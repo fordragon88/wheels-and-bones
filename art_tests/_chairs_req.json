@@ -1,0 +1,249 @@
+{
+ "aeroz": {
+  "name": "TiLite Aero Z (активная, жёсткая рама)",
+  "parts": [
+   "anti_tip",
+   "axle",
+   "bolts",
+   "brake",
+   "spokes",
+   "tire"
+  ],
+  "faces": 12050,
+  "iou": 0.71,
+  "missing": []
+ },
+ "basic": {
+  "name": "",
+  "parts": [
+   "bolts",
+   "brake",
+   "rear_wheel",
+   "rim",
+   "spokes",
+   "tire",
+   "tube",
+   "valve"
+  ],
+  "faces": 11484,
+  "iou": 0.699,
+  "missing": []
+ },
+ "cross6": {
+  "name": "Etac Cross 6 (складная, регулируемая)",
+  "parts": [
+   "anti_tip",
+   "backrest",
+   "bolts",
+   "brake",
+   "cushion",
+   "tire"
+  ],
+  "faces": 11700,
+  "iou": 0.709,
+  "missing": []
+ },
+ "dwarf": {
+  "name": "Progeo Tekna Advance (складная активная)",
+  "parts": [
+   "bolts",
+   "brake",
+   "frame",
+   "rear_wheel",
+   "tire"
+  ],
+  "faces": 11044,
+  "iou": 0.717,
+  "missing": []
+ },
+ "edge4": {
+  "name": "Quantum Edge 4 (батареи 22NF / группа 24)",
+  "parts": [
+   "actuator",
+   "armrest",
+   "battery",
+   "controller",
+   "frame",
+   "freewheel",
+   "seat",
+   "seat_lift",
+   "wiring"
+  ],
+  "faces": 9624,
+  "iou": 0.737,
+  "missing": []
+ },
+ "elf": {
+  "name": "",
+  "parts": [
+   "bearing",
+   "bolts",
+   "brake",
+   "caster",
+   "caster_stem",
+   "rear_wheel",
+   "rim",
+   "spokes",
+   "tire"
+  ],
+  "faces": 11820,
+  "iou": 0.708,
+  "missing": []
+ },
+ "f5": {
+  "name": "Permobil F5 Corpus (передний привод, 2×12 В SLA)",
+  "parts": [
+   "battery",
+   "breaker",
+   "frame",
+   "freewheel",
+   "joystick",
+   "motor",
+   "tire"
+  ],
+  "faces": 9200,
+  "iou": 0.789,
+  "missing": []
+ },
+ "fairy": {
+  "name": "Progeo Exelle Junior (детская)",
+  "parts": [
+   "bearing",
+   "bolts",
+   "rim",
+   "spokes",
+   "tube"
+  ],
+  "faces": 11806,
+  "iou": 0.699,
+  "missing": []
+ },
+ "focuscr": {
+  "name": "Ki Mobility Focus CR (наклон в пространстве)",
+  "parts": [
+   "anti_tip",
+   "brake",
+   "gas_spring",
+   "tilt_cable",
+   "tilt_lever",
+   "tilt_lock"
+  ],
+  "faces": 10266,
+  "iou": 0.706,
+  "missing": []
+ },
+ "iris": {
+  "name": "Zippie Iris (детская, наклон в пространстве)",
+  "parts": [
+   "anti_tip",
+   "brake",
+   "tilt_cable",
+   "tilt_lever",
+   "tilt_lock",
+   "tire"
+  ],
+  "faces": 11644,
+  "iou": 0.694,
+  "missing": []
+ },
+ "m3": {
+  "name": "Permobil M3 Corpus (средний привод)",
+  "parts": [
+   "battery",
+   "boot",
+   "controller",
+   "joystick",
+   "wiring"
+  ],
+  "faces": 9460,
+  "iou": 0.821,
+  "missing": []
+ },
+ "orc": {
+  "name": "Progeo Noir 2.0 (жёсткая рама)",
+  "parts": [
+   "axle",
+   "bearing",
+   "brake",
+   "rear_wheel",
+   "tire"
+  ],
+  "faces": 11612,
+  "iou": 0.743,
+  "missing": []
+ },
+ "pulse6": {
+  "name": "Quickie Pulse 6 (средний привод, пульт VR2)",
+  "parts": [
+   "battery",
+   "brushes",
+   "controller",
+   "freewheel",
+   "joystick",
+   "motor",
+   "wiring"
+  ],
+  "faces": 12042,
+  "iou": 0.819,
+  "missing": []
+ },
+ "q6edge": {
+  "name": "Quantum Q6 Edge (средний привод, пульт Q-Logic)",
+  "parts": [
+   "battery",
+   "controller",
+   "frame",
+   "freewheel",
+   "joystick",
+   "mag_brake",
+   "motor",
+   "wiring"
+  ],
+  "faces": 11852,
+  "iou": 0.802,
+  "missing": []
+ },
+ "trident": {
+  "name": "Drive Trident HD (бариатрическая, передний привод)",
+  "parts": [
+   "axle",
+   "battery",
+   "controller",
+   "frame",
+   "freewheel",
+   "motor",
+   "wiring"
+  ],
+  "faces": 9500,
+  "iou": 0.824,
+  "missing": []
+ },
+ "troll": {
+  "name": "Invacare 9000 XDT (усиленная, до 159 кг)",
+  "parts": [
+   "cushion",
+   "frame",
+   "seat",
+   "valve"
+  ],
+  "faces": 11632,
+  "iou": 0.704,
+  "missing": []
+ },
+ "whillc2": {
+  "name": "WHILL Model C2 (омни-колёса, литые задние шины)",
+  "parts": [
+   "armrest",
+   "battery",
+   "controller",
+   "freewheel",
+   "joystick",
+   "seat",
+   "seat_cable",
+   "tire"
+  ],
+  "faces": 9410,
+  "iou": 0.799,
+  "missing": []
+ }
+}

@@ -1,0 +1,34 @@
+# Сборка и кэш
+build/
+dist/
+__pycache__/
+*.pyc
+*.spec
+prof.out
+
+# Сохранения, настройки и журналы игрока
+save.json
+settings.json
+crash.log
+
+# Архивы обменов
+*.zip
+
+# Бэкапы
+*.bak
+*.bak_*
+art_tests/game.py.bak*
+art_tests/*.bak_before_*
+art_tests/README.md.bak*
+
+# art_tests: в репозиторий идут только инструменты и маленькие данные; черновые рендеры — нет
+art_tests/*/
+!art_tests/fit/
+art_tests/*.png
+art_tests/*.gif
+art_tests/*.wav
+art_tests/*.mp3
+art_tests/fit/*.png
+
+# Временные скриншоты проверок
+i18n_work/audit_shots/
