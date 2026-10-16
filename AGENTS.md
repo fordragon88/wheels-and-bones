@@ -36,6 +36,9 @@
 
 ## 2. Как запускать
 
+Репозиторий: https://github.com/fordragon88/wheels-and-bones (exe — в Releases).
+
+
 ```bash
 python game.py                 # игра (Python 3.10 из PATH, pygame 2.6, numpy)
 py game.py                     # двойной клик по .py -> Python 3.14 + pygame-ce (тоже должно работать)
@@ -217,6 +220,9 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-17 — Claude (Opus 5.5) — проект выложен на GitHub: https://github.com/fordragon88/wheels-and-bones (публичный),
+  exe — в Releases (v0.2). `.gitignore` исключает бэкапы, архивы, build/dist, черновые рендеры `art_tests/*/`.
+  Для Muse AI — задача по 3D в `MUSE_3D_TASK.md`.
 - 2026-10-17 — Claude (Opus 5.5) + Codex (gpt-6-luna) — аудит всех картинок. Codex отредактировал фоны
   `bg_workshop` (инструменты, колёса на щите и полках), `bg_garage` (инструменты, обрезанные края), `bg_guild`
   (колясочные колёса на станках вместо тележных) и иконку `tool_hands`; дриада Ивушка перерисована (seat_cross6_s151,
