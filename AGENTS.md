@@ -36,7 +36,7 @@
 
 ## 2. Как запускать
 
-Репозиторий: https://github.com/fordragon88/wheels-and-bones (exe — в Releases).
+Репозиторий (приватный): https://github.com/fordragon88/wheels-and-bones (exe — в Releases).
 
 
 ```bash
@@ -220,7 +220,7 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
-- 2026-10-17 — Claude (Opus 5.5) — проект выложен на GitHub: https://github.com/fordragon88/wheels-and-bones (публичный),
+- 2026-10-17 — Claude (Opus 5.5) — проект выложен на GitHub: https://github.com/fordragon88/wheels-and-bones (был публичным для Muse, 2026-10-17 снова приватный),
   exe — в Releases (v0.2). `.gitignore` исключает бэкапы, архивы, build/dist, черновые рендеры `art_tests/*/`.
   Для Muse AI — задача по 3D в `MUSE_3D_TASK.md`.
 - 2026-10-17 — Claude (Opus 5.5) + Codex (gpt-6-luna) — аудит всех картинок. Codex отредактировал фоны
