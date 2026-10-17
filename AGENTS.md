@@ -274,6 +274,11 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-17 — Claude (Opus 5.5) — тексты больше не вылезают за рамки (оба языка): подписи кнопок и заголовки
+  вступления уменьшаются под ширину (заголовки — одним размером на все слайды), Гильдия — 5 карточек над «Назад»,
+  реплика — под Бренной; мини-игры: табло прибора, пояснение, подсказка под инструкцией, счётчик спиц внизу.
+  Проверка: снимки всех экранов на ru (`art_tests/ui_playthrough.py` → art_tests/audit_shots) и en
+  (`i18n_work/build_lang.py` → i18n_work/audit_shots).
 - 2026-10-17 — Claude (Opus 5.5) — браузерная версия опубликована: https://fordragon88.github.io/wheels-and-bones-web/
   (публичный репозиторий fordragon88/wheels-and-bones-web — только сборка; выкладка: `python build_web.py --deploy`).
   Блок для страницы WordPress (Custom HTML с iframe) — `wordpress_embed.html`. Холст — role=application,

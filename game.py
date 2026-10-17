@@ -5121,10 +5121,16 @@ class Button:
         aa_rect(surf, col, r, 3 if (hov or active) else 2, border_radius=7)
         cx = r.centerx
         if self.sub:
-            draw_text(surf, self.label, (cx, r.y + 8), 16, WHITE if enabled else GREY, bold=True, center=True)
+            sz = 16
+            while sz > 11 and font(sz, True).size(tr(self.label))[0] > r.w - 14:
+                sz -= 1
+            draw_text(surf, self.label, (cx, r.y + 8), sz, WHITE if enabled else GREY, bold=True, center=True)
             draw_text(surf, self.sub, (cx, r.y + 30), 12, GREY, center=True)
         else:
-            draw_text(surf, self.label, r.center, 17, col if enabled else GREY, bold=True, center=True)
+            sz = 17                                   # длинная подпись (часто в переводе) — мельче, но в кнопке
+            while sz > 11 and font(sz, True).size(tr(self.label))[0] > r.w - 14:
+                sz -= 1
+            draw_text(surf, self.label, r.center, sz, col if enabled else GREY, bold=True, center=True)
         return r
 
 
@@ -7975,7 +7981,11 @@ class Game:
         s.fill((22, 20, 30, int(230 * sk)))
         surf.blit(s, panel)
         aa_rect(surf, AMBER, panel, 2, border_radius=8)
-        draw_text(surf, title, (panel.centerx, panel.y + 20), 26, AMBER, bold=True, center=True, alpha=255 * sk)
+        tsz = 26                                      # один размер на все слайды — по самому длинному заголовку
+        while tsz > 16 and max(font(tsz, True).size(tr(t_))[0] for t_, _ in self.intro_slides) > panel.w - 40:
+            tsz -= 1
+        draw_text(surf, title, (panel.centerx, panel.y + 20 + (26 - tsz) // 2), tsz, AMBER, bold=True, center=True,
+                  alpha=255 * sk)
         draw_wrapped(surf, text, (panel.centerx, panel.y + 70), panel.w - 50, 19, WHITE, center=True,
                      line_gap=4, limit=n)
         draw_text(surf, f"{idx + 1}/{len(self.intro_slides)}   [ клик — далее ]",
@@ -10152,7 +10162,7 @@ class Game:
     def _mini_meter_rects(self):
         p = self._mini_panel_rect()
         n = len(self.mini_pending["cfg"]["options"])
-        return [(i, pygame.Rect(p.x + 40, p.y + 190 + i * 74, p.w - 240, 64)) for i in range(n)]
+        return [(i, pygame.Rect(p.x + 40, p.y + 202 + i * 70, p.w - 240, 62)) for i in range(n)]
 
     def _click_mini(self, m):
         if self._mini_cancel_rect().collidepoint(m):
@@ -10196,10 +10206,10 @@ class Game:
         aa_rect(surf, AMBER, p, 2, border_radius=10)
         m = self.mini_pending
         cfg = m["cfg"]
-        draw_wrapped(surf, m["step"]["instr"], (p.x + 24, p.y + 16), p.w - 48, 19, WHITE)
+        y_end = draw_wrapped(surf, m["step"]["instr"], (p.x + 24, p.y + 16), p.w - 48, 19, WHITE, max_lines=3)
         tip = cfg.get("hint") or cfg.get("prompt")
-        if tip:
-            draw_text(surf, tip, (p.x + 24, p.y + 64), 14, AMBER)
+        if tip:                                        # подсказка — под инструкцией, сколько бы строк та ни заняла
+            draw_wrapped(surf, tip, (p.x + 24, max(p.y + 64, y_end + 2)), p.w - 48, 14, AMBER, max_lines=2)
         k = m["kind"]
         if k == "pump":
             self._draw_mini_pump(surf, mouse, p, m, cfg)
@@ -10252,7 +10262,7 @@ class Game:
         cx, cy = p.centerx, p.y + 230
         found = len(m["dull"] & m["tested"])
         draw_text(surf, f"Кликай спицы, ищи глухие. Найдено: {found}/{len(m['dull'])}",
-                  (p.centerx, p.y + 96), 15, CYAN, center=True)
+                  (p.x + 24, p.bottom - 46), 15, CYAN)            # внизу — не на колесе
         aa_circle(surf, DIM, (cx, cy), 150, 3)
         for i, rect in self._mini_ping_spots():
             ang = math.radians(i * (360 / cfg["total"]) - 90)
@@ -10275,9 +10285,12 @@ class Game:
         disp = pygame.Rect(p.centerx - 160, p.y + 92, 320, 64)
         aa_rect(surf, (16, 24, 18), disp, border_radius=8)
         aa_rect(surf, GOOD, disp, 2, border_radius=8)
-        draw_text(surf, cfg["reading"], disp.center, 34, GOOD, bold=True, center=True)
-        if cfg.get("sub"):
-            draw_text(surf, cfg["sub"], (p.centerx, disp.bottom + 8), 13, GREY, center=True)
+        rsz = 34                                      # показание прибора — целиком в табло
+        while rsz > 16 and font(rsz, True).size(tr(cfg["reading"]))[0] > disp.w - 24:
+            rsz -= 1
+        draw_text(surf, cfg["reading"], disp.center, rsz, GOOD, bold=True, center=True)
+        if cfg.get("sub"):                            # пояснение — переносом, в пределах панели
+            draw_wrapped(surf, cfg["sub"], (p.centerx, disp.bottom + 6), p.w - 60, 13, GREY, center=True, max_lines=2)
         for i, rect in self._mini_meter_rects():
             aa_rect(surf, PANEL, rect, border_radius=8)
             aa_rect(surf, CYAN if rect.collidepoint(mouse) else DIM, rect, 2, border_radius=8)
@@ -10356,7 +10369,8 @@ class Game:
 
     # ----- Гильдия Колёсников (хаб про-трека) -----
     def _guild_job_rects(self):
-        return [(job["id"], pygame.Rect(60, 170 + i * 116, 560, 96))
+        step = min(116, (HEIGHT - 100 - 160) // max(1, len(TECH_JOBS)))   # все карточки — над кнопкой «Назад»
+        return [(job["id"], pygame.Rect(60, 160 + i * step, 560, step - 10))
                 for i, job in enumerate(TECH_JOBS)]
 
     def _guild_back_rect(self):
@@ -10388,10 +10402,12 @@ class Game:
             done = jid in self.done
             dx = -int(140 * (1 - appear(self.st, 0.1 * i, 0.45)))
             r = Button(rect, "", GOOD if done else CYAN).draw(surf, mouse, active=done, offset=(dx, 0))
-            surf.blit(load_image(job["client_art"], (70, 70), GHOST), (r.x + 10, r.y + 13))
-            fit_text(surf, job["title"], (r.x + 96, r.y + 14), r.w - 96 - (96 if done else 14), 18, WHITE, bold=True)
-            draw_text(surf, job["client"], (r.x + 96, r.y + 40), 14, GREY)
-            draw_text(surf, "УРОВЕНЬ: ТЕХНИК", (r.x + 96, r.y + 64), 12, PURPLE, bold=True)
+            art = min(70, r.h - 10)
+            surf.blit(load_image(job["client_art"], (art, art), GHOST), (r.x + 10, r.y + (r.h - art) // 2))
+            ty = r.y + (r.h - 66) // 2                      # три строки по центру карточки
+            fit_text(surf, job["title"], (r.x + 96, ty), r.w - 96 - (96 if done else 14), 18, WHITE, bold=True)
+            draw_text(surf, job["client"], (r.x + 96, ty + 25), 14, GREY)
+            draw_text(surf, "УРОВЕНЬ: ТЕХНИК", (r.x + 96, ty + 47), 12, PURPLE, bold=True)
             if done:
                 draw_text(surf, "✔ сдано", (r.right - 14, r.y + 12), 15, GOOD, right=True)
         blit_idle(surf, load_image("master.png", (200, 280), PURPLE), (WIDTH - 300, 130), self.t,
@@ -10407,7 +10423,7 @@ class Game:
         else:
             line = ("Барти: «Это ОНА, Мартин! Та самая мастерица, про которую я рассказывал! "
                     "...Она меня не помнит. Обидно.»")
-        draw_wrapped(surf, line, (60, 516), 560, 15, GHOST)
+        draw_wrapped(surf, line, (WIDTH - 470, 452), 420, 15, GHOST, max_lines=5)   # под Бренной, не на карточках
         Button(self._guild_back_rect(), "НАЗАД", AMBER).draw(surf, mouse)
 
     # ----- результат -----
