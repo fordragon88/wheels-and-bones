@@ -881,13 +881,13 @@ def build_f5(lod=1.0):
     # R-net joystick module (right) with charging socket at front
     jz = 290.0
     add_rounded_box(b, 120.0, 200.0, 684.0, 696.0, jz - 22.0, jz + 22.0, "frame", (44, 42, 44), bevel=3.0)
-    add_rounded_box(b, 180.0, 310.0, 692.0, 736.0, jz - 44.0, jz + 44.0, "joystick", (34, 34, 38), bevel=12.0)
-    add_rounded_box(b, 194.0, 246.0, 734.0, 739.0, jz - 30.0, jz + 30.0, "joystick", (90, 180, 220), bevel=1.5)
-    add_cyl(b, (272.0, 734.0, jz), (272.0, 752.0, jz), 20.0, "joystick", (28, 30, 34), sides=10)
-    add_cyl(b, (272.0, 748.0, jz), (272.0, 788.0, jz), 6.5, "joystick", (180, 186, 196), sides=8)
-    add_cyl(b, (272.0, 784.0, jz), (272.0, 814.0, jz), 17.0, "joystick", (44, 46, 54), sides=10)
-    add_cyl(b, (308.0, 714.0, jz), (322.0, 714.0, jz), 11.0, "joystick", (30, 30, 34), sides=10)
-    add_cyl(b, (320.0, 714.0, jz), (324.0, 714.0, jz), 6.0, "joystick", (200, 160, 60), sides=6)
+    add_rounded_box(b, 180.0, 310.0, 692.0, 736.0, jz - 44.0, jz + 44.0, "controller", (34, 34, 38), bevel=12.0)
+    add_rounded_box(b, 194.0, 246.0, 734.0, 739.0, jz - 30.0, jz + 30.0, "controller", (90, 180, 220), bevel=1.5)
+    add_cyl(b, (272.0, 734.0, jz), (272.0, 752.0, jz), 20.0, "controller", (28, 30, 34), sides=10)
+    add_cyl(b, (272.0, 748.0, jz), (272.0, 788.0, jz), 6.5, "controller", (180, 186, 196), sides=8)
+    add_cyl(b, (272.0, 784.0, jz), (272.0, 814.0, jz), 17.0, "controller", (44, 46, 54), sides=10)
+    add_cyl(b, (308.0, 714.0, jz), (322.0, 714.0, jz), 11.0, "controller", (30, 30, 34), sides=10)
+    add_cyl(b, (320.0, 714.0, jz), (324.0, 714.0, jz), 6.0, "controller", (200, 160, 60), sides=6)
     add_spline_tube(b, [(190.0, 700.0, jz - 30.0), (120.0, 620.0, jz - 50.0), (40.0, 420.0, 200.0), (0.0, 320.0, 160.0)],
                     6.0, "wiring", (50, 52, 58), sides=6, smooth=2)
     # low front footplate on a bar with the front anti-tip roller
