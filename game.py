@@ -560,8 +560,9 @@ def fit_text(surf, text, pos, width, size=18, color=WHITE, bold=False):
         CAPTURE["mute"] -= 1
 
 
-def wrap_lines(text, width, size=16):
-    text = tr(text)
+def wrap_lines(text, width, size=16, raw=False):
+    """raw=True — текст игрока (комментарий): без перевода."""
+    text = text if raw else tr(text)
     f = font(size)
     out, cur = [], ""
     for w in text.split(" "):
@@ -578,15 +579,15 @@ def wrap_lines(text, width, size=16):
 
 
 def draw_wrapped(surf, text, pos, width, size=16, color=WHITE, center=False, line_gap=2,
-                 limit=None, alpha=255, max_lines=None):
+                 limit=None, alpha=255, max_lines=None, raw=False):
     """limit — сколько символов показать («печать по буквам»): переносы считаются по
     полному тексту, поэтому слова не прыгают между строками во время печати."""
     x, y = pos
     f = font(size)
-    text = tr(text)
+    text = text if raw else tr(text)
     _cap_text(surf, text, pygame.Rect(x - (width // 2 if center else 0), y, width, size + 4))
     left = len(text) if limit is None else limit
-    lines = wrap_lines(text, width, size)
+    lines = wrap_lines(text, width, size, raw=True)
     if max_lines and len(lines) > max_lines:
         lines = lines[:max_lines]
         last = lines[-1]
@@ -992,7 +993,9 @@ def draw_tool_action(surf, tid, pos, u, ok=True):
         rr = int(10 + 40 * ((u * 2) % 1.0))
         aa_circle(surf, CYAN, (int(x), int(y)), rr, 2)
     elif tid in READ_TOOLS:                  # прибор: стрелка покачалась и встала, «норма»
-        bub = pygame.Rect(x + 24, y - 54, 86, 26)
+        bw = max(86, font(14, True).size(tr("✔ норма"))[0] + 20)
+        bx = x + 24 if x + 24 + bw <= WIDTH - 8 else x - 24 - bw   # у правого края — слева от детали
+        bub = pygame.Rect(bx, max(58, y - 54), bw, 26)
         aa_rect(surf, (20, 40, 30), bub, border_radius=8)
         aa_rect(surf, GOOD, bub, 2, border_radius=8)
         draw_text(surf, "✔ норма", bub.center, 14, GOOD, bold=True, center=True, alpha=255 * clamp01((u - 0.3) / 0.2))
@@ -1120,7 +1123,7 @@ def _desktop():
         return (1920, 1080)
 
 
-def _fit(w, h):
+def _fit_view(w, h):
     """Наибольший прямоугольник 16:9 внутри w×h — по центру (поля по бокам или сверху/снизу)."""
     k = min(w / WIDTH, h / HEIGHT)
     vw, vh = max(1, round(WIDTH * k)), max(1, round(HEIGHT * k))
@@ -1142,7 +1145,7 @@ def _default_window():
     res = DISPLAY.get("res")
     if res and res[0] <= dw * 0.95 and res[1] <= dh * 0.92:
         return tuple(res)
-    r = _fit(int(dw * 0.85), int(dh * 0.85))
+    r = _fit_view(int(dw * 0.85), int(dh * 0.85))
     return (r.w, r.h)
 
 
@@ -1166,7 +1169,7 @@ def _set_window(fullscreen):
 def _update_rs():
     """Пересчитать масштаб рендера под текущее окно/разрешение; при смене — сбросить кэши и кадр."""
     global RS
-    view = _fit(*pygame.display.get_surface().get_size())
+    view = _fit_view(*pygame.display.get_surface().get_size())
     new_rs = rs_for(DISPLAY.get("res"), view.h)
     if new_rs != RS or DISPLAY.get("frame") is None:
         RS = new_rs
@@ -1211,7 +1214,7 @@ def toggle_fullscreen():
 def present(frame):
     """Вывести кадр в окно: по центру, без искажений, с тёмными полями; при несовпадении размеров — масштаб."""
     screen = pygame.display.get_surface()
-    view = _fit(*screen.get_size())
+    view = _fit_view(*screen.get_size())
     DISPLAY["view"] = view
     fw, fh = pygame.Surface.get_size(frame)
     if (fw, fh) == view.size:
@@ -2436,7 +2439,7 @@ for _k, _v in {"chair_aeroz": "chair_basic", "chair_cross6": "chair_basic", "cha
     VECTOR_ART.setdefault(_k, VECTOR_ART[_v])
 # точки клика реальных колясок — по их арту (art_tests/hotspots_<модель>.json)
 CHAIR_HOTSPOTS["inv9000"] = {"tire": (90, 262, 12), "rim": (55, 150, 11), "spokes": (112, 202, 12), "tube": (132, 240, 10), "valve": (90, 128, 9), "brake": (150, 160, 10)}
-CHAIR_HOTSPOTS["xdt"] = {"cushion": (190, 120, 14), "seat": (110, 150, 10), "frame": (200, 195, 11), "valve": (258, 128, 8)}
+CHAIR_HOTSPOTS["xdt"] = {"cushion": (190, 120, 14), "seat": (225, 150, 10), "frame": (200, 195, 11), "valve": (258, 128, 8)}
 CHAIR_HOTSPOTS["ego"] = {"caster": (225, 265, 12), "caster_stem": (225, 228, 9), "bearing": (322, 232, 9), "bolts": (340, 182, 8), "brake": (215, 110, 9), "tire": (55, 240, 12)}
 CHAIR_HOTSPOTS["tekna"] = {"tire": (30, 200, 11), "rear_wheel": (95, 205, 13), "brake": (175, 140, 10), "bolts": (205, 172, 8), "frame": (300, 130, 12)}
 CHAIR_HOTSPOTS["exelle_jr"] = {"rim": (55, 140, 11), "spokes": (142, 202, 12), "bearing": (107, 175, 8), "tube": (140, 262, 10), "bolts": (275, 145, 8)}
@@ -2450,7 +2453,7 @@ CHAIR_HOTSPOTS["aeroz"] = {"tire": (55, 230, 11), "spokes": (90, 185, 11), "axle
 CHAIR_HOTSPOTS["cross6"] = {"backrest": (160, 75, 13), "cushion": (215, 140, 12), "brake": (165, 168, 9), "bolts": (122, 196, 9), "tire": (78, 210, 11), "anti_tip": (100, 265, 9)}
 CHAIR_HOTSPOTS["iris"] = {"anti_tip": (325, 262, 9), "tilt_cable": (300, 130, 9), "tilt_lock": (245, 195, 10), "tilt_lever": (322, 50, 9), "tire": (300, 282, 10), "brake": (283, 210, 9)}
 CHAIR_HOTSPOTS["focuscr"] = {"tilt_lever": (80, 32, 9), "tilt_cable": (98, 122, 9), "gas_spring": (118, 160, 9), "brake": (150, 172, 9), "tilt_lock": (178, 210, 10), "anti_tip": (52, 265, 9)}
-CHAIR_HOTSPOTS["whillc2"] = {"controller": (292, 72, 9), "joystick": (270, 46, 9), "armrest": (232, 118, 11), "seat": (178, 124, 11), "seat_cable": (195, 182, 9), "battery": (112, 186, 11), "freewheel": (36, 250, 9), "tire": (140, 272, 11)}
+CHAIR_HOTSPOTS["whillc2"] = {"controller": (292, 72, 9), "joystick": (270, 46, 9), "armrest": (232, 118, 11), "seat": (178, 124, 11), "seat_cable": (170, 148, 9), "battery": (112, 186, 11), "freewheel": (36, 250, 9), "tire": (110, 262, 11)}
 CHAIR_HOTSPOTS["f5"] = {"joystick": (140, 118, 9), "battery": (205, 192, 11), "motor": (150, 228, 11), "tire": (128, 272, 11), "freewheel": (200, 240, 9), "frame": (248, 222, 11), "breaker": (276, 214, 9)}
 
 
@@ -4995,8 +4998,8 @@ ALL_JOBS = JOBS + TECH_JOBS
 #  UI-объекты
 # ----------------------------------------------------------------------------- #
 def _of(a, b):
-    """«3 из 5» / «3 of 5» — для озвучки счётчиков."""
-    return f"{a} {tr('из')} {b}"
+    """«3 из 5» / «3 of 5» — для озвучки счётчиков (по языку, без словаря)."""
+    return f"{a} из {b}" if LANG["code"] == "ru" else f"{a} of {b}"
 
 
 _SPEECH_SUBS = [("✔", ""), ("⚑", ""), ("◉", ""), ("○", ""), ("✉", ""), ("⚠", ""), ("▶", ""), ("◀", ""),
@@ -5972,7 +5975,8 @@ class Game:
                             step=step, expected=expected, got=got, msg=msg, t=self.t, sent=False)
 
     def _dispute_btn_rect(self):
-        return pygame.Rect(WIDTH - 196, 60, 172, 30)
+        # в верхней панели, слева от ⚑: не закрывает «МАНУАЛ» Гильдии и заголовки правой колонки
+        return pygame.Rect(WIDTH - 340, 10, 176, 34)
 
     def dispute_visible(self):
         d = self.dispute
@@ -6064,8 +6068,11 @@ class Game:
             self.feedback_mem.append(entry)
         else:
             try:
-                data = json.load(open(FEEDBACK_PATH, encoding="utf-8")) if os.path.exists(FEEDBACK_PATH) else []
+                with open(FEEDBACK_PATH, encoding="utf-8") as f:
+                    data = json.load(f)
             except Exception:
+                data = []
+            if not isinstance(data, list):                # старый/испорченный файл — не падаем
                 data = []
             data.append(entry)
             try:
@@ -6150,10 +6157,11 @@ class Game:
                 y = draw_wrapped(surf, "Шаг: " + d["step"], (p.x + 28, y), p.w - 56, 14, GREY, max_lines=2)
             draw_text(surf, "Снимок экрана приложится сам — опиши, что не так.", (p.x + 28, max(y, p.y + 110)), 14, GREY)
         else:
-            if d["expected"] or d["got"]:
-                draw_text(surf, "Игра ожидала: " + d["expected"], (p.x + 28, y), 15, GOOD); y += 24
-                draw_text(surf, "Ты выбрал: " + d["got"], (p.x + 28, y), 15, BAD); y += 26
-            y = draw_wrapped(surf, "Подсказка игры: " + d["msg"], (p.x + 28, y), p.w - 56, 14, GREY, max_lines=3)
+            if d["expected"] or d["got"]:                # полный текст диагноза — переносом, в пределах панели
+                y = draw_wrapped(surf, "Игра ожидала: " + d["expected"], (p.x + 28, y), p.w - 56, 14, GOOD, max_lines=2) + 2
+                y = draw_wrapped(surf, "Ты выбрал: " + d["got"], (p.x + 28, y), p.w - 56, 14, BAD, max_lines=2) + 2
+            draw_wrapped(surf, "Подсказка игры: " + d["msg"], (p.x + 28, y), p.w - 56, 13, GREY,
+                         max_lines=max(1, (p.y + 150 - y) // (font(13).get_height() + 2)))
         draw_text(surf, "Что не так?" if general else "Почему не согласен?", (p.x + 28, p.y + 156), 15, WHITE, bold=True)
         reasons = self._reasons()
         for i, r in self._dispute_reason_rects():
@@ -6165,7 +6173,7 @@ class Game:
         aa_rect(surf, (12, 12, 18), tr_, border_radius=8)
         aa_rect(surf, DIM, tr_, 1, border_radius=8)
         caret = "|" if int(self.t * 2) % 2 == 0 else ""
-        draw_wrapped(surf, ui["text"] + caret, (tr_.x + 10, tr_.y + 8), tr_.w - 20, 15, WHITE, max_lines=3)
+        draw_wrapped(surf, ui["text"] + caret, (tr_.x + 10, tr_.y + 8), tr_.w - 20, 15, WHITE, max_lines=3, raw=True)
         Button(self._dispute_cancel_rect(), "ОТМЕНА", GREY).draw(surf, mouse)
         Button(self._dispute_send_rect(), "ОТПРАВИТЬ", GOOD).draw(surf, mouse)
 
@@ -6223,9 +6231,13 @@ class Game:
         except Exception:
             acc = None
         if isinstance(acc, dict):
-            for k in A11Y:
-                if k in acc:
-                    A11Y[k] = type(A11Y[k])(acc[k])
+            for k in A11Y:                           # старый/испорченный файл: неверный тип — оставляем значение по умолчанию
+                v = acc.get(k)
+                if isinstance(A11Y[k], bool):
+                    if isinstance(v, bool):
+                        A11Y[k] = v
+                elif isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
+                    A11Y[k] = int(max(-10, min(10, v)))
         elif screen_reader_running():                # первый запуск под NVDA/JAWS/Диктором — сразу говорим
             A11Y["on"] = True
         if "--speak" in sys.argv:
@@ -6250,15 +6262,30 @@ class Game:
         try:
             with open(SAVE_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            valid = {j["id"] for j in ALL_JOBS}
-            self.done = {j for j in data.get("done", []) if j in valid}
-            self.garage = [(j, int(s)) for j, s in data.get("garage", []) if j in valid]
-            self.exam_passed = bool(data.get("exam_passed"))
-            ids = {c["id"] for c in SEAT_CASES}
-            self.seat_done = {c for c in data.get("seat_done", []) if c in ids}
-            self.seat_quiz_ok = bool(data.get("seat_quiz_ok"))
         except Exception:
-            pass
+            return
+        if not isinstance(data, dict):
+            return
+
+        def lst(key):
+            v = data.get(key, [])
+            return v if isinstance(v, list) else []
+        # каждое поле — отдельно, битые элементы пропускаем: одна ошибка не должна обнулять весь прогресс
+        valid = {j["id"] for j in ALL_JOBS}
+        self.done = {j for j in lst("done") if isinstance(j, str) and j in valid}
+        garage = []
+        for e in lst("garage"):
+            try:
+                j, st_ = e
+                if isinstance(j, str) and j in valid and j not in [g[0] for g in garage]:
+                    garage.append((j, max(1, min(3, int(st_)))))
+            except Exception:
+                continue
+        self.garage = garage
+        self.exam_passed = data.get("exam_passed") is True
+        ids = {c["id"] for c in SEAT_CASES}
+        self.seat_done = {c for c in lst("seat_done") if isinstance(c, str) and c in ids}
+        self.seat_quiz_ok = data.get("seat_quiz_ok") is True
 
     def save_progress(self):
         if self.headless:
@@ -6297,6 +6324,8 @@ class Game:
         self.spec_pending = None
         self.show_manual = False
         self.manual_page = None
+        self.manual_viewed = set()        # «сначала мануал» — заново в каждом задании (и на экзамене)
+        self.dispute = None               # замечание к прошлой попытке к новой не относится
         self.mini_pending = None
         self.exam_mode = False
         self.inspected = set()
@@ -6385,7 +6414,7 @@ class Game:
                 or self.dispute_ui is not None or getattr(self, "show_manual", False):
             return
         if self.t >= self.client_next:
-            if self.client_queue:
+            if self.client_queue and not self.exam_mode:   # на экзамене болтовни нет (и вступительных реплик тоже)
                 self._show_client(self.client_queue.pop(0))
                 self.client_next = self.t + 7.5
             elif not self.exam_mode:
@@ -6431,6 +6460,7 @@ class Game:
             self.phase = "repair"
             self.step_idx = 0
             self.sel_tool = None
+            self.last_note = ""
             snd("ok")
             self.flash("Диагноз верный! Приступаем к ремонту.", GOOD, 3)
             self._set_step_ghost()
@@ -6450,7 +6480,7 @@ class Game:
     def _set_step_ghost(self):
         if self.step_idx < len(self.cur["steps"]):
             self.ghost_line = self.cur["steps"][self.step_idx].get("ghost", "")
-            self.last_note = ""
+            # last_note (итог прошлого шага) не стираем: он виден строкой «✔ …» под инструкцией
 
     def select_tool(self, tool_id):
         self.sel_tool = tool_id
@@ -6774,18 +6804,19 @@ class Game:
         ("F11", "весь экран или окно"),
     ]
 
-    def say(self, text, interrupt=False):
-        """В очередь озвучки; всё за кадр произносится одной фразой (в конце draw)."""
+    def say(self, text, interrupt=False, raw=False):
+        """В очередь озвучки; всё за кадр произносится одной фразой (в конце draw).
+        raw=True — текст уже переведён / это текст игрока (не прогонять через tr)."""
         if text:
-            self.kb["queue"].append((tr(str(text)), interrupt))
+            self.kb["queue"].append((str(text) if raw else tr(str(text)), interrupt))
 
     # ---------- пункты для фокуса ----------
     def a11y_items(self):
         items = []
 
-        def add(group, label, rect=None, act=None, adj=None, key=None):
+        def add(group, label, rect=None, act=None, adj=None, key=None, raw=False):
             items.append(dict(group=group, label=label, rect=pygame.Rect(rect) if rect else None,
-                              act=act, adj=adj, key=key or (group, label)))
+                              act=act, adj=adj, key=key or (group, label), raw=raw))
 
         if self.kb["help"]:
             add("Справка", tr("Закрыть справку"), act=self.toggle_help, key="help")
@@ -6796,7 +6827,7 @@ class Game:
                 add("Причина", tr(self._reasons()[i]) + (", " + tr("выбрано") if ui["reason"] == i else ""), r,
                     act=lambda i=i: (ui.__setitem__("reason", i), snd("tick")), key=("reason", i))
             add("Комментарий", tr("Комментарий: печатай текст, Enter — отправить") + (". " + ui["text"] if ui["text"] else ""),
-                self._dispute_text_rect(), act=self.send_dispute, key="dtext")
+                self._dispute_text_rect(), act=self.send_dispute, key="dtext", raw=True)
             add("Кнопки", tr("Отправить"), self._dispute_send_rect(), act=self.send_dispute, key="dsend")
             add("Кнопки", tr("Отмена"), self._dispute_cancel_rect(), act=self.close_dispute, key="dcancel")
             return items
@@ -7086,7 +7117,11 @@ class Game:
             head = tr(it["group"]) + ". "
             self.kb["group"] = it["group"]
         snd("tick")
-        self.say(head + it["label"] + pos, True)
+        if it.get("raw"):                                  # подпись с текстом игрока — без перевода
+            self.say(head, True)
+            self.say(it["label"] + pos, True, raw=True)
+        else:
+            self.say(head + it["label"] + pos, True)
 
     def _a11y_activate(self, it):
         if it["act"]:
@@ -7251,10 +7286,10 @@ class Game:
             self.kb["seat_seen"] = say_
         cur = next((it for it in items if it["key"] == self.kb["key"]), None)
         if self.kb.pop("say_focus", False) and cur:       # ползунок сдвинули — новое значение
-            self.say(cur["label"], True)
+            self.say(cur["label"], True, raw=cur.get("raw", False))
         same = self.kb.pop("say_focus_if_same", None)
         if same is not None and cur and cur["key"] == same and not self.kb["queue"]:
-            self.say(cur["label"], True)                   # нажали, а экран не изменился — что теперь на кнопке
+            self.say(cur["label"], True, raw=cur.get("raw", False))                   # нажали, а экран не изменился — что теперь на кнопке
         if self.kb["active"] and cur and cur["rect"] is not None and self.kb["help"] is False:
             r = cur["rect"].inflate(12, 12) if cur["rect"].h > 12 else cur["rect"].inflate(24, 30)
             pulse = 0.5 + 0.5 * math.sin(self.t * 5)
@@ -7291,17 +7326,23 @@ class Game:
             return
         if event.type == pygame.KEYDOWN and (event.key == pygame.K_F11 or (
                 event.key == pygame.K_RETURN and getattr(event, "mod", 0) & pygame.KMOD_ALT)):
-            if not self.headless:
+            if not self.headless and not IS_WEB:           # в браузере размер холста задаёт страница
                 toggle_fullscreen()
                 self.save_settings()
+            return
+        if self.dispute_ui is not None:                  # окно замечания модально (и ловит ввод текста):
+            self.handle_dispute_event(event)             # буквы, в т.ч. «m»/«ь», — это текст, а не горячие клавиши
             return
         if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
             on = toggle_sound()
             self.save_settings()
             self.flash("Звук включён" if on else "Звук выключен (M — включить)", GHOST, 1.8)
             return
-        if self.dispute_ui is not None:                  # окно замечания модально (и ловит ввод текста)
-            self.handle_dispute_event(event)
+        if self.kb["help"] and event.type == pygame.MOUSEBUTTONDOWN:   # справка F1 модальна: клик — закрыть
+            self.toggle_help()
+            return
+        if self.show_sound:                              # панель настроек модальна (⚑ и «Я не согласен» — под ней)
+            self.handle_sound_event(event)
             return
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.dispute_visible()
                 and self._dispute_btn_rect().collidepoint(event.pos)):
@@ -7310,9 +7351,6 @@ class Game:
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.scene not in ("title", "intro", "ending")
                 and self._feedback_rect().collidepoint(event.pos)):
             self.open_feedback()
-            return
-        if self.show_sound:                              # панель громкости модальна
-            self.handle_sound_event(event)
             return
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
                 and self.scene in ("title", "hub", "guild", "garage") and not IS_WEB
@@ -7336,7 +7374,7 @@ class Game:
             if handler:
                 handler(event.pos)
         elif event.type == pygame.KEYDOWN:
-            if (event.key == pygame.K_v and self.scene == "job" and self.cur
+            if (event.key == pygame.K_v and self.scene == "job" and self.cur and self.cur.get("track") != "tech"
                     and not self.mini_pending and not self.show_manual and not self.spec_pending):
                 self.open_v3d()
                 return
@@ -7360,9 +7398,11 @@ class Game:
                                    AMBER, 2.5)
                 elif self.scene in ("garage", "guild", "result", "exam_result", "failed", "seating"):
                     self.scene = "hub"
-                elif self.scene == "hub":
+                elif self.scene in ("hub", "intro"):
                     self.scene = "title"
-                elif self.scene in ("title", "intro", "ending"):
+                elif self.scene == "ending":
+                    self.scene = "hub"
+                elif self.scene == "title":
                     pygame.event.post(pygame.event.Event(pygame.QUIT))
 
     def click_title(self, m):
@@ -7799,13 +7839,13 @@ class Game:
                         self._set_vol_from_x(key, event.pos[0])
                         return
                 return
-            for full, r in self._mode_rects():
+            for full, r in ([] if IS_WEB else self._mode_rects()):     # в браузере окно и размер — у страницы
                 if r.collidepoint(event.pos):
                     if full != DISPLAY["fullscreen"] and not self.headless:
                         toggle_fullscreen()
                     snd("tick")
                     return
-            for opt, r in self._res_rects():
+            for opt, r in ([] if IS_WEB else self._res_rects()):
                 if r.collidepoint(event.pos):
                     cur = DISPLAY["res"] or "auto"
                     if opt != cur:
@@ -7886,6 +7926,12 @@ class Game:
                           GREY if muted else WHITE, right=True)
             Button(self._sound_mute_rect(), "ВКЛЮЧИТЬ ЗВУК" if not VOL["on"] else "БЕЗ ЗВУКА",
                    GOOD if not VOL["on"] else GREY).draw(surf, mouse)
+        elif IS_WEB:                                   # браузер: размер холста и полный экран задаёт страница
+            draw_wrapped(surf, "В браузере размер и полный экран задаёт сама страница — например, клавиша F11 браузера.",
+                         (p.x + 32, p.y + 130), p.w - 64, 15, GREY)
+            draw_text(surf, "Свечение и частицы", (p.x + 32, p.y + 329), 17, WHITE)
+            Button(self._glow_btn_rect(), "ВКЛ" if DISPLAY["glow"] else "ВЫКЛ",
+                   AMBER if DISPLAY["glow"] else GREY).draw(surf, mouse, active=DISPLAY["glow"])
         else:
             draw_text(surf, "Режим экрана", (p.x + 32, p.y + 137), 17, WHITE)
             for full, r in self._mode_rects():
@@ -7923,10 +7969,16 @@ class Game:
         set_ambient(name)
 
     def _draw_toast(self, surf):
-        lines = wrap_lines(self.toast, WIDTH - 140, 16)
+        reserve = 56 if self.scene in ("title", "intro", "ending") else 164   # справа значки ⚑ / RU / шестерёнка
+        if self.scene in ("title",) and not IS_WEB:
+            reserve = 112
+        if self.scene == "job" and self.dispute_visible():
+            reserve = WIDTH - self._dispute_btn_rect().x + 6
+        w = WIDTH - 16 - reserve
+        lines = wrap_lines(self.toast, w - 40, 16)
         h = 12 + len(lines) * (font(16).get_height() + 2)
         k = ease_back((self.t - self._typing.setdefault(("toast", self.toast), (self.toast, self.t))[1]) / 0.3)
-        rect = pygame.Rect(8, 4 - int(50 * (1 - k)), WIDTH - 16, max(46, h))
+        rect = pygame.Rect(8, 4 - int(50 * (1 - k)), w, max(46, h))
         s = Surf(rect.size, pygame.SRCALPHA)
         s.fill((20, 18, 26, 250))
         surf.blit(s, rect)
@@ -7940,8 +7992,13 @@ class Game:
     def _topbar(self, surf, title):
         DR.rect(surf, (16, 14, 22), (0, 0, WIDTH, 54))
         DR.line(surf, AMBER, (0, 54), (WIDTH, 54), 1)
-        draw_text(surf, title, (24, 15), 22, AMBER, bold=True)
-        draw_text(surf, "КОЛЁСА И КОСТИ", (WIDTH - 170, 16), 18, GHOST, bold=True, right=True)
+        right = WIDTH - 170
+        if self.scene == "job" and self.dispute_visible():      # место занято кнопкой «Я НЕ СОГЛАСЕН»
+            right = self._dispute_btn_rect().x - 12
+        else:
+            draw_text(surf, "КОЛЁСА И КОСТИ", (right, 16), 18, GHOST, bold=True, right=True)
+            right -= font(18, True).size(tr("КОЛЁСА И КОСТИ"))[0] + 16
+        fit_text(surf, title, (24, 15), right - 24, 22, AMBER, bold=True)
 
     # ----- титул -----
     def _wave_title(self, surf, text, center, size, color, st, delay=0.0):
@@ -8461,7 +8518,20 @@ class Game:
             self._draw_necro_thread(surf, (staff_x, staff_y), (tx, ty), col=col_t, active=is_act, phase=i * 1.3)
 
     # ---------- рисунок: скелет-марионетка и клиент в коляске сбоку ----------
-    def _draw_seat_scene(self, surf, rect, case, cfg, pose, highlight=True, show_necro=True, show_body=False):
+    def _draw_seat_scene(self, surf, rect, case, cfg, pose, highlight=True, show_necro=True, show_body=False,
+                         clip=None):
+        """Сцена посадки; clip — рамка, за которую рисунок не выходит (череп не налезает на тексты)."""
+        old = surf.get_clip()
+        if clip is not None:
+            k = _rs(surf)
+            c = _rr(clip, k).clip(old)
+            surf.set_clip(c)
+        try:
+            self._draw_seat_scene_body(surf, rect, case, cfg, pose, highlight, show_necro, show_body)
+        finally:
+            surf.set_clip(old)
+
+    def _draw_seat_scene_body(self, surf, rect, case, cfg, pose, highlight=True, show_necro=True, show_body=False):
         """Вид сбоку: детальная коляска, анатомический скелет (таз, позвонки, грудная клетка, череп,
         бедро, надколенник, голень, стопа) и некромант Мортимер, управляющий скелетом нитями."""
         for gx in range(rect.x + 20, rect.right - 10, 36):
@@ -8735,6 +8805,8 @@ class Game:
             pt_deg = round(pose.get("p", 0))
             badge_col = BAD if pt_deg > 12 else (AMBER if pt_deg > 5 else GOOD)
             status_txt = f"Завал таза назад: {pt_deg}° (на крестце)" if pt_deg > 5 else "Таз в нейтрали · позвоночник стабилен"
+            sw_ = font(12, True).size(tr(status_txt))[0] + 12          # подпись — на тёмной плашке, поверх рисунка
+            aa_rect(surf, (16, 12, 24, 215), (rect.x + 134, rect.y + 10, sw_, 18), border_radius=4)
             draw_text(surf, status_txt, (rect.x + 140, rect.y + 12), 12, badge_col, bold=True)
 
         if not highlight:
@@ -8762,7 +8834,7 @@ class Game:
                     ly = min(floor_y - 24, uy + 19)
             used_ys.append(ly)
             DR.line(surf, col, (int(p_[0]), int(p_[1])), (lx, ly + 7), 1)
-            tw = font(12, True).size(label)[0] + 10
+            tw = font(12, True).size(tr(label))[0] + 10
             aa_rect(surf, (16, 12, 24, 215), (lx - tw // 2, ly - 1, tw, 16), border_radius=4)
             draw_text(surf, label, (lx, ly), 12, col, bold=True, center=True)
 
@@ -8890,8 +8962,11 @@ class Game:
         """Иллюстрация к вопросу о мифе «90-90-90»: Мортимер и три скелета с разной целью посадки."""
         for gx in range(rect.x + 20, rect.right - 10, 36):
             DR.line(surf, (26, 29, 40), (gx, rect.y + 8), (gx, rect.bottom - 26), 1)
-        draw_text(surf, "Мортимер: «Один шаблон 90-90-90 не подходит всем — решают осмотр и цель!»",
-                  (rect.centerx + 36, rect.y + 16), 14, AMBER, bold=True, center=True)
+        myth = "Мортимер: «Один шаблон 90-90-90 не подходит всем — решают осмотр и цель!»"
+        msz = 14                                       # строка — в ширину рамки (в переводе она длиннее)
+        while msz > 11 and font(msz, True).size(tr(myth))[0] > rect.w - 60:
+            msz -= 1
+        draw_text(surf, myth, (rect.centerx + 20, rect.y + 16), msz, AMBER, bold=True, center=True)
         presets = [
             ("Активный толчок", dict(seat_h=48, kind="manual", body=dict(thigh=45, shank=42, scap=35, shoulder=54)),
              dict(depth=40, leg=42, back_h=35, back_a=93, tilt=0)),
@@ -8958,9 +9033,12 @@ class Game:
                 self._seat_front(surf, cv, corrected=demo_good)
             else:
                 case, cfg, pose = self._seat_demo_pose(cv, lpose, force_good=demo_good)
-                self._draw_seat_scene(surf, cv.inflate(-16, -24), case, cfg, pose, show_necro=True)
-                if lpose.get("measure"):
-                    draw_text(surf, "Жёсткая рулетка: глубина = бедро − 5 см (2″)", (cv.x + 148, cv.y + 14), 14, AMBER, bold=True)
+                self._draw_seat_scene(surf, cv.inflate(-16, -24), case, cfg, pose, show_necro=True, clip=cv.inflate(-4, -4))
+                if lpose.get("measure"):                # подпись — справа, под кнопкой «норма», не на статусе позы
+                    cap = "Жёсткая рулетка: глубина = бедро − 5 см (2″)"
+                    cw_ = font(14, True).size(tr(cap))[0] + 14
+                    aa_rect(surf, (16, 12, 24, 215), (cv.right - 14 - cw_, cv.y + 46, cw_, 22), border_radius=5)
+                    draw_text(surf, cap, (cv.right - 21, cv.y + 48), 14, AMBER, bold=True, right=True)
             has_err_pose = any(k in lpose for k in ("p", "slide", "deep", "knee_up", "dangle", "front"))
             if has_err_pose:
                 tbtn = self._seat_demo_toggle_rect()
@@ -8972,13 +9050,14 @@ class Game:
             for pt_ in les["points"]:
                 y = draw_wrapped(surf, "• " + pt_, (780, y), 476, 15, WHITE) + 8
             draw_text(surf, "По руководству Permobil «Seating & Positioning Guide»",
-                      (cv.x + 14, cv.bottom - 38), 11, GREY)
+                      (cv.right - 14, cv.bottom - 18), 11, GREY, right=True)
         elif sc["tab"] == "fit":
             case = SEAT_CASES[sc["case"]]
             checks, pose = self.seat_eval(case, sc["cfg"])
             xray = sc.get("xray", True)
-            self._draw_seat_scene(surf, pygame.Rect(cv.x + 8, cv.y + 98, cv.w - 16, cv.h - 122),
-                                  case, sc["cfg"], pose, show_necro=True, show_body=xray)
+            scene_r = pygame.Rect(cv.x + 8, cv.y + 98, cv.w - 16, cv.h - 122)
+            self._draw_seat_scene(surf, scene_r, case, sc["cfg"], pose, show_necro=True, show_body=xray,
+                                  clip=pygame.Rect(cv.x + 4, scene_r.y - 4, cv.w - 8, cv.bottom - scene_r.y))
             blit_idle(surf, load_image(case["client_art"], (92, 108), GHOST), (cv.x + 12, cv.y + 6), self.t)
             tbtn = self._seat_demo_toggle_rect()
             Button(tbtn, "РЕНТГЕН: ВКЛ" if xray else "РЕНТГЕН: СКЕЛЕТ",
@@ -8988,11 +9067,14 @@ class Game:
                 Button(r, "", GOOD if done else CYAN).draw(surf, mouse, active=i == sc["case"])
                 fit_text(surf, ("✔ " if done else "") + SEAT_CASES[i]["client"], (r.x + 10, r.y + 8), r.w - 20, 14, WHITE)
             b = case["body"]
-            draw_wrapped(surf, case["story"], (cv.x + 112, cv.y + 10), cv.w - 362, 14, WHITE, max_lines=3)
-            draw_wrapped(surf, "Карта терапевта: " + case["therapist"], (cv.x + 112, cv.y + 62), cv.w - 126, 13, CYAN, max_lines=2)
-            draw_text(surf, f"Мерки: бедро {b['thigh']} см · голень {b['shank']} см · "
-                            f"лопатка {b['scap']} см · плечо {b['shoulder']} см",
-                      (cv.x + 14, cv.bottom - 38), 11, AMBER)
+            sy_ = draw_wrapped(surf, case["story"], (cv.x + 112, cv.y + 10), cv.w - 362, 14, WHITE, max_lines=3)
+            th_lines = max(1, min(2, (cv.y + 104 - (sy_ + 2)) // (font(13).get_height() + 2)))
+            draw_wrapped(surf, "Карта терапевта: " + case["therapist"], (cv.x + 112, max(cv.y + 44, sy_ + 2)),
+                         cv.w - 126, 13, CYAN, max_lines=th_lines)
+            cm = tr("см")                               # каждое слово — через словарь (в EN не остаётся кириллицы)
+            draw_text(surf, f"{tr('Мерки')}: {tr('бедро')} {b['thigh']} {cm} · {tr('голень')} {b['shank']} {cm} · "
+                            f"{tr('лопатка')} {b['scap']} {cm} · {tr('плечо')} {b['shoulder']} {cm}",
+                      (cv.x + 14, cv.bottom - 18), 11, AMBER)
             sliders = self._seat_slider_rects()
             for key, track in sliders:
                 label, unit, lo, hi = SEAT_SLIDERS[key]
@@ -9357,6 +9439,8 @@ class Game:
     V3D_SS = 2                      # суперсэмплинг модели (сглаживание)
 
     def open_v3d(self):
+        if not self.cur or self.cur.get("track") == "tech":     # у заданий Гильдии нет деталей для осмотра
+            return
         # настоящая модель — по умолчанию, если есть numpy (без него 30 тыс. граней тормозят)
         ai_default = _np is not None and get_ai_chair3d(self.cur.get("chair_art")) is not None
         self.v3d = dict(yaw=-0.75, pitch=0.28, ai=ai_default,
@@ -9679,7 +9763,7 @@ class Game:
         aa_rect(surf, (60, 72, 88), vr, 1, border_radius=10)
         if hover:
             label = PARTS.get(hover, hover)
-            w = font(15, True).size(label)[0] + 22
+            w = font(15, True).size(tr(label))[0] + 22
             rect = pygame.Rect(mouse[0] - w // 2, mouse[1] - 40, w, 26)
             rect.clamp_ip(vr)
             tip = Surf(rect.size, pygame.SRCALPHA)
@@ -9752,6 +9836,7 @@ class Game:
                 ring = Surf((rr * 2 + 4, rr * 2 + 4), pygame.SRCALPHA)
                 aa_circle(ring, (*AMBER, int(150 * (1 - ph))), (rr + 2, rr + 2), rr, 2)
                 surf.blit(ring, (x - rr - 2, y - rr - 2))
+            aa_circle(surf, (14, 12, 20), (x, y), r + 1, 3)          # тёмная подложка: кольцо видно и на белом арте
             aa_circle(surf, GOOD if done else AMBER, (x, y), r, 1)
             if (mouse[0] - x) ** 2 + (mouse[1] - y) ** 2 <= r * r:
                 hover = (pid, x, y, r)
@@ -9759,7 +9844,7 @@ class Game:
             pid, x, y, r = hover
             aa_circle(surf, WHITE, (x, y), r + 3, 2)
             label = PARTS[pid]
-            w = font(14).size(label)[0] + 16
+            w = font(14).size(tr(label))[0] + 16
             rect = pygame.Rect(x - w // 2, y - r - 30, w, 22)
             rect.clamp_ip(pygame.Rect(0, 56, WIDTH, HEIGHT - 56))
             tip = Surf(rect.size, pygame.SRCALPHA)
@@ -9812,24 +9897,30 @@ class Game:
                    f"Осмотри детали (клик по коляске или списку): {len(self.inspected)}/{INSPECT_REQ}")
             draw_text(surf, tip, (360, crect.bottom + 4), 15, GREY if unlocked else AMBER, bold=not unlocked)
             draw_text(surf, "ДИАГНОЗ", (980, self._right_col_top() + 6), 16, CYAN if unlocked else DIM, bold=True)
-            for i, rect in self._diag_rects():
+            drects = self._diag_rects()
+            dsize = 11                                     # один размер на весь список: самый крупный, где влезают все
+            for dsize in (14, 13, 12, 11):
+                if all(len(wrap_lines(job["diagnosis"][i]["text"], r.w - 24, dsize)) * (font(dsize).get_height() + 2)
+                       <= r.h - 12 for i, r in drects):
+                    break
+            for i, rect in drects:
                 Button(rect, "", CYAN if unlocked else DIM).draw(surf, mouse, enabled=unlocked)
                 text = job["diagnosis"][i]["text"]
-                for size in (14, 13, 12, 11):              # длинный диагноз — мельче, но целиком
-                    if len(wrap_lines(tr(text), rect.w - 24, size)) * (font(size).get_height() + 2) <= rect.h - 12:
-                        break
-                draw_wrapped(surf, text, (rect.x + 12, rect.y + 6), rect.w - 24, size, WHITE if unlocked else GREY)
+                draw_wrapped(surf, text, (rect.x + 12, rect.y + 6), rect.w - 24, dsize, WHITE if unlocked else GREY)
             self._draw_parts(surf, mouse, "ОСМОТРЕТЬ")
             Button(self._v3d_btn_rect(), "ОСМОТР 3D", CYAN).draw(surf, mouse)
         elif self.phase == "repair":
             n = len(job["steps"])
-            draw_text(surf, f"РЕМОНТ — шаг {self.step_idx + 1}/{n}", (360, 70), 20, AMBER, bold=True)
+            hdr = draw_text(surf, f"РЕМОНТ — шаг {self.step_idx + 1}/{n}", (360, 70), 20, AMBER, bold=True)
+            # прогресс-точки — в строке заголовка (раньше лежали под заметкой и пересекались с ней)
+            self._draw_step_dots(surf, n, (hdr.right + 22, hdr.centery))
             step = job["steps"][self.step_idx]
-            draw_wrapped(surf, step["instr"], (360, 100), 560, 19, WHITE)
-            if self.last_note:
-                draw_wrapped(surf, "✔ " + self.last_note, (360, 175), 560, 15, GOOD)
-            # прогресс-полоса шагов
-            self._draw_step_dots(surf, n)
+            y = draw_wrapped(surf, step["instr"], (360, 100), 560, 19, WHITE)
+            if self.last_note:                         # итог прошлого шага — сколько влезет до коляски (y=222)
+                lh = font(14).get_height() + 2
+                room = (222 - (y + 4)) // lh
+                if room >= 1:
+                    draw_wrapped(surf, "✔ " + self.last_note, (360, y + 4), 560, 14, GOOD, max_lines=min(2, room))
             self._draw_parts(surf, mouse, "ДЕТАЛЬ")
             self._draw_tools(surf, mouse)
         elif self.phase == "test":
@@ -9839,10 +9930,10 @@ class Game:
                 Button(self._test_btn_rect(), "ПРОКАТИТЬ И ПРОВЕРИТЬ", GOOD).draw(surf, mouse)
             else:
                 self._draw_ride(surf)
-        if self.mini_pending:
-            self._draw_mini_overlay(surf, mouse)
         if self.v3d is None:
             self._draw_action(surf)
+        if self.mini_pending:
+            self._draw_mini_overlay(surf, mouse)
         if self.v3d is not None:
             self._draw_v3d(surf, mouse)
         self._draw_tool_in_hand(surf, mouse)
@@ -9880,13 +9971,18 @@ class Game:
         DR.polygon(surf, (44, 36, 28), [(70, 289), (63, r.y + 4), (89, r.y + 4)])
         surf.blit(box, r)
 
-    def _draw_step_dots(self, surf, n):
-        x, y = 360, 205
+    def _draw_step_dots(self, surf, n, at=(360, 205)):
+        x, y = at
+        if x + (n - 1) * 22 > 960:                    # длинное задание — точки плотнее, в пределах центра
+            step = max(12, (960 - x) // max(1, n - 1))
+        else:
+            step = 22
+        r = 7 if step >= 22 else max(4, step // 3)
         for i in range(n):
             c = GOOD if i < self.step_idx else (AMBER if i == self.step_idx else DIM)
-            aa_circle(surf, c, (x + i * 22, y), 7)
+            aa_circle(surf, c, (x + i * step, y), r)
             if i == self.step_idx:
-                aa_circle(surf, AMBER, (x + i * 22, y), 10, 2)
+                aa_circle(surf, AMBER, (x + i * step, y), r + 3, 2)
 
     def _draw_parts(self, surf, mouse, header):
         draw_text(surf, header, (980, 70), 16, AMBER, bold=True)
@@ -10059,20 +10155,20 @@ class Game:
         elif self.phase == "test":
             draw_text(surf, "ПРОВЕРКА ПОД НАГРУЗКОЙ", (360, 70), 20, GOOD, bold=True)
             draw_wrapped(surf, job["test"], (360, 100), 560, 19, WHITE)
-            if self.ride_t0 is None:
+            if self.ride_t0 is None:                     # реплика — над кнопкой, кнопку не закрывает
+                self._draw_ghost_bubble(surf, 440)
                 Button(self._test_btn_rect(), "ПРОВЕРИТЬ РАБОТУ", GOOD).draw(surf, mouse)
             else:
                 self._draw_ride(surf)
-            self._draw_ghost_bubble(surf, 540)
 
+        if self.v3d is None:                         # анимация инструмента — под окнами (мануал, спека, мини)
+            self._draw_action(surf)
         if self.mini_pending:
             self._draw_mini_overlay(surf, mouse)
         if self.spec_pending:
             self._draw_spec_overlay(surf, mouse)
         if self.show_manual:
             self._draw_manual_overlay(surf, mouse)
-        if self.v3d is None:
-            self._draw_action(surf)
         if self.v3d is not None:
             self._draw_v3d(surf, mouse)
         self._draw_tool_in_hand(surf, mouse)
@@ -10121,7 +10217,7 @@ class Game:
 
     # --- оверлей мануала Гильдии ---
     def _manual_panel_rect(self):
-        return pygame.Rect(140, 80, 1000, 560)
+        return pygame.Rect(40, 62, WIDTH - 80, 646)
 
     def _manual_page_rects(self):
         pages = (self.cur.get("manual") if (self.cur and self.cur.get("track") == "tech")
@@ -10129,6 +10225,23 @@ class Game:
         p = self._manual_panel_rect()
         return [(key, pygame.Rect(p.x + 20, p.y + 70 + i * 54, 270, 46))
                 for i, key in enumerate(pages)]
+
+    def _manual_text_size(self, page, width, height):
+        """Наибольший шрифт (17→11), при котором вся страница мануала помещается в height."""
+        key = (page, width, height, LANG["code"])
+        cache = self.__dict__.setdefault("_manual_fit", {})
+        if key not in cache:
+            lines = MANUAL[page][1]
+            best = (11, 4)
+            for size in range(17, 10, -1):
+                gap = 8 if size >= 15 else 5
+                lh = font(size).get_height() + 2
+                h = sum(len(wrap_lines("• " + ln, width, size)) * lh + gap for ln in lines)
+                if h <= height:
+                    best = (size, gap)
+                    break
+            cache[key] = best
+        return cache[key]
 
     def _manual_close_rect(self):
         p = self._manual_panel_rect()
@@ -10149,14 +10262,22 @@ class Game:
             active = key == self.manual_page
             aa_rect(surf, PANEL2 if active else PANEL, rect, border_radius=6)
             aa_rect(surf, PURPLE if active else DIM, rect, 2, border_radius=6)
-            fit_text(surf, MANUAL[key][0], (rect.x + 10, rect.y + 13), rect.w - 20, 14,
-                     WHITE if active else GREY)          # сначала перевод, потом обрезка
+            name = MANUAL[key][0]
+            if font(14).size(tr(name))[0] <= rect.w - 20:
+                draw_text(surf, name, (rect.x + 10, rect.y + 13), 14, WHITE if active else GREY)
+            else:                                        # длинное название — в две строки, а не мелким шрифтом
+                draw_wrapped(surf, name, (rect.x + 10, rect.y + 5), rect.w - 20, 13, WHITE if active else GREY,
+                             max_lines=2)
         if self.manual_page:
             title, lines = MANUAL[self.manual_page]
-            draw_text(surf, title, (p.x + 320, p.y + 70), 20, AMBER, bold=True)
-            y = p.y + 110
-            for ln in lines:
-                y = draw_wrapped(surf, "• " + ln, (p.x + 320, y), p.w - 350, 17, WHITE) + 8
+            x0 = p.x + 320
+            tw = p.right - 24 - x0
+            fit_text(surf, title, (x0, p.y + 70), tw, 20, AMBER, bold=True)
+            y0, bottom = p.y + 110, self._manual_close_rect().y - 10
+            size, gap = self._manual_text_size(self.manual_page, tw, bottom - y0)
+            y = y0
+            for ln in lines:                             # весь текст страницы — в панели (шрифт подбирается)
+                y = draw_wrapped(surf, "• " + ln, (x0, y), tw, size, WHITE) + gap
         Button(self._manual_close_rect(), "ЗАКРЫТЬ [Esc]", AMBER).draw(surf, mouse)
 
     # ----- мини-интеракции: геометрия, клики, отрисовка -----
@@ -10272,23 +10393,26 @@ class Game:
         Button(b_done, "ГОТОВО, ПРОВЕРЯЮ", GOOD).draw(surf, mouse)
 
     def _draw_mini_gap(self, surf, mouse, p, m, cfg):
-        tr = self._mini_gap_track()
-        aa_rect(surf, PANEL, tr, border_radius=6)
+        trk = self._mini_gap_track()
+        aa_rect(surf, PANEL, trk, border_radius=6)
         span = cfg["mx"] - cfg["mn"]
-        zx = tr.x + tr.w * (cfg["lo"] - cfg["mn"]) / span
-        zw = max(8, tr.w * (cfg["hi"] - cfg["lo"]) / span)
-        aa_rect(surf, (40, 70, 48), (zx, tr.y, zw, tr.h), border_radius=6)
-        aa_rect(surf, GOOD, (zx, tr.y, zw, tr.h), 2, border_radius=6)
-        aa_rect(surf, DIM, tr, 2, border_radius=6)
-        vx = tr.x + tr.w * (m["value"] - cfg["mn"]) / span
-        aa_rect(surf, CYAN, (vx - 3, tr.y - 8, 6, tr.h + 16), border_radius=3)
-        draw_text(surf, str(cfg["mn"]), (tr.x, tr.bottom + 8), 13, GREY)
-        draw_text(surf, str(cfg["mx"]), (tr.right, tr.bottom + 8), 13, GREY, right=True)
+        zx = trk.x + trk.w * (cfg["lo"] - cfg["mn"]) / span
+        zw = max(8, trk.w * (cfg["hi"] - cfg["lo"]) / span)
+        aa_rect(surf, (40, 70, 48), (zx, trk.y, zw, trk.h), border_radius=6)
+        aa_rect(surf, GOOD, (zx, trk.y, zw, trk.h), 2, border_radius=6)
+        aa_rect(surf, DIM, trk, 2, border_radius=6)
+        vx = trk.x + trk.w * (m["value"] - cfg["mn"]) / span
+        aa_rect(surf, CYAN, (vx - 3, trk.y - 8, 6, trk.h + 16), border_radius=3)
+        draw_text(surf, str(cfg["mn"]), (trk.x, trk.bottom + 8), 13, GREY)
+        draw_text(surf, str(cfg["mx"]), (trk.right, trk.bottom + 8), 13, GREY, right=True)
         label = cfg.get("label", "Значение")
-        draw_text(surf, f"{label}: {m['value']} {cfg['unit']}", (tr.centerx, tr.bottom + 34),
-                  26, WHITE, bold=True, center=True)
+        text = f"{tr(label)}: {m['value']} {tr(cfg['unit'])}"
+        sz = 26                                       # крупно, но в ширину панели и ниже цифр шкалы
+        while sz > 16 and font(sz, True).size(text)[0] > p.w - 48:
+            sz -= 1
+        draw_text(surf, text, (trk.centerx, trk.bottom + 46), sz, WHITE, bold=True, center=True)
         draw_text(surf, "Кликни по шкале, чтобы выставить значение.",
-                  (tr.centerx, tr.bottom + 74), 14, GREY, center=True)
+                  (trk.centerx, trk.bottom + 82), 14, GREY, center=True)
         Button(self._mini_gap_check_rect(), "ПРОВЕРИТЬ", GOOD).draw(surf, mouse)
 
     def _draw_mini_ping(self, surf, mouse, p, m, cfg):
@@ -10494,17 +10618,24 @@ class Game:
         draw_wrapped(surf, job["thanks"], (WIDTH // 2, 185), 760, 20, WHITE, center=True,
                      limit=self.typed("thanks", job["thanks"]) if st > 1.2 else 0)
         # карточка «что ты узнал»
-        card = pygame.Rect(WIDTH // 2 - 380, 250 + int(50 * (1 - appear(st, 0.9, 0.5))), 760, 180)
+        fsz = 18                                     # длинный факт — мельче, но целиком в карточке (до y≈450)
+        for fsz in (18, 17, 16, 15, 14):
+            if 54 + len(wrap_lines(job["fact"], 712, fsz)) * (font(fsz).get_height() + 2) + 14 <= 200:
+                break
+        fh = len(wrap_lines(job["fact"], 712, fsz)) * (font(fsz).get_height() + 2)
+        card = pygame.Rect(WIDTH // 2 - 380, 250 + int(50 * (1 - appear(st, 0.9, 0.5))), 760, max(180, 54 + fh + 14))
         s = Surf(card.size, pygame.SRCALPHA)
         s.fill((26, 32, 30, 235))
         surf.blit(s, card)
         aa_rect(surf, GHOST, card, 2, border_radius=10)
         draw_text(surf, "ЧТО ТЫ УЗНАЛ (по-настоящему):", (card.x + 24, card.y + 18), 18, GHOST, bold=True)
-        draw_wrapped(surf, job["fact"], (card.x + 24, card.y + 54), card.w - 48, 18, WHITE)
-        draw_text(surf, self.result_gag, (WIDTH // 2, 470), 17, PURPLE, center=True)
+        draw_wrapped(surf, job["fact"], (card.x + 24, card.y + 54), card.w - 48, fsz, WHITE)
+        gy = max(470, 250 + card.h + 14)
+        draw_text(surf, self.result_gag, (WIDTH // 2, gy), 17, PURPLE, center=True)
         if self.result_gag in LEG_GAGS and st > 1.4:
             kind = LEG_GAG_KIND[LEG_GAGS.index(self.result_gag)]
-            draw_leg_gag(surf, kind, st - 1.4, pygame.Rect(260, 488, 760, 118))
+            top = gy + 18
+            draw_leg_gag(surf, kind, st - 1.4, pygame.Rect(260, top, 760, max(60, HEIGHT - 114 - top)))
         if self.cur.get("track") == "tech":
             nxt = "В ГИЛЬДИЮ"
         elif self.user_done_count() >= len(JOBS):
@@ -10524,10 +10655,13 @@ class Game:
             draw_text(surf, "Пока пусто. Почини хотя бы одну коляску!", (WIDTH // 2, 300), 22, GREY, center=True)
         n = len(self.garage)
         cols = 3 if n <= 9 else 4       # с заданиями Гильдии коллекция шире
-        gx, gy = 20, 20
+        gx = 20
+        rows = max(1, -(-n // cols))
+        gy = 20 if rows <= 4 else 10
         cw = (WIDTH - 80 - (cols - 1) * gx) // cols
-        ch = 150 if cols == 3 else 128
-        art = 120 if cols == 3 else 96
+        # все ряды — между шапкой (y=90) и кнопкой «НАЗАД» (y=HEIGHT-70)
+        ch = min(150 if cols == 3 else 128, (HEIGHT - 70 - 10 - 90 - (rows - 1) * gy) // rows)
+        art = min(120 if cols == 3 else 96, ch - 12)
         tx = art + 20
         x0 = (WIDTH - cols * cw - (cols - 1) * gx) // 2
         for i, (jid, stars) in enumerate(self.garage):
@@ -11185,6 +11319,77 @@ def run_selftest():
     if speech_clean("Enter — начать · 1920×1080 ✔") not in ("Enter, начать, 1920 на 1080", "Enter, начать, 1920 by 1080"):
         failures.append(f"speech_clean: {speech_clean('Enter — начать · 1920×1080 ✔')}")
 
+    # --- падения из аудита 2026-10-17 (art_tests/audit/code_bugs.md) ---
+    import tempfile
+    surf_ = Surf((WIDTH, HEIGHT))
+    gv = Game(headless=True)                                   # V в задании Гильдии: у tech нет parts
+    gv.done = {j["id"] for j in JOBS}
+    gv.start_job(TECH_JOBS[0]["id"])
+    try:
+        gv.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_v, mod=0, unicode="v"))
+        gv.update(0.1)
+        gv.draw(surf_)
+        if gv.v3d is not None:
+            failures.append("V открыл 3D-осмотр в задании Гильдии")
+    except Exception as e:
+        failures.append(f"V в задании Гильдии: {type(e).__name__}: {e}")
+    gm = Game(headless=True)                                   # «m»/«ь» в комментарии — текст, а не выкл. звука
+    gm.scene = "hub"
+    gm.open_feedback()
+    vol_on = VOL["on"]
+    gm.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_m, mod=0, unicode="ь"))
+    gm.handle_event(pygame.event.Event(pygame.TEXTINPUT, text="ь"))
+    if VOL["on"] != vol_on or gm.dispute_ui is None or gm.dispute_ui["text"] != "ь":
+        failures.append("клавиша M в окне замечания переключила звук")
+    VOL["on"] = vol_on
+    gm.close_dispute()
+    gm.show_sound = True                                       # ⚑ при открытых настройках не открывает окно под ними
+    gm.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gm._feedback_rect().center))
+    if gm.dispute_ui is not None:
+        failures.append("⚑ открыл окно замечания под панелью настроек")
+    # битые/старые файлы: settings (a11y), save, feedback — во временной папке, файлы игрока не трогаем
+    tmp = tempfile.mkdtemp()
+    keep = {k: globals()[k] for k in ("SAVE_PATH", "SETTINGS_PATH", "FEEDBACK_PATH", "DATA_DIR")}
+    a11y0, vol0, lang0 = dict(A11Y), dict(VOL), LANG["code"]
+    try:
+        globals().update(SAVE_PATH=os.path.join(tmp, "save.json"), SETTINGS_PATH=os.path.join(tmp, "settings.json"),
+                         FEEDBACK_PATH=os.path.join(tmp, "feedback.json"), DATA_DIR=tmp)
+        with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+            json.dump({"lang": lang0, "a11y": {"rate": "fast", "on": "false", "instant": None}}, f)
+        with open(SAVE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"done": ["flat", ["x"]], "garage": [["flat", 3], ["caster"], 5], "exam_passed": True,
+                       "seat_quiz_ok": True}, f)
+        with open(FEEDBACK_PATH, "w", encoding="utf-8") as f:
+            json.dump({"old": "format"}, f)
+        try:
+            gs = Game(headless=False)
+            if A11Y["on"] is not False or not isinstance(A11Y["rate"], int):
+                failures.append(f"settings.json: неверные типы a11y приняты: {A11Y}")
+            if gs.done != {"flat"} or gs.garage != [("flat", 3)] or not gs.exam_passed or not gs.seat_quiz_ok:
+                failures.append("save.json: один битый элемент сбросил остальной прогресс")
+            gs.headless = True                                 # снимок экрана не нужен
+            gs.scene = "hub"
+            gs.open_feedback()
+            gs.headless = False
+            gs.send_dispute()
+            with open(FEEDBACK_PATH, encoding="utf-8") as f:
+                if not isinstance(json.load(f), list):
+                    failures.append("feedback.json не исправлен на список")
+        except Exception as e:
+            failures.append(f"битые файлы сохранения: {type(e).__name__}: {e}")
+    finally:
+        globals().update(keep)
+        A11Y.update(a11y0); VOL.update(vol0); set_lang(lang0)
+    ad0 = ASSETS_DIR                                           # запасной векторный арт (нет PNG) не падает
+    try:
+        globals()["ASSETS_DIR"] = tmp
+        load_image("martin.png", (77, 91))
+    except Exception as e:
+        failures.append(f"векторный арт без PNG: {type(e).__name__}: {e}")
+    finally:
+        globals()["ASSETS_DIR"] = ad0
+        _img_cache.pop(("martin.png", (77, 91)), None)
+
     pygame.quit()
     if failures:
         print("SELFTEST FAILED:")
@@ -11256,9 +11461,11 @@ async def main():
         return
     if "--feedback" in sys.argv:                            # замечания «Я не согласен» от игроков
         try:
-            data = json.load(open(FEEDBACK_PATH, encoding="utf-8"))
+            with open(FEEDBACK_PATH, encoding="utf-8") as f:
+                data = json.load(f)
         except Exception:
             data = []
+        data = [e for e in data if isinstance(e, dict)] if isinstance(data, list) else []
         print(f"Файл: {FEEDBACK_PATH}  — замечаний: {len(data)}")
         for e in data:
             print()
@@ -11280,25 +11487,28 @@ async def main():
     if "--mute" not in sys.argv:
         build_sounds()
     set_lang(LANG["code"])
-    try:
-        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
-            want_full = bool(json.load(f).get("fullscreen"))
-    except Exception:
-        want_full = False
-    if "--window" in sys.argv:
-        want_full = False
     global RS
     try:
         with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
             st_ = json.load(f)
     except Exception:
         st_ = {}
-    if st_.get("res"):
-        DISPLAY["res"] = tuple(st_["res"])
+    if not isinstance(st_, dict):                         # старый/испорченный settings.json — как будто его нет
+        st_ = {}
+    want_full = st_.get("fullscreen") is True and not IS_WEB
+    if "--window" in sys.argv:
+        want_full = False
+    res_ = st_.get("res")
+    if (not IS_WEB and isinstance(res_, (list, tuple)) and len(res_) == 2
+            and all(isinstance(x, int) and not isinstance(x, bool) and 320 <= x <= 16384 for x in res_)):
+        DISPLAY["res"] = tuple(res_)
     GL["off"] = "--nogl" in sys.argv or bool(os.environ.get("WNB_NOGL")) or st_.get("gpu3d") is False
     if "--rs" in sys.argv[:-1]:                               # ручной масштаб = разрешение 1280*N × 720*N
-        k_ = float(sys.argv[sys.argv.index("--rs") + 1])
-        DISPLAY["res"] = (round(WIDTH * k_), round(HEIGHT * k_))
+        try:
+            k_ = max(1.0, min(3.0, float(sys.argv[sys.argv.index("--rs") + 1])))
+            DISPLAY["res"] = (round(WIDTH * k_), round(HEIGHT * k_))
+        except ValueError:
+            print("--rs: нужно число, например --rs 1.5")
     init_display(want_full)
     if _crash_log:                                          # какой 3D-рендер включился — в журнал запуска
         try:
