@@ -3,7 +3,9 @@
 Собирает папку web_build/wheels_and_bones (main.py + game.py + assets, музыка в .ogg),
 затем pygbag кладёт готовый сайт в web_build/wheels_and_bones/build/web/:
   index.html + wheels_and_bones.apk + favicon.png — эти файлы и выкладываются на сервер.
---serve — после сборки запустить локальный сервер http://localhost:8000 для проверки."""
+--serve — после сборки запустить локальный сервер (проверять через http://127.0.0.1:8000).
+--deploy — выложить сборку на GitHub Pages: https://fordragon88.github.io/wheels-and-bones-web/
+           (публичный репозиторий только со сборкой; клон — в web_deploy/)."""
 import os, sys, shutil, subprocess
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -74,6 +76,27 @@ def build(serve=False):
     subprocess.run(cmd, check=True, cwd=ROOT)
 
 
+DEPLOY = os.path.join(ROOT, "web_deploy")
+REPO = "https://github.com/fordragon88/wheels-and-bones-web.git"
+
+
+def deploy():
+    web = os.path.join(APP, "build", "web")
+    if not os.path.isdir(os.path.join(DEPLOY, ".git")):
+        subprocess.run(["git", "clone", "-q", REPO, DEPLOY], check=True)
+    for n in os.listdir(web):
+        shutil.copy2(os.path.join(web, n), DEPLOY)
+    git = ["git", "-C", DEPLOY, "-c", "user.name=fordragon88",
+           "-c", "user.email=98241749+fordragon88@users.noreply.github.com"]
+    subprocess.run(git + ["add", "-A"], check=True)
+    if subprocess.run(git + ["diff", "--cached", "--quiet"]).returncode:
+        subprocess.run(git + ["commit", "-q", "-m", "Update web build"], check=True)
+        subprocess.run(git + ["push", "-q"], check=True)
+        print("выложено: https://fordragon88.github.io/wheels-and-bones-web/ (обновится через ~1 мин)")
+    else:
+        print("сборка не изменилась — выкладывать нечего")
+
+
 if __name__ == "__main__":
     stage()
     print("подготовлено:", APP)
@@ -82,3 +105,5 @@ if __name__ == "__main__":
     if os.path.isdir(web):
         for n in os.listdir(web):
             print(f"  {n:32s} {os.path.getsize(os.path.join(web, n)) / 1e6:6.1f} МБ")
+    if "--deploy" in sys.argv:
+        deploy()

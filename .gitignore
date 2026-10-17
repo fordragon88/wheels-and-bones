@@ -37,3 +37,4 @@ feedback_shots/
 
 # Браузерная сборка (python build_web.py)
 web_build/
+web_deploy/

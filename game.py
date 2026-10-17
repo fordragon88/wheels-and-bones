@@ -1064,6 +1064,19 @@ def web_setup_page():
         d.style.cssText='position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden';
         document.body.appendChild(d); }
       mk('wnb-live-polite','polite'); mk('wnb-live-assertive','assertive');
+      var c = document.getElementById('canvas');
+      if (c) {             // «приложение»: NVDA/JAWS сами отдают стрелки и буквы игре
+        c.setAttribute('role', 'application');
+        c.setAttribute('aria-label', 'Wheels and Bones, wheelchair repair game. Press F1 for keyboard help.');
+        c.tabIndex = 0;
+        try { c.focus(); } catch (e) {}
+        window.addEventListener('focus', function(){ try { c.focus(); } catch (e) {} });
+      }
+      function unlockAudio(){   // браузер даёт звук только после действия игрока
+        try { var S = (window.Module && Module.SDL2) || window.SDL2;
+              if (S && S.audioContext && S.audioContext.state !== 'running') S.audioContext.resume(); } catch (e) {}
+      }
+      ['pointerdown','keydown','touchstart'].forEach(function(t){ window.addEventListener(t, unlockAudio, true); });
       window.addEventListener('keydown', function(e){
         if (['Tab',' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','F1','F2'].indexOf(e.key) >= 0) e.preventDefault();
       });

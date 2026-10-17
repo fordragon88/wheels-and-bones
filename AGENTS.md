@@ -274,6 +274,10 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-17 — Claude (Opus 5.5) — браузерная версия опубликована: https://fordragon88.github.io/wheels-and-bones-web/
+  (публичный репозиторий fordragon88/wheels-and-bones-web — только сборка; выкладка: `python build_web.py --deploy`).
+  Блок для страницы WordPress (Custom HTML с iframe) — `wordpress_embed.html`. Холст — role=application,
+  звук разблокируется первым нажатием.
 - 2026-10-17 — Claude (Opus 5.5) — браузерная версия (pygbag): `python build_web.py [--serve]` → web_build/…/build/web
   (index.html + .apk 8 МБ). В game.py: `IS_WEB`, асинхронный `main()` (`asyncio.run`), холст 1280×720, только английский,
   сохранения в localStorage (`web_persist`/`web_restore`), озвучка — aria-live на странице (+ голос браузера по F2).
