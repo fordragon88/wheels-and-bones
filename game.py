@@ -7421,9 +7421,11 @@ class Game:
     def typed(self, key, text, cps=75):
         """Сколько символов text уже «напечатано» (сброс при смене текста)."""
         text = tr(text)
-        if A11Y["instant"]:
-            return 10 ** 6
         seen = self._typing.get(key)
+        if A11Y["instant"]:                          # «текст сразу»: считаем, что напечатано давно
+            if not seen or seen[0] != text:
+                self._typing[key] = (text, self.t - 1000)
+            return 10 ** 6
         if not seen or seen[0] != text:
             self._typing[key] = (text, self.t)
             return 0
