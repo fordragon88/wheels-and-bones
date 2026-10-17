@@ -520,14 +520,14 @@ def build_chair_folding(lod=1.0, is_troll=False):
         z_in = 30.0 * s
         z_out = (zf_abs - 22.0) * s
         za, zb = min(z_in, z_out), max(z_in, z_out)
-        add_rounded_box(b, xb - 20.0, xb + 165.0, FY, FY + 20.0, za, zb, "footrest", DARK,
+        add_rounded_box(b, xb - 20.0, xb + 185.0, FY, FY + 20.0, za, zb, "footrest", DARK,
                         top_col=(56, 56, 62), bevel=4.0)
         for rx in (xb + 25.0, xb + 60.0, xb + 95.0, xb + 130.0):
             add_rounded_box(b, rx - 5.0, rx + 5.0, FY + 19.0, FY + 24.0, za + 14.0, zb - 14.0, "footrest", (66, 66, 72), bevel=1.0)
-        add_spline_tube(b, [(xb + 160.0, FY + 16.0, za + 4.0), (xb + 160.0, FY + 16.0, zb - 4.0)], 9.5, "footrest", CHROME,
+        add_spline_tube(b, [(xb + 180.0, FY + 16.0, za + 4.0), (xb + 180.0, FY + 16.0, zb - 4.0)], 9.5, "footrest", CHROME,
                         sides=8, smooth=0, caps=True)
 
-        add_front_caster(b, x_front - 10.0, 100.0, (zf_abs - 4.0) * s, 100.0, (x_front, 262.0),
+        add_front_caster(b, x_front - 6.0, 106.0, (zf_abs - 4.0) * s, 106.0, (x_front, 262.0),
                          fork_col=DARK, tire_col=TIRE_COL, hub_col=(46, 46, 50), n_spokes=6, stem_col=CHROME)
         add_wheel_brake(b, 278.0, y_seat + 8.0, (zf_abs + 22.0) * s, s, col_clamp=CHROME, col_knob=(40, 40, 44))
 
@@ -687,14 +687,18 @@ def build_chair_active(variant="elf", lod=1.0):
                          col=(34, 34, 38), edge_col=(52, 52, 58), part="frame")
 
         # задняя стойка спинки + ручка толкателя назад
+        # (длина ручки по варианту: у elf — короткие «пеньки», у остальных — полноценные;
+        #  у fairy ручка загибается вверх, как на арте)
+        hx = {"elf": 46.0, "fairy": 108.0, "dwarf": 92.0, "orc": 78.0}[variant]
+        hy = {"elf": 24.0, "fairy": 46.0, "dwarf": 26.0, "orc": 24.0}[variant]
         add_spline_tube(b, [
             (x_post + 4.0, y_sr - 30.0, zf),
             (x_post - 4.0, (y_sr + back_top) * 0.5, zf),
             (x_post - 14.0, back_top, zf),
             (x_post - 26.0, back_top + 18.0, zf),
-            (x_post - 78.0, back_top + 24.0, zf)
+            (x_post - 26.0 - hx, back_top + hy, zf)
         ], 11.5, "frame", BLACK if variant != "dwarf" else FR_COL, sides=8, smooth=2)
-        add_spline_tube(b, [(x_post - 34.0, back_top + 22.0, zf), (x_post - 98.0, back_top + 26.0, zf)],
+        add_spline_tube(b, [(x_post - 34.0, back_top + 22.0, zf), (x_post - 34.0 - hx, back_top + hy + 2.0, zf)],
                         15.0, "frame", (30, 30, 34), sides=8, smooth=0)
 
         # крепление оси к раме
@@ -846,6 +850,9 @@ def build_chair_active(variant="elf", lod=1.0):
         add_spline_tube(b, [(x_leg - 10.0, y_sf - 60.0, -zl_abs), (x_leg - 10.0, y_sf - 60.0, zl_abs)], 11.0, "frame", FR_COL,
                         sides=8, smooth=0)
         x0, x1, y0, y1 = fp
+        # платформа чуть длиннее вперёд, как на арте (кроме orc — там силуэт уже точный)
+        if variant != "orc":
+            x1 = x1 + 20.0
         add_rounded_box(b, x0, x1, y0, y1, -zl_abs - 6.0, zl_abs + 6.0, "footrest", BLACK, top_col=(58, 58, 64), bevel=5.0)
         for rx in np.linspace(x0 + 22.0, x1 - 22.0, 4):
             add_rounded_box(b, rx - 4.0, rx + 4.0, y1 - 1.0, y1 + 4.0, -zl_abs + 20.0, zl_abs - 20.0, "footrest",

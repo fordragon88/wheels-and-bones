@@ -582,8 +582,8 @@ def build_focuscr(lod=1.0):
     xc = 430.0                 # front caster axle
     cR = 88.0
     xf = 470.0                 # seat front / legrest receiver
-    yh = 1030.0                # push handle height
-    lr = 160.0                 # legrest forward reach
+    yh = 1000.0                # push handle height
+    lr = 175.0                 # legrest forward reach
     hb = -45.0                   # push handle top set-back
     ya = 681.0                 # armrest pad bottom
     arc_c, arc_R = (190.0, 900.0), 560.0
@@ -660,7 +660,7 @@ def build_focuscr(lod=1.0):
                     "tilt_cable", (28, 28, 32), sides=5, smooth=1, caps=False)
     # navy seat pan, cushion, tall back narrowing into the headrest
     add_rounded_box(b, wx - 24.0, xf + 10.0, y_seat - 10.0, y_seat + 10.0, -zf_abs + 6.0, zf_abs - 6.0, "seat", NAVY, bevel=4.0)
-    add_contoured_cushion(b, wx - 14.0, xf - 120.0, y_seat + 6.0, y_seat + 74.0, -zf_abs + 10.0, zf_abs - 10.0, "cushion",
+    add_contoured_cushion(b, wx - 14.0, xf - 90.0, y_seat + 6.0, y_seat + 74.0, -zf_abs + 10.0, zf_abs - 10.0, "cushion",
                           NAVY, trim_col=NAVY_T, bolster=16.0, ribs=0)
     add_contoured_backrest(b, wx - 10.0, wx - 40.0, y_seat + 50.0, 860.0, -zf_abs + 30.0, zf_abs - 30.0, 60.0,
                            "seat", NAVY, trim_col=NAVY_T, bolster=26.0, ribs=0)
@@ -682,15 +682,15 @@ def build_whillc2(lod=1.0):
     BLACK2 = (48, 48, 54)
     DGREY = (76, 76, 82)
     GTYRE = (112, 112, 118)
-    fx = 430.0
+    fx = 450.0
     fR = 145.0
     fz = 256.0
     rx = -250.0
     rR = 165.0
     rz = 262.0
     ys = 450.0                  # seat pan top
-    yb = 940.0                  # back shell top
-    pr = 58.0                   # arm pod radius
+    yb = 910.0                  # back shell top
+    pr = 50.0                   # arm pod radius
     p0x = -140.0                # arm pod rear-low end
     p0y = 330.0
     p1x = 230.0                 # arm pod front-high end
@@ -934,11 +934,11 @@ def build_pulse6(lod=1.0):
     dR = 172.0
     xcf = 300.0                # front caster axle
     xcr = -300.0               # rear caster axle
-    cR = 72.0
+    cR = 68.0
     ys = 560.0                 # seat frame
     yb = 1100.0                # backrest top
     tilt = 9.0
-    xl = 410.0                 # footplate x
+    xl = 380.0                 # footplate x
     yl = 250.0                 # footplate height
 
     # chassis: low body, fenders over the drive wheels, front battery box with badge
@@ -981,7 +981,7 @@ def build_pulse6(lod=1.0):
 
     i_seat = len(b.verts)
     add_rounded_box(b, -250.0, 270.0, ys - 10.0, ys + 26.0, -232.0, 232.0, "frame", BASE, bevel=6.0)
-    add_rounded_box(b, -244.0, 266.0, ys + 24.0, ys + 104.0, -236.0, 236.0, "frame", UPH, top_col=UPH_T, bevel=18.0)
+    add_rounded_box(b, -244.0, 280.0, ys + 24.0, ys + 104.0, -236.0, 236.0, "frame", UPH, top_col=UPH_T, bevel=18.0)
     add_contoured_backrest(b, -222.0, -270.0, ys + 90.0, yb - 80.0, -226.0, 226.0, 64.0, "frame", UPH, trim_col=UPH_T,
                            bolster=20.0, ribs=3)
     for s in (-1, 1):
@@ -1044,8 +1044,8 @@ def build_q6edge(lod=1.0):
     xcr = -390.0
     cR = 66.0
     ys = 440.0                 # seat frame
-    yb = 1150.0                # backrest top
-    xl = 380.0                 # footplate centre x
+    yb = 1122.0                # backrest top
+    xl = 358.0                 # footplate centre x
     yl = 110.0                 # footplate height
 
     # chassis with purple side trims, glossy yellow front shroud with black grille, rear lights
@@ -1056,7 +1056,7 @@ def build_q6edge(lod=1.0):
         for zt in (-70.0, 70.0):
             add_cyl(b, (xb, 312.0 if xb > 0 else 318.0, zt), (xb, 326.0, zt), 9.0, "battery",
                     (200, 60, 50) if zt > 0 else (40, 40, 44), sides=6)
-    add_rounded_box(b, 230.0, 362.0, 112.0, 330.0, -186.0, 186.0, "frame", YEL, top_col=(250, 206, 80), bevel=44.0)
+    add_rounded_box(b, 230.0, 362.0, 112.0, 330.0, -198.0, 198.0, "frame", YEL, top_col=(250, 206, 80), bevel=44.0)
     add_rounded_box(b, 356.0, 366.0, 250.0, 280.0, -34.0, 34.0, "frame", (30, 30, 34), bevel=6.0)
     add_rounded_box(b, 364.0, 368.0, 258.0, 272.0, -20.0, 20.0, "frame", (210, 214, 222), bevel=2.0)
     add_rounded_box(b, -362.0, -340.0, 200.0, 246.0, -40.0, 40.0, "fuse", (228, 92, 84), bevel=5.0)
@@ -1084,10 +1084,10 @@ def build_q6edge(lod=1.0):
     for s in (-1, 1):
         add_spline_tube(b, [(-160.0, 320.0, 120.0 * s), (150.0, ys, 120.0 * s)], 12.0, "frame", (70, 70, 76), sides=6, smooth=0)
     add_rounded_box(b, -250.0, 260.0, ys - 20.0, ys + 30.0, -238.0, 238.0, "frame", BASE, bevel=6.0)
-    add_contoured_cushion(b, -244.0, 266.0, ys + 26.0, ys + 110.0, -240.0, 240.0, "frame", UPH, trim_col=UPH_T, bolster=26.0, ribs=0)
+    add_contoured_cushion(b, -244.0, 282.0, ys + 26.0, ys + 110.0, -252.0, 252.0, "frame", UPH, trim_col=UPH_T, bolster=26.0, ribs=0)
     add_contoured_backrest(b, -215.0, -262.0, ys + 90.0, yb - 220.0, -232.0, 232.0, 64.0, "frame", UPH, trim_col=UPH_T,
                            bolster=34.0, ribs=0)
-    add_contoured_backrest(b, -258.0, -282.0, yb - 260.0, yb, -170.0, 170.0, 58.0, "frame", UPH, trim_col=UPH_T,
+    add_contoured_backrest(b, -258.0, -282.0, yb - 260.0, yb, -150.0, 150.0, 58.0, "frame", UPH, trim_col=UPH_T,
                            bolster=26.0, ribs=0)
     for s in (-1, 1):
         add_spline_tube(b, [(-262.0, ys, 200.0 * s), (-290.0, yb - 300.0, 200.0 * s)], 12.0, "frame", (50, 52, 60), sides=8, smooth=0)
