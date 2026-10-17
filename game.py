@@ -314,8 +314,7 @@ class LFont:
 
 def mouse_pos():
     """Мышь в логических координатах 1280x720."""
-    x, y = pygame.mouse.get_pos()
-    return (int(x / RS), int(y / RS))
+    return window_to_logical(pygame.mouse.get_pos())
 
 
 def pick_render_scale():
@@ -1009,84 +1008,125 @@ def dpi_aware():
 
 def available_resolutions():
     """Разрешения 16:9, которые помещаются на монитор."""
-    try:
-        dw, dh = pygame.display.get_desktop_sizes()[0]
-    except Exception:
-        dw, dh = 1920, 1080
+    dw, dh = _desktop()
     return [r for r in RES_OPTIONS if r[0] <= dw and r[1] <= dh] or [RES_OPTIONS[0]]
 
 
-def rs_for(res):
-    """Масштаб рендера для разрешения (None — авто по монитору)."""
-    if not res:
+def _desktop():
+    try:
+        return pygame.display.get_desktop_sizes()[0]
+    except Exception:
+        return (1920, 1080)
+
+
+def _fit(w, h):
+    """Наибольший прямоугольник 16:9 внутри w×h — по центру (поля по бокам или сверху/снизу)."""
+    k = min(w / WIDTH, h / HEIGHT)
+    vw, vh = max(1, round(WIDTH * k)), max(1, round(HEIGHT * k))
+    return pygame.Rect((w - vw) // 2, (h - vh) // 2, vw, vh)
+
+
+def rs_for(res, view_h=None):
+    """Масштаб рендера: выбранное разрешение, а в режиме АВТО — по высоте области игры в окне (не больше ×2)."""
+    if res:
+        return max(1.0, min(3.0, res[1] / HEIGHT))
+    if view_h is None:
         return pick_render_scale()
-    return max(1.0, min(3.0, res[1] / HEIGHT))
+    return max(1.0, min(2.0, view_h / HEIGHT))          # ровно под окно — кадр выводится без масштабирования
 
 
-def apply_display(res=None, fullscreen=None):
-    """Сменить разрешение и/или режим на лету: новый масштаб рендера, новое окно, сброс кэшей картинок и шрифтов."""
+def _default_window():
+    """Окно в режиме «в окне»: выбранное разрешение, если влезает, иначе 85% монитора (16:9)."""
+    dw, dh = _desktop()
+    res = DISPLAY.get("res")
+    if res and res[0] <= dw * 0.95 and res[1] <= dh * 0.92:
+        return tuple(res)
+    r = _fit(int(dw * 0.85), int(dh * 0.85))
+    return (r.w, r.h)
+
+
+def _set_window(fullscreen):
+    """Создать/переключить окно. Масштабирование кадра делает игра сама (present), без SCALED у SDL."""
+    if fullscreen:
+        screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    else:
+        size = DISPLAY.get("win_size") or _default_window()
+        screen = pygame.display.set_mode(size, pygame.RESIZABLE)
+    DISPLAY["fullscreen"] = bool(fullscreen)
+    DISPLAY["screen"] = screen
+    return screen
+
+
+def _update_rs():
+    """Пересчитать масштаб рендера под текущее окно/разрешение; при смене — сбросить кэши и кадр."""
     global RS
-    if res is not None:
-        DISPLAY["res"] = None if res == "auto" else tuple(res)
-    want_full = DISPLAY["fullscreen"] if fullscreen is None else fullscreen
-    new_rs = rs_for(DISPLAY["res"])
-    if new_rs != RS:
+    view = _fit(*pygame.display.get_surface().get_size())
+    new_rs = rs_for(DISPLAY.get("res"), view.h)
+    if new_rs != RS or DISPLAY.get("frame") is None:
         RS = new_rs
         for c in (_img_cache, _font_cache, _AA_CACHE, _glow_cache, _tool_icon_cache):
             c.clear()
-    # окно пересоздаётся целиком: повторный set_mode с SCALED в pygame 2.6 оставляет поверхность размера окна
-    # (кадр обрезался бы). Ссылку на старый объект окна отпускаем только после закрытия окна.
-    DISPLAY["fullscreen"] = False
-    cap = pygame.display.get_caption()
-    pygame.display.quit()
-    DISPLAY.pop("win", None)
-    pygame.display.init()
-    if cap and cap[0]:
-        pygame.display.set_caption(cap[0])
-    DISPLAY["screen"] = init_display(want_full)
-    DISPLAY["frame"] = Surf((WIDTH, HEIGHT))
+        DISPLAY["frame"] = Surf((WIDTH, HEIGHT))
+        DISPLAY["rs_changed"] = True
+    return RS
+
+
+def apply_display(res=None, fullscreen=None):
+    """Сменить разрешение и/или режим на лету."""
+    if res is not None:
+        DISPLAY["res"] = None if res == "auto" else tuple(res)
+        DISPLAY["win_size"] = None                     # окно — под новое разрешение
+    want_full = DISPLAY["fullscreen"] if fullscreen is None else fullscreen
+    _set_window(want_full)
+    _update_rs()
     return RS
 
 
 def init_display(fullscreen=False):
-    """Окно игры: кадр рисуется в WIDTH*RS x HEIGHT*RS (разрешение экрана), SDL выводит его в окно
-    (SCALED: поля без искажений, окно можно тянуть). В окне — 85% монитора; F11 — пиксель в пиксель."""
-    os.environ.setdefault("SDL_RENDER_SCALE_QUALITY", "1")        # плавное (не «пиксельное») масштабирование
-    size = (round(WIDTH * RS), round(HEIGHT * RS))
-    try:
-        screen = pygame.display.set_mode(size, pygame.SCALED | pygame.RESIZABLE)
-    except pygame.error:
-        screen = pygame.display.set_mode(size)
-    try:                                                # окно — выбранного размера, но не больше 85% экрана
-        dw, dh = pygame.display.get_desktop_sizes()[0]
-        k = min(1.0, 0.85 * dw / size[0], 0.85 * dh / size[1])
-        if DISPLAY.get("res") and DISPLAY["res"][0] <= dw * 0.95 and DISPLAY["res"][1] <= dh * 0.95:
-            k = DISPLAY["res"][0] / size[0]
-        if k != 1.0:
-            try:
-                win = pygame.Window.from_display_module()           # pygame-ce
-            except Exception:
-                from pygame._sdl2.video import Window               # pygame 2
-                win = Window.from_display_module()
-            win.size = (round(size[0] * k), round(size[1] * k))
-            win.position = ((dw - win.size[0]) // 2, (dh - win.size[1]) // 2)
-            DISPLAY["win"] = win        # ВАЖНО: держать ссылку. SDL хранит указатель на этот объект в окне,
-                                        # и если он умрёт, оконные события pygame обратятся к освобождённой памяти
-    except Exception:
-        pass
-    if fullscreen:
-        toggle_fullscreen()
-    return screen
+    """Первое окно игры."""
+    os.environ.setdefault("SDL_VIDEO_CENTERED", "1")
+    _set_window(fullscreen)
+    _update_rs()
+    DISPLAY["rs_changed"] = False
+    return DISPLAY["screen"]
 
 
 def toggle_fullscreen():
     """Полный экран <-> окно (F11, Alt+Enter, кнопка в настройках)."""
+    if not DISPLAY["fullscreen"]:
+        DISPLAY["win_size"] = pygame.display.get_surface().get_size()   # вернуться в окно того же размера
     try:
-        pygame.display.toggle_fullscreen()
-        DISPLAY["fullscreen"] = not DISPLAY["fullscreen"]
+        apply_display(fullscreen=not DISPLAY["fullscreen"])
     except pygame.error:
         pass
     return DISPLAY["fullscreen"]
+
+
+def present(frame):
+    """Вывести кадр в окно: по центру, без искажений, с тёмными полями; при несовпадении размеров — масштаб."""
+    screen = pygame.display.get_surface()
+    view = _fit(*screen.get_size())
+    DISPLAY["view"] = view
+    fw, fh = pygame.Surface.get_size(frame)
+    if (fw, fh) == view.size:
+        if view.topleft != (0, 0):
+            screen.fill((0, 0, 0))
+        pygame.Surface.blit(screen, frame, view.topleft)
+    else:
+        buf = DISPLAY.get("scale_buf")
+        if buf is None or buf.get_size() != view.size:
+            buf = DISPLAY["scale_buf"] = pygame.Surface(view.size)
+        pygame.transform.smoothscale(frame, view.size, buf)
+        screen.fill((0, 0, 0))
+        screen.blit(buf, view.topleft)
+
+
+def window_to_logical(pos):
+    """Координаты окна -> логические 1280×720 (с учётом полей и масштаба)."""
+    v = DISPLAY.get("view")
+    if not v:
+        return (int(pos[0] / RS), int(pos[1] / RS))
+    return (int((pos[0] - v.x) * WIDTH / v.w), int((pos[1] - v.y) * HEIGHT / v.h))
 
 
 VOL = {"master": 0.8, "music": 0.55, "sfx": 0.9, "amb": 0.45, "on": True}   # сохраняется в settings.json
@@ -6040,9 +6080,6 @@ class Game:
                             DISPLAY["res"] = None if opt == "auto" else tuple(opt)
                         else:
                             apply_display(opt)
-                            self.m3d = None                      # картинки 3D пересчитаются в новом разрешении
-                            self._fade_from = None
-                            self._last_frame = None
                     snd("tick")
                     return
             if self._glow_btn_rect().collidepoint(event.pos):
@@ -9322,11 +9359,10 @@ def main():
     if st_.get("res"):
         DISPLAY["res"] = tuple(st_["res"])
     GL["off"] = "--nogl" in sys.argv or bool(os.environ.get("WNB_NOGL")) or st_.get("gpu3d") is False
-    if "--rs" in sys.argv[:-1]:
-        RS = float(sys.argv[sys.argv.index("--rs") + 1])
-    else:
-        RS = rs_for(DISPLAY["res"])
-    DISPLAY["screen"] = init_display(want_full)
+    if "--rs" in sys.argv[:-1]:                               # ручной масштаб = разрешение 1280*N × 720*N
+        k_ = float(sys.argv[sys.argv.index("--rs") + 1])
+        DISPLAY["res"] = (round(WIDTH * k_), round(HEIGHT * k_))
+    init_display(want_full)
     if _crash_log:                                          # какой 3D-рендер включился — в журнал запуска
         try:
             info = GL["ctx"].info["GL_RENDERER"] if gl_ok() else ("выключен" if GL["off"] else "недоступен")
@@ -9334,7 +9370,6 @@ def main():
             info = "ошибка"
         _crash_log.write(f"RS {RS}, 3D: GPU {info}" + chr(10))
         _crash_log.flush()
-    DISPLAY["frame"] = Surf((WIDTH, HEIGHT))          # кадр в логических координатах, пиксели — экранные
     clock = pygame.time.Clock()
     game = Game()
     if "--unlock" in sys.argv:   # предпросмотр: всё открыто, включая Гильдию
@@ -9345,17 +9380,26 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.VIDEORESIZE:            # окно растянули/развернули — масштаб пересчитаем чуть позже
+                DISPLAY["resize_at"] = pygame.time.get_ticks()
             else:
-                if RS != 1 and event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION):
+                if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION):
                     d = dict(event.dict)
-                    d["pos"] = (int(d["pos"][0] / RS), int(d["pos"][1] / RS))
-                    if "rel" in d:
-                        d["rel"] = (d["rel"][0] / RS, d["rel"][1] / RS)
+                    d["pos"] = window_to_logical(d["pos"])
+                    v = DISPLAY.get("view")
+                    if "rel" in d and v:
+                        d["rel"] = (d["rel"][0] * WIDTH / v.w, d["rel"][1] * HEIGHT / v.h)
                     event = pygame.event.Event(event.type, d)
                 game.handle_event(event)
+        if DISPLAY.get("resize_at") and pygame.time.get_ticks() - DISPLAY["resize_at"] > 350:
+            DISPLAY["resize_at"] = None
+            _update_rs()
+        if DISPLAY.pop("rs_changed", False):
+            game.m3d = None
+            game._fade_from = game._last_frame = None
         game.update(dt)
-        game.draw(DISPLAY["frame"])                    # экран и кадр берутся каждый раз: разрешение меняется на лету
-        DISPLAY["screen"].blit(DISPLAY["frame"], (0, 0))
+        game.draw(DISPLAY["frame"])                    # кадр пересоздаётся при смене разрешения
+        present(DISPLAY["frame"])
         pygame.display.flip()
     pygame.quit()
 
