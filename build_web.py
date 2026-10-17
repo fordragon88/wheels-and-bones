@@ -5,7 +5,9 @@
   index.html + wheels_and_bones.apk + favicon.png — эти файлы и выкладываются на сервер.
 --serve — после сборки запустить локальный сервер (проверять через http://127.0.0.1:8000).
 --deploy — выложить сборку на GitHub Pages: https://fordragon88.github.io/wheels-and-bones-web/
-           (публичный репозиторий только со сборкой; клон — в web_deploy/)."""
+           (публичный репозиторий только со сборкой; клон — в web_deploy/).
+--off — скрыть всё: выключить GitHub Pages и сделать репозиторий приватным.
+--on  — открыть: репозиторий публичный + GitHub Pages включены (сайт оживает через ~1 мин)."""
 import os, sys, shutil, subprocess
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -97,7 +99,29 @@ def deploy():
         print("сборка не изменилась — выкладывать нечего")
 
 
+GH_REPO = "fordragon88/wheels-and-bones-web"
+
+
+def site(on):
+    """Включить/выключить публичный доступ к браузерной версии."""
+    gh = ["gh", "api", "-X"]
+    if on:
+        subprocess.run(["gh", "repo", "edit", GH_REPO, "--visibility", "public",
+                        "--accept-visibility-change-consequences"], check=True)
+        subprocess.run(gh + ["POST", f"repos/{GH_REPO}/pages", "-f", "source[branch]=main", "-f", "source[path]=/"],
+                       check=False, stdout=subprocess.DEVNULL)
+        print("открыто: https://fordragon88.github.io/wheels-and-bones-web/ (заработает через ~1 мин)")
+    else:
+        subprocess.run(gh + ["DELETE", f"repos/{GH_REPO}/pages"], check=False)
+        subprocess.run(["gh", "repo", "edit", GH_REPO, "--visibility", "private",
+                        "--accept-visibility-change-consequences"], check=True)
+        print("скрыто: сайт выключен, репозиторий приватный")
+
+
 if __name__ == "__main__":
+    if "--off" in sys.argv or "--on" in sys.argv:
+        site("--on" in sys.argv)
+        sys.exit(0)
     stage()
     print("подготовлено:", APP)
     build(serve="--serve" in sys.argv)
