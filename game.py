@@ -278,7 +278,12 @@ class LFont:
     """Шрифт: рендер нужного размера в пикселях экрана, метрики — в логических."""
 
     def __init__(self, size, bold=False):
-        self.f = pygame.font.SysFont("dejavusans,arial,helvetica", max(1, round(size * RS)), bold=bold)
+        px = max(1, round(size * RS))
+        path = os.path.join(ASSETS_DIR, "fonts", "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf")
+        try:                                     # свой шрифт: значки ⚑ ✔ ◉ ★ ⟲ есть на любом компьютере
+            self.f = pygame.font.Font(path, px)
+        except Exception:
+            self.f = pygame.font.SysFont("dejavusans,segoeuisymbol,arial,helvetica", px, bold=bold)
         self._cache = {}
 
     def render(self, text, aa=True, color=(255, 255, 255), bg=None):
