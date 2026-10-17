@@ -677,12 +677,34 @@ def blit_idle(surf, img, pos, t, mode="breathe", phase=0.0, k=1.0, rock=0.0):
         img = TF.rotozoom(img, rock, k)
         surf.blit(img, img.get_rect(midbottom=(pos[0] + w // 2, pos[1] + h)))
         return
-    cut = int(h * 0.55)
     sy = 1 + 0.014 * math.sin(t * 2.1 + phase)
-    surf.blit(img, (pos[0], pos[1] + cut), pygame.Rect(0, cut, w, h - cut))
-    th = int(cut * sy)
-    surf.blit(TF.smoothscale(img.subsurface((0, 0, w, cut)), (w, th)),
-              (pos[0], pos[1] + cut - th))
+    if not (isinstance(surf, Surf) and isinstance(img, Surf)):      # запасной путь (обычные поверхности)
+        cut = int(h * 0.55)
+        surf.blit(img, (pos[0], pos[1] + cut), pygame.Rect(0, cut, w, h - cut))
+        th = int(cut * sy)
+        surf.blit(TF.smoothscale(img.subsurface((0, 0, w, cut)), (w, th)), (pos[0], pos[1] + cut - th))
+        return
+    # Всё — в пикселях экрана (без округления логических координат). Верх (торс) берётся с запасом ov строк
+    # ниже разреза, растягивается и встаёт нижним краем ровно на целую строку — без сдвига на полпикселя;
+    # последние ov строк верха плавно растворяются (градиент прозрачности) поверх неподвижного низа — стыка нет.
+    RW, RH = pygame.Surface.get_size(img)
+    px, py = round(pos[0] * RS), round(pos[1] * RS)
+    cut = int(RH * 0.55)
+    ov = max(4, RH // 30)
+    top_h = min(RH, cut + ov)
+    th = max(1, round(top_h * sy))
+    pygame.Surface.blit(surf, img, (px, py + cut), pygame.Rect(0, cut, RW, RH - cut))
+    top = pygame.transform.smoothscale(pygame.Surface.subsurface(img, (0, 0, RW, top_h)), (RW, th))
+    band = min(ov, th)
+    key = ("seam_ramp", RW, band)
+    ramp = _img_cache.get(key)
+    if ramp is None:
+        ramp = pygame.Surface((RW, band), pygame.SRCALPHA)
+        for i in range(band):
+            pygame.Surface.fill(ramp, (255, 255, 255, int(255 * (1 - (i + 0.5) / band))), (0, i, RW, 1))
+        _img_cache[key] = ramp
+    pygame.Surface.blit(top, ramp, (0, th - band), None, pygame.BLEND_RGBA_MULT)
+    pygame.Surface.blit(surf, top, (px, py + top_h - th))
 
 
 def draw_spin_wheel(surf, center, r, ang, k=1.0, col=(205, 210, 225)):
