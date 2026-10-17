@@ -2497,8 +2497,9 @@ void main() {
 _GL_FS = """
 #version 330
 uniform vec3 LK; uniform vec3 LF; uniform vec3 HK;
-uniform float hl_part; uniform vec3 hl_col; uniform float hl_amt;
-uniform float hv_part; uniform float hv_amt;
+uniform vec4 hl_part; uniform vec3 hl_col; uniform float hl_amt;
+uniform vec4 hv_part; uniform float hv_amt;
+bool inset(float p, vec4 s) { return abs(p - s.x) < 0.5 || abs(p - s.y) < 0.5 || abs(p - s.z) < 0.5 || abs(p - s.w) < 0.5; }
 in vec3 v_nrm; in vec3 v_col; flat in float v_part; in float v_metal;
 layout(location = 0) out vec4 f_col;
 layout(location = 1) out vec4 f_id;
@@ -2509,8 +2510,8 @@ void main() {
     float h = max(dot(n, HK), 0.0);
     float spec = v_metal > 0.5 ? (170.0 / 255.0) * pow(h, 18.0) : 0.06 * pow(h, 28.0);
     vec3 c = v_col * inten + spec;
-    if (hl_amt > 0.0 && abs(v_part - hl_part) < 0.5) c = mix(c, hl_col, hl_amt);
-    if (hv_amt > 0.0 && abs(v_part - hv_part) < 0.5) c = c * (1.0 + hv_amt);
+    if (hl_amt > 0.0 && inset(v_part, hl_part)) c = mix(c, hl_col, hl_amt);
+    if (hv_amt > 0.0 && inset(v_part, hv_part)) c = c * (1.0 + hv_amt);
     f_col = vec4(clamp(c, 0.0, 1.0), 1.0);
     f_id = vec4((v_part + 1.0) / 255.0, 0.0, 0.0, 1.0);
 }
@@ -2597,6 +2598,15 @@ def _gl_fbo(w, h):
     return f
 
 
+# Узлы, которые подсвечиваются целиком: «джойстик» в заданиях — это весь пульт (ручка + пыльник + корпус),
+# хотя клики и улики по деталям остаются раздельными (замечание тестировщицы).
+HL_GROUPS = {"joystick": ("joystick", "boot", "controller")}
+
+
+def hl_group(part):
+    return HL_GROUPS.get(part, (part,)) if part else ()
+
+
 def gl_render(mesh, yaw, pitch, size, zoom, center=None, hl_part=None, hl_col=None, hl_amt=0.0,
               hover_part=None, hover_amt=0.35):
     """Отрисовать модель в size=(w, h) настоящих пикселей. Возврат: (pygame.Surface RGBA, ids) или None.
@@ -2613,11 +2623,16 @@ def gl_render(mesh, yaw, pitch, size, zoom, center=None, hl_part=None, hl_col=No
         pr["cp_sp"].value = (math.cos(pitch), math.sin(pitch))
         pr["scale"].value = h / 1250.0 * zoom
         pr["size"].value = (float(w), float(h))
-        pr["hl_part"].value = float(names.index(hl_part)) if hl_part in names else -9.0
+        def ids4(part):                                     # деталь -> до 4 номеров (с группой узла)
+            v = [float(names.index(p)) for p in hl_group(part) if p in names][:4]
+            return tuple(v + [-9.0] * (4 - len(v))), bool(v)
+        hl4, hl_on = ids4(hl_part)
+        hv4, hv_on = ids4(hover_part)
+        pr["hl_part"].value = hl4
         pr["hl_col"].value = tuple(c / 255.0 for c in (hl_col or AMBER))
-        pr["hl_amt"].value = float(hl_amt if hl_part in names else 0.0)
-        pr["hv_part"].value = float(names.index(hover_part)) if hover_part in names else -9.0
-        pr["hv_amt"].value = float(hover_amt if hover_part in names else 0.0)
+        pr["hl_amt"].value = float(hl_amt if hl_on else 0.0)
+        pr["hv_part"].value = hv4
+        pr["hv_amt"].value = float(hover_amt if hv_on else 0.0)
         ctx = GL["ctx"]
         ms, ms_c, ms_i, col, ids = _gl_fbo(w, h)
         ms.use()
@@ -7368,7 +7383,7 @@ class Game:
                 k = s["polys_ss"]
                 hl = Surf((fr.w * k, fr.h * k), pygame.SRCALPHA)
                 for depth, pts, col, part, fl in s["polys"]:
-                    if part == hover:
+                    if part in hl_group(hover):
                         pygame.draw.polygon(hl, (*tuple(int(c + (a_ - c) * 0.6) for c, a_ in zip(col, AMBER)), 190), pts)
                 s["hl"] = hl if k == 1 else TF.smoothscale(hl, fr.size)
                 s["hl_key"] = (key, hover)
@@ -7664,9 +7679,9 @@ class Game:
                     break
         big = Surf((vr.w * SS, vr.h * SS), pygame.SRCALPHA)
         for depth, pts, col, part, fl in polys:
-            if part and part == hover:
+            if part and part in hl_group(hover):
                 col = _shade(col, 1.35)
-            elif part and part == side_hl:
+            elif part and part in hl_group(side_hl):
                 col = tuple(int(c + (a - c) * 0.45 * pulse) for c, a in zip(col, AMBER))
             pygame.draw.polygon(big, col, pts)
             if fl & M_EDGE:
