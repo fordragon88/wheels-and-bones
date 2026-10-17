@@ -38,3 +38,12 @@ feedback_shots/
 # Браузерная сборка (python build_web.py)
 web_build/
 web_deploy/
+
+# Промежуточное — только локально (на GitHub — лишь то, что нужно для текущей сборки и проверок)
+i18n_work/oc/
+art_tests/dialogue_draft.py
+art_tests/quest_audit.json
+art_tests/_ai3d_bench.py
+art_tests/*.sh
+MUSE_3D_TASK.md
+.claude/

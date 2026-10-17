@@ -95,6 +95,14 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
     3D в окне диагностики (`m3d`), мануал, мини-игры (`mini_pending`), панель звука.
 13. **`run_selftest()`** и **`main()`**.
 
+### Где что лежит (для людей)
+- Тексты квестов, диагнозы, шаги и решения — всё в `game.py` (`JOBS`, `TECH_JOBS`, `SEAT_*`, `CLIENT_TALK`, `MANUAL`);
+  английский — `assets/lang_en.json` (собирается из `i18n_work/en*.json`). Читаемая выгрузка — `docs/QUESTS*.md`
+  (пересобирать `python docs/export_quests.py` после правок квестов).
+- Сохранения: из исходников — рядом с game.py (save.json, settings.json, feedback.json, crash.log); exe —
+  `%APPDATA%\WheelsAndBones\`; браузер — localStorage (`wnb:save.json` …).
+- Инструмент `eyes` («Глаза») — для визуальных шагов; `hands` — потрогать, нажать, снять/поставить, работать джойстиком.
+
 ### Формат задания (обычное)
 ```python
 dict(id="...", kind="manual"|"power", client="...", client_art="client_x.png", chair_art="chair_x.png",
@@ -274,6 +282,15 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-17 — Claude (Opus 5.5) — по замечаниям тестировщицы: вылет `KeyError: 'thanks'` в записке Мастерской
+  (у заданий с вариантами thanks — в варианте; селфтест теперь рисует записки всех клиентов). Новый инструмент
+  **«Глаза» (`eyes`)** — для чисто визуальных шагов (индикатор, код, осмотр); руки вместо глаз (и наоборот) дают
+  подсказку. Аудит логики всех квестов (77 замечаний, `art_tests/quest_audit.json` — локально): всё, что делается
+  джойстиком, — «Руки → Контроллер»; зазор тормоза — пока хомут ослаблен; просушка джойстика — до включения и т. п.
+  Перевод новых строк — `i18n_work/en9.json`. Читаемая выгрузка всех квестов для людей: `python docs/export_quests.py`
+  → `docs/QUESTS.md` (en) и `docs/QUESTS_ru.md`. README — сначала English, потом русский. Из GitHub убраны
+  промежуточные файлы (локально остались, см. .gitignore): i18n_work/oc/, черновик диалогов, MUSE_3D_TASK.md,
+  пакетные .sh, .claude/. Проверки: selftest (python, py), keyboard_playthrough ru/en, ui_playthrough, monkey — OK.
 - 2026-10-17 — Claude (Opus 5.5) — браузерная версия СКРЫТА до публичного запуска (владелец планирует ближе к
   Хэллоуину): GitHub Pages выключены, репозиторий wheels-and-bones-web приватный. Открыть: `python build_web.py --on`,
   скрыть: `--off`. `--deploy` обновляет сборку и в скрытом состоянии. Страницу WordPress пока не публиковать.
