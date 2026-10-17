@@ -74,7 +74,8 @@ else:
     ASSETS_DIR = os.path.join(BASE_DIR, "assets")
     DATA_DIR = BASE_DIR
 SAVE_PATH = os.path.join(DATA_DIR, "save.json")
-SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")   # громкость и язык (не сбрасываются --reset)
+SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
+FEEDBACK_PATH = os.path.join(DATA_DIR, "feedback.json")   # «Я не согласен»: замечания игроков к заданиям   # громкость и язык (не сбрасываются --reset)
 GUILD_REQ = 5                   # починенных колясок для доступа в Гильдию
 EXAM_MAX_MISTAKES = 3           # лимит ошибок на экзамене Гильдии
 INSPECT_REQ = 2                 # осмотров деталей, прежде чем откроется диагноз
@@ -613,7 +614,9 @@ _glow_cache = {}
 
 
 def add_glow(surf, pos, radius, color, level=1.0):
-    """Мягкое аддитивное свечение (светлячки, искры, луч света)."""
+    """Мягкое аддитивное свечение (светлячки, искры, луч света). Выключается в настройках («Свечение»)."""
+    if not DISPLAY["glow"]:
+        return
     q = max(0, min(8, int(level * 8 + 0.5)))
     if q == 0 or radius < 1:
         return
@@ -696,6 +699,8 @@ def draw_burst(surf, center, ph, color=(255, 210, 90), n=10, dist=70):
 
 def draw_ambient(surf, name, t):
     """Частицы поверх фона: у каждой сцены своя жизнь."""
+    if not DISPLAY["glow"]:
+        return
     if name == "bg_workshop.png":            # луч из круглого окна и пылинки в нём
         add_glow(surf, (150, 170), 200, (70, 55, 28), 0.6 + 0.15 * math.sin(t * 0.7))
         for i in range(34):
@@ -978,7 +983,7 @@ SOUND = {}
 SR = 22050
 _rng = random.Random(7)
 _AMB = {"name": None}
-DISPLAY = {"fullscreen": False}     # сохраняется в settings.json
+DISPLAY = {"fullscreen": False, "glow": True}     # сохраняется в settings.json; glow — свечение и частицы
 
 
 def dpi_aware():
@@ -2722,14 +2727,15 @@ PARTS = {
 }
 
 
-def S(instr, tool, part, note="", ghost="", ghost_wrong=False, wrongmsg="", mini=None):
+def S(instr, tool, part, note="", ghost="", ghost_wrong=False, wrongmsg="", mini=None, alt=()):
     """Удобный конструктор шага ремонта.
 
     mini — необязательная мини-интеракция вместо мгновенного выполнения:
     dict(kind="pump"|"gap"|"ping"|"meter", ...) — см. Game.start_mini().
+    alt — другие детали, которые тоже верны (насос к ниппелю И «к шине»: игроки думают по-разному).
     """
     return dict(instr=instr, tool=tool, part=part, note=note,
-                ghost=ghost, ghost_wrong=ghost_wrong, wrongmsg=wrongmsg, mini=mini)
+                ghost=ghost, ghost_wrong=ghost_wrong, wrongmsg=wrongmsg, mini=mini, alt=tuple(alt))
 
 
 def D(text, correct, feedback=""):
@@ -3018,14 +3024,14 @@ JOBS = [
             S("Проведи пальцем внутри покрышки и по ободу — убери стекло/занозы.", "hands", "tire",
               "Пропустишь осколок — новая камера проколется сразу.",
               "Барти: «О, это я помню — он тут однажды нашёл монетку. Богатей.»"),
-            S("Чуть подкачай новую камеру, чтобы держала круглую форму.", "pump", "tube",
+            S("Чуть подкачай новую камеру через ниппель, чтобы держала круглую форму.", "pump", "tube",
               "Полуспущенная камера легче и ровнее ложится в покрышку."),
             S("Вставь камеру, ниппель проведи в отверстие обода.", "hands", "valve", ""),
             S("Заправь борт покрышки руками от ниппеля по кругу.", "hands", "tire",
               "Последний участок дожми монтажкой, не прищеми камеру."),
             S("Проверь, что ниппель стоит перпендикулярно, не косо.", "hands", "valve",
               "Косой ниппель со временем перетрётся."),
-            S("Накачай до давления, указанного на боковине покрышки.", "pump", "tire",
+            S("Подключи насос к ниппелю и накачай до давления, указанного на боковине покрышки.", "pump", "tire",
               "Правильное давление снижает сопротивление качению и нагрузку на плечи.",
               "Барти: «Качай, пока не зазвенит! ...не до взрыва, конечно.»",
               mini=dict(kind="pump", lo=65, hi=80, mx=110, unit="psi",
@@ -3136,7 +3142,7 @@ JOBS = [
             S("Проверь давление в шине — спущенная шина «уводит» упор тормоза.", "gauge", "tire",
               "Первая причина «замок не держит» — низкое давление в шине.",
               "Барти: «Сразу болты крути!» ...а вот и нет — сначала давление.", ghost_wrong=True),
-            S("Подкачай шину до нормы.", "pump", "tire", ""),
+            S("Подкачай шину через ниппель до нормы.", "pump", "tire", ""),
             S("Проверь болты механизма на люфт и подтяни, если болтаются.", "allen", "brake",
               "Не перетягивай — замок станет туго включаться."),
             S("Не помогло — ослабь два болта хомута, крепящего замок к раме.", "allen", "brake",
@@ -3297,7 +3303,7 @@ JOBS = [
             D("Ослабла спинка", False, "Спинка тут ни при чём."),
         ],
         steps=[
-            S("Перекачай подушку — надуй сильнее обычного.", "pump", "cushion",
+            S("Перекачай подушку через клапан — надуй сильнее обычного.", "pump", "cushion",
               "Перекачанную легче проверить на прокол."),
             S("Погрузи подушку в таз с водой и найди прокол по пузырькам.", "bucket", "cushion",
               "Пузырьки укажут точное место утечки.",
@@ -3307,7 +3313,7 @@ JOBS = [
               "Заплатка держится только на чистой сухой поверхности."),
             S("Наклей заплатку из ремкомплекта и прижми.", "patch", "cushion",
               "В комплекте ROHO всегда есть заплатка."),
-            S("Накачай до правильного уровня: ~палец воздуха до дна под костями таза.", "pump", "cushion",
+            S("Накачай через клапан до правильного уровня: ~палец воздуха до дна под костями таза.", "pump", "cushion",
               "«Пробивание» подушки до дна = риск пролежней. Зазор ~1 палец обязателен.",
               "Барти: «Дуй до звона!» — нет, тут наоборот, перекачивать вредно.", ghost_wrong=True),
         ],
@@ -3723,7 +3729,7 @@ JOBS += [
               "TiLite: давление проверять КАЖДУЮ неделю. Если шина спущена, замок на этой стороне может проскальзывать.",
               "Барти: «Мастер говорил: замок держит не рычаг, а воздух. Я тогда не понял. Я и сейчас не понял.»"),
             # source: p70 (регулировать только на накачанной шине); число — GAME (мануал: «см. боковину»)
-            S("Накачай шину до давления с боковины. Замок регулируют только на накачанной шине!", "pump", "tire",
+            S("Накачай шину через ниппель до давления с боковины. Замок регулируют только на накачанной шине!", "pump", "tire",
               "Если выставить замок на спущенной шине, после подкачки он будет работать неправильно.",
               "Барти: «Качай, качай... я считаю вслух. Раз. Два. Э-э... много.»",
               mini=dict(kind="pump", lo=90, hi=110, mx=140, unit="psi",
@@ -4284,7 +4290,7 @@ JOBS += [
               "наоборот."),
             # source: F5_UM p64: drive tyres 250 kPa (35 psi), check weekly and after temperature change
             # source: F5_UM p21: overfilled tires can explode
-            S("Пока идёт зарядка, накачай шины ведущих колёс до 250 кПа.", "pump", "tire",
+            S("Пока идёт зарядка, накачай шины ведущих колёс через ниппель до 250 кПа.", "pump", "tire",
               "Давление проверяют раз в неделю и после резкой смены температуры. Перекачанная шина может лопнуть.",
               mini=dict(kind="pump", lo=240, hi=260, mx=320, unit="кПа",
                         hint="Мануал F5: ведущие шины — 250 кПа (35 psi)")),
@@ -4672,6 +4678,14 @@ TECH_JOBS += [
     ),
 ]
 
+# насос подключают к ниппелю (клапану): в шагах накачки ниппель тоже верная цель —
+# замечание коллеги-тестировщика: «к шине» и «к ниппелю» — оба естественных ответа
+for _job in JOBS:
+    for _v in [_job] + _job.get("variants", []):
+        for _st in _v.get("steps", []):
+            if _st.get("tool") == "pump" and _st.get("part") in ("tire", "tube", "cushion"):
+                _st["alt"] = tuple(set(_st.get("alt", ())) | {"valve"})
+
 ALL_JOBS = JOBS + TECH_JOBS
 
 
@@ -4698,7 +4712,7 @@ class Button:
             bg = (col[0] // 3, col[1] // 3, col[2] // 3)
         bg = tuple(int(b + (c // 3 - b) * 0.45 * h) for b, c in zip(bg, col))
         r = self.rect.move(offset[0], offset[1] - round(3 * h))
-        if h > 0.03:
+        if h > 0.03 and DISPLAY["glow"]:
             g = Surf(r.inflate(12, 12).size, pygame.SRCALPHA)
             aa_rect(g, (*col, int(60 * h)), g.get_rect(), border_radius=12)
             surf.blit(g, r.inflate(12, 12).topleft)
@@ -4792,6 +4806,9 @@ class Game:
         self.esc_timer = 0.0              # двойной Esc — покинуть ремонт
         self.v3d = None                   # состояние 3D-осмотра (yaw/pitch/drag)
         self.show_sound = False           # панель «Звук» (громкость)
+        self.dispute = None               # последняя засчитанная ошибка (для кнопки «Я не согласен»)
+        self.dispute_ui = None            # открытое окно замечания
+        self.feedback_mem = []            # headless/тесты: замечания не пишутся в файл
         self.seat_done = set()            # Кабинет посадки: решённые примерки
         self.seat_quiz_ok = False         # и сданный зачёт
         self.seatc = None
@@ -4813,7 +4830,151 @@ class Game:
         self.mistakes += 1
         snd("bad")
         self.flash(msg, BAD, secs)
+        if not (self.dispute and self.dispute.get("t") == self.t):
+            self.note_dispute("mistake", "", "", msg)
         self._exam_check()
+
+    def note_dispute(self, kind, expected, got, msg):
+        """Запомнить засчитанную ошибку — игрок может оспорить её кнопкой «Я не согласен»."""
+        if not self.cur:
+            return
+        step = ""
+        if self.phase == "repair" and self.cur.get("track") != "tech" and self.step_idx < len(self.cur.get("steps", [])):
+            step = self.cur["steps"][self.step_idx]["instr"]
+        self.dispute = dict(kind=kind, job=self.cur["id"], title=self.cur.get("title", ""), phase=self.phase,
+                            step=step, expected=expected, got=got, msg=msg, t=self.t, sent=False)
+
+    def _dispute_btn_rect(self):
+        return pygame.Rect(WIDTH - 196, 60, 172, 30)
+
+    def dispute_visible(self):
+        d = self.dispute
+        return bool(self.scene == "job" and d and not d["sent"] and self.cur and d["job"] == self.cur["id"]
+                    and self.t - d["t"] < 25 and not self.dispute_ui and self.v3d is None)
+
+    def open_dispute(self):
+        self.dispute_ui = dict(reason=0, text="")
+        try:
+            pygame.key.start_text_input()
+        except Exception:
+            pass
+        snd("tick")
+
+    DISPUTE_REASONS = ["Мой вариант тоже правильный", "В игре ошибка или неточность", "Непонятно сформулировано"]
+
+    def _dispute_panel_rect(self):
+        return pygame.Rect(WIDTH // 2 - 340, HEIGHT // 2 - 250, 680, 500)
+
+    def _dispute_reason_rects(self):
+        p = self._dispute_panel_rect()
+        return [(i, pygame.Rect(p.x + 28, p.y + 182 + i * 42, p.w - 56, 36)) for i in range(len(self.DISPUTE_REASONS))]
+
+    def _dispute_text_rect(self):
+        p = self._dispute_panel_rect()
+        return pygame.Rect(p.x + 28, p.y + 340, p.w - 56, 78)
+
+    def _dispute_send_rect(self):
+        p = self._dispute_panel_rect()
+        return pygame.Rect(p.right - 228, p.bottom - 62, 200, 44)
+
+    def _dispute_cancel_rect(self):
+        p = self._dispute_panel_rect()
+        return pygame.Rect(p.x + 28, p.bottom - 62, 160, 44)
+
+    def close_dispute(self):
+        self.dispute_ui = None
+        try:
+            pygame.key.stop_text_input()
+        except Exception:
+            pass
+
+    def send_dispute(self):
+        """Сохранить замечание (feedback.json рядом с сохранениями) и не засчитывать спорную ошибку."""
+        import datetime
+        d, ui = self.dispute, self.dispute_ui
+        entry = dict(time=datetime.datetime.now().isoformat(timespec="seconds"), lang=LANG["code"],
+                     job=d["job"], title=d["title"], phase=d["phase"], step=d["step"], kind=d["kind"],
+                     expected=d["expected"], got=d["got"], game_message=d["msg"],
+                     reason=self.DISPUTE_REASONS[ui["reason"]], comment=ui["text"].strip())
+        if self.headless:
+            self.feedback_mem.append(entry)
+        else:
+            try:
+                data = json.load(open(FEEDBACK_PATH, encoding="utf-8")) if os.path.exists(FEEDBACK_PATH) else []
+            except Exception:
+                data = []
+            data.append(entry)
+            try:
+                with open(FEEDBACK_PATH, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=1)
+            except Exception:
+                pass
+        d["sent"] = True
+        refunded = False
+        if not self.exam_mode and self.mistakes > 0:
+            self.mistakes -= 1
+            refunded = True
+        self.close_dispute()
+        snd("ok")
+        self.flash("Спасибо! Замечание сохранено — его проверят и поправят игру."
+                   + (" Эта ошибка не засчитана." if refunded else ""), GOOD, 5)
+
+    def handle_dispute_event(self, event):
+        ui = self.dispute_ui
+        if event.type == pygame.TEXTINPUT:
+            if len(ui["text"]) < 400:
+                ui["text"] += event.text
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                self.close_dispute()
+            elif event.key == pygame.K_BACKSPACE:
+                ui["text"] = ui["text"][:-1]
+            elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                self.send_dispute()
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._dispute_send_rect().collidepoint(event.pos):
+                self.send_dispute()
+            elif self._dispute_cancel_rect().collidepoint(event.pos) or \
+                    not self._dispute_panel_rect().collidepoint(event.pos):
+                self.close_dispute()
+            else:
+                for i, r in self._dispute_reason_rects():
+                    if r.collidepoint(event.pos):
+                        ui["reason"] = i
+                        snd("tick")
+
+    def _draw_dispute_btn(self, surf, mouse):
+        if self.dispute_visible():
+            Button(self._dispute_btn_rect(), "Я НЕ СОГЛАСЕН", PURPLE).draw(surf, mouse)
+
+    def _draw_dispute_panel(self, surf, mouse):
+        ui, d = self.dispute_ui, self.dispute
+        dim = _img_cache.get(("v3d_dim", 160, RS))
+        if dim is None:
+            dim = _img_cache[("v3d_dim", 160, RS)] = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
+            dim.fill((8, 8, 12, 160))
+        surf.blit(dim, (0, 0))
+        p = self._dispute_panel_rect()
+        aa_rect(surf, (20, 18, 28), p, border_radius=14)
+        aa_rect(surf, PURPLE, p, 2, border_radius=14)
+        draw_text(surf, "Я НЕ СОГЛАСЕН С ИГРОЙ", (p.x + 28, p.y + 20), 22, PURPLE, bold=True)
+        y = p.y + 58
+        if d["expected"] or d["got"]:
+            draw_text(surf, "Игра ожидала: " + d["expected"], (p.x + 28, y), 15, GOOD); y += 24
+            draw_text(surf, "Ты выбрал: " + d["got"], (p.x + 28, y), 15, BAD); y += 26
+        y = draw_wrapped(surf, "Подсказка игры: " + d["msg"], (p.x + 28, y), p.w - 56, 14, GREY, max_lines=3)
+        draw_text(surf, "Почему не согласен?", (p.x + 28, p.y + 156), 15, WHITE, bold=True)
+        for i, r in self._dispute_reason_rects():
+            Button(r, "", CYAN).draw(surf, mouse, active=i == ui["reason"])
+            draw_text(surf, ("◉  " if i == ui["reason"] else "○  ") + self.DISPUTE_REASONS[i], (r.x + 14, r.y + 8), 16, WHITE)
+        tr_ = self._dispute_text_rect()
+        draw_text(surf, "Как правильно, по-твоему? (можно не писать)", (tr_.x, tr_.y - 22), 14, GREY)
+        aa_rect(surf, (12, 12, 18), tr_, border_radius=8)
+        aa_rect(surf, DIM, tr_, 1, border_radius=8)
+        caret = "|" if int(self.t * 2) % 2 == 0 else ""
+        draw_wrapped(surf, ui["text"] + caret, (tr_.x + 10, tr_.y + 8), tr_.w - 20, 15, WHITE, max_lines=3)
+        Button(self._dispute_cancel_rect(), "ОТМЕНА", GREY).draw(surf, mouse)
+        Button(self._dispute_send_rect(), "ОТПРАВИТЬ", GOOD).draw(surf, mouse)
 
     def _exam_check(self):
         if self.exam_mode and self.mistakes > EXAM_MAX_MISTAKES and self.scene == "job":
@@ -4848,6 +5009,11 @@ class Game:
                 VOL["on"] = bool(data["on"])
         except Exception:
             pass
+        try:
+            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+                DISPLAY["glow"] = bool(json.load(f).get("glow", True))
+        except Exception:
+            pass
         apply_volume()
         lang = None
         try:
@@ -4864,7 +5030,8 @@ class Game:
             return
         try:
             with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
-                json.dump({"volume": dict(VOL), "lang": LANG["code"], "fullscreen": DISPLAY["fullscreen"]},
+                json.dump({"volume": dict(VOL), "lang": LANG["code"], "fullscreen": DISPLAY["fullscreen"],
+                           "glow": DISPLAY["glow"]},
                           f, ensure_ascii=False, indent=2)
         except Exception:
             pass
@@ -4965,6 +5132,8 @@ class Game:
             self.mistakes += 1
             snd("bad")
             self.flash(opt["feedback"] or "Не похоже. Осмотри ещё раз.", BAD, 4)
+            right = next((o["text"] for o in self.cur["diagnosis"] if o["correct"]), "")
+            self.note_dispute("diagnosis", right, opt["text"], opt["feedback"] or "")
             return False
 
     # ---------- ремонт ----------
@@ -4982,7 +5151,7 @@ class Game:
         if self.phase != "repair":
             return "wrong"
         step = self.cur["steps"][self.step_idx]
-        if tool_id == step["tool"] and part_id == step["part"]:
+        if tool_id == step["tool"] and (part_id == step["part"] or part_id in step.get("alt", ())):
             if step.get("mini"):
                 self.start_mini(step)
                 return "mini"
@@ -4991,6 +5160,8 @@ class Game:
         # ошибка
         self.mistakes += 1
         snd("bad")
+        self.note_dispute("repair", f"{TOOLS[step['tool']][0]} → {PARTS.get(step['part'], step['part'])}",
+                          f"{TOOLS.get(tool_id, (tool_id,))[0]} → {PARTS.get(part_id, part_id)}", step.get("wrongmsg", ""))
         self._start_action(tool_id, False, part=part_id)
         msg = step.get("wrongmsg", "")
         if not msg:
@@ -5001,6 +5172,8 @@ class Game:
             else:
                 msg = "Не то. Перечитай шаг и подсказку."
         self.flash(msg, BAD, 4)
+        if self.dispute and self.dispute.get("t") == self.t:
+            self.dispute["msg"] = msg
         return "wrong"
 
     def _act_pos(self, part=None, sid=None):
@@ -5262,6 +5435,13 @@ class Game:
             on = toggle_sound()
             self.save_settings()
             self.flash("Звук включён" if on else "Звук выключен (M — включить)", GHOST, 1.8)
+            return
+        if self.dispute_ui is not None:                  # окно замечания модально (и ловит ввод текста)
+            self.handle_dispute_event(event)
+            return
+        if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.dispute_visible()
+                and self._dispute_btn_rect().collidepoint(event.pos)):
+            self.open_dispute()
             return
         if self.show_sound:                              # панель громкости модальна
             self.handle_sound_event(event)
@@ -5563,6 +5743,10 @@ class Game:
         self._draw_speaker(surf)
         if self.scene in ("title", "hub", "guild", "garage"):
             self._draw_lang(surf)
+        if self.scene == "job":
+            self._draw_dispute_btn(surf, mouse_pos())
+            if self.dispute_ui is not None:
+                self._draw_dispute_panel(surf, mouse_pos())
         if self.show_sound:
             self._draw_sound_panel(surf)
         if self._fade_from is not None:
@@ -5626,7 +5810,12 @@ class Game:
 
     def _screen_btn_rect(self):
         p = self._sound_panel_rect()
-        return pygame.Rect(p.x + 32, p.bottom - 128, p.w - 64, 44)
+        return pygame.Rect(p.x + 32, p.bottom - 128, (p.w - 64) // 2 - 6, 44)
+
+    def _glow_btn_rect(self):
+        p = self._sound_panel_rect()
+        w = (p.w - 64) // 2 - 6
+        return pygame.Rect(p.right - 32 - w, p.bottom - 128, w, 44)
 
     def _vol_slider_rects(self):
         p = self._sound_panel_rect()
@@ -5665,6 +5854,10 @@ class Game:
             if self._screen_btn_rect().collidepoint(event.pos):
                 if not self.headless:
                     toggle_fullscreen()
+                snd("tick")
+                return
+            if self._glow_btn_rect().collidepoint(event.pos):
+                DISPLAY["glow"] = not DISPLAY["glow"]
                 snd("tick")
                 return
             for key, track in self._vol_slider_rects():
@@ -5709,7 +5902,9 @@ class Game:
                       GREY if muted else WHITE, right=True)
         Button(self._sound_mute_rect(), "ВКЛЮЧИТЬ ЗВУК" if not VOL["on"] else "БЕЗ ЗВУКА",
                GOOD if not VOL["on"] else GREY).draw(surf, mouse)
-        Button(self._screen_btn_rect(), "В ОКНО  [F11]" if DISPLAY["fullscreen"] else "ВО ВЕСЬ ЭКРАН  [F11]",
+        Button(self._glow_btn_rect(), "СВЕЧЕНИЕ: ВКЛ" if DISPLAY["glow"] else "СВЕЧЕНИЕ: ВЫКЛ",
+               AMBER if DISPLAY["glow"] else GREY).draw(surf, mouse)
+        Button(self._screen_btn_rect(), "В ОКНО [F11]" if DISPLAY["fullscreen"] else "ВЕСЬ ЭКРАН [F11]",
                CYAN).draw(surf, mouse)
         Button(self._sound_close_rect(), "ГОТОВО", AMBER).draw(surf, mouse)
 
@@ -8714,6 +8909,29 @@ def run_selftest():
                 gs.seatc.update(quiz=i, picked=0)
             gs.draw(scr)                                     # все экраны кабинета рисуются без падений
 
+    # насос к ниппелю засчитывается в шагах накачки; «Я не согласен» сохраняет замечание и снимает ошибку
+    gd = Game(headless=True)
+    gd.start_job("flat")
+    gd.phase, gd.step_idx = "repair", next(i for i, st in enumerate(gd.cur["steps"]) if st["tool"] == "pump" and st["part"] == "tire")
+    if gd.do_action("pump", "valve") not in ("ok", "mini"):
+        failures.append("насос к ниппелю не засчитан в шаге накачки шины")
+    gd = Game(headless=True)
+    gd.start_job("flat")
+    gd.phase, gd.step_idx = "repair", 0
+    gd.do_action("lever", "rim")
+    if not gd.dispute_visible() or gd.mistakes != 1:
+        failures.append("после ошибки не появилась кнопка «Я не согласен»")
+    else:
+        gd.open_dispute()
+        gd.handle_dispute_event(pygame.event.Event(pygame.TEXTINPUT, text="тест"))
+        gd.draw(pygame.display.get_surface())
+        gd.send_dispute()
+        if len(gd.feedback_mem) != 1 or gd.feedback_mem[0]["comment"] != "тест" or gd.mistakes != 0:
+            failures.append("замечание «Я не согласен» не сохранилось или ошибка не снята")
+    DISPLAY["glow"] = False
+    gd.draw(pygame.display.get_surface())
+    DISPLAY["glow"] = True
+
     # 3D в окне диагностики: у каждой детали задания есть кружок, кружки не перекрываются
     if _np is not None:
         for base in JOBS:
@@ -8809,6 +9027,22 @@ def main():
         return
     if "--selftest" in sys.argv:
         run_selftest()
+        return
+    if "--feedback" in sys.argv:                            # замечания «Я не согласен» от игроков
+        try:
+            data = json.load(open(FEEDBACK_PATH, encoding="utf-8"))
+        except Exception:
+            data = []
+        print(f"Файл: {FEEDBACK_PATH}  — замечаний: {len(data)}")
+        for e in data:
+            print()
+            print(f"[{e.get('time')}] {e.get('job')} «{e.get('title')}» — {e.get('reason')}")
+            if e.get("step"):
+                print("  шаг:", e["step"])
+            if e.get("expected") or e.get("got"):
+                print("  ожидалось:", e.get("expected"), "| выбрано:", e.get("got"))
+            if e.get("comment"):
+                print("  комментарий:", e["comment"])
         return
     if "--reset" in sys.argv and os.path.exists(SAVE_PATH):
         os.remove(SAVE_PATH)

@@ -14,6 +14,8 @@ out, seen = [], set()
 
 
 def add(ru, node, fmt):
+    if ru.lstrip().startswith("#version") or ru.startswith(("[А-", "(?")):   # шейдеры и регулярки — не текст игры
+        return
     if not CYR.search(ru) or ru in have or ru in seen:
         return
     seen.add(ru)
