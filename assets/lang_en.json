@@ -1450,5 +1450,20 @@
  "СВЕЧЕНИЕ: ВКЛ": "GLOW: ON",
  "СВЕЧЕНИЕ: ВЫКЛ": "GLOW: OFF",
  "В ОКНО [F11]": "WINDOWED [F11]",
- "ВЕСЬ ЭКРАН [F11]": "FULL SCREEN [F11]"
+ "ВЕСЬ ЭКРАН [F11]": "FULL SCREEN [F11]",
+ "Неточность в картинке или 3D": "Inaccuracy in a picture or 3D",
+ "Ошибка в тексте или шагах": "Error in the text or steps",
+ "Непонятно, что делать": "Unclear what to do",
+ "Другое": "Other",
+ "Гараж": "Garage",
+ "Гильдия": "Guild",
+ "Титул": "Title screen",
+ "Вступление": "Intro",
+ "СООБЩИТЬ О НЕТОЧНОСТИ": "REPORT AN INACCURACY",
+ "Где: ": "Where: ",
+ "Шаг: ": "Step: ",
+ "Снимок экрана приложится сам — опиши, что не так.": "A screenshot is attached automatically — describe what's wrong.",
+ "Что не так?": "What's wrong?",
+ "Опиши, что не так и как правильно": "Describe what's wrong and what's right",
+ "Сообщить о неточности": "Report an inaccuracy"
 }

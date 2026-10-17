@@ -4852,6 +4852,29 @@ class Game:
         return bool(self.scene == "job" and d and not d["sent"] and self.cur and d["job"] == self.cur["id"]
                     and self.t - d["t"] < 25 and not self.dispute_ui and self.v3d is None)
 
+    FEEDBACK_REASONS = ["Неточность в картинке или 3D", "Ошибка в тексте или шагах", "Непонятно, что делать", "Другое"]
+
+    def _feedback_rect(self):
+        return pygame.Rect(WIDTH - 154, 8, 38, 38)
+
+    def open_feedback(self):
+        """Флажок ⚑ на верхней панели: замечание о любой неточности, со снимком экрана."""
+        shot = None
+        if not self.headless:
+            try:
+                shot = pygame.display.get_surface().copy()
+            except Exception:
+                shot = None
+        step = ""
+        if self.scene == "job" and self.cur and self.phase == "repair" and self.cur.get("track") != "tech" \
+                and self.step_idx < len(self.cur.get("steps", [])):
+            step = self.cur["steps"][self.step_idx]["instr"]
+        title = self.cur.get("title", "") if (self.scene == "job" and self.cur) else ""
+        self.dispute = dict(kind="general", job=(self.cur["id"] if self.scene == "job" and self.cur else ""),
+                            title=title, phase=(self.phase if self.scene == "job" else self.scene), step=step,
+                            expected="", got="", msg="", t=self.t, sent=False, shot=shot, scene=self.scene)
+        self.open_dispute()
+
     def open_dispute(self):
         self.dispute_ui = dict(reason=0, text="")
         try:
@@ -4865,9 +4888,14 @@ class Game:
     def _dispute_panel_rect(self):
         return pygame.Rect(WIDTH // 2 - 340, HEIGHT // 2 - 250, 680, 500)
 
+    def _reasons(self):
+        return self.FEEDBACK_REASONS if (self.dispute and self.dispute["kind"] == "general") else self.DISPUTE_REASONS
+
     def _dispute_reason_rects(self):
         p = self._dispute_panel_rect()
-        return [(i, pygame.Rect(p.x + 28, p.y + 182 + i * 42, p.w - 56, 36)) for i in range(len(self.DISPUTE_REASONS))]
+        n = len(self._reasons())
+        step = 42 if n <= 3 else 34
+        return [(i, pygame.Rect(p.x + 28, p.y + 182 + i * step, p.w - 56, step - 6)) for i in range(n)]
 
     def _dispute_text_rect(self):
         p = self._dispute_panel_rect()
@@ -4895,7 +4923,16 @@ class Game:
         entry = dict(time=datetime.datetime.now().isoformat(timespec="seconds"), lang=LANG["code"],
                      job=d["job"], title=d["title"], phase=d["phase"], step=d["step"], kind=d["kind"],
                      expected=d["expected"], got=d["got"], game_message=d["msg"],
-                     reason=self.DISPUTE_REASONS[ui["reason"]], comment=ui["text"].strip())
+                     reason=self._reasons()[ui["reason"]], comment=ui["text"].strip(), scene=d.get("scene", "job"))
+        if d.get("shot") is not None and not self.headless:
+            try:
+                fdir = os.path.join(DATA_DIR, "feedback_shots")
+                os.makedirs(fdir, exist_ok=True)
+                name = "shot_" + entry["time"].replace(":", "-") + ".png"
+                pygame.image.save(d["shot"], os.path.join(fdir, name))
+                entry["screenshot"] = os.path.join("feedback_shots", name)
+            except Exception:
+                pass
         if self.headless:
             self.feedback_mem.append(entry)
         else:
@@ -4910,8 +4947,9 @@ class Game:
             except Exception:
                 pass
         d["sent"] = True
+        d["shot"] = None
         refunded = False
-        if not self.exam_mode and self.mistakes > 0:
+        if d["kind"] != "general" and not self.exam_mode and self.mistakes > 0:
             self.mistakes -= 1
             refunded = True
         self.close_dispute()
@@ -4922,7 +4960,7 @@ class Game:
     def handle_dispute_event(self, event):
         ui = self.dispute_ui
         if event.type == pygame.TEXTINPUT:
-            if len(ui["text"]) < 400:
+            if len(ui["text"]) < 600:
                 ui["text"] += event.text
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
@@ -4943,6 +4981,21 @@ class Game:
                         ui["reason"] = i
                         snd("tick")
 
+    def _draw_feedback_flag(self, surf):
+        r = self._feedback_rect()
+        mouse = mouse_pos()
+        hov = r.collidepoint(mouse)
+        h = _hover_amt(("fbflag",), 1.0 if hov else 0.0)
+        aa_rect(surf, (30, 28, 40, int(150 + 90 * h)), r, border_radius=10)
+        col = tuple(int(a + (b - a) * h) for a, b in zip(GHOST, PURPLE))
+        draw_text(surf, "⚑", r.center, 22, col, center=True)
+        if hov:
+            tip = "Сообщить о неточности"
+            w = font(13).size(tr(tip))[0] + 16
+            tr_ = pygame.Rect(r.right - w, r.bottom + 6, w, 24)
+            aa_rect(surf, (18, 16, 24, 240), tr_, border_radius=6)
+            draw_text(surf, tip, tr_.center, 13, WHITE, center=True)
+
     def _draw_dispute_btn(self, surf, mouse):
         if self.dispute_visible():
             Button(self._dispute_btn_rect(), "Я НЕ СОГЛАСЕН", PURPLE).draw(surf, mouse)
@@ -4957,18 +5010,29 @@ class Game:
         p = self._dispute_panel_rect()
         aa_rect(surf, (20, 18, 28), p, border_radius=14)
         aa_rect(surf, PURPLE, p, 2, border_radius=14)
-        draw_text(surf, "Я НЕ СОГЛАСЕН С ИГРОЙ", (p.x + 28, p.y + 20), 22, PURPLE, bold=True)
+        general = d["kind"] == "general"
+        draw_text(surf, "СООБЩИТЬ О НЕТОЧНОСТИ" if general else "Я НЕ СОГЛАСЕН С ИГРОЙ", (p.x + 28, p.y + 20), 22, PURPLE, bold=True)
         y = p.y + 58
-        if d["expected"] or d["got"]:
-            draw_text(surf, "Игра ожидала: " + d["expected"], (p.x + 28, y), 15, GOOD); y += 24
-            draw_text(surf, "Ты выбрал: " + d["got"], (p.x + 28, y), 15, BAD); y += 26
-        y = draw_wrapped(surf, "Подсказка игры: " + d["msg"], (p.x + 28, y), p.w - 56, 14, GREY, max_lines=3)
-        draw_text(surf, "Почему не согласен?", (p.x + 28, p.y + 156), 15, WHITE, bold=True)
+        if general:
+            where = d["title"] or {"hub": "Мастерская", "garage": "Гараж", "guild": "Гильдия", "seating": "Кабинет посадки",
+                                   "title": "Титул", "intro": "Вступление"}.get(d.get("scene"), d.get("scene", ""))
+            draw_text(surf, "Где: " + where, (p.x + 28, y), 15, CYAN); y += 24
+            if d["step"]:
+                y = draw_wrapped(surf, "Шаг: " + d["step"], (p.x + 28, y), p.w - 56, 14, GREY, max_lines=2)
+            draw_text(surf, "Снимок экрана приложится сам — опиши, что не так.", (p.x + 28, max(y, p.y + 110)), 14, GREY)
+        else:
+            if d["expected"] or d["got"]:
+                draw_text(surf, "Игра ожидала: " + d["expected"], (p.x + 28, y), 15, GOOD); y += 24
+                draw_text(surf, "Ты выбрал: " + d["got"], (p.x + 28, y), 15, BAD); y += 26
+            y = draw_wrapped(surf, "Подсказка игры: " + d["msg"], (p.x + 28, y), p.w - 56, 14, GREY, max_lines=3)
+        draw_text(surf, "Что не так?" if general else "Почему не согласен?", (p.x + 28, p.y + 156), 15, WHITE, bold=True)
+        reasons = self._reasons()
         for i, r in self._dispute_reason_rects():
             Button(r, "", CYAN).draw(surf, mouse, active=i == ui["reason"])
-            draw_text(surf, ("◉  " if i == ui["reason"] else "○  ") + self.DISPUTE_REASONS[i], (r.x + 14, r.y + 8), 16, WHITE)
+            draw_text(surf, ("◉  " if i == ui["reason"] else "○  ") + reasons[i], (r.x + 14, r.y + (8 if r.h > 32 else 5)), 16, WHITE)
         tr_ = self._dispute_text_rect()
-        draw_text(surf, "Как правильно, по-твоему? (можно не писать)", (tr_.x, tr_.y - 22), 14, GREY)
+        draw_text(surf, "Опиши, что не так и как правильно" if general else "Как правильно, по-твоему? (можно не писать)",
+                  (tr_.x, tr_.y - 22), 14, GREY)
         aa_rect(surf, (12, 12, 18), tr_, border_radius=8)
         aa_rect(surf, DIM, tr_, 1, border_radius=8)
         caret = "|" if int(self.t * 2) % 2 == 0 else ""
@@ -5443,6 +5507,10 @@ class Game:
                 and self._dispute_btn_rect().collidepoint(event.pos)):
             self.open_dispute()
             return
+        if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.scene not in ("title", "intro", "ending")
+                and self._feedback_rect().collidepoint(event.pos)):
+            self.open_feedback()
+            return
         if self.show_sound:                              # панель громкости модальна
             self.handle_sound_event(event)
             return
@@ -5745,8 +5813,10 @@ class Game:
             self._draw_lang(surf)
         if self.scene == "job":
             self._draw_dispute_btn(surf, mouse_pos())
-            if self.dispute_ui is not None:
-                self._draw_dispute_panel(surf, mouse_pos())
+        if self.scene not in ("title", "intro", "ending"):
+            self._draw_feedback_flag(surf)
+        if self.dispute_ui is not None:
+            self._draw_dispute_panel(surf, mouse_pos())
         if self.show_sound:
             self._draw_sound_panel(surf)
         if self._fade_from is not None:
@@ -5941,7 +6011,7 @@ class Game:
         DR.rect(surf, (16, 14, 22), (0, 0, WIDTH, 54))
         DR.line(surf, AMBER, (0, 54), (WIDTH, 54), 1)
         draw_text(surf, title, (24, 15), 22, AMBER, bold=True)
-        draw_text(surf, "КОЛЁСА И КОСТИ", (WIDTH - 118, 16), 18, GHOST, bold=True, right=True)
+        draw_text(surf, "КОЛЁСА И КОСТИ", (WIDTH - 170, 16), 18, GHOST, bold=True, right=True)
 
     # ----- титул -----
     def _wave_title(self, surf, text, center, size, color, st, delay=0.0):
@@ -8931,6 +9001,20 @@ def run_selftest():
     DISPLAY["glow"] = False
     gd.draw(pygame.display.get_surface())
     DISPLAY["glow"] = True
+    # флажок ⚑: общее замечание с любого экрана (без засчитанной ошибки)
+    gf = Game(headless=True)
+    gf.done = {"flat"}
+    gf.scene = "hub"
+    gf.draw(pygame.display.get_surface())
+    gf.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gf._feedback_rect().center))
+    if gf.dispute_ui is None or gf.dispute["kind"] != "general":
+        failures.append("флажок «Сообщить о неточности» не открыл окно")
+    else:
+        gf.dispute_ui["reason"] = 0
+        gf.draw(pygame.display.get_surface())
+        gf.send_dispute()
+        if len(gf.feedback_mem) != 1 or gf.feedback_mem[0]["reason"] != Game.FEEDBACK_REASONS[0]:
+            failures.append("общее замечание не сохранилось")
 
     # 3D в окне диагностики: у каждой детали задания есть кружок, кружки не перекрываются
     if _np is not None:
