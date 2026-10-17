@@ -50,6 +50,7 @@
 """
 
 import array
+import asyncio
 import json
 import math
 import os
@@ -73,6 +74,7 @@ if getattr(sys, "frozen", False):
 else:
     ASSETS_DIR = os.path.join(BASE_DIR, "assets")
     DATA_DIR = BASE_DIR
+IS_WEB = sys.platform == "emscripten"          # браузерная версия (pygbag, WebAssembly)
 SAVE_PATH = os.path.join(DATA_DIR, "save.json")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 FEEDBACK_PATH = os.path.join(DATA_DIR, "feedback.json")   # «Я не согласен»: замечания игроков к заданиям   # громкость и язык (не сбрасываются --reset)
@@ -806,6 +808,10 @@ def load_image(name, size=None, color=GHOST):
     if key in _img_cache:
         return _img_cache[key]
     path = os.path.join(ASSETS_DIR, name)
+    if not os.path.exists(path) and name.endswith(".png"):      # браузерная сборка: фоны сжаты в .jpg
+        alt = path[:-4] + ".jpg"
+        if os.path.exists(alt):
+            path = alt
     surf = None
     if os.path.exists(path):
         try:
@@ -1015,6 +1021,65 @@ DISPLAY = {"fullscreen": False, "glow": True, "res": None, "screen": None, "fram
 RES_OPTIONS = [(1280, 720), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160)]
 
 
+def web_js(code):
+    """Браузер: выполнить JavaScript на странице игры (в настольной версии — ничего)."""
+    if not IS_WEB:
+        return None
+    try:
+        import platform as _pf
+        return _pf.window.eval(code)
+    except Exception:
+        return None
+
+
+def web_restore():
+    """Браузер: файлы сохранений живут в localStorage — перед стартом кладём их обратно в память."""
+    for path in (SAVE_PATH, SETTINGS_PATH, FEEDBACK_PATH):
+        text = web_js(f"localStorage.getItem({json.dumps('wnb:' + os.path.basename(path))})")
+        if text:
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(str(text))
+            except Exception:
+                pass
+
+
+def web_persist(path):
+    """Браузер: после записи файла — копия в localStorage (переживает перезагрузку страницы)."""
+    if not IS_WEB:
+        return
+    try:
+        text = open(path, encoding="utf-8").read()
+    except Exception:
+        return
+    web_js(f"localStorage.setItem({json.dumps('wnb:' + os.path.basename(path))}, {json.dumps(text)})")
+
+
+def web_setup_page():
+    """Браузер: живые области для экранных чтецов и клавиши, которые не должна забирать страница."""
+    web_js("""(function(){
+      if (document.getElementById('wnb-live-polite')) return;
+      function mk(id, mode){ var d=document.createElement('div'); d.id=id; d.setAttribute('aria-live', mode);
+        d.setAttribute('role', mode=='assertive' ? 'alert' : 'status');
+        d.style.cssText='position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden';
+        document.body.appendChild(d); }
+      mk('wnb-live-polite','polite'); mk('wnb-live-assertive','assertive');
+      window.addEventListener('keydown', function(e){
+        if (['Tab',' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','F1','F2'].indexOf(e.key) >= 0) e.preventDefault();
+      });
+      window.wnbSay = function(text, interrupt, voice){
+        var el = document.getElementById(interrupt ? 'wnb-live-assertive' : 'wnb-live-polite');
+        el.textContent = ''; setTimeout(function(){ el.textContent = text; }, 30);
+        if (voice && window.speechSynthesis) {
+          if (interrupt) speechSynthesis.cancel();
+          var u = new SpeechSynthesisUtterance(text);
+          u.lang = document.documentElement.getAttribute('data-wnb-lang') || 'en-US';
+          speechSynthesis.speak(u);
+        }
+      };
+    })()""")
+
+
 def dpi_aware():
     """Windows: игра сама следит за масштабом — система не растягивает и не мылит окно.
     Вызывать до pygame.init(), чтобы размер монитора определился в настоящих пикселях."""
@@ -1070,6 +1135,11 @@ def _default_window():
 
 def _set_window(fullscreen):
     """Создать/переключить окно. Масштабирование кадра делает игра сама (present), без SCALED у SDL."""
+    if IS_WEB:                                        # браузер: холст страницы, масштабирует сам браузер
+        screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        DISPLAY["fullscreen"] = False
+        DISPLAY["screen"] = screen
+        return screen
     if fullscreen:
         screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     else:
@@ -1270,9 +1340,34 @@ def _noise(sec, decay=0.1, attack=0.002, lp=1.0, hp=0.0, swell=None):
 
 
 def _to_sound(samples, vol=0.5):
+    """Синтезированный звук → Sound в ТОМ формате, который реально открыл микшер
+    (браузер обычно даёт 44,1/48 кГц стерео вместо наших 22 050 Гц моно — иначе хрип)."""
     peak = max(1e-6, max(abs(v) for v in samples))
     k = vol / peak
-    buf = array.array("h", (int(max(-1.0, min(1.0, v * k)) * 32767) for v in samples))
+    freq, size, chans = pygame.mixer.get_init() or (SR, -16, 1)
+    if freq != SR:                                    # линейная передискретизация
+        n = max(1, int(len(samples) * freq / SR))
+        step = SR / freq
+        last = len(samples) - 1
+        res = []
+        for i in range(n):
+            x = i * step
+            j = int(x)
+            if j >= last:
+                res.append(samples[last])
+            else:
+                f = x - j
+                res.append(samples[j] * (1 - f) + samples[j + 1] * f)
+        samples = res
+    vals = [max(-1.0, min(1.0, v * k)) for v in samples]
+    if chans > 1:
+        vals = [v for v in vals for _ in range(chans)]
+    if size == 32:                                    # 32-битный float
+        buf = array.array("f", vals)
+    elif abs(size) == 8:
+        buf = array.array("B" if size > 0 else "b", (int(v * 127) + (128 if size > 0 else 0) for v in vals))
+    else:
+        buf = array.array("h", (int(v * 32767) for v in vals))
     return pygame.mixer.Sound(buffer=buf.tobytes())
 
 
@@ -4905,6 +5000,9 @@ class Speech:
     def init(self):
         if self.kind:
             return
+        if IS_WEB:
+            self.kind, self.name = "web", "web"
+            return
         try:
             from cytolk import tolk
             tolk.load()
@@ -4924,6 +5022,10 @@ class Speech:
 
     def set_voice(self):
         """Голос Windows — на языке игры (русский — Irina/Pavel, английский — David/Zira…), скорость из настроек."""
+        if IS_WEB:
+            web_js(f"document.documentElement.setAttribute('data-wnb-lang', "
+                   f"{json.dumps('ru-RU' if LANG['code'] == 'ru' else 'en-US')})")
+            return
         if self.kind != "sapi":
             return
         want = ("419",) if LANG["code"] == "ru" else ("409", "809", "c09", "1009")
@@ -4943,6 +5045,10 @@ class Speech:
             return
         self.log.append(text)
         del self.log[:-200]
+        if IS_WEB:                                    # экранный чтец страницы читает всегда, голос браузера — по F2
+            web_js(f"window.wnbSay && wnbSay({json.dumps(text)}, {str(bool(interrupt)).lower()}, "
+                   f"{str(bool(A11Y['on'])).lower()})")
+            return
         if not A11Y["on"] or not self.kind:
             return
         try:
@@ -4954,6 +5060,8 @@ class Speech:
             pass
 
     def label(self):
+        if self.kind == "web":
+            return "экранный чтец страницы" + (" + голос браузера" if A11Y["on"] else "")
         if self.kind == "tolk":
             return self.name
         return "голос Windows" if self.kind == "sapi" else "недоступна"
@@ -5897,7 +6005,7 @@ class Game:
                      job=d["job"], title=d["title"], phase=d["phase"], step=d["step"], kind=d["kind"],
                      expected=d["expected"], got=d["got"], game_message=d["msg"],
                      reason=self._reasons()[ui["reason"]], comment=ui["text"].strip(), scene=d.get("scene", "job"))
-        if d.get("shot") is not None and not self.headless:
+        if d.get("shot") is not None and not self.headless and not IS_WEB:
             try:
                 fdir = os.path.join(DATA_DIR, "feedback_shots")
                 os.makedirs(fdir, exist_ok=True)
@@ -5919,6 +6027,7 @@ class Game:
                     json.dump(data, f, ensure_ascii=False, indent=1)
             except Exception:
                 pass
+            web_persist(FEEDBACK_PATH)
         d["sent"] = True
         d["shot"] = None
         refunded = False
@@ -6061,7 +6170,7 @@ class Game:
             pass
         if "--lang" in sys.argv[:-1]:
             lang = sys.argv[sys.argv.index("--lang") + 1]
-        set_lang(lang or system_lang())
+        set_lang("en" if IS_WEB else (lang or system_lang()))      # браузерная версия — только английская
         try:
             with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
                 acc = json.load(f).get("a11y")
@@ -6089,6 +6198,7 @@ class Game:
                           f, ensure_ascii=False, indent=2)
         except Exception:
             pass
+        web_persist(SETTINGS_PATH)
 
     def load_progress(self):
         try:
@@ -6116,6 +6226,7 @@ class Game:
                           f, ensure_ascii=False, indent=2)
         except Exception:
             pass
+        web_persist(SAVE_PATH)
 
     def available_jobs(self):
         """Туториал (flat) первым; остальные открыты после него."""
@@ -6678,7 +6789,7 @@ class Game:
             add("Меню", tr("Настройки: звук, графика, доступность"), self._speaker_rect(),
                 act=self._a11y_open_settings, key="settings")
             add("Меню", tr("Сообщить о неточности"), self._feedback_rect(), act=self.open_feedback, key="flag")
-            if self.scene in ("hub", "guild", "garage"):
+            if self.scene in ("hub", "guild", "garage") and not IS_WEB:
                 add("Меню", tr("Язык: русский. Переключить на английский") if LANG["code"] == "ru"
                     else "Language: English. Switch to Russian", self._lang_rect(), act=self.toggle_lang, key="lang")
         return items
@@ -7154,7 +7265,7 @@ class Game:
             self.handle_sound_event(event)
             return
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
-                and self.scene in ("title", "hub", "guild", "garage")
+                and self.scene in ("title", "hub", "guild", "garage") and not IS_WEB
                 and self._lang_rect().collidepoint(event.pos)):
             self.toggle_lang()
             return
@@ -7458,7 +7569,7 @@ class Game:
             self._draw_toast(surf)
         CAPTURE["mute"] -= 1
         self._draw_speaker(surf)
-        if self.scene in ("title", "hub", "guild", "garage"):
+        if self.scene in ("title", "hub", "guild", "garage") and not IS_WEB:
             self._draw_lang(surf)
         if self.scene == "job":
             self._draw_dispute_btn(surf, mouse_pos())
@@ -7824,7 +7935,8 @@ class Game:
             pulse = 0.5 + 0.5 * math.sin(self.t * 3.2)
             draw_text(surf, label, (WIDTH // 2, 470), 24, AMBER, bold=True, center=True,
                       alpha=150 + 105 * pulse)
-        draw_text(surf, "Esc — выход · M — звук · прогресс сохраняется автоматически",
+        draw_text(surf, "M — sound · progress saves automatically" if IS_WEB else
+                  "Esc — выход · M — звук · прогресс сохраняется автоматически",
                   (WIDTH // 2, HEIGHT - 36), 15, GREY, center=True)
         draw_text(surf, "F1 — управление с клавиатуры · F2 — озвучка для незрячих",
                   (WIDTH // 2, HEIGHT - 62), 15, CYAN, center=True)
@@ -11044,6 +11156,8 @@ def print_assets():
 # ----------------------------------------------------------------------------- #
 def _install_crash_log():
     """exe без консоли: сбои пишем в crash.log рядом с сохранениями (и нативные падения — через faulthandler)."""
+    if IS_WEB:
+        return None
     import faulthandler, traceback, datetime
     try:
         f = open(os.path.join(DATA_DIR, "crash.log"), "a", encoding="utf-8")
@@ -11061,8 +11175,11 @@ def _install_crash_log():
         return None
 
 
-def main():
+async def main():
     _crash_log = _install_crash_log()
+    if IS_WEB:
+        web_restore()
+        web_setup_page()
     if "--assets" in sys.argv:
         print_assets()
         return
@@ -11089,7 +11206,8 @@ def main():
         os.remove(SAVE_PATH)
         print("Сохранение удалено, начинаем заново.")
     dpi_aware()
-    pygame.mixer.pre_init(22050, -16, 1, 512)
+    if not IS_WEB:                                      # в браузере микшер уже открыт в main.py
+        pygame.mixer.pre_init(22050, -16, 1, 512)
     pygame.init()
     if "--mute" not in sys.argv:
         build_sounds()
@@ -11133,7 +11251,7 @@ def main():
         dt = clock.tick(FPS) / 1000.0
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                running = IS_WEB                              # в браузере «выход» некуда — остаёмся в игре
             elif event.type == pygame.VIDEORESIZE:            # окно растянули/развернули — масштаб пересчитаем чуть позже
                 DISPLAY["resize_at"] = pygame.time.get_ticks()
             else:
@@ -11155,8 +11273,9 @@ def main():
         game.draw(DISPLAY["frame"])                    # кадр пересоздаётся при смене разрешения
         present(DISPLAY["frame"])
         pygame.display.flip()
+        await asyncio.sleep(0)                        # браузеру — нарисовать кадр и принять ввод
     pygame.quit()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

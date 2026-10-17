@@ -34,3 +34,6 @@ art_tests/fit/*.png
 # Временные скриншоты проверок
 i18n_work/audit_shots/
 feedback_shots/
+
+# Браузерная сборка (python build_web.py)
+web_build/

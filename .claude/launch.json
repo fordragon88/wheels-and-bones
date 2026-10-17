@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-build",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8000",
+        "--directory",
+        "web_build/wheels_and_bones/build/web"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "web-t1",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8001",
+        "--directory",
+        "web_build/t1/build/web"
+      ],
+      "port": 8001
+    }
+  ]
+}
