@@ -15,6 +15,9 @@ if errorlevel 1 (
   )
 )
 
+rem speech for blind players: Tolk (NVDA/JAWS) + Windows voices (pywin32)
+python -m pip install --quiet cytolk pywin32
+
 echo.
 echo Building WheelsAndBones.exe ^(1-3 minutes^)...
 python -m PyInstaller --noconfirm --clean --onefile --windowed ^
@@ -22,6 +25,7 @@ python -m PyInstaller --noconfirm --clean --onefile --windowed ^
   --add-data "assets;assets" ^
   --exclude-module tkinter ^
   --hidden-import moderngl --hidden-import glcontext --hidden-import glcontext.wgl --hidden-import glcontext.empty ^
+  --collect-all cytolk --hidden-import win32com.client --hidden-import pythoncom --hidden-import pywintypes ^
   game.py
 if errorlevel 1 (
   echo.

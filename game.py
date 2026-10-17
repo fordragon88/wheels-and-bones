@@ -507,8 +507,24 @@ def font(size, bold=False):
     return _font_cache[key]
 
 
+# ---- Доступность: что нарисовано в кадре — для управления с клавиатуры и чтения вслух ----
+A11Y = dict(on=False, voices=True, rate=0, contrast=False, instant=False)
+CAPTURE = dict(frame=None, texts=[], buttons=[], modal=None, mute=0)
+
+
+def _cap_text(surf, text, rect):
+    if surf is CAPTURE["frame"] and not CAPTURE["mute"] and text and str(text).strip():
+        CAPTURE["texts"].append((pygame.Rect(rect), str(text)))
+
+
+def _cap_modal():
+    """Начался модальный оверлей: с клавиатуры доступно только то, что нарисовано дальше."""
+    CAPTURE["modal"] = (len(CAPTURE["texts"]), len(CAPTURE["buttons"]))
+
+
 def draw_text(surf, text, pos, size=18, color=WHITE, bold=False, center=False, right=False, alpha=255):
-    img = font(size, bold).render(tr(str(text)), True, color)
+    s_ = tr(str(text))
+    img = font(size, bold).render(s_, True, color)
     if alpha < 255:
         img.set_alpha(max(0, int(alpha)))
     rect = img.get_rect()
@@ -519,12 +535,14 @@ def draw_text(surf, text, pos, size=18, color=WHITE, bold=False, center=False, r
     else:
         rect.topleft = pos
     surf.blit(img, rect)
+    _cap_text(surf, s_, rect)
     return rect
 
 
 def fit_text(surf, text, pos, width, size=18, color=WHITE, bold=False):
     """Строка в заданную ширину: уменьшаем шрифт (до 75%), иначе обрезаем с «…»."""
     text = tr(str(text))
+    _cap_text(surf, text, pygame.Rect(pos, (width, size + 4)))
     sz = size
     while sz > int(size * 0.75) and font(sz, bold).size(text)[0] > width:
         sz -= 1
@@ -533,7 +551,11 @@ def fit_text(surf, text, pos, width, size=18, color=WHITE, bold=False):
         while text and f.size(text + "…")[0] > width:
             text = text[:-1]
         text = text.rstrip() + "…"
-    return draw_text(surf, text, (pos[0], pos[1] + (size - sz) // 2), sz, color, bold)
+    CAPTURE["mute"] += 1
+    try:
+        return draw_text(surf, text, (pos[0], pos[1] + (size - sz) // 2), sz, color, bold)
+    finally:
+        CAPTURE["mute"] -= 1
 
 
 def wrap_lines(text, width, size=16):
@@ -560,6 +582,7 @@ def draw_wrapped(surf, text, pos, width, size=16, color=WHITE, center=False, lin
     x, y = pos
     f = font(size)
     text = tr(text)
+    _cap_text(surf, text, pygame.Rect(x - (width // 2 if center else 0), y, width, size + 4))
     left = len(text) if limit is None else limit
     lines = wrap_lines(text, width, size)
     if max_lines and len(lines) > max_lines:
@@ -1394,6 +1417,27 @@ def snd(name):
             s.play()
         except Exception:
             pass
+
+
+_PITCH = {}
+
+
+def snd_pitch(frac):
+    """Короткий тон: чем больше значение (давление насоса), тем выше — слышно без экрана."""
+    if not VOL["on"]:
+        return
+    step = max(0, min(20, int(frac * 20)))
+    s = _PITCH.get(step)
+    if s is None:
+        try:
+            s = _PITCH[step] = _to_sound(_tone(330 * 2 ** (step / 10), 0.12, decay=0.08), 0.3)
+        except Exception:
+            return
+    try:
+        s.set_volume(VOL["master"] * VOL["sfx"])
+        s.play()
+    except Exception:
+        pass
 
 
 TOOL_SOUND = {"hands": "tool_soft", "cloth": "tool_soft", "brush": "tool_soft", "patch": "tool_soft",
@@ -3051,14 +3095,17 @@ SEAT_LESSONS = [
 
 SEAT_QUIZ = [
     dict(pose=dict(knee_up=True), q="Что не так в посадке?",
+         desc="На рисунке: колени задраны выше бёдер, бёдра почти не касаются сиденья.",
          options=[("Подножка слишком высоко: колени выше бёдер", True, ""),
                   ("Сиденье слишком глубокое", False, "Глубина тут ни при чём — смотри на колени и бёдра."),
                   ("Спинка слишком низкая", False, "Спинка держит корпус, а проблема — в коленях.")]),
     dict(pose=dict(p=20, slide=7, deep=True), q="Почему клиент сползает и сидит на крестце?",
+         desc="На рисунке: таз уехал к переднему краю, спина колесом, край сиденья упирается под колени.",
          options=[("Сиденье глубже нормы: край давит под колени", True, ""),
                   ("Слишком мягкий подголовник", False, "Подголовник не тянет таз вперёд."),
                   ("Подножка слишком короткая", False, "Тогда колени ушли бы вверх.")]),
     dict(pose=dict(dangle=True, slide=4, p=8), q="Стопы не достают до подножки. Что поправить?",
+         desc="На рисунке: стопы висят над подножкой, тело немного сползает вперёд.",
          options=[("Поднять подножку (укоротить) — стопы должны стоять", True, ""),
                   ("Откинуть спинку", False, "Откинутая спинка сползание только усилит."),
                   ("Сузить сиденье", False, "Ширина не влияет на опору стоп.")]),
@@ -3067,10 +3114,12 @@ SEAT_QUIZ = [
                   ("Да, это стандарт для всех", False, "Руководство прямо говорит: готового рецепта нет."),
                   ("Да, но только детей", False, "Для детей тоже решают индивидуально.")]),
     dict(pose=dict(tilt=45), q="Клиент не может сам перенести вес. Как разгрузить таз?",
+         desc="На рисунке: клиент сидит в электроколяске с механизмом наклона сиденья.",
          options=[("Наклонить сиденье (tilt) не меньше чем на 45°", True, ""),
                   ("Только откинуть спинку", False, "Откидывание без наклона усиливает сдвиг тканей."),
                   ("Поднять подножки повыше", False, "Подъёмные подножки тянут таз назад, на крестец.")]),
     dict(pose=dict(front=True), q="Где ставят боковые упоры при сколиозе?",
+         desc="На рисунке: вид спереди, позвоночник изогнут дугой вбок.",
          options=[("В три точки: вершина изгиба, под мышкой с зазором, низко у таза", True, ""),
                   ("Вплотную в подмышку — так надёжнее", False, "Под мышкой оставляют зазор: там нервы."),
                   ("Только один упор на вершине изгиба", False, "Одна точка не удержит изгиб.")]),
@@ -4810,6 +4859,109 @@ ALL_JOBS = JOBS + TECH_JOBS
 # ----------------------------------------------------------------------------- #
 #  UI-объекты
 # ----------------------------------------------------------------------------- #
+def _of(a, b):
+    """«3 из 5» / «3 of 5» — для озвучки счётчиков."""
+    return f"{a} {tr('из')} {b}"
+
+
+_SPEECH_SUBS = [("✔", ""), ("⚑", ""), ("◉", ""), ("○", ""), ("✉", ""), ("⚠", ""), ("▶", ""), ("◀", ""),
+                ("★", ""), ("☆", ""), ("⟲", ""), ("•", ""), ("[", ""), ("]", ""), ("…", "..."), ("·", ","),
+                ("″", "")]
+
+
+def speech_clean(text):
+    """Текст для голоса: без значков, «1920×1080» — словами."""
+    t = str(text or "")
+    for a, b in _SPEECH_SUBS:
+        t = t.replace(a, b)
+    t = re.sub(r"(\d)\s*×\s*(\d)", r"\1 " + ("на" if LANG["code"] == "ru" else "by") + r" \2", t)
+    t = re.sub(r"\s*—\s*", ", ", t)
+    t = re.sub(r"\s+", " ", t)
+    t = re.sub(r"\s+([,.!?:;])", r"\1", t)
+    t = re.sub(r"([.!?])[.,]+(?=\s|$)", r"\1", t)
+    t = re.sub(r",\s*,", ",", t).strip(" ,")
+    return t
+
+
+def screen_reader_running():
+    """Windows сообщает, что работает экранный чтец (NVDA, JAWS, Экранный диктор…)."""
+    try:
+        import ctypes
+        flag = ctypes.c_int(0)
+        ctypes.windll.user32.SystemParametersInfoW(0x0046, 0, ctypes.byref(flag), 0)   # SPI_GETSCREENREADER
+        return bool(flag.value)
+    except Exception:
+        return False
+
+
+class Speech:
+    """Озвучка: через экранный чтец игрока (NVDA, JAWS… — библиотека Tolk, с его голосом, скоростью и брайлем),
+    а если чтеца нет — голосом Windows (SAPI) на языке игры."""
+
+    def __init__(self):
+        self.kind, self.name, self.tolk, self.voice = None, "", None, None
+        self.log = []                                  # что сказано (для тестов и повтора)
+
+    def init(self):
+        if self.kind:
+            return
+        try:
+            from cytolk import tolk
+            tolk.load()
+            reader = tolk.detect_screen_reader()
+            if reader:
+                self.tolk, self.kind, self.name = tolk, "tolk", reader
+                return
+        except Exception:
+            pass
+        try:
+            import win32com.client
+            self.voice = win32com.client.Dispatch("SAPI.SpVoice")
+            self.kind, self.name = "sapi", "SAPI"
+            self.set_voice()
+        except Exception:
+            self.kind = None
+
+    def set_voice(self):
+        """Голос Windows — на языке игры (русский — Irina/Pavel, английский — David/Zira…), скорость из настроек."""
+        if self.kind != "sapi":
+            return
+        want = ("419",) if LANG["code"] == "ru" else ("409", "809", "c09", "1009")
+        try:
+            for v in self.voice.GetVoices():
+                lang = (v.GetAttribute("Language") or "").lower().split(";")
+                if any(l_.strip() in want for l_ in lang):
+                    self.voice.Voice = v
+                    break
+            self.voice.Rate = max(-10, min(10, int(A11Y["rate"])))
+        except Exception:
+            pass
+
+    def say(self, text, interrupt=True):
+        text = speech_clean(text)
+        if not text:
+            return
+        self.log.append(text)
+        del self.log[:-200]
+        if not A11Y["on"] or not self.kind:
+            return
+        try:
+            if self.kind == "tolk":
+                self.tolk.output(text, interrupt)
+            else:
+                self.voice.Speak(text, 1 | (2 if interrupt else 0))     # асинхронно; 2 — оборвать прошлое
+        except Exception:
+            pass
+
+    def label(self):
+        if self.kind == "tolk":
+            return self.name
+        return "голос Windows" if self.kind == "sapi" else "недоступна"
+
+
+SPEECH = Speech()
+
+
 class Button:
     def __init__(self, rect, label, color=AMBER, sub=""):
         self.rect = pygame.Rect(rect)
@@ -4822,6 +4974,16 @@ class Button:
 
     def draw(self, surf, mouse, enabled=True, active=False, offset=(0, 0)):
         """offset — сдвиг только картинки (въезд в кадр); клики считаются по rect."""
+        if surf is CAPTURE["frame"]:
+            CAPTURE["buttons"].append(dict(rect=pygame.Rect(self.rect), label=tr(self.label), sub=tr(self.sub),
+                                           enabled=enabled, active=active))
+        CAPTURE["mute"] += 1
+        try:
+            return self._draw(surf, mouse, enabled, active, offset)
+        finally:
+            CAPTURE["mute"] -= 1
+
+    def _draw(self, surf, mouse, enabled, active, offset):
         hov = self.hovered(mouse) and enabled
         col = self.color if enabled else DIM
         h = _hover_amt(tuple(self.rect), 1.0 if hov else 0.0)
@@ -5597,6 +5759,9 @@ class Game:
         self.ghost_quip_until = 0.0
         self._talk_used = {}
         self._talk_n = 0
+        # доступность: фокус клавиатуры, очередь озвучки, справка F1
+        self.kb = dict(key=None, active=False, queue=[], sig=None, help=False, items=[],
+                       client_seen="", quip_seen="", seat_seen="", group=None)
         # про-трек (Гильдия)
         self.done_steps = set()           # выполненные шаги tech-задания
         self.step_order = []              # порядок карточек-операций (перемешан)
@@ -5630,6 +5795,7 @@ class Game:
         self.toast = text
         self.toast_color = color
         self.toast_timer = secs
+        self.say(text, True)
 
     def miss(self, msg, secs=4.0):
         """Ошибка игрока: тост + счётчик; на экзамене следит за лимитом."""
@@ -5808,6 +5974,7 @@ class Game:
             Button(self._dispute_btn_rect(), "Я НЕ СОГЛАСЕН", PURPLE).draw(surf, mouse)
 
     def _draw_dispute_panel(self, surf, mouse):
+        _cap_modal()
         ui, d = self.dispute_ui, self.dispute
         dim = _img_cache.get(("v3d_dim", 160, RS))
         if dim is None:
@@ -5895,6 +6062,21 @@ class Game:
         if "--lang" in sys.argv[:-1]:
             lang = sys.argv[sys.argv.index("--lang") + 1]
         set_lang(lang or system_lang())
+        try:
+            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+                acc = json.load(f).get("a11y")
+        except Exception:
+            acc = None
+        if isinstance(acc, dict):
+            for k in A11Y:
+                if k in acc:
+                    A11Y[k] = type(A11Y[k])(acc[k])
+        elif screen_reader_running():                # первый запуск под NVDA/JAWS/Диктором — сразу говорим
+            A11Y["on"] = True
+        if "--speak" in sys.argv:
+            A11Y["on"] = True
+        if A11Y["on"]:
+            SPEECH.init()
 
     def save_settings(self):
         if self.headless:
@@ -5903,7 +6085,7 @@ class Game:
             with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
                 json.dump({"volume": dict(VOL), "lang": LANG["code"], "fullscreen": DISPLAY["fullscreen"],
                            "glow": DISPLAY["glow"], "res": list(DISPLAY["res"]) if DISPLAY["res"] else None,
-                           "gpu3d": not GL["off"]},
+                           "gpu3d": not GL["off"], "a11y": dict(A11Y)},
                           f, ensure_ascii=False, indent=2)
         except Exception:
             pass
@@ -6116,6 +6298,7 @@ class Game:
     def select_tool(self, tool_id):
         self.sel_tool = tool_id
         snd(TOOL_SOUND.get(tool_id, "tool_metal"))
+        self.say(f"В руке: {tr(TOOLS[tool_id][0])}", True)
 
     def do_action(self, tool_id, part_id):
         """Применить (инструмент, деталь) к текущему шагу. Возврат: 'ok' | 'wrong'."""
@@ -6354,6 +6537,10 @@ class Game:
             self.miss("БАБАХ! Перекачал сверх шкалы — камере конец, ставим новую. Заново.", 3.5)
         else:
             snd("hiss")
+            cfg = m["cfg"]
+            snd_pitch(m["value"] / cfg["mx"])
+            zone = cfg["lo"] <= m["value"] <= cfg["hi"]
+            self.say(f"{m['value']} {tr(cfg['unit'])}" + (", " + tr("зелёная зона") if zone else ""), True)
 
     def mini_pump_done(self):
         m = self.mini_pending
@@ -6405,9 +6592,544 @@ class Game:
     # =========================================================== #
     #  ОБРАБОТКА ВВОДА
     # =========================================================== #
+    # =========================================================== #
+    #  ДОСТУПНОСТЬ: вся игра с клавиатуры + озвучка
+    #  Пункты для фокуса берутся из прошлого кадра: кнопки (Button) и тексты, которые
+    #  нарисовала сцена (CAPTURE), плюс особые элементы (детали, инструменты, ползунки…).
+    # =========================================================== #
+    A11Y_KEYS = [
+        ("Стрелки", "выбрать пункт; влево-вправо двигают ползунок"),
+        ("Tab, Shift+Tab", "следующая или предыдущая группа"),
+        ("Enter, Пробел", "нажать"),
+        ("Esc", "назад или закрыть окно"),
+        ("R", "повторить: где я и что делать"),
+        ("T", "прочитать весь экран"),
+        ("H", "подсказка призрака"),
+        ("C", "что сказал клиент"),
+        ("V", "3D-осмотр коляски"),
+        ("F1", "справка по клавишам"),
+        ("F2", "озвучка: включить или выключить"),
+        ("M", "звук: включить или выключить"),
+        ("F11", "весь экран или окно"),
+    ]
+
+    def say(self, text, interrupt=False):
+        """В очередь озвучки; всё за кадр произносится одной фразой (в конце draw)."""
+        if text:
+            self.kb["queue"].append((tr(str(text)), interrupt))
+
+    # ---------- пункты для фокуса ----------
+    def a11y_items(self):
+        items = []
+
+        def add(group, label, rect=None, act=None, adj=None, key=None):
+            items.append(dict(group=group, label=label, rect=pygame.Rect(rect) if rect else None,
+                              act=act, adj=adj, key=key or (group, label)))
+
+        if self.kb["help"]:
+            add("Справка", tr("Закрыть справку"), act=self.toggle_help, key="help")
+            return items
+        if self.dispute_ui is not None:
+            ui = self.dispute_ui
+            for i, r in self._dispute_reason_rects():
+                add("Причина", tr(self._reasons()[i]) + (", " + tr("выбрано") if ui["reason"] == i else ""), r,
+                    act=lambda i=i: (ui.__setitem__("reason", i), snd("tick")), key=("reason", i))
+            add("Комментарий", tr("Комментарий: печатай текст, Enter — отправить") + (". " + ui["text"] if ui["text"] else ""),
+                self._dispute_text_rect(), act=self.send_dispute, key="dtext")
+            add("Кнопки", tr("Отправить"), self._dispute_send_rect(), act=self.send_dispute, key="dsend")
+            add("Кнопки", tr("Отмена"), self._dispute_cancel_rect(), act=self.close_dispute, key="dcancel")
+            return items
+        if self.show_sound:
+            self._a11y_settings_items(add)
+        elif self.scene == "job" and self.cur:
+            self._a11y_job_items(add)
+        elif self.scene == "title":
+            add("Меню", tr("Продолжить игру" if self.done else "Начать игру"), act=lambda: self.click_title((0, 0)),
+                key="start")
+        elif self.scene == "intro":
+            add("Меню", tr("Далее"), act=self._a11y_intro_next, key="next")
+        elif self.scene == "hub":
+            for jid, r in self._hub_job_rects():
+                job = self.job_by_id(jid)
+                note = (CLIENT_TALK.get(jid, {}).get("intro") or [""])[0]
+                lab = (f"{tr(job['client'])}. {tr(job['title'])}. "
+                       + tr("Электроколяска" if job.get("kind") == "power" else "Ручная коляска")
+                       + (". " + tr("Уже починено") if jid in self.done else "")
+                       + (". " + tr(note) if note and jid not in self.done else ""))
+                add("Клиенты", lab, r, key=("job", jid))
+            for d, r in self._hub_arrow_rects():
+                add("Клиенты", tr("Следующая страница очереди" if d > 0 else "Предыдущая страница очереди"), r,
+                    key=("page", d))
+        elif self.scene == "ending":
+            add("Меню", tr("Посмотреть гараж"), act=lambda: self.click_ending((0, 0)), key="garage")
+        elif self.scene == "seating" and self.seatc:
+            sc = self.seatc
+            if sc["tab"] == "fit" and not sc["solved"]:
+                case = SEAT_CASES[sc["case"]]
+                checks, _ = self.seat_eval(case, sc["cfg"])
+                for k, r in self._seat_slider_rects():
+                    label, unit, lo, hi = SEAT_SLIDERS[k]
+                    state = next((t for ck, ok, t in checks if ck == k), "")
+                    add("Ползунки", f"{tr(label)}: {sc['cfg'][k]} {tr(unit)}. {tr(state)}", r,
+                        adj=lambda d, k=k: self._a11y_seat_adj(k, d), key=("seat", k))
+        self._a11y_generic(items, add)
+        if not (self.show_sound or self.dispute_ui is not None or self.mini_pending or self.show_manual
+                or self.spec_pending or self.v3d is not None) and self.scene not in ("title", "intro", "ending"):
+            add("Меню", tr("Настройки: звук, графика, доступность"), self._speaker_rect(),
+                act=self._a11y_open_settings, key="settings")
+            add("Меню", tr("Сообщить о неточности"), self._feedback_rect(), act=self.open_feedback, key="flag")
+            if self.scene in ("hub", "guild", "garage"):
+                add("Меню", tr("Язык: русский. Переключить на английский") if LANG["code"] == "ru"
+                    else "Language: English. Switch to Russian", self._lang_rect(), act=self.toggle_lang, key="lang")
+        return items
+
+    def _a11y_generic(self, items, add):
+        """Кнопки, нарисованные в кадре (в модальном окне — только его), которых ещё нет в списке."""
+        taken = [it["rect"] for it in items if it["rect"]]
+        t0, b0 = CAPTURE["modal"] or (0, 0)
+        texts = CAPTURE["texts"][t0:]
+        for b in CAPTURE["buttons"][b0:]:
+            r = b["rect"]
+            if any(r.colliderect(x) for x in taken):
+                continue
+            lab = " ".join(x for x in (b["label"], b["sub"]) if x).strip()
+            if not lab:                                   # пустая кнопка-карточка: подпись — текст внутри
+                lab = ". ".join(t for tr_, t in texts if r.collidepoint(tr_.topleft))
+            elif len(lab) <= 14:                          # «ВКЛ», «В ОКНЕ» — с подписью строки слева
+                row = [t for tr_, t in texts if abs(tr_.centery - r.centery) < 22 and tr_.right <= r.x + 4]
+                if row:
+                    lab = row[-1] + ": " + lab
+            if b["active"]:
+                lab += ", " + tr("выбрано")
+            if not b["enabled"]:
+                lab += ", " + tr("недоступно")
+            if lab:
+                add("Кнопки", lab, r, key=("btn", tuple(r)))
+                taken.append(r)
+
+    def _a11y_job_items(self, add):
+        job = self.cur
+        tech = job.get("track") == "tech"
+        if self.v3d is not None:
+            add("3D", tr("Закрыть 3D-осмотр"), act=lambda: self.handle_v3d_event(
+                pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, mod=0, unicode="")), key="v3dclose")
+            return
+        m = self.mini_pending
+        if m:
+            cfg = m["cfg"]
+            if m["kind"] == "gap":
+                add("Шкала", f"{tr(cfg.get('label', 'Значение'))}: {m['value']} {tr(cfg['unit'])}",
+                    self._mini_gap_track(), adj=self._a11y_gap_adj, key="gap")
+            elif m["kind"] == "ping":
+                n = cfg["total"]
+                for i, r in self._mini_ping_spots():
+                    st = ""
+                    if i in m["tested"]:
+                        st = ", " + tr("глухая" if i in m["dull"] else "звонкая")
+                    add("Спицы", f"{tr('Спица')} {_of(i + 1, n)}{st}", r, act=lambda i=i: self.mini_ping(i),
+                        key=("spoke", i))
+            elif m["kind"] == "meter":
+                for i, r in self._mini_meter_rects():
+                    add("Выводы", tr(cfg["options"][i][0]), r, act=lambda i=i: self.mini_meter(i), key=("meter", i))
+            return
+        if self.show_manual:
+            for k, r in self._manual_page_rects():
+                add("Страницы", tr(MANUAL[k][0]) + (", " + tr("открыта") if k == self.manual_page else ""), r,
+                    act=lambda k=k: (setattr(self, "manual_page", k), self.manual_viewed.add(k)), key=("page", k))
+            return
+        if self.spec_pending:
+            spec = self.spec_pending["spec"]
+            viewed = spec["manual"] in self.manual_viewed
+            for i, r in self._spec_option_rects():
+                add("Варианты", tr(spec["options"][i][0]) + ("" if viewed else ", " + tr("закрыто: сначала мануал")),
+                    r, act=lambda i=i: self.choose_spec(i) if viewed else self.flash(
+                        "Сначала открой мануал и сверься со спецификацией.", AMBER, 3), key=("spec", i))
+            return
+        if self.phase == "diagnose" and not tech:
+            unlocked = len(self.inspected) >= INSPECT_REQ
+            for pid, r in self._part_rects():
+                add("Детали", tr(PARTS[pid]) + (", " + tr("осмотрено") if pid in self.inspected else ""), r,
+                    act=lambda pid=pid: self.inspect_part(pid), key=("part", pid))
+            for i, r in self._diag_rects():
+                add("Диагноз", f"{tr('Диагноз')} {i + 1}: {tr(job['diagnosis'][i]['text'])}"
+                    + ("" if unlocked else ", " + tr("сначала осмотри детали")), r,
+                    act=lambda i=i: self.choose_diagnosis(i), key=("diag", i))
+        elif self.phase == "repair":
+            if tech:
+                for sid, r in self._op_rects():
+                    st = self.step_by_id(sid)
+                    add("Операции", tr(st["instr"]) + (", " + tr("выполнено") if sid in self.done_steps else ""), r,
+                        act=lambda sid=sid: self._a11y_apply(sid=sid), key=("op", sid))
+            for tid, r in self._tool_rects():
+                add("Инструменты", tr(TOOLS[tid][0]) + (", " + tr("в руке") if tid == self.sel_tool else "")
+                    + ". " + tr(TOOLS[tid][1]), r, act=lambda tid=tid: self.select_tool(tid), key=("tool", tid))
+            if not tech:
+                for pid, r in self._part_rects():
+                    add("Детали", tr(PARTS[pid]), r, act=lambda pid=pid: self._a11y_apply(pid=pid), key=("part", pid))
+
+    def _a11y_apply(self, pid=None, sid=None):
+        if self.sel_tool is None:
+            self.flash("Сначала выбери инструмент внизу.", AMBER, 2.5)
+            self.kb["key"] = ("tool", next(iter(self.cur.get("tools") or TOOLS)))
+            return
+        if sid is not None:
+            self.do_tech_action(self.sel_tool, sid)
+        else:
+            self.do_action(self.sel_tool, pid)
+
+    def _a11y_settings_items(self, add):
+        tab = getattr(self, "settings_tab", "sound")
+        for t, r in self._settings_tab_rects():
+            names = {"sound": "Вкладка: звук", "graphics": "Вкладка: графика", "access": "Вкладка: доступность"}
+            add("Вкладки", tr(names[t]) + (", " + tr("открыта") if t == tab else ""), r,
+                act=lambda t=t: (setattr(self, "settings_tab", t), snd("tick")), key=("tab", t))
+        if tab == "sound":
+            names = {"master": "Общая громкость", "music": "Музыка", "sfx": "Эффекты", "amb": "Атмосфера сцен"}
+            for k, r in self._vol_slider_rects():
+                add("Громкость", f"{tr(names[k])}: {int(VOL[k] * 100)}%", r, adj=lambda d, k=k: self._a11y_vol(k, d),
+                    key=("vol", k))
+        elif tab == "access":
+            for k, r in self._access_rects():
+                add("Доступность", self._access_label(k), r, act=lambda k=k: self._access_toggle(k), key=("acc", k))
+
+    # ---------- действия ----------
+    def _a11y_intro_next(self):
+        self.skip_typing("intro")
+        self.click_intro((0, 0))
+
+    def _a11y_open_settings(self):
+        self.show_sound = True
+        snd("tick")
+
+    def _a11y_gap_adj(self, d):
+        m = self.mini_pending
+        cfg = m["cfg"]
+        m["value"] = max(cfg["mn"], min(cfg["mx"], m["value"] + d))
+        snd_pitch((m["value"] - cfg["mn"]) / max(1, cfg["mx"] - cfg["mn"]))
+
+    def _a11y_seat_adj(self, k, d):
+        sc = self.seatc
+        sc["focus"] = k
+        _, _, lo, hi = SEAT_SLIDERS[k]
+        sc["cfg"][k] = max(lo, min(hi, sc["cfg"][k] + d))
+        snd("ratchet")
+
+    def _a11y_vol(self, k, d):
+        VOL[k] = round(max(0.0, min(1.0, VOL[k] + 0.05 * d)), 2)
+        apply_volume()
+        snd("tick")
+
+    def toggle_help(self):
+        self.kb["help"] = not self.kb["help"]
+        if self.kb["help"]:
+            self.say(tr("Клавиши.") + " " + " ".join(f"{tr(k)}: {tr(v)}." for k, v in self.A11Y_KEYS)
+                     + " " + tr("Esc — закрыть справку."), True)
+        else:
+            self.say("Справка закрыта.", True)
+
+    def toggle_speech(self):
+        if A11Y["on"]:
+            SPEECH.say(tr("Озвучка выключена. F2 — включить."), True)
+            A11Y["on"] = False
+        else:
+            A11Y["on"] = True
+            SPEECH.init()
+            SPEECH.set_voice()
+            if not SPEECH.kind:
+                self.flash("Озвучка недоступна на этом компьютере.", AMBER, 3)
+            else:
+                self.kb["sig"] = None                      # сразу рассказать, где мы
+                self.say(tr("Озвучка включена.") + " " + tr("F1 — справка по клавишам."), True)
+        self.save_settings()
+
+    # ---------- клавиши ----------
+    def a11y_key(self, ev):
+        k = ev.key
+        mod = getattr(ev, "mod", 0)
+        if k == pygame.K_F1:
+            self.toggle_help()
+            return True
+        if k == pygame.K_F2:
+            self.toggle_speech()
+            return True
+        if self.kb["help"]:
+            if k in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                self.toggle_help()
+            return True
+        typing = self.dispute_ui is not None              # в окне замечания буквы — это текст
+        v3d = self.v3d is not None and self.scene == "job"
+        shift = mod & pygame.KMOD_SHIFT
+        if not typing and not (mod & (pygame.KMOD_CTRL | pygame.KMOD_ALT)):
+            if k == pygame.K_r and not v3d:
+                self.say(self.a11y_summary(full=True), True)
+                return True
+            if k == pygame.K_t:
+                self.say(self.a11y_screen_text(), True)
+                return True
+            if k == pygame.K_h:
+                line = self.ghost_text() if self.scene == "job" else ""
+                self.say(line or "Подсказки сейчас нет.", True)
+                return True
+            if k == pygame.K_c:
+                self.say(self.client_line or "Клиент пока молчит.", True)
+                return True
+        if v3d and k != pygame.K_RETURN:
+            return False
+        items = self.kb["items"]
+        nav = (pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT, pygame.K_TAB,
+               pygame.K_RETURN, pygame.K_KP_ENTER) + (() if typing else (pygame.K_SPACE,))
+        if k not in nav or not items:
+            return False
+        if k in (pygame.K_RETURN, pygame.K_KP_ENTER) and mod & pygame.KMOD_ALT:
+            return False                                   # Alt+Enter — весь экран
+        self.kb["active"] = True
+        idx = next((i for i, it in enumerate(items) if it["key"] == self.kb["key"]), None)
+        cur = items[idx] if idx is not None else None
+        if k in (pygame.K_LEFT, pygame.K_RIGHT) and cur and cur["adj"]:
+            cur["adj"](1 if k == pygame.K_RIGHT else -1)
+            self.kb["say_focus"] = True                    # новое значение прочитаем после кадра
+            return True
+        if k in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+            if cur is None and typing:
+                self.send_dispute()
+                return True
+            if cur is None:
+                if len(items) == 1:
+                    cur = items[0]
+                else:
+                    self._a11y_focus(items[0], items)
+                    return True
+            self._a11y_activate(cur)
+            return True
+        if k == pygame.K_TAB:
+            groups = []
+            for it in items:
+                if it["group"] not in groups:
+                    groups.append(it["group"])
+            g = groups.index(cur["group"]) if cur else -1
+            g = (g + (-1 if shift else 1)) % len(groups)
+            first = next(it for it in items if it["group"] == groups[g])
+            self._a11y_focus(first, items)
+            return True
+        d = -1 if k in (pygame.K_UP, pygame.K_LEFT) else 1
+        i = ((idx if idx is not None else (-1 if d > 0 else 0)) + d) % len(items)
+        self._a11y_focus(items[i], items)
+        return True
+
+    def _a11y_focus(self, it, items):
+        self.kb["key"] = it["key"]
+        n = [x for x in items if x["group"] == it["group"]]
+        pos = f" ({_of(n.index(it) + 1, len(n))})" if len(n) > 1 else ""
+        head = ""
+        if it["group"] != self.kb.get("group"):
+            head = tr(it["group"]) + ". "
+            self.kb["group"] = it["group"]
+        snd("tick")
+        self.say(head + it["label"] + pos, True)
+
+    def _a11y_activate(self, it):
+        if it["act"]:
+            it["act"]()
+        elif it["rect"] is not None:                       # обычный клик в центр кнопки
+            c = it["rect"].center
+            self.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=c, button=1))
+            self.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=c, button=1))
+        self.kb["say_focus_if_same"] = it["key"]
+
+    # ---------- что сказать ----------
+    def a11y_screen_text(self):
+        t0, b0 = CAPTURE["modal"] or (0, 0)
+        texts = sorted(CAPTURE["texts"][t0:], key=lambda x: (x[0].y // 12, x[0].x))
+        out = [t.strip().rstrip(".") for r, t in texts if t != tr("КОЛЁСА И КОСТИ") and t.strip(" .")]
+        out += [b["label"] for b in CAPTURE["buttons"][b0:] if b["label"]]
+        return ". ".join(out) or tr("На экране нет текста.")
+
+    def a11y_summary(self, full=True):
+        """Главное о текущем экране: где ты и что делать."""
+        if self.kb["help"]:
+            return tr("Справка по клавишам.")
+        if self.dispute_ui is not None:
+            d = self.dispute
+            head = tr("Сообщить о неточности." if d and d["kind"] == "general" else "Я не согласен с игрой.")
+            extra = ""
+            if d and d.get("expected"):
+                extra = f" {tr('Игра ожидала')}: {tr(d['expected'])}. {tr('Ты выбрал')}: {tr(d['got'])}."
+            return (head + extra + " " + tr("Стрелки — выбрать причину, печатай комментарий, "
+                                            "Enter — отправить, Esc — отмена."))
+        if self.show_sound:
+            tab = getattr(self, "settings_tab", "sound")
+            return tr("Настройки.") + " " + tr({"sound": "Звук.", "graphics": "Графика.", "access": "Доступность."}[tab]) \
+                + " " + tr("Tab — к вкладкам и пунктам, Esc — закрыть.")
+        sc = self.scene
+        if sc == "title":
+            return (tr("Колёса и Кости. Обучающий симулятор ремонта инвалидных колясок.") + " "
+                    + tr("Enter — начать. F1 — справка по клавишам, F2 — озвучка."))
+        if sc == "intro":
+            idx = min(self.intro_idx, len(self.intro_slides) - 1)
+            title, text = self.intro_slides[idx]
+            return f"{tr(title)}. {tr(text)} " + tr("Enter — далее.")
+        if sc == "hub":
+            return (f"{tr('Мастерская.')} {tr('Починено')}: {_of(self.user_done_count(), len(JOBS))}. "
+                    + tr("Стрелки — выбрать клиента, Enter — взять заказ, Tab — другие разделы."))
+        if sc == "job" and self.cur:
+            return self._a11y_job_summary(full)
+        if sc == "result" and self.cur:
+            stars = getattr(self, "cur_stars", 3)
+            return (f"{tr('Готово!')} {tr('Звёзд')}: {_of(stars, 3)}. {tr(self.cur['thanks'])} "
+                    f"{tr('Что ты узнал')}: {tr(self.cur['fact'])} {tr(self.result_gag)} " + tr("Enter на кнопке — дальше."))
+        if sc == "seating" and self.seatc:
+            return self._a11y_seat_summary(full)
+        return self.a11y_screen_text()
+
+    def _a11y_job_summary(self, full):
+        job = self.cur
+        tech = job.get("track") == "tech"
+        if self.v3d is not None:
+            return tr("3D-осмотр коляски. Esc — закрыть.")
+        m = self.mini_pending
+        if m:
+            cfg = m["cfg"]
+            out = tr(m["step"]["instr"]) + ". " + tr(cfg.get("hint") or cfg.get("prompt") or "")
+            if m["kind"] == "pump":
+                out += f" {tr('Сейчас')}: {m['value']} {tr(cfg['unit'])}. " + tr(
+                    "Нужно попасть в зелёную зону") + f": {cfg['lo']}–{cfg['hi']} {tr(cfg['unit'])}. " + tr(
+                    "Enter на «Качать» — подкачать, потом «Готово».")
+            elif m["kind"] == "gap":
+                out += f" {tr('Допуск')}: {cfg['lo']}–{cfg['hi']} {tr(cfg['unit'])}. " + tr(
+                    "Стрелки влево-вправо — значение, потом «Проверить».")
+            elif m["kind"] == "ping":
+                out += " " + tr("Простукивай спицы по очереди и слушай: звонкая — в норме, глухая — ослабла.")
+            elif m["kind"] == "meter":
+                out += f" {tr('Прибор показывает')}: {tr(cfg['reading'])}. {tr(cfg.get('sub', ''))}"
+            return out
+        if self.show_manual and self.manual_page:
+            title, lines = MANUAL[self.manual_page]
+            return f"{tr('Мануал')}. {tr(title)}. " + " ".join(tr(x) for x in lines)
+        if self.spec_pending:
+            spec = self.spec_pending["spec"]
+            return tr(spec["prompt"]) + ("" if spec["manual"] in self.manual_viewed else
+                                         " " + tr("Сначала открой мануал — варианты откроются."))
+        voices = A11Y["voices"]
+        if tech:
+            if self.phase == "repair":
+                out = f"{tr('Выполнено')}: {_of(len(self.done_steps), len(job['steps']))}."
+                if full:
+                    out = (f"{tr(job['title'])}. {tr(job['symptom'])} " + out + " "
+                           + tr("Порядок шагов выбираешь сам: выбери инструмент, потом операцию. "
+                                "Значения — из мануала."))
+                return out + (" " + tr(self.ghost_line) if voices and self.ghost_line else "")
+            return tr("Проверка под нагрузкой.") + " " + tr(job["test"])
+        if self.phase == "diagnose":
+            out = (f"{tr(job['title'])}. {tr('Клиент')}: {tr(job['client'])}. "
+                   f"{tr('Коляска')}: {tr(job.get('chair_name', ''))}. {tr(job['symptom'])} "
+                   + tr("Осмотри детали, минимум две, потом выбери диагноз. Tab — переход между группами."))
+            return out
+        if self.phase == "repair":
+            n = len(job["steps"])
+            step = job["steps"][min(self.step_idx, n - 1)]
+            out = f"{tr('Шаг')} {_of(self.step_idx + 1, n)}: {tr(step['instr'])}"
+            if full:
+                out += " " + tr("Выбери инструмент, потом деталь.")
+            if voices and self.ghost_line:
+                out += " " + tr(self.ghost_line)
+            return out
+        return tr("Тест-драйв.") + " " + tr(job["test"]) + " " + tr("Enter на кнопке — прокатить и проверить.")
+
+    def _a11y_seat_summary(self, full):
+        sc = self.seatc
+        if sc["tab"] == "lessons":
+            les = SEAT_LESSONS[sc["lesson"]]
+            return (f"{tr('Кабинет посадки. Урок')}: {tr(les['title'])}. " + " ".join(tr(x) for x in les["points"]))
+        if sc["tab"] == "fit":
+            case = SEAT_CASES[sc["case"]]
+            b = case["body"]
+            return (f"{tr('Примерка')}: {tr(case['client'])}. {tr(case['story'])} "
+                    f"{tr('Карта терапевта')}: {tr(case['therapist'])} "
+                    f"{tr('Мерки')}: {tr('бедро')} {b['thigh']} {tr('см')}, {tr('голень')} {b['shank']} {tr('см')}, "
+                    f"{tr('до лопаток')} {b['scap']} {tr('см')}, {tr('до плеч')} {b['shoulder']} {tr('см')}. "
+                    + tr("Двигай ползунки стрелками влево-вправо, потом «Проверить посадку»."))
+        if sc["quiz_done"]:
+            return f"{tr('Зачёт')}: {_of(sc['score'], len(SEAT_QUIZ))}."
+        q = SEAT_QUIZ[sc["quiz"]]
+        pic = (" " + tr(q["desc"])) if q.get("desc") else ""
+        return f"{tr('Вопрос')} {_of(sc['quiz'] + 1, len(SEAT_QUIZ))}: {tr(q['q'])}{pic}"
+
+    def _a11y_sig(self):
+        sc = self.seatc if self.scene == "seating" and self.seatc else {}
+        return ((self.scene, self.cur and self.cur["id"], self.phase, self.mini_pending is not None,
+                 self.show_manual, self.spec_pending is not None, self.show_sound, self.dispute_ui is None,
+                 self.v3d is None, self.kb["help"], sc.get("tab"), sc.get("case"), sc.get("lesson"),
+                 sc.get("quiz"), sc.get("quiz_done")),
+                (self.step_idx, len(self.done_steps), getattr(self, "intro_idx", 0), self.manual_page,
+                 getattr(self, "settings_tab", "sound"), getattr(self, "hub_page", 0)))
+
+    # ---------- раз в кадр: фокус, автоозвучка, рамка ----------
+    def a11y_frame(self, surf):
+        items = self.a11y_items()
+        self.kb["items"] = items
+        sig = self._a11y_sig()
+        old = self.kb["sig"]
+        if sig != old:
+            big = old is None or sig[0] != old[0]
+            self.kb["sig"] = sig
+            if big:
+                self.kb["group"] = None
+                if not any(it["key"] == self.kb["key"] for it in items):
+                    self.kb["key"] = None
+            self.say(self.a11y_summary(full=big))
+        if A11Y["voices"] and self.scene == "job":        # реплики персонажей — вслух, в очередь
+            if self.client_line and self.client_line != self.kb["client_seen"]:
+                self.say(self.client_line)
+            if self.ghost_quip and self.ghost_quip != self.kb["quip_seen"] and self.t < self.ghost_quip_until:
+                self.say(self.ghost_quip)
+        self.kb["client_seen"], self.kb["quip_seen"] = self.client_line, self.ghost_quip
+        if self.scene == "seating" and self.seatc:
+            say_ = self.seatc.get("say") or ""
+            if A11Y["voices"] and say_ != self.kb["seat_seen"] and self.kb["seat_seen"]:
+                self.say(say_)
+            self.kb["seat_seen"] = say_
+        cur = next((it for it in items if it["key"] == self.kb["key"]), None)
+        if self.kb.pop("say_focus", False) and cur:       # ползунок сдвинули — новое значение
+            self.say(cur["label"], True)
+        same = self.kb.pop("say_focus_if_same", None)
+        if same is not None and cur and cur["key"] == same and not self.kb["queue"]:
+            self.say(cur["label"], True)                   # нажали, а экран не изменился — что теперь на кнопке
+        if self.kb["active"] and cur and cur["rect"] is not None and self.kb["help"] is False:
+            r = cur["rect"].inflate(12, 12) if cur["rect"].h > 12 else cur["rect"].inflate(24, 30)
+            pulse = 0.5 + 0.5 * math.sin(self.t * 5)
+            aa_rect(surf, (0, 0, 0), r.inflate(10, 10), 3, border_radius=13)
+            aa_rect(surf, (255, 255, 255), r, 3, border_radius=10)
+            aa_rect(surf, AMBER, r.inflate(6, 6), 3 + int(pulse), border_radius=12)
+        q = self.kb["queue"]
+        if q:
+            SPEECH.say(" ".join(t for t, _ in q), any(i for _, i in q))
+            q.clear()
+
+    def _draw_help(self, surf):
+        _cap_modal()
+        dim = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
+        dim.fill((6, 6, 10, 215))
+        surf.blit(dim, (0, 0))
+        p = pygame.Rect(WIDTH // 2 - 360, 70, 720, 580)
+        aa_rect(surf, (24, 22, 32), p, border_radius=12)
+        aa_rect(surf, AMBER, p, 2, border_radius=12)
+        draw_text(surf, "УПРАВЛЕНИЕ С КЛАВИАТУРЫ", (p.x + 28, p.y + 20), 24, AMBER, bold=True)
+        y = p.y + 66
+        for k, v in self.A11Y_KEYS:
+            draw_text(surf, k, (p.x + 28, y), 17, CYAN, bold=True)
+            draw_text(surf, v, (p.x + 230, y), 17, WHITE)
+            y += 33
+        st = f"Озвучка: {'включена' if A11Y['on'] else 'выключена'} ({SPEECH.label()})"
+        draw_text(surf, st, (p.x + 28, p.bottom - 74), 15, GOOD if A11Y["on"] else GREY)
+        draw_text(surf, "Esc или F1 — закрыть", (p.x + 28, p.bottom - 44), 15, GREY)
+
     def handle_event(self, event):
+        if event.type == pygame.MOUSEMOTION:
+            self.kb["active"] = False                     # мышь — рамку фокуса прячем
+        if event.type == pygame.KEYDOWN and self.a11y_key(event):
+            return
         if event.type == pygame.KEYDOWN and (event.key == pygame.K_F11 or (
-                event.key == pygame.K_RETURN and event.mod & pygame.KMOD_ALT)):
+                event.key == pygame.K_RETURN and getattr(event, "mod", 0) & pygame.KMOD_ALT)):
             if not self.headless:
                 toggle_fullscreen()
                 self.save_settings()
@@ -6453,7 +7175,7 @@ class Game:
             if handler:
                 handler(event.pos)
         elif event.type == pygame.KEYDOWN:
-            if (event.key == pygame.K_TAB and self.scene == "job" and self.cur
+            if (event.key == pygame.K_v and self.scene == "job" and self.cur
                     and not self.mini_pending and not self.show_manual and not self.spec_pending):
                 self.open_v3d()
                 return
@@ -6699,6 +7421,8 @@ class Game:
     def typed(self, key, text, cps=75):
         """Сколько символов text уже «напечатано» (сброс при смене текста)."""
         text = tr(text)
+        if A11Y["instant"]:
+            return 10 ** 6
         seen = self._typing.get(key)
         if not seen or seen[0] != text:
             self._typing[key] = (text, self.t)
@@ -6706,6 +7430,8 @@ class Game:
         return int((self.t - seen[1]) * cps)
 
     def typing_done(self, key):
+        if A11Y["instant"]:
+            return True
         seen = self._typing.get(key)
         return not seen or (self.t - seen[1]) * 75 >= len(seen[0])
 
@@ -6723,9 +7449,12 @@ class Game:
             self._stars_played = set()
             self._scene_seen = self.scene
             self.scene_t0 = self.t
+        CAPTURE.update(frame=surf, texts=[], buttons=[], modal=None, mute=0)
         getattr(self, f"draw_{self.scene}")(surf)
+        CAPTURE["mute"] += 1                            # тост и значки сверху читаются отдельно
         if self.toast_timer > 0 and self.toast:
             self._draw_toast(surf)
+        CAPTURE["mute"] -= 1
         self._draw_speaker(surf)
         if self.scene in ("title", "hub", "guild", "garage"):
             self._draw_lang(surf)
@@ -6737,6 +7466,9 @@ class Game:
             self._draw_dispute_panel(surf, mouse_pos())
         if self.show_sound:
             self._draw_sound_panel(surf)
+        if self.kb["help"]:
+            self._draw_help(surf)
+        self.a11y_frame(surf)
         if self._fade_from is not None:
             k = (self.t - self._fade_t0) / 0.35
             if k >= 1:
@@ -6765,6 +7497,8 @@ class Game:
 
     def toggle_lang(self):
         set_lang("en" if LANG["code"] == "ru" else "ru")
+        SPEECH.set_voice()
+        self.kb["sig"] = None
         self.save_settings()
         self._typing.clear()
         snd("tick")
@@ -6798,7 +7532,39 @@ class Game:
 
     def _settings_tab_rects(self):
         p = self._sound_panel_rect()
-        return [(t, pygame.Rect(p.x + 32 + i * 150, p.y + 64, 140, 36)) for i, t in enumerate(("sound", "graphics"))]
+        return [(t, pygame.Rect(p.x + 32 + i * 174, p.y + 64, 164, 36))
+                for i, t in enumerate(("sound", "graphics", "access"))]
+
+    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant")
+
+    def _access_rects(self):
+        p = self._sound_panel_rect()
+        return [(k, pygame.Rect(p.x + 330, p.y + 118 + i * 46, 216, 38)) for i, k in enumerate(self.ACCESS_ROWS)]
+
+    def _access_label(self, k):
+        on = tr("включено") if A11Y.get(k) else tr("выключено")
+        if k == "on":
+            return f"{tr('Озвучка')}: {tr('включена') if A11Y['on'] else tr('выключена')}. F2"
+        if k == "voices":
+            return f"{tr('Реплики персонажей вслух')}: {on}"
+        if k == "rate":
+            return f"{tr('Скорость голоса Windows')}: {A11Y['rate']}. " + tr("Enter — быстрее, после 10 — снова медленно")
+        if k == "contrast":
+            return f"{tr('Тёмный контрастный фон')}: {on}"
+        return f"{tr('Текст сразу, без печати по буквам')}: {on}"
+
+    def _access_toggle(self, k):
+        if k == "on":
+            self.toggle_speech()
+        elif k == "rate":
+            A11Y["rate"] = A11Y["rate"] + 2 if A11Y["rate"] < 10 else -4
+            SPEECH.set_voice()
+            self.say(f"{tr('Скорость')}: {A11Y['rate']}", True)
+        else:
+            A11Y[k] = not A11Y[k]
+            self.say(self._access_label(k), True)
+        snd("tick")
+        self.save_settings()
 
     def _vol_slider_rects(self):
         p = self._sound_panel_rect()
@@ -6853,6 +7619,12 @@ class Game:
                     self.settings_tab = t
                     snd("tick")
                     return
+            if tab == "access":
+                for k, r in self._access_rects():
+                    if r.collidepoint(event.pos):
+                        self._access_toggle(k)
+                        return
+                return
             if tab == "sound":
                 if self._sound_mute_rect().collidepoint(event.pos):
                     toggle_sound()
@@ -6898,7 +7670,23 @@ class Game:
                 snd("ok")                                   # услышать новую громкость
             self._vol_drag = None
 
+    def _draw_access_tab(self, surf, p, mouse):
+        names = {"on": "Озвучка (F2)", "voices": "Реплики героев вслух", "rate": "Скорость голоса",
+                 "contrast": "Контрастный фон", "instant": "Текст сразу"}
+        for k, r in self._access_rects():
+            draw_text(surf, names[k], (p.x + 32, r.y + 9), 17, WHITE)
+            if k == "rate":
+                label = str(A11Y["rate"])
+            else:
+                label = "ВКЛ" if A11Y[k] else "ВЫКЛ"
+            Button(r, label, GOOD if (k == "rate" or A11Y[k]) else GREY).draw(surf, mouse, active=bool(A11Y.get(k)))
+        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, p.y + 350), 13, GREY)
+        draw_wrapped(surf, "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
+                           "С экранным чтецом (NVDA, JAWS) игра говорит его голосом.",
+                     (p.x + 32, p.y + 370), p.w - 64, 13, GREY)
+
     def _draw_sound_panel(self, surf):
+        _cap_modal()
         dim = _img_cache.get(("v3d_dim", 168, RS))
         if dim is None:
             dim = _img_cache[("v3d_dim", 168, RS)] = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -6911,8 +7699,11 @@ class Game:
         mouse = mouse_pos()
         tab = getattr(self, "settings_tab", "sound")
         for t, r in self._settings_tab_rects():
-            Button(r, "ЗВУК" if t == "sound" else "ГРАФИКА", CYAN).draw(surf, mouse, active=t == tab)
-        if tab == "sound":
+            Button(r, {"sound": "ЗВУК", "graphics": "ГРАФИКА", "access": "ДОСТУПНОСТЬ"}[t], CYAN).draw(
+                surf, mouse, active=t == tab)
+        if tab == "access":
+            self._draw_access_tab(surf, p, mouse)
+        elif tab == "sound":
             draw_text(surf, "M — быстро выключить / включить звук", (p.x + 32, p.y + 374), 13, GREY)
             names = {"master": "Общая громкость", "music": "Музыка", "sfx": "Эффекты", "amb": "Атмосфера сцен"}
             for key, track in self._vol_slider_rects():
@@ -6954,17 +7745,18 @@ class Game:
         Button(self._sound_close_rect(), "ГОТОВО", AMBER).draw(surf, mouse)
 
     def _bg(self, surf, name, color):
-        key = ("bg_dimmed", name, RS)                          # фон + затемнение — один раз, дальше одна копия на кадр
+        key = ("bg_dimmed", name, RS, A11Y["contrast"])        # фон + затемнение — один раз, дальше одна копия на кадр
         bg = _img_cache.get(key)
         if bg is None:
             bg = Surf((WIDTH, HEIGHT))
             bg.blit(load_image(name, (WIDTH, HEIGHT), color), (0, 0))
             ov = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
-            ov.fill((18, 16, 24, 150))
+            ov.fill((10, 9, 14, 222) if A11Y["contrast"] else (18, 16, 24, 150))   # контраст: фон почти чёрный
             bg.blit(ov, (0, 0))
             _img_cache[key] = bg
         surf.blit(bg, (0, 0))
-        draw_ambient(surf, name, self.t)
+        if not A11Y["contrast"]:
+            draw_ambient(surf, name, self.t)
         set_ambient(name)
 
     def _draw_toast(self, surf):
@@ -7032,6 +7824,8 @@ class Game:
                       alpha=150 + 105 * pulse)
         draw_text(surf, "Esc — выход · M — звук · прогресс сохраняется автоматически",
                   (WIDTH // 2, HEIGHT - 36), 15, GREY, center=True)
+        draw_text(surf, "F1 — управление с клавиатуры · F2 — озвучка для незрячих",
+                  (WIDTH // 2, HEIGHT - 62), 15, CYAN, center=True)
 
     # ----- интро -----
     def draw_intro(self, surf):
@@ -8597,6 +9391,7 @@ class Game:
         return bg
 
     def _draw_v3d(self, surf, mouse):
+        _cap_modal()
         v = self.v3d
         ok = ease_out((self.t - v["t0"]) / 0.3)
         da = int(200 * ok) // 8 * 8                           # затемнение и панель — из кэша (при ×2 это полноэкранные слои)
@@ -9130,6 +9925,7 @@ class Game:
         return pygame.Rect(p.right - 190, p.bottom - 60, 166, 46)
 
     def _draw_spec_overlay(self, surf, mouse):
+        _cap_modal()
         dim = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
         dim.fill((8, 8, 12, 180))
         surf.blit(dim, (0, 0))
@@ -9169,6 +9965,7 @@ class Game:
         return pygame.Rect(p.right - 200, p.bottom - 64, 180, 46)
 
     def _draw_manual_overlay(self, surf, mouse):
+        _cap_modal()
         dim = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
         dim.fill((8, 8, 12, 180))
         surf.blit(dim, (0, 0))
@@ -9261,6 +10058,7 @@ class Game:
                     return
 
     def _draw_mini_overlay(self, surf, mouse):
+        _cap_modal()
         dim = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
         dim.fill((8, 8, 12, 180))
         surf.blit(dim, (0, 0))
@@ -10160,6 +10958,51 @@ def run_selftest():
     gt.scene = "hub"
     gt.draw(pygame.display.get_surface())
 
+    # доступность: задание «flat» проходится одними клавишами, игра говорит, что происходит
+    # (полный проход всех экранов с клавиатуры — art_tests/keyboard_playthrough.py)
+    scr = pygame.display.get_surface()
+    ga = Game(headless=True)
+    SPEECH.log.clear()
+
+    def kp(k):
+        ga.handle_event(pygame.event.Event(pygame.KEYDOWN, key=k, mod=0, unicode=""))
+        ga.update(0.05)
+        ga.draw(scr)
+
+    def to(key_):
+        for _ in range(len(ga.kb["items"]) + 2):
+            if ga.kb["key"] == key_:
+                return True
+            kp(pygame.K_DOWN)
+        return False
+
+    ga.start_job("flat")
+    ga.draw(scr)
+    for pid in ga.cur["parts"][:INSPECT_REQ]:
+        if to(("part", pid)):
+            kp(pygame.K_RETURN)
+    okd = next(i for i, o in enumerate(ga.cur["diagnosis"]) if o["correct"])
+    if to(("diag", okd)):
+        kp(pygame.K_RETURN)
+    if ga.phase != "repair":
+        failures.append("клавиатура: диагноз не поставлен стрелками и Enter")
+    else:
+        st0 = ga.cur["steps"][0]
+        if to(("tool", st0["tool"])):
+            kp(pygame.K_RETURN)
+        if to(("part", st0["part"])):
+            kp(pygame.K_RETURN)
+        if ga.step_idx != 1 and not ga.mini_pending:
+            failures.append("клавиатура: первый шаг ремонта не выполнен")
+    if not any("Шаг" in t for t in SPEECH.log):
+        failures.append("озвучка: шаг ремонта не прозвучал")
+    kp(pygame.K_F1)
+    if not ga.kb["help"]:
+        failures.append("F1 не открыл справку")
+    kp(pygame.K_ESCAPE)
+    if speech_clean("Enter — начать · 1920×1080 ✔") not in ("Enter, начать, 1920 на 1080", "Enter, начать, 1920 by 1080"):
+        failures.append(f"speech_clean: {speech_clean('Enter — начать · 1920×1080 ✔')}")
+
     pygame.quit()
     if failures:
         print("SELFTEST FAILED:")
@@ -10278,6 +11121,9 @@ def main():
         _crash_log.flush()
     clock = pygame.time.Clock()
     game = Game()
+    if _crash_log and A11Y["on"]:                         # какой голос у озвучки — тоже в журнал
+        _crash_log.write(f"озвучка: {SPEECH.kind} {SPEECH.name}" + chr(10))
+        _crash_log.flush()
     if "--unlock" in sys.argv:   # предпросмотр: всё открыто, включая Гильдию
         game.done.update(j["id"] for j in JOBS)
     running = True
