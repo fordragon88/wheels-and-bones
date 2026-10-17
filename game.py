@@ -289,7 +289,8 @@ class LFont:
             if len(self._cache) > 1500:
                 self._cache.clear()
             self._cache[key] = img
-        return img.copy()               # копия: вызывающий может менять прозрачность (set_alpha)
+        img.set_alpha(255)              # без копии: вызывающие ставят set_alpha сразу перед blit, сбрасываем здесь
+        return img
 
     def size(self, text):
         w, h = self.f.size(text)
@@ -2457,6 +2458,201 @@ def project_mesh(mesh, yaw, pitch, rect, zoom=1.0, center=None, ss=1):
     out.sort(key=lambda o: o[0])
     return out
 
+
+# ----------------------------------------------------------------------------- #
+#  GPU-рендер 3D (moderngl, OpenGL 3.3): плавное освещение по нормалям вершин,
+#  MSAA, блики на металле, подсветка детали в шейдере и буфер номеров деталей для
+#  наведения. Проекция — ТА ЖЕ формула, что у project_mesh/project_point, поэтому
+#  кружки деталей, клики и пикинг совпадают пиксель в пиксель. Если OpenGL нет
+#  (старая видеокарта, браузерная сборка, флаг --nogl), всё рисуется как раньше.
+# ----------------------------------------------------------------------------- #
+try:
+    import moderngl as _mgl
+except Exception:
+    _mgl = None
+GL = {"ctx": None, "failed": False, "prog": None, "meshes": {}, "fbo": {}, "off": False}
+
+_GL_VS = """
+#version 330
+uniform vec3 center; uniform vec2 cy_sy; uniform vec2 cp_sp; uniform float scale; uniform vec2 size;
+in vec3 in_pos; in vec3 in_nrm; in vec3 in_col; in float in_part; in float in_metal;
+out vec3 v_nrm; out vec3 v_col; flat out float v_part; out float v_metal;
+vec3 cam(vec3 p) {
+    float X = p.x * cy_sy.x + p.z * cy_sy.y;
+    float Z = -p.x * cy_sy.y + p.z * cy_sy.x;
+    return vec3(X, p.y * cp_sp.x - Z * cp_sp.y, p.y * cp_sp.y + Z * cp_sp.x);
+}
+void main() {
+    vec3 t = cam(in_pos - center);
+    float wc = (2600.0 - t.z) / 2600.0;
+    gl_Position = vec4(2.0 * t.x * scale / size.x, -0.08 * wc + 2.0 * t.y * scale / size.y, (-t.z / 4000.0) * wc, wc);
+    v_nrm = cam(in_nrm); v_col = in_col; v_part = in_part; v_metal = in_metal;
+}
+"""
+_GL_FS = """
+#version 330
+uniform vec3 LK; uniform vec3 LF; uniform vec3 HK;
+uniform float hl_part; uniform vec3 hl_col; uniform float hl_amt;
+uniform float hv_part; uniform float hv_amt;
+in vec3 v_nrm; in vec3 v_col; flat in float v_part; in float v_metal;
+layout(location = 0) out vec4 f_col;
+layout(location = 1) out vec4 f_id;
+void main() {
+    vec3 n = normalize(v_nrm);
+    if (n.z < 0.0) n = -n;                                   // двусторонние грани
+    float inten = 0.36 + 0.62 * max(dot(n, LK), 0.0) + 0.18 * max(dot(n, LF), 0.0) + 0.12 * (1.0 - n.z);
+    float h = max(dot(n, HK), 0.0);
+    float spec = v_metal > 0.5 ? (170.0 / 255.0) * pow(h, 18.0) : 0.06 * pow(h, 28.0);
+    vec3 c = v_col * inten + spec;
+    if (hl_amt > 0.0 && abs(v_part - hl_part) < 0.5) c = mix(c, hl_col, hl_amt);
+    if (hv_amt > 0.0 && abs(v_part - hv_part) < 0.5) c = c * (1.0 + hv_amt);
+    f_col = vec4(clamp(c, 0.0, 1.0), 1.0);
+    f_id = vec4((v_part + 1.0) / 255.0, 0.0, 0.0, 1.0);
+}
+"""
+
+
+def gl_ok():
+    """Готов ли GPU-рендер (ленивая инициализация; при любой ошибке — навсегда выключен)."""
+    if GL["off"] or GL["failed"] or _mgl is None or _np is None:
+        return False
+    if GL["ctx"] is None:
+        try:
+            ctx = _mgl.create_standalone_context()
+            GL["prog"] = ctx.program(vertex_shader=_GL_VS, fragment_shader=_GL_FS)
+            for name, v in (("LK", _L_KEY), ("LF", _L_FILL), ("HK", _H_KEY)):
+                GL["prog"][name].value = tuple(v)
+            GL["ctx"] = ctx
+        except Exception:
+            GL["failed"] = True
+            return False
+    return True
+
+
+def _gl_mesh(mesh):
+    """Буферы модели: треугольники без общих вершин, сглаженные нормали (с изломом > ~50°)."""
+    key = id(mesh)
+    hit = GL["meshes"].get(key)
+    if hit and hit[0] is mesh:
+        return hit[1], hit[2]
+    V = _np.asarray(mesh.verts, dtype=_np.float64)
+    tri, fcol, fpart, fmet = [], [], [], []
+    names = []
+    for idx, part, col, fl in mesh.faces:
+        if part not in names:
+            names.append(part)
+        pid = names.index(part)
+        for j in range(1, len(idx) - 1):                     # веер для четырёхугольников
+            tri.append((idx[0], idx[j], idx[j + 1]))
+            fcol.append(col); fpart.append(pid); fmet.append(1.0 if fl & M_METAL else 0.0)
+    T = _np.asarray(tri, dtype=_np.int64)
+    a, b, c = V[T[:, 0]], V[T[:, 1]], V[T[:, 2]]
+    fn = _np.cross(b - a, c - a)
+    area = _np.linalg.norm(fn, axis=1)
+    fnu = fn / _np.where(area > 0, area, 1.0)[:, None]
+    acc = _np.zeros_like(V)
+    for k in range(3):
+        _np.add.at(acc, T[:, k], fn)                         # площадь как вес
+    vn = acc / _np.maximum(_np.linalg.norm(acc, axis=1), 1e-9)[:, None]
+    corner_n = vn[T]                                         # (n, 3, 3)
+    d = (corner_n * fnu[:, None, :]).sum(-1)
+    corner_n = _np.where((_np.abs(d) > 0.64)[..., None], corner_n * _np.sign(d)[..., None], fnu[:, None, :])
+    pos = V[T].reshape(-1, 3)
+    nrm = corner_n.reshape(-1, 3)
+    col = _np.repeat(_np.asarray(fcol, dtype=_np.float64) / 255.0, 3, axis=0)
+    prt = _np.repeat(_np.asarray(fpart, dtype=_np.float64), 3)[:, None]
+    met = _np.repeat(_np.asarray(fmet, dtype=_np.float64), 3)[:, None]
+    data = _np.hstack([pos, nrm, col, prt, met]).astype("f4")
+    ctx = GL["ctx"]
+    vbo = ctx.buffer(data.tobytes())
+    vao = ctx.vertex_array(GL["prog"], [(vbo, "3f 3f 3f 1f 1f", "in_pos", "in_nrm", "in_col", "in_part", "in_metal")])
+    GL["meshes"][key] = (mesh, vao, names)
+    return vao, names
+
+
+def _gl_fbo(w, h):
+    f = GL["fbo"].get((w, h))
+    if f is None:
+        ctx = GL["ctx"]
+        samples = min(8, ctx.max_samples)
+        rb_c = ctx.renderbuffer((w, h), 4, samples=samples)
+        rb_i = ctx.renderbuffer((w, h), 4, samples=samples)
+        ms = ctx.framebuffer(color_attachments=[rb_c, rb_i],
+                             depth_attachment=ctx.depth_renderbuffer((w, h), samples=samples))
+        ms_c = ctx.framebuffer(color_attachments=[rb_c])          # «виды» на слои — для copy_framebuffer
+        ms_i = ctx.framebuffer(color_attachments=[rb_i])
+        col = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h), 4)])
+        ids = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h), 4)])
+        if len(GL["fbo"]) > 6:
+            for old in GL["fbo"].values():
+                for o in old:
+                    o.release()
+            GL["fbo"].clear()
+        f = GL["fbo"][(w, h)] = (ms, ms_c, ms_i, col, ids)
+    return f
+
+
+def gl_render(mesh, yaw, pitch, size, zoom, center=None, hl_part=None, hl_col=None, hl_amt=0.0,
+              hover_part=None, hover_amt=0.35):
+    """Отрисовать модель в size=(w, h) настоящих пикселей. Возврат: (pygame.Surface RGBA, ids) или None.
+    ids — функция (x, y) -> имя детали под пикселем (для наведения), x/y в пикселях картинки."""
+    if not gl_ok():
+        return None
+    try:
+        w, h = max(1, int(size[0])), max(1, int(size[1]))
+        vao, names = _gl_mesh(mesh)
+        center = center or getattr(mesh, "pivot", (180, 470, 0))
+        pr = GL["prog"]
+        pr["center"].value = tuple(float(c) for c in center)
+        pr["cy_sy"].value = (math.cos(yaw), math.sin(yaw))
+        pr["cp_sp"].value = (math.cos(pitch), math.sin(pitch))
+        pr["scale"].value = h / 1250.0 * zoom
+        pr["size"].value = (float(w), float(h))
+        pr["hl_part"].value = float(names.index(hl_part)) if hl_part in names else -9.0
+        pr["hl_col"].value = tuple(c / 255.0 for c in (hl_col or AMBER))
+        pr["hl_amt"].value = float(hl_amt if hl_part in names else 0.0)
+        pr["hv_part"].value = float(names.index(hover_part)) if hover_part in names else -9.0
+        pr["hv_amt"].value = float(hover_amt if hover_part in names else 0.0)
+        ctx = GL["ctx"]
+        ms, ms_c, ms_i, col, ids = _gl_fbo(w, h)
+        ms.use()
+        ctx.enable(_mgl.DEPTH_TEST)
+        ctx.disable(_mgl.CULL_FACE)
+        ms.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
+        vao.render(_mgl.TRIANGLES)
+        ctx.copy_framebuffer(col, ms_c)                         # MSAA -> обычная картинка
+        raw = _np.frombuffer(col.read(components=4, alignment=1), dtype=_np.uint8).reshape(h, w, 4)
+        al = raw[..., 3]
+        rows, cols_ = _np.nonzero(al.any(1))[0], _np.nonzero(al.any(0))[0]
+        bbox = (pygame.Rect(int(cols_[0]), int(h - 1 - rows[-1]), int(cols_[-1] - cols_[0] + 1), int(rows[-1] - rows[0] + 1))
+                if len(rows) else pygame.Rect(0, 0, 0, 0))     # где модель (в пикселях картинки, после переворота)
+        edge = (al > 0) & (al < 255)                           # только кромка: из премультиплицированного
+        if edge.any():
+            raw = raw.copy()
+            e = raw[edge].astype(_np.float32)
+            e[:, :3] = _np.clip(e[:, :3] * 255.0 / _np.maximum(e[:, 3:4], 1.0), 0, 255)
+            raw[edge] = e.astype(_np.uint8)
+        img = pygame.image.frombuffer(raw.tobytes(), (w, h), "RGBA")
+        img = pygame.transform.flip(img, False, True)
+        ctx.copy_framebuffer(ids, ms_i)
+        cache = {}
+
+        def pick(x, y, _names=names):
+            """Деталь под пикселем (x, y) картинки; буфер номеров читается один раз и только по запросу."""
+            x, y = int(x), int(y)
+            if not (0 <= x < w and 0 <= y < h):
+                return None
+            if "ids" not in cache:
+                cache["ids"] = _np.frombuffer(ids.read(components=4, alignment=1), dtype=_np.uint8).reshape(h, w, 4)[::-1, :, 0].copy()
+            v = int(cache["ids"][y, x])
+            return _names[v - 1] if v and v - 1 < len(_names) else None
+        pick.bbox = bbox
+        return img, pick
+    except Exception:
+        GL["failed"] = True                                   # дальше — программный рендер
+        if os.environ.get("WNB_GL_DEBUG"):
+            raise
+        return None
 
 def project_point(p, yaw, pitch, rect, zoom=1.0, center=None):
     center = center or (180, 470, 0)
@@ -5518,10 +5714,16 @@ class Game:
         Button(self._sound_close_rect(), "ГОТОВО", AMBER).draw(surf, mouse)
 
     def _bg(self, surf, name, color):
-        surf.blit(load_image(name, (WIDTH, HEIGHT), color), (0, 0))
-        ov = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
-        ov.fill((18, 16, 24, 150))
-        surf.blit(ov, (0, 0))
+        key = ("bg_dimmed", name, RS)                          # фон + затемнение — один раз, дальше одна копия на кадр
+        bg = _img_cache.get(key)
+        if bg is None:
+            bg = Surf((WIDTH, HEIGHT))
+            bg.blit(load_image(name, (WIDTH, HEIGHT), color), (0, 0))
+            ov = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
+            ov.fill((18, 16, 24, 150))
+            bg.blit(ov, (0, 0))
+            _img_cache[key] = bg
+        surf.blit(bg, (0, 0))
         draw_ambient(surf, name, self.t)
         set_ambient(name)
 
@@ -6850,6 +7052,31 @@ class Game:
         s = self._m3d_state()
         yaw, pitch, spinning = self._m3d_view()
         fr, zoom = self._m3d_frame()
+        if gl_ok():                                           # GPU: подсветка детали под кружком — прямо в шейдере
+            hover = None if s["drag"] else self._hotspot_at(mouse)
+            key = ("gl", round(yaw, 4), round(pitch, 4), round(zoom, 4), tuple(fr), id(mesh), hover)
+            if s.get("img_key") != key:
+                glr = gl_render(mesh, yaw, pitch, (round(fr.w * RS), round(fr.h * RS)), zoom,
+                                hl_part=hover, hl_col=AMBER, hl_amt=0.6)
+                if glr is not None:
+                    loc = pygame.Rect(0, 0, fr.w, fr.h)
+                    big = Surf(fr.size, pygame.SRCALPHA)
+                    px = mesh.pivot[0]
+                    foot = [project_point((px + fx, 0, fz), yaw, pitch, loc, zoom, mesh.pivot)[0]
+                            for fx, fz in ((-470, -310), (470, -310), (470, 310), (-470, 310))]
+                    sh = Surf(fr.size, pygame.SRCALPHA)
+                    DR.polygon(sh, (0, 0, 0, 110), foot)
+                    sw, shh = max(1, fr.w // 10), max(1, fr.h // 10)
+                    big.blit(TF.smoothscale(TF.smoothscale(sh, (sw, shh)), fr.size), (0, 0))
+                    bb = glr[1].bbox
+                    if bb.w and bb.h:
+                        pygame.Surface.blit(big, glr[0], bb.topleft, bb)
+                    s["img"], s["img_key"] = big, key
+            if s.get("img_key") == key:
+                surf.blit(s["img"], fr)
+                if hover is None and not s["drag"] and rect.collidepoint(mouse):
+                    draw_text(surf, "⟲ тяни — повернуть", (rect.x + 4, rect.bottom - 18), 12, (200, 196, 180))
+                return
         SS = 1 if (s["drag"] or spinning or RS >= 1.5) else 2      # на большом экране пикселей и так хватает
         key = (round(yaw, 4), round(pitch, 4), round(zoom, 4), tuple(fr), SS, id(mesh))
         if s.get("img_key") != key:
@@ -7094,12 +7321,17 @@ class Game:
     def _draw_v3d(self, surf, mouse):
         v = self.v3d
         ok = ease_out((self.t - v["t0"]) / 0.3)
-        dim = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
-        dim.fill((8, 8, 12, int(200 * ok)))
+        da = int(200 * ok) // 8 * 8                           # затемнение и панель — из кэша (при ×2 это полноэкранные слои)
+        dim = _img_cache.get(("v3d_dim", da, RS))
+        if dim is None:
+            dim = _img_cache[("v3d_dim", da, RS)] = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
+            dim.fill((8, 8, 12, da))
         surf.blit(dim, (0, 0))
         p = self._v3d_panel_rect().move(0, int(30 * (1 - ok)))
-        s = Surf(p.size, pygame.SRCALPHA)
-        aa_rect(s, (16, 18, 24, 250), s.get_rect(), border_radius=14)
+        s = _img_cache.get(("v3d_panel", p.size, RS))
+        if s is None:
+            s = _img_cache[("v3d_panel", p.size, RS)] = Surf(p.size, pygame.SRCALPHA)
+            aa_rect(s, (16, 18, 24, 250), s.get_rect(), border_radius=14)
         surf.blit(s, p)
         aa_rect(surf, CYAN, p, 2, border_radius=14)
         hr = draw_text(surf, "ОСМОТР 3D", (p.x + 22, p.y + 14), 22, CYAN, bold=True)
@@ -7123,23 +7355,48 @@ class Game:
             DR.line(view, (84, 100, 118), q1, q2, 2)
         foot = [project_point((px + q[0], 0, q[2]), yaw, pitch, loc, zoom, piv)[0] for q in
                 ((-510, 0, -330), (510, 0, -330), (510, 0, 330), (-510, 0, 330))]
-        sh = Surf(vr.size, pygame.SRCALPHA)
-        DR.polygon(sh, (0, 0, 0, 120), foot)
-        sw, shh = max(1, vr.w // 8), max(1, vr.h // 8)
-        sh = TF.smoothscale(TF.smoothscale(sh, (sw, shh)), vr.size)
-        view.blit(sh, (0, 0))
+        key_sh = ("v3d_shadow", tuple((round(x), round(y)) for x, y in foot), vr.size, RS)   # мягкая тень (кэш по положению)
+        shadow = _img_cache.get(key_sh)
+        if shadow is None:
+            w4, h4 = max(1, vr.w // 2), max(1, vr.h // 2)
+            s1 = pygame.Surface((w4, h4), pygame.SRCALPHA)
+            pygame.draw.polygon(s1, (0, 0, 0, 120), [(x / 2, y / 2) for x, y in foot])
+            for _ in range(3):                                  # размытие: вниз в 4 раза и обратно
+                s1 = pygame.transform.smoothscale(pygame.transform.smoothscale(s1, (max(1, w4 // 4), max(1, h4 // 4))), (w4, h4))
+            shadow = pygame.transform.smoothscale(s1, (round(vr.w * RS), round(vr.h * RS)))
+            if len([k for k in _img_cache if k[0] == "v3d_shadow"]) > 40:
+                for k in [k for k in _img_cache if k[0] == "v3d_shadow"]:
+                    del _img_cache[k]
+            _img_cache[key_sh] = shadow
+        xs = [x for x, y in foot]; ys = [y for x, y in foot]          # тень — только вокруг пятна
+        sb = pygame.Rect(round((min(xs) - 60) * RS), round((min(ys) - 60) * RS),
+                         round((max(xs) - min(xs) + 120) * RS), round((max(ys) - min(ys) + 120) * RS)).clip(shadow.get_rect())
+        if sb.w and sb.h:
+            pygame.Surface.blit(view, shadow, sb.topleft, sb)
         # модель
-        SS = 1 if (v["drag"] or abs(v.get("vel", 0)) > 0.002 or v.get("target") is not None or RS >= 1.5) else self.V3D_SS
-        polys = project_mesh(mesh, yaw, pitch, loc, zoom, ss=SS * RS)
+        side_hl = v.get("hl")
+        pulse = 0.5 + 0.5 * math.sin(self.t * 6)
         hover = None
-        if vr.collidepoint(mouse) and not v["drag"]:
+        glr = gl_render(mesh, yaw, pitch, (round(vr.w * RS), round(vr.h * RS)), zoom,
+                        hl_part=side_hl, hl_col=AMBER, hl_amt=0.45 * pulse,
+                        hover_part=v.get("hov"), hover_amt=0.35) if gl_ok() else None
+        if glr is not None:                                   # GPU: плавный свет, сглаживание, деталь под курсором — из буфера номеров
+            img, pick = glr
+            if vr.collidepoint(mouse) and not v["drag"]:
+                hover = pick((mouse[0] - vr.x) * RS, (mouse[1] - vr.y) * RS)
+            v["hov"] = hover
+            bb = pick.bbox                                       # только прямоугольник модели (быстрее при ×2)
+            if bb.w and bb.h:
+                pygame.Surface.blit(view, img, bb.topleft, bb)
+            polys = None
+        SS = 1 if (v["drag"] or abs(v.get("vel", 0)) > 0.002 or v.get("target") is not None or RS >= 1.5) else self.V3D_SS
+        polys = project_mesh(mesh, yaw, pitch, loc, zoom, ss=SS * RS) if glr is None else []
+        if glr is None and vr.collidepoint(mouse) and not v["drag"]:
             mp = ((mouse[0] - vr.x) * SS * RS, (mouse[1] - vr.y) * SS * RS)
             for depth, pts, col, part, fl in reversed(polys):
                 if _pt_in_poly(mp, pts):
                     hover = part
                     break
-        side_hl = v.get("hl")
-        pulse = 0.5 + 0.5 * math.sin(self.t * 6)
         big = Surf((vr.w * SS, vr.h * SS), pygame.SRCALPHA)
         for depth, pts, col, part, fl in polys:
             if part and part == hover:
@@ -7149,7 +7406,8 @@ class Game:
             pygame.draw.polygon(big, col, pts)
             if fl & M_EDGE:
                 pygame.draw.polygon(big, _shade(col, 0.45), pts, max(1, round(2 * RS)))
-        view.blit(TF.smoothscale(big, vr.size), (0, 0))
+        if glr is None:
+            view.blit(TF.smoothscale(big, vr.size), (0, 0))
         # маркеры деталей задания: пульс — ещё не осмотрено, галочка — осмотрено
         for i, pid in enumerate(self.cur["parts"]):
             c = self._v3d_near_center(pid, yaw, pitch)
@@ -7166,10 +7424,14 @@ class Game:
                 aa_circle(ring, (*AMBER, int(200 * (1 - ph))), (rr + 2, rr + 2), rr, 2)
                 view.blit(ring, (mx - rr - 2, my - rr - 2))
                 aa_circle(view, AMBER, (int(mx), int(my)), 4)
-        mask = Surf(vr.size, pygame.SRCALPHA)
-        aa_rect(mask, (255, 255, 255, 255), mask.get_rect(), border_radius=10)
-        view = view.convert_alpha()
-        view.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        corners = _img_cache.get(("v3d_corners", vr.size, RS))  # скруглённые углы: накладка цвета панели (вместо маски каждый кадр)
+        if corners is None:
+            corners = _img_cache[("v3d_corners", vr.size, RS)] = Surf(vr.size, pygame.SRCALPHA)
+            corners.fill((16, 18, 24, 255))
+            hole = Surf(vr.size, pygame.SRCALPHA)
+            aa_rect(hole, (255, 255, 255, 255), hole.get_rect(), border_radius=10)
+            corners.blit(hole, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
+        view.blit(corners, (0, 0))
         surf.blit(view, vr)
         aa_rect(surf, (60, 72, 88), vr, 1, border_radius=10)
         if hover:
@@ -8565,11 +8827,19 @@ def main():
     if "--window" in sys.argv:
         want_full = False
     global RS
+    GL["off"] = "--nogl" in sys.argv or bool(os.environ.get("WNB_NOGL"))
     if "--rs" in sys.argv[:-1]:
         RS = float(sys.argv[sys.argv.index("--rs") + 1])
     else:
         RS = pick_render_scale()
     screen = init_display(want_full)
+    if _crash_log:                                          # какой 3D-рендер включился — в журнал запуска
+        try:
+            info = GL["ctx"].info["GL_RENDERER"] if gl_ok() else ("выключен" if GL["off"] else "недоступен")
+        except Exception:
+            info = "ошибка"
+        _crash_log.write(f"RS {RS}, 3D: GPU {info}" + chr(10))
+        _crash_log.flush()
     frame = Surf((WIDTH, HEIGHT))                     # кадр в логических координатах, пиксели — экранные
     clock = pygame.time.Clock()
     game = Game()

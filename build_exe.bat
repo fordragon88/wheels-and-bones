@@ -21,6 +21,7 @@ python -m PyInstaller --noconfirm --clean --onefile --windowed ^
   --name WheelsAndBones --icon assets\icon.ico ^
   --add-data "assets;assets" ^
   --exclude-module tkinter ^
+  --hidden-import moderngl --hidden-import glcontext --hidden-import glcontext.wgl --hidden-import glcontext.empty ^
   game.py
 if errorlevel 1 (
   echo.
