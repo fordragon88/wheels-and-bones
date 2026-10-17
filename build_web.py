@@ -79,6 +79,7 @@ def build(serve=False):
 
 
 DEPLOY = os.path.join(ROOT, "web_deploy")
+GH_REPO = "fordragon88/wheels-and-bones-web"
 REPO = "https://github.com/fordragon88/wheels-and-bones-web.git"
 
 
@@ -94,12 +95,12 @@ def deploy():
     if subprocess.run(git + ["diff", "--cached", "--quiet"]).returncode:
         subprocess.run(git + ["commit", "-q", "-m", "Update web build"], check=True)
         subprocess.run(git + ["push", "-q"], check=True)
-        print("выложено: https://fordragon88.github.io/wheels-and-bones-web/ (обновится через ~1 мин)")
+        public = subprocess.run(["gh", "api", f"repos/{GH_REPO}", "--jq", ".visibility"],
+                                capture_output=True, text=True).stdout.strip() == "public"
+        print("выложено: https://fordragon88.github.io/wheels-and-bones-web/ (обновится через ~1 мин)" if public
+              else "сборка обновлена в скрытом репозитории (сайт выключен; открыть: python build_web.py --on)")
     else:
         print("сборка не изменилась — выкладывать нечего")
-
-
-GH_REPO = "fordragon88/wheels-and-bones-web"
 
 
 def site(on):
