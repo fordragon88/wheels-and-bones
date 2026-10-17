@@ -988,7 +988,9 @@ SOUND = {}
 SR = 22050
 _rng = random.Random(7)
 _AMB = {"name": None}
-DISPLAY = {"fullscreen": False, "glow": True}     # сохраняется в settings.json; glow — свечение и частицы
+DISPLAY = {"fullscreen": False, "glow": True, "res": None, "screen": None, "frame": None}
+# сохраняется в settings.json: fullscreen, glow (свечение и частицы), res (разрешение рендера; None — авто по монитору)
+RES_OPTIONS = [(1280, 720), (1600, 900), (1920, 1080), (2560, 1440), (3840, 2160)]
 
 
 def dpi_aware():
@@ -1005,6 +1007,47 @@ def dpi_aware():
             pass
 
 
+def available_resolutions():
+    """Разрешения 16:9, которые помещаются на монитор."""
+    try:
+        dw, dh = pygame.display.get_desktop_sizes()[0]
+    except Exception:
+        dw, dh = 1920, 1080
+    return [r for r in RES_OPTIONS if r[0] <= dw and r[1] <= dh] or [RES_OPTIONS[0]]
+
+
+def rs_for(res):
+    """Масштаб рендера для разрешения (None — авто по монитору)."""
+    if not res:
+        return pick_render_scale()
+    return max(1.0, min(3.0, res[1] / HEIGHT))
+
+
+def apply_display(res=None, fullscreen=None):
+    """Сменить разрешение и/или режим на лету: новый масштаб рендера, новое окно, сброс кэшей картинок и шрифтов."""
+    global RS
+    if res is not None:
+        DISPLAY["res"] = None if res == "auto" else tuple(res)
+    want_full = DISPLAY["fullscreen"] if fullscreen is None else fullscreen
+    new_rs = rs_for(DISPLAY["res"])
+    if new_rs != RS:
+        RS = new_rs
+        for c in (_img_cache, _font_cache, _AA_CACHE, _glow_cache, _tool_icon_cache):
+            c.clear()
+    # окно пересоздаётся целиком: повторный set_mode с SCALED в pygame 2.6 оставляет поверхность размера окна
+    # (кадр обрезался бы). Ссылку на старый объект окна отпускаем только после закрытия окна.
+    DISPLAY["fullscreen"] = False
+    cap = pygame.display.get_caption()
+    pygame.display.quit()
+    DISPLAY.pop("win", None)
+    pygame.display.init()
+    if cap and cap[0]:
+        pygame.display.set_caption(cap[0])
+    DISPLAY["screen"] = init_display(want_full)
+    DISPLAY["frame"] = Surf((WIDTH, HEIGHT))
+    return RS
+
+
 def init_display(fullscreen=False):
     """Окно игры: кадр рисуется в WIDTH*RS x HEIGHT*RS (разрешение экрана), SDL выводит его в окно
     (SCALED: поля без искажений, окно можно тянуть). В окне — 85% монитора; F11 — пиксель в пиксель."""
@@ -1014,10 +1057,12 @@ def init_display(fullscreen=False):
         screen = pygame.display.set_mode(size, pygame.SCALED | pygame.RESIZABLE)
     except pygame.error:
         screen = pygame.display.set_mode(size)
-    try:                                                # окно не больше 85% экрана
+    try:                                                # окно — выбранного размера, но не больше 85% экрана
         dw, dh = pygame.display.get_desktop_sizes()[0]
         k = min(1.0, 0.85 * dw / size[0], 0.85 * dh / size[1])
-        if k < 1.0:
+        if DISPLAY.get("res") and DISPLAY["res"][0] <= dw * 0.95 and DISPLAY["res"][1] <= dh * 0.95:
+            k = DISPLAY["res"][0] / size[0]
+        if k != 1.0:
             try:
                 win = pygame.Window.from_display_module()           # pygame-ce
             except Exception:
@@ -2776,6 +2821,19 @@ def T(sid, instr, tool, part, note="", ghost="", after=(), safety=False,
     return dict(id=sid, instr=instr, tool=tool, part=part, note=note,
                 ghost=ghost, after=list(after), safety=safety, spec=spec,
                 failnote=failnote, mini=mini)
+
+
+def shuffle_answers(job):
+    """Перемешать варианты ответов (диагноз, вопросы-замеры, спеки Гильдии): в данных верный вариант записан
+    первым, и игроки это быстро замечают. Списки перемешиваются на месте при каждом старте задания."""
+    if job.get("diagnosis"):
+        random.shuffle(job["diagnosis"])
+    for st in job.get("steps", []):
+        m = st.get("mini") or {}
+        if m.get("options"):
+            random.shuffle(m["options"])
+        if st.get("spec") and st["spec"].get("options"):
+            random.shuffle(st["spec"]["options"])
 
 
 def resolve_job(base, variant=None):
@@ -5115,7 +5173,8 @@ class Game:
         try:
             with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
                 json.dump({"volume": dict(VOL), "lang": LANG["code"], "fullscreen": DISPLAY["fullscreen"],
-                           "glow": DISPLAY["glow"]},
+                           "glow": DISPLAY["glow"], "res": list(DISPLAY["res"]) if DISPLAY["res"] else None,
+                           "gpu3d": not GL["off"]},
                           f, ensure_ascii=False, indent=2)
         except Exception:
             pass
@@ -5156,6 +5215,7 @@ class Game:
     # ---------- запуск задания ----------
     def start_job(self, jid, variant=None):
         self.cur = resolve_job(self.job_by_id(jid), variant)
+        shuffle_answers(self.cur)
         tech = self.cur.get("track") == "tech"
         self.phase = "repair" if tech else "diagnose"
         self.step_idx = 0
@@ -5875,41 +5935,36 @@ class Game:
         return pygame.Rect(WIDTH - 50, 8, 38, 38)
 
     def _draw_speaker(self, surf):
+        """Шестерёнка настроек (звук и графика). Если звук выключен — маленький красный крестик."""
         r = self._speaker_rect()
         mouse = mouse_pos()
         h = _hover_amt(("speaker",), 1.0 if (r.collidepoint(mouse) or self.show_sound) else 0.0)
-        bg = Surf(r.size, pygame.SRCALPHA)
-        aa_rect(bg, (30, 28, 40, int(150 + 90 * h)), bg.get_rect(), border_radius=10)
-        surf.blit(bg, r)
+        aa_rect(surf, (30, 28, 40, int(150 + 90 * h)), r, border_radius=10)
         col = tuple(int(a + (b - a) * h) for a, b in zip(GHOST, AMBER))
-        cx, cy = r.x + 13, r.centery
-        DR.rect(surf, col, (cx - 6, cy - 5, 6, 10))
-        DR.polygon(surf, col, [(cx, cy - 5), (cx + 7, cy - 11), (cx + 7, cy + 11), (cx, cy + 5)])
-        level = VOL["master"] if VOL["on"] else 0.0
-        if level <= 0.001:
-            DR.line(surf, BAD, (cx + 12, cy - 6), (cx + 22, cy + 6), 3)
-            DR.line(surf, BAD, (cx + 22, cy - 6), (cx + 12, cy + 6), 3)
-        else:
-            for i, rad in enumerate((7, 12, 17)):
-                if level > i / 3 + 0.01:
-                    DR.arc(surf, col, (cx + 4 - rad + 6, cy - rad, rad * 2, rad * 2),
-                                    -0.75, 0.75, 2)
+        cx, cy = r.center
+        ang0 = self.t * 0.8 * h
+        pts = []
+        for i in range(16):                                  # 8 зубцов
+            a_ = ang0 + i * math.pi / 8
+            rad = 12 if i % 2 == 0 else 9
+            pts.append((cx + rad * math.cos(a_), cy + rad * math.sin(a_)))
+        DR.polygon(surf, col, pts)
+        aa_circle(surf, col, (cx, cy), 9)
+        aa_circle(surf, (30, 28, 40), (cx, cy), 4)
+        if not VOL["on"] or VOL["master"] <= 0.001:
+            DR.line(surf, BAD, (r.right - 13, r.bottom - 13), (r.right - 5, r.bottom - 5), 2)
+            DR.line(surf, BAD, (r.right - 5, r.bottom - 13), (r.right - 13, r.bottom - 5), 2)
 
     def _sound_panel_rect(self):
-        return pygame.Rect(WIDTH // 2 - 260, HEIGHT // 2 - 228, 520, 448)
+        return pygame.Rect(WIDTH // 2 - 290, HEIGHT // 2 - 250, 580, 500)
 
-    def _screen_btn_rect(self):
+    def _settings_tab_rects(self):
         p = self._sound_panel_rect()
-        return pygame.Rect(p.x + 32, p.bottom - 128, (p.w - 64) // 2 - 6, 44)
-
-    def _glow_btn_rect(self):
-        p = self._sound_panel_rect()
-        w = (p.w - 64) // 2 - 6
-        return pygame.Rect(p.right - 32 - w, p.bottom - 128, w, 44)
+        return [(t, pygame.Rect(p.x + 32 + i * 150, p.y + 64, 140, 36)) for i, t in enumerate(("sound", "graphics"))]
 
     def _vol_slider_rects(self):
         p = self._sound_panel_rect()
-        return [(k, pygame.Rect(p.x + 205, p.y + 86 + i * 58, 210, 8))
+        return [(k, pygame.Rect(p.x + 225, p.y + 146 + i * 58, 230, 8))
                 for i, k in enumerate(("master", "music", "sfx", "amb"))]
 
     def _sound_mute_rect(self):
@@ -5920,6 +5975,23 @@ class Game:
         p = self._sound_panel_rect()
         return pygame.Rect(p.right - 192, p.bottom - 70, 160, 44)
 
+    def _mode_rects(self):
+        p = self._sound_panel_rect()
+        return [(m, pygame.Rect(p.x + 230 + i * 160, p.y + 128, 150, 38)) for i, m in enumerate((False, True))]
+
+    def _res_rects(self):
+        p = self._sound_panel_rect()
+        opts = ["auto"] + available_resolutions()
+        return [(o, pygame.Rect(p.x + 32 + (i % 3) * 174, p.y + 214 + (i // 3) * 44, 164, 38)) for i, o in enumerate(opts)]
+
+    def _glow_btn_rect(self):
+        p = self._sound_panel_rect()
+        return pygame.Rect(p.x + 310, p.y + 320, 216, 38)
+
+    def _gpu_btn_rect(self):
+        p = self._sound_panel_rect()
+        return pygame.Rect(p.x + 310, p.y + 368, 216, 38)
+
     def _set_vol_from_x(self, key, x):
         track = dict(self._vol_slider_rects())[key]
         VOL[key] = round(max(0.0, min(1.0, (x - track.x) / track.w)), 2)
@@ -5927,6 +5999,7 @@ class Game:
             apply_volume()
 
     def handle_sound_event(self, event):
+        tab = getattr(self, "settings_tab", "sound")
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             self.show_sound = False
             self.save_settings()
@@ -5937,24 +6010,52 @@ class Game:
                 self.save_settings()
                 snd("tick")
                 return
-            if self._sound_mute_rect().collidepoint(event.pos):
-                toggle_sound()
-                snd("tick")
+            for t, r in self._settings_tab_rects():
+                if r.collidepoint(event.pos):
+                    self.settings_tab = t
+                    snd("tick")
+                    return
+            if tab == "sound":
+                if self._sound_mute_rect().collidepoint(event.pos):
+                    toggle_sound()
+                    snd("tick")
+                    return
+                for key, track in self._vol_slider_rects():
+                    if track.inflate(24, 30).collidepoint(event.pos):
+                        self._vol_drag = key
+                        self._set_vol_from_x(key, event.pos[0])
+                        return
                 return
-            if self._screen_btn_rect().collidepoint(event.pos):
-                if not self.headless:
-                    toggle_fullscreen()
-                snd("tick")
-                return
+            for full, r in self._mode_rects():
+                if r.collidepoint(event.pos):
+                    if full != DISPLAY["fullscreen"] and not self.headless:
+                        toggle_fullscreen()
+                    snd("tick")
+                    return
+            for opt, r in self._res_rects():
+                if r.collidepoint(event.pos):
+                    cur = DISPLAY["res"] or "auto"
+                    if opt != cur:
+                        if self.headless:
+                            DISPLAY["res"] = None if opt == "auto" else tuple(opt)
+                        else:
+                            apply_display(opt)
+                            self.m3d = None                      # картинки 3D пересчитаются в новом разрешении
+                            self._fade_from = None
+                            self._last_frame = None
+                    snd("tick")
+                    return
             if self._glow_btn_rect().collidepoint(event.pos):
                 DISPLAY["glow"] = not DISPLAY["glow"]
                 snd("tick")
                 return
-            for key, track in self._vol_slider_rects():
-                if track.inflate(24, 30).collidepoint(event.pos):
-                    self._vol_drag = key
-                    self._set_vol_from_x(key, event.pos[0])
-                    return
+            if self._gpu_btn_rect().collidepoint(event.pos) and _mgl is not None:
+                GL["off"] = not GL["off"]
+                if not GL["off"]:
+                    GL["failed"] = False
+                self.m3d = None
+                snd("tick")
+                return
         elif event.type == pygame.MOUSEMOTION and self._vol_drag:
             self._set_vol_from_x(self._vol_drag, event.pos[0])
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self._vol_drag:
@@ -5963,39 +6064,58 @@ class Game:
             self._vol_drag = None
 
     def _draw_sound_panel(self, surf):
-        dim = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
-        dim.fill((8, 8, 12, 170))
+        dim = _img_cache.get(("v3d_dim", 168, RS))
+        if dim is None:
+            dim = _img_cache[("v3d_dim", 168, RS)] = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
+            dim.fill((8, 8, 12, 168))
         surf.blit(dim, (0, 0))
         p = self._sound_panel_rect()
-        bg = Surf(p.size, pygame.SRCALPHA)
-        aa_rect(bg, (18, 18, 26, 250), bg.get_rect(), border_radius=14)
-        surf.blit(bg, p)
+        aa_rect(surf, (18, 18, 26, 250), p, border_radius=14)
         aa_rect(surf, AMBER, p, 2, border_radius=14)
-        draw_text(surf, "ЗВУК И ЭКРАН", (p.x + 32, p.y + 22), 24, AMBER, bold=True)
-        draw_text(surf, "M — быстро выключить / включить", (p.right - 32, p.y + 30), 13, GREY, right=True)
+        draw_text(surf, "НАСТРОЙКИ", (p.x + 32, p.y + 22), 24, AMBER, bold=True)
         mouse = mouse_pos()
-        names = {"master": "Общая громкость", "music": "Музыка", "sfx": "Эффекты", "amb": "Атмосфера сцен"}
-        for key, track in self._vol_slider_rects():
-            muted = not VOL["on"]
-            draw_text(surf, names[key], (p.x + 32, track.y - 8), 17, GREY if muted else WHITE)
-            aa_rect(surf, (44, 46, 60), track, border_radius=4)
-            fill = track.copy()
-            fill.w = int(track.w * VOL[key])
-            if fill.w:
-                aa_rect(surf, DIM if muted else AMBER, fill, border_radius=4)
-            kx = track.x + fill.w
-            hov = track.inflate(24, 30).collidepoint(mouse) or self._vol_drag == key
-            h = _hover_amt(("vol", key), 1.0 if hov else 0.0)
-            aa_circle(surf, WHITE, (kx, track.centery), int(10 + 3 * h))
-            aa_circle(surf, DIM if muted else AMBER, (kx, track.centery), int(10 + 3 * h), 3)
-            draw_text(surf, f"{int(VOL[key] * 100)}%", (track.right + 52, track.y - 8), 16,
-                      GREY if muted else WHITE, right=True)
-        Button(self._sound_mute_rect(), "ВКЛЮЧИТЬ ЗВУК" if not VOL["on"] else "БЕЗ ЗВУКА",
-               GOOD if not VOL["on"] else GREY).draw(surf, mouse)
-        Button(self._glow_btn_rect(), "СВЕЧЕНИЕ: ВКЛ" if DISPLAY["glow"] else "СВЕЧЕНИЕ: ВЫКЛ",
-               AMBER if DISPLAY["glow"] else GREY).draw(surf, mouse)
-        Button(self._screen_btn_rect(), "В ОКНО [F11]" if DISPLAY["fullscreen"] else "ВЕСЬ ЭКРАН [F11]",
-               CYAN).draw(surf, mouse)
+        tab = getattr(self, "settings_tab", "sound")
+        for t, r in self._settings_tab_rects():
+            Button(r, "ЗВУК" if t == "sound" else "ГРАФИКА", CYAN).draw(surf, mouse, active=t == tab)
+        if tab == "sound":
+            draw_text(surf, "M — быстро выключить / включить звук", (p.x + 32, p.y + 374), 13, GREY)
+            names = {"master": "Общая громкость", "music": "Музыка", "sfx": "Эффекты", "amb": "Атмосфера сцен"}
+            for key, track in self._vol_slider_rects():
+                muted = not VOL["on"]
+                draw_text(surf, names[key], (p.x + 32, track.y - 8), 17, GREY if muted else WHITE)
+                aa_rect(surf, (44, 46, 60), track, border_radius=4)
+                fill = track.copy()
+                fill.w = int(track.w * VOL[key])
+                if fill.w:
+                    aa_rect(surf, DIM if muted else AMBER, fill, border_radius=4)
+                kx = track.x + fill.w
+                hov = track.inflate(24, 30).collidepoint(mouse) or self._vol_drag == key
+                h = _hover_amt(("vol", key), 1.0 if hov else 0.0)
+                aa_circle(surf, WHITE, (kx, track.centery), int(10 + 3 * h))
+                aa_circle(surf, DIM if muted else AMBER, (kx, track.centery), int(10 + 3 * h), 3)
+                draw_text(surf, f"{int(VOL[key] * 100)}%", (track.right + 56, track.y - 8), 16,
+                          GREY if muted else WHITE, right=True)
+            Button(self._sound_mute_rect(), "ВКЛЮЧИТЬ ЗВУК" if not VOL["on"] else "БЕЗ ЗВУКА",
+                   GOOD if not VOL["on"] else GREY).draw(surf, mouse)
+        else:
+            draw_text(surf, "Режим экрана", (p.x + 32, p.y + 137), 17, WHITE)
+            for full, r in self._mode_rects():
+                Button(r, "ВЕСЬ ЭКРАН" if full else "В ОКНЕ", CYAN).draw(surf, mouse, active=full == DISPLAY["fullscreen"])
+            draw_text(surf, "F11 или Alt+Enter — переключить", (p.x + 230, p.y + 172), 12, GREY)
+            draw_text(surf, "Разрешение", (p.x + 32, p.y + 190), 17, WHITE)
+            cur = DISPLAY["res"] or "auto"
+            for opt, r in self._res_rects():
+                label = "АВТО" if opt == "auto" else f"{opt[0]}×{opt[1]}"
+                Button(r, label, AMBER).draw(surf, mouse, active=opt == cur)
+            draw_text(surf, f"Сейчас: {round(WIDTH * RS)}×{round(HEIGHT * RS)} · меньше — быстрее на слабом ПК",
+                      (p.x + 32, p.y + 296), 13, GREY)
+            draw_text(surf, "Свечение и частицы", (p.x + 32, p.y + 329), 17, WHITE)
+            Button(self._glow_btn_rect(), "ВКЛ" if DISPLAY["glow"] else "ВЫКЛ",
+                   AMBER if DISPLAY["glow"] else GREY).draw(surf, mouse, active=DISPLAY["glow"])
+            draw_text(surf, "3D через видеокарту", (p.x + 32, p.y + 377), 17, WHITE)
+            gpu_label = "НЕДОСТУПНО" if _mgl is None else ("ВКЛ" if not GL["off"] else "ВЫКЛ")
+            Button(self._gpu_btn_rect(), gpu_label, CYAN if (not GL["off"] and _mgl is not None) else GREY).draw(
+                surf, mouse, enabled=_mgl is not None, active=not GL["off"] and _mgl is not None)
         Button(self._sound_close_rect(), "ГОТОВО", AMBER).draw(surf, mouse)
 
     def _bg(self, surf, name, color):
@@ -6200,6 +6320,8 @@ class Game:
     #  КАБИНЕТ ПОСАДКИ: уроки, примерка (ползунки + живая поза), проверка
     # ================================================================ #
     def open_seating(self):
+        for q in SEAT_QUIZ:                                  # верный ответ — не всегда первым
+            random.shuffle(q["options"])
         self.seatc = dict(tab="lessons", lesson=0, case=0, cfg=None, drag=None,
                           quiz=0, picked=None, score=0, quiz_done=False, solved=False,
                           demo_good=False, demo_k=0.0, xray=True)
@@ -6407,6 +6529,8 @@ class Game:
             if sc["quiz_done"]:
                 if self._seat_btn_rect().collidepoint(m):
                     sc.update(quiz=0, picked=None, score=0, quiz_done=False)
+                    for q in SEAT_QUIZ:
+                        random.shuffle(q["options"])
                 return
             if sc["picked"] is None:
                 for i, r in self._seat_quiz_rects():
@@ -8835,7 +8959,7 @@ def run_selftest():
     g.start_job("flat")
     for pid in g.cur["parts"][:INSPECT_REQ]:
         g.inspect_part(pid)
-    g.choose_diagnosis(0)
+    g.choose_diagnosis(next(i for i, d_ in enumerate(g.cur["diagnosis"]) if d_["correct"]))
     pump_checked = False
     while g.phase == "repair":
         st = g.cur["steps"][g.step_idx]
@@ -9021,6 +9145,31 @@ def run_selftest():
     DISPLAY["glow"] = False
     gd.draw(pygame.display.get_surface())
     DISPLAY["glow"] = True
+    # настройки: вкладки звук/графика открываются и рисуются, выбор разрешения запоминается
+    gq_ = Game(headless=True)
+    gq_.scene = "hub"
+    gq_.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gq_._speaker_rect().center))
+    if not gq_.show_sound:
+        failures.append("шестерёнка не открыла настройки")
+    gq_.draw(pygame.display.get_surface())
+    gq_.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gq_._settings_tab_rects()[1][1].center))
+    gq_.draw(pygame.display.get_surface())
+    old_res = DISPLAY["res"]
+    opt, r_ = gq_._res_rects()[-1]
+    gq_.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=r_.center))
+    if (DISPLAY["res"] or "auto") != opt:
+        failures.append("выбор разрешения в настройках не сработал")
+    DISPLAY["res"] = old_res
+
+    # варианты ответов перемешиваются: верный диагноз не всегда первый
+    gs_ = Game(headless=True)
+    seen = set()
+    for _ in range(30):
+        gs_.start_job("flat")
+        seen.add(next(i for i, d_ in enumerate(gs_.cur["diagnosis"]) if d_["correct"]))
+    if len(seen) < 2:
+        failures.append("варианты диагноза не перемешиваются — верный всегда на одном месте")
+
     # флажок ⚑: общее замечание с любого экрана (без засчитанной ошибки)
     gf = Game(headless=True)
     gf.done = {"flat"}
@@ -9165,12 +9314,19 @@ def main():
     if "--window" in sys.argv:
         want_full = False
     global RS
-    GL["off"] = "--nogl" in sys.argv or bool(os.environ.get("WNB_NOGL"))
+    try:
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            st_ = json.load(f)
+    except Exception:
+        st_ = {}
+    if st_.get("res"):
+        DISPLAY["res"] = tuple(st_["res"])
+    GL["off"] = "--nogl" in sys.argv or bool(os.environ.get("WNB_NOGL")) or st_.get("gpu3d") is False
     if "--rs" in sys.argv[:-1]:
         RS = float(sys.argv[sys.argv.index("--rs") + 1])
     else:
-        RS = pick_render_scale()
-    screen = init_display(want_full)
+        RS = rs_for(DISPLAY["res"])
+    DISPLAY["screen"] = init_display(want_full)
     if _crash_log:                                          # какой 3D-рендер включился — в журнал запуска
         try:
             info = GL["ctx"].info["GL_RENDERER"] if gl_ok() else ("выключен" if GL["off"] else "недоступен")
@@ -9178,7 +9334,7 @@ def main():
             info = "ошибка"
         _crash_log.write(f"RS {RS}, 3D: GPU {info}" + chr(10))
         _crash_log.flush()
-    frame = Surf((WIDTH, HEIGHT))                     # кадр в логических координатах, пиксели — экранные
+    DISPLAY["frame"] = Surf((WIDTH, HEIGHT))          # кадр в логических координатах, пиксели — экранные
     clock = pygame.time.Clock()
     game = Game()
     if "--unlock" in sys.argv:   # предпросмотр: всё открыто, включая Гильдию
@@ -9198,8 +9354,8 @@ def main():
                     event = pygame.event.Event(event.type, d)
                 game.handle_event(event)
         game.update(dt)
-        game.draw(frame)
-        screen.blit(frame, (0, 0))
+        game.draw(DISPLAY["frame"])                    # экран и кадр берутся каждый раз: разрешение меняется на лету
+        DISPLAY["screen"].blit(DISPLAY["frame"], (0, 0))
         pygame.display.flip()
     pygame.quit()
 

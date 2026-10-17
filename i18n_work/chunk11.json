@@ -1,0 +1,92 @@
+[
+ {
+  "ru": "НАСТРОЙКИ",
+  "line": 6075,
+  "fmt": false,
+  "context": "draw_text(surf, \"НАСТРОЙКИ\", (p.x + 32, p.y + 22), 24, AMBER, bold=True)"
+ },
+ {
+  "ru": "ГРАФИКА",
+  "line": 6079,
+  "fmt": false,
+  "context": "Button(r, \"ЗВУК\" if t == \"sound\" else \"ГРАФИКА\", CYAN).draw(surf, mouse, active=t == tab)"
+ },
+ {
+  "ru": "M — быстро выключить / включить звук",
+  "line": 6081,
+  "fmt": false,
+  "context": "draw_text(surf, \"M — быстро выключить / включить звук\", (p.x + 32, p.y + 374), 13, GREY)"
+ },
+ {
+  "ru": "Режим экрана",
+  "line": 6101,
+  "fmt": false,
+  "context": "draw_text(surf, \"Режим экрана\", (p.x + 32, p.y + 137), 17, WHITE)"
+ },
+ {
+  "ru": "ВЕСЬ ЭКРАН",
+  "line": 6103,
+  "fmt": false,
+  "context": "Button(r, \"ВЕСЬ ЭКРАН\" if full else \"В ОКНЕ\", CYAN).draw(surf, mouse, active=full == DISPLAY[\"fullscreen\"])"
+ },
+ {
+  "ru": "В ОКНЕ",
+  "line": 6103,
+  "fmt": false,
+  "context": "Button(r, \"ВЕСЬ ЭКРАН\" if full else \"В ОКНЕ\", CYAN).draw(surf, mouse, active=full == DISPLAY[\"fullscreen\"])"
+ },
+ {
+  "ru": "F11 или Alt+Enter — переключить",
+  "line": 6104,
+  "fmt": false,
+  "context": "draw_text(surf, \"F11 или Alt+Enter — переключить\", (p.x + 230, p.y + 172), 12, GREY)"
+ },
+ {
+  "ru": "Разрешение",
+  "line": 6105,
+  "fmt": false,
+  "context": "draw_text(surf, \"Разрешение\", (p.x + 32, p.y + 190), 17, WHITE)"
+ },
+ {
+  "ru": "АВТО",
+  "line": 6108,
+  "fmt": false,
+  "context": "label = \"АВТО\" if opt == \"auto\" else f\"{opt[0]}×{opt[1]}\""
+ },
+ {
+  "ru": "Сейчас: {0}×{1} · меньше — быстрее на слабом ПК",
+  "line": 6110,
+  "fmt": true,
+  "context": "draw_text(surf, f\"Сейчас: {round(WIDTH * RS)}×{round(HEIGHT * RS)} · меньше — быстрее на слабом ПК\","
+ },
+ {
+  "ru": "Свечение и частицы",
+  "line": 6112,
+  "fmt": false,
+  "context": "draw_text(surf, \"Свечение и частицы\", (p.x + 32, p.y + 329), 17, WHITE)"
+ },
+ {
+  "ru": "ВКЛ",
+  "line": 6113,
+  "fmt": false,
+  "context": "Button(self._glow_btn_rect(), \"ВКЛ\" if DISPLAY[\"glow\"] else \"ВЫКЛ\","
+ },
+ {
+  "ru": "ВЫКЛ",
+  "line": 6113,
+  "fmt": false,
+  "context": "Button(self._glow_btn_rect(), \"ВКЛ\" if DISPLAY[\"glow\"] else \"ВЫКЛ\","
+ },
+ {
+  "ru": "3D через видеокарту",
+  "line": 6115,
+  "fmt": false,
+  "context": "draw_text(surf, \"3D через видеокарту\", (p.x + 32, p.y + 377), 17, WHITE)"
+ },
+ {
+  "ru": "НЕДОСТУПНО",
+  "line": 6116,
+  "fmt": false,
+  "context": "gpu_label = \"НЕДОСТУПНО\" if _mgl is None else (\"ВКЛ\" if not GL[\"off\"] else \"ВЫКЛ\")"
+ }
+]
