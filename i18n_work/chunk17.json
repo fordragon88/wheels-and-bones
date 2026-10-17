@@ -1,0 +1,104 @@
+[
+ {
+  "ru": "Вкладка: игра и прогресс",
+  "line": 7003,
+  "fmt": false,
+  "context": "\"game\": \"Вкладка: игра и прогресс\"}"
+ },
+ {
+  "ru": "Игра.",
+  "line": 7186,
+  "fmt": false,
+  "context": "return (tr(\"Настройки.\") + \" \" + tr(\"Игра.\") + \" \" + \" \".join(tr(x) + \".\" for x in self.progress_summary())"
+ },
+ {
+  "ru": "Починено колясок: {0} из {1}",
+  "line": 7787,
+  "fmt": true,
+  "context": "return [f\"Починено колясок: {self.user_done_count()} из {len(JOBS)}\","
+ },
+ {
+  "ru": "Гильдия: {0} из {1}",
+  "line": 7788,
+  "fmt": true,
+  "context": "f\"Гильдия: {self.tech_done_count()} из {len(TECH_JOBS)}\" + (\", диплом получен\" if self.exam_passed else \"\"),"
+ },
+ {
+  "ru": ", диплом получен",
+  "line": 7788,
+  "fmt": false,
+  "context": "f\"Гильдия: {self.tech_done_count()} из {len(TECH_JOBS)}\" + (\", диплом получен\" if self.exam_passed else \"\"),"
+ },
+ {
+  "ru": "Кабинет посадки: {0} из {1}",
+  "line": 7789,
+  "fmt": true,
+  "context": "f\"Кабинет посадки: {len(self.seat_done)} из {len(SEAT_CASES)}\" + (\", зачёт сдан\" if self.seat_quiz_ok else \"\")]"
+ },
+ {
+  "ru": ", зачёт сдан",
+  "line": 7789,
+  "fmt": false,
+  "context": "f\"Кабинет посадки: {len(self.seat_done)} из {len(SEAT_CASES)}\" + (\", зачёт сдан\" if self.seat_quiz_ok else \"\")]"
+ },
+ {
+  "ru": "Прогресс сброшен. Начинаем с начала — настройки сохранены.",
+  "line": 7806,
+  "fmt": false,
+  "context": "self.flash(\"Прогресс сброшен. Начинаем с начала — настройки сохранены.\", AMBER, 4)"
+ },
+ {
+  "ru": "Сбросить весь прогресс? Это нельзя отменить. Да или нет.",
+  "line": 7812,
+  "fmt": false,
+  "context": "self.say(\"Сбросить весь прогресс? Это нельзя отменить. Да или нет.\" if on else \"Сброс отменён.\", True)"
+ },
+ {
+  "ru": "Сброс отменён.",
+  "line": 7812,
+  "fmt": false,
+  "context": "self.say(\"Сбросить весь прогресс? Это нельзя отменить. Да или нет.\" if on else \"Сброс отменён.\", True)"
+ },
+ {
+  "ru": "Прогресс",
+  "line": 7815,
+  "fmt": false,
+  "context": "draw_text(surf, \"Прогресс\", (p.x + 32, p.y + 124), 19, WHITE, bold=True)"
+ },
+ {
+  "ru": "Сбросить весь прогресс? Это нельзя отменить.",
+  "line": 7821,
+  "fmt": false,
+  "context": "draw_text(surf, \"Сбросить весь прогресс? Это нельзя отменить.\", (p.x + 32, p.y + 268), 16, BAD, bold=True)"
+ },
+ {
+  "ru": "ДА, СБРОСИТЬ",
+  "line": 7822,
+  "fmt": false,
+  "context": "Button(self._reset_yes_rect(), \"ДА, СБРОСИТЬ\", BAD).draw(surf, mouse)"
+ },
+ {
+  "ru": "НЕТ",
+  "line": 7823,
+  "fmt": false,
+  "context": "Button(self._reset_no_rect(), \"НЕТ\", GOOD).draw(surf, mouse)"
+ },
+ {
+  "ru": "СБРОСИТЬ ПРОГРЕСС",
+  "line": 7825,
+  "fmt": false,
+  "context": "Button(self._reset_btn_rect(), \"СБРОСИТЬ ПРОГРЕСС\", BAD).draw(surf, mouse)"
+ },
+ {
+  "ru": "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и доступность останутся.",
+  "line": 7826,
+  "fmt": false,
+  "context": "draw_wrapped(surf, \"Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и \""
+ },
+ {
+  "ru": "ИГРА",
+  "line": 8006,
+  "fmt": false,
+  "context": "Button(r, {\"sound\": \"ЗВУК\", \"graphics\": \"ГРАФИКА\", \"access\": \"ДОСТУПНОСТЬ\", \"game\": \"ИГРА\"}[t], CYAN).draw("
+ }
+]

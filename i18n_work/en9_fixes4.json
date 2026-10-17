@@ -1,0 +1,19 @@
+{
+ "Вкладка: игра и прогресс": "Tab: game and progress",
+ "Игра.": "Game.",
+ "Починено колясок: {0} из {1}": "Wheelchairs repaired: {0} of {1}",
+ "Гильдия: {0} из {1}": "Wheelwrights' Guild: {0} of {1}",
+ ", диплом получен": ", diploma earned",
+ "Кабинет посадки: {0} из {1}": "Seating Clinic: {0} of {1}",
+ ", зачёт сдан": ", test passed",
+ "Прогресс сброшен. Начинаем с начала — настройки сохранены.": "Progress reset. Starting over — your settings are kept.",
+ "Сбросить весь прогресс? Это нельзя отменить. Да или нет.": "Reset all progress? This can't be undone. Yes or no.",
+ "Сброс отменён.": "Reset cancelled.",
+ "Прогресс": "Progress",
+ "Сбросить весь прогресс? Это нельзя отменить.": "Reset all progress? This can't be undone.",
+ "ДА, СБРОСИТЬ": "YES, RESET",
+ "НЕТ": "NO",
+ "СБРОСИТЬ ПРОГРЕСС": "RESET PROGRESS",
+ "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и доступность останутся.": "Erases repaired wheelchairs, the garage, the Guild and the Seating Clinic. Sound, graphics, language and accessibility settings stay.",
+ "ИГРА": "GAME"
+}

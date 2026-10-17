@@ -184,6 +184,7 @@ The **gear** in the top-right corner of every screen opens the settings menu:
 - **GRAPHICS** — windowed / fullscreen, resolution (AUTO, 1280×720 … 2560×1440, whatever fits your monitor),
   glow and GPU-accelerated 3D; **F11** / **Alt+Enter** toggles fullscreen;
 - **ACCESSIBILITY** — see above.
+- **GAME** — progress summary and **RESET PROGRESS** (asks yes/no; settings are kept).
 
 Settings are stored in `settings.json` and are not cleared by `--reset`.
 
@@ -217,7 +218,7 @@ you think is right. The disputed mistake is not counted (except in the exam). Vi
   - running from source — next to `game.py`;
   - the Windows exe — `%APPDATA%\WheelsAndBones\`;
   - the browser version — the browser's localStorage (keys `wnb:save.json` etc.).
-- **Reset progress:** `python game.py --reset` or delete `save.json`.
+- **Reset progress:** gear → GAME → RESET PROGRESS, or `python game.py --reset`, or delete `save.json`.
 
 ### Browser version
 
@@ -516,6 +517,7 @@ python game.py --feedback   # показать замечания игроков
   а рисуется всё в выбранном разрешении; кадр вписывается в окно по центру без искажений, окно можно
   тянуть и разворачивать. **F11** / **Alt+Enter** — весь экран;
 - **ДОСТУПНОСТЬ** — см. выше.
+- **ИГРА** — сводка прогресса и **СБРОСИТЬ ПРОГРЕСС** (с вопросом «да / нет»; настройки сохраняются).
 
 Настройки хранятся в `settings.json` и не сбрасываются `--reset`.
 
@@ -563,7 +565,7 @@ Esc** (защита от случайного выхода; прогресс з�
   - запуск из исходников — рядом с `game.py`;
   - exe для Windows — `%APPDATA%\WheelsAndBones\`;
   - браузерная версия — localStorage браузера (ключи `wnb:save.json` и т. д.).
-- **Сбросить прогресс:** `python game.py --reset` или удалить `save.json`.
+- **Сбросить прогресс:** шестерёнка → ИГРА → СБРОСИТЬ ПРОГРЕСС, или `python game.py --reset`, или удалить `save.json`.
 
 ### Браузерная версия
 

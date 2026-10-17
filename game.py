@@ -6999,7 +6999,8 @@ class Game:
     def _a11y_settings_items(self, add):
         tab = getattr(self, "settings_tab", "sound")
         for t, r in self._settings_tab_rects():
-            names = {"sound": "Вкладка: звук", "graphics": "Вкладка: графика", "access": "Вкладка: доступность"}
+            names = {"sound": "Вкладка: звук", "graphics": "Вкладка: графика", "access": "Вкладка: доступность",
+                     "game": "Вкладка: игра и прогресс"}
             add("Вкладки", tr(names[t]) + (", " + tr("открыта") if t == tab else ""), r,
                 act=lambda t=t: (setattr(self, "settings_tab", t), snd("tick")), key=("tab", t))
         if tab == "sound":
@@ -7181,6 +7182,9 @@ class Game:
                                             "Enter — отправить, Esc — отмена."))
         if self.show_sound:
             tab = getattr(self, "settings_tab", "sound")
+            if tab == "game":
+                return (tr("Настройки.") + " " + tr("Игра.") + " " + " ".join(tr(x) + "." for x in self.progress_summary())
+                        + " " + tr("Tab — к вкладкам и пунктам, Esc — закрыть."))
             return tr("Настройки.") + " " + tr({"sound": "Звук.", "graphics": "Графика.", "access": "Доступность."}[tab]) \
                 + " " + tr("Tab — к вкладкам и пунктам, Esc — закрыть.")
         sc = self.scene
@@ -7762,8 +7766,65 @@ class Game:
 
     def _settings_tab_rects(self):
         p = self._sound_panel_rect()
-        return [(t, pygame.Rect(p.x + 32 + i * 174, p.y + 64, 164, 36))
-                for i, t in enumerate(("sound", "graphics", "access"))]
+        return [(t, pygame.Rect(p.x + 32 + i * 130, p.y + 64, 122, 36))
+                for i, t in enumerate(("sound", "graphics", "access", "game"))]
+
+    def _reset_btn_rect(self):
+        p = self._sound_panel_rect()
+        return pygame.Rect(p.x + 32, p.y + 300, p.w - 64, 46)
+
+    def _reset_yes_rect(self):
+        p = self._sound_panel_rect()
+        return pygame.Rect(p.x + 32, p.y + 300, (p.w - 80) // 2, 46)
+
+    def _reset_no_rect(self):
+        p = self._sound_panel_rect()
+        w = (p.w - 80) // 2
+        return pygame.Rect(p.right - 32 - w, p.y + 300, w, 46)
+
+    def progress_summary(self):
+        """Что сейчас пройдено — для вкладки «ИГРА» и озвучки."""
+        return [f"Починено колясок: {self.user_done_count()} из {len(JOBS)}",
+                f"Гильдия: {self.tech_done_count()} из {len(TECH_JOBS)}" + (", диплом получен" if self.exam_passed else ""),
+                f"Кабинет посадки: {len(self.seat_done)} из {len(SEAT_CASES)}" + (", зачёт сдан" if self.seat_quiz_ok else "")]
+
+    def reset_progress(self):
+        """Сброс прогресса (починки, гараж, Гильдия, посадка). Настройки звука/графики/языка/доступности остаются."""
+        self.done = set()
+        self.garage = []
+        self.exam_passed = False
+        self.seat_done = set()
+        self.seat_quiz_ok = False
+        self.hub_page = 0
+        self.cur = None
+        self.exam_mode = False
+        self.save_progress()
+        self._reset_ask = False
+        self.show_sound = False
+        self.scene = "title"
+        snd("whoosh")
+        self.flash("Прогресс сброшен. Начинаем с начала — настройки сохранены.", AMBER, 4)
+
+    def _ask_reset(self, on=True):
+        """Подтверждение сброса: вопрос и кнопки «ДА, СБРОСИТЬ» / «НЕТ»."""
+        self._reset_ask = on
+        snd("bad" if on else "tick")
+        self.say("Сбросить весь прогресс? Это нельзя отменить. Да или нет." if on else "Сброс отменён.", True)
+
+    def _draw_game_tab(self, surf, p, mouse):
+        draw_text(surf, "Прогресс", (p.x + 32, p.y + 124), 19, WHITE, bold=True)
+        y = p.y + 156
+        for line in self.progress_summary():
+            draw_text(surf, line, (p.x + 32, y), 16, GREY)
+            y += 28
+        if getattr(self, "_reset_ask", False):
+            draw_text(surf, "Сбросить весь прогресс? Это нельзя отменить.", (p.x + 32, p.y + 268), 16, BAD, bold=True)
+            Button(self._reset_yes_rect(), "ДА, СБРОСИТЬ", BAD).draw(surf, mouse)
+            Button(self._reset_no_rect(), "НЕТ", GOOD).draw(surf, mouse)
+        else:
+            Button(self._reset_btn_rect(), "СБРОСИТЬ ПРОГРЕСС", BAD).draw(surf, mouse)
+        draw_wrapped(surf, "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и "
+                           "доступность останутся.", (p.x + 32, p.y + 356), p.w - 64, 13, GREY)
 
     ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant")
 
@@ -7834,6 +7895,9 @@ class Game:
 
     def handle_sound_event(self, event):
         tab = getattr(self, "settings_tab", "sound")
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE and getattr(self, "_reset_ask", False):
+            self._ask_reset(False)                            # Esc сначала отменяет вопрос о сбросе
+            return
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             self.show_sound = False
             self.save_settings()
@@ -7847,6 +7911,7 @@ class Game:
             for t, r in self._settings_tab_rects():
                 if r.collidepoint(event.pos):
                     self.settings_tab = t
+                    self._reset_ask = False
                     snd("tick")
                     return
             if tab == "access":
@@ -7854,6 +7919,15 @@ class Game:
                     if r.collidepoint(event.pos):
                         self._access_toggle(k)
                         return
+                return
+            if tab == "game":
+                if getattr(self, "_reset_ask", False):
+                    if self._reset_yes_rect().collidepoint(event.pos):
+                        self.reset_progress()
+                    elif self._reset_no_rect().collidepoint(event.pos):
+                        self._ask_reset(False)
+                elif self._reset_btn_rect().collidepoint(event.pos):
+                    self._ask_reset(True)
                 return
             if tab == "sound":
                 if self._sound_mute_rect().collidepoint(event.pos):
@@ -7929,10 +8003,12 @@ class Game:
         mouse = mouse_pos()
         tab = getattr(self, "settings_tab", "sound")
         for t, r in self._settings_tab_rects():
-            Button(r, {"sound": "ЗВУК", "graphics": "ГРАФИКА", "access": "ДОСТУПНОСТЬ"}[t], CYAN).draw(
+            Button(r, {"sound": "ЗВУК", "graphics": "ГРАФИКА", "access": "ДОСТУПНОСТЬ", "game": "ИГРА"}[t], CYAN).draw(
                 surf, mouse, active=t == tab)
         if tab == "access":
             self._draw_access_tab(surf, p, mouse)
+        elif tab == "game":
+            self._draw_game_tab(surf, p, mouse)
         elif tab == "sound":
             draw_text(surf, "M — быстро выключить / включить звук", (p.x + 32, p.y + 374), 13, GREY)
             names = {"master": "Общая громкость", "music": "Музыка", "sfx": "Эффекты", "amb": "Атмосфера сцен"}
@@ -11343,6 +11419,31 @@ def run_selftest():
     if not ga.kb["help"]:
         failures.append("F1 не открыл справку")
     kp(pygame.K_ESCAPE)
+    # сброс прогресса: кнопка — только вопрос; «НЕТ» и Esc отменяют; «ДА, СБРОСИТЬ» — сброс; настройки не трогаются
+    gr = Game(headless=True)
+    gr.done, gr.garage, gr.exam_passed, gr.seat_quiz_ok = {"flat", "caster"}, [("flat", 3)], True, True
+    gr.show_sound, gr.settings_tab = True, "game"
+    gr.draw(scr)
+    vol0, lang0 = dict(VOL), LANG["code"]
+    click = lambda r: gr.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=r.center, button=1))
+    click(gr._reset_btn_rect())
+    gr.draw(scr)
+    if not gr.done or not gr._reset_ask:
+        failures.append("кнопка сброса должна сначала спросить «да/нет»")
+    click(gr._reset_no_rect())
+    if not gr.done or gr._reset_ask:
+        failures.append("«НЕТ» не отменил сброс")
+    click(gr._reset_btn_rect())
+    gr.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, mod=0, unicode=""))
+    if not gr.done or gr._reset_ask or not gr.show_sound:
+        failures.append("Esc должен отменить вопрос о сбросе, не закрывая настройки")
+    click(gr._reset_btn_rect())
+    click(gr._reset_yes_rect())
+    if gr.done or gr.garage or gr.exam_passed or gr.seat_quiz_ok or gr.scene != "title":
+        failures.append("«ДА, СБРОСИТЬ» не сбросил прогресс")
+    if dict(VOL) != vol0 or LANG["code"] != lang0:
+        failures.append("сброс прогресса задел настройки")
+
     if speech_clean("Enter — начать · 1920×1080 ✔") not in ("Enter, начать, 1920 на 1080", "Enter, начать, 1920 by 1080"):
         failures.append(f"speech_clean: {speech_clean('Enter — начать · 1920×1080 ✔')}")
 

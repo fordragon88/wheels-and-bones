@@ -2155,5 +2155,22 @@
  "После просушки включи пульт и посмотри на дисплей: что за код? Потом снова выключи — дальше работаем на выключенной коляске.": "Once it's dry, turn the joystick on and look at the display: what code is it showing? Then switch it off again — the rest is done with the chair off.",
  "Пульт погас — нет питания.": "The joystick is dark — no power.",
  "Выключи питание на пульте и проверь: рычаги свободного хода в режиме езды": "Turn off the power at the joystick and check: freewheel levers in drive mode",
- "Пульт ожил, индикатор заряда ползёт вверх. Бренна проверяет затяжку клемм. Кивнула!": "The joystick wakes up, the charge gauge creeps up. Brenna checks the terminal torque. A nod!"
+ "Пульт ожил, индикатор заряда ползёт вверх. Бренна проверяет затяжку клемм. Кивнула!": "The joystick wakes up, the charge gauge creeps up. Brenna checks the terminal torque. A nod!",
+ "Вкладка: игра и прогресс": "Tab: game and progress",
+ "Игра.": "Game.",
+ "Починено колясок: {0} из {1}": "Wheelchairs repaired: {0} of {1}",
+ "Гильдия: {0} из {1}": "Wheelwrights' Guild: {0} of {1}",
+ ", диплом получен": ", diploma earned",
+ "Кабинет посадки: {0} из {1}": "Seating Clinic: {0} of {1}",
+ ", зачёт сдан": ", test passed",
+ "Прогресс сброшен. Начинаем с начала — настройки сохранены.": "Progress reset. Starting over — your settings are kept.",
+ "Сбросить весь прогресс? Это нельзя отменить. Да или нет.": "Reset all progress? This can't be undone. Yes or no.",
+ "Сброс отменён.": "Reset cancelled.",
+ "Прогресс": "Progress",
+ "Сбросить весь прогресс? Это нельзя отменить.": "Reset all progress? This can't be undone.",
+ "ДА, СБРОСИТЬ": "YES, RESET",
+ "НЕТ": "NO",
+ "СБРОСИТЬ ПРОГРЕСС": "RESET PROGRESS",
+ "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и доступность останутся.": "Erases repaired wheelchairs, the garage, the Guild and the Seating Clinic. Sound, graphics, language and accessibility settings stay.",
+ "ИГРА": "GAME"
 }
