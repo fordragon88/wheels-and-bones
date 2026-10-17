@@ -2449,10 +2449,10 @@ CHAIR_HOTSPOTS["trident"] = {"controller": (160, 108, 10), "wiring": (185, 150, 
 # точки клика M3 расставлены по арту assets/chair_m3.png (art_tests/hotspots_m3.json)
 CHAIR_HOTSPOTS["m3"] = {"joystick": (222, 80, 11), "boot": (214, 98, 7), "controller": (242, 108, 12), "wiring": (190, 132, 11), "battery": (160, 232, 14), "fuse": (98, 222, 9), "motor": (196, 252, 12), "freewheel": (130, 212, 10), "axle": (166, 250, 12), "frame": (245, 205, 12)}
 # вторая волна: точки клика по арту (art_tests/hotspots_<model>.json, build_new_assets.py)
-CHAIR_HOTSPOTS["aeroz"] = {"tire": (55, 230, 11), "spokes": (90, 185, 11), "axle": (124, 207, 9), "brake": (205, 160, 10), "bolts": (232, 140, 8), "anti_tip": (42, 272, 9)}
-CHAIR_HOTSPOTS["cross6"] = {"backrest": (160, 75, 13), "cushion": (215, 140, 12), "brake": (165, 168, 9), "bolts": (122, 196, 9), "tire": (78, 210, 11), "anti_tip": (100, 265, 9)}
+CHAIR_HOTSPOTS["aeroz"] = {"tire": (55, 230, 11), "spokes": (90, 185, 11), "axle": (124, 207, 9), "brake": (205, 160, 10), "bolts": (232, 140, 8), "anti_tip": (35, 276, 9)}
+CHAIR_HOTSPOTS["cross6"] = {"backrest": (160, 75, 13), "cushion": (215, 140, 12), "brake": (165, 168, 9), "bolts": (122, 196, 9), "tire": (78, 210, 11), "anti_tip": (62, 271, 9)}
 CHAIR_HOTSPOTS["iris"] = {"anti_tip": (325, 262, 9), "tilt_cable": (300, 130, 9), "tilt_lock": (245, 195, 10), "tilt_lever": (322, 50, 9), "tire": (300, 282, 10), "brake": (283, 210, 9)}
-CHAIR_HOTSPOTS["focuscr"] = {"tilt_lever": (80, 32, 9), "tilt_cable": (98, 122, 9), "gas_spring": (118, 160, 9), "brake": (150, 172, 9), "tilt_lock": (178, 210, 10), "anti_tip": (52, 265, 9)}
+CHAIR_HOTSPOTS["focuscr"] = {"tilt_lever": (80, 32, 9), "tilt_cable": (98, 122, 9), "gas_spring": (118, 160, 9), "brake": (150, 172, 9), "tilt_lock": (178, 210, 10), "anti_tip": (33, 275, 9)}
 CHAIR_HOTSPOTS["whillc2"] = {"controller": (292, 72, 9), "joystick": (270, 46, 9), "armrest": (232, 118, 11), "seat": (178, 124, 11), "seat_cable": (170, 148, 9), "battery": (112, 186, 11), "freewheel": (36, 250, 9), "tire": (110, 262, 11)}
 CHAIR_HOTSPOTS["f5"] = {"joystick": (140, 118, 9), "battery": (205, 192, 11), "motor": (150, 228, 11), "tire": (128, 272, 11), "freewheel": (200, 240, 9), "frame": (248, 222, 11), "breaker": (276, 214, 9)}
 
@@ -3138,7 +3138,7 @@ SEAT_CASES = [
          start=dict(depth=46, leg=45, back_h=42, back_a=103),
          fact="Зазор ~5 см (2 дюйма) от переднего края подушки до подколенной ямки защищает сосуды и нервы "
               "под коленом и не стягивает таз вперёд."),
-    dict(id="seat_iris", client="Дракончик Искра", client_art="client_iris.png", kind="power",
+    dict(id="seat_iris", client="Дракончик Искра", client_art="client_iris.png", kind="manual",   # Zippie Iris: ручная, наклон в пространстве
          skin=(228, 108, 92), seat_h=46,
          body=dict(thigh=35, shank=32, scap=30, shoulder=44),
          story="Искра устаёт держать голову и заваливается вперёд, а при долгом сидении немеет крестец.",
@@ -8280,7 +8280,7 @@ class Game:
             checks.append(("back_h", False, "Спинка низко: корпусу не на что опереться"))
         elif bh > hi_b:
             checks.append(("back_h", False, "Спинка выше, чем в карте терапевта"
-                           + (": мешает лопаткам и толчку" if case["kind"] == "manual" else "")))
+                           + (": мешает лопаткам и толчку" if case["kind"] == "manual" and not case.get("tilt") else "")))
         else:
             checks.append(("back_h", True, "Высота спинки по карте"))
         if ba < lo_a:
@@ -8633,7 +8633,7 @@ class Game:
         ]
         DR.polygon(surf, UP, b_pad)
         DR.polygon(surf, (92, 102, 152), b_pad, 2)
-        if case["kind"] == "power":
+        if case["kind"] == "power" or case.get("tilt"):             # подголовник — и у ручной коляски с наклоном
             hr0 = T(top[0] + 1.0 * nx_b, top[1] + 1.0 * ny_b)
             hr1 = T(top[0] + 8.0 * ux_b + 2.0 * nx_b, top[1] + 8.0 * uy_b + 2.0 * ny_b)
             hr2 = T(top[0] + 15.0 * ux_b + 4.5 * nx_b, top[1] + 15.0 * uy_b + 4.5 * ny_b)
