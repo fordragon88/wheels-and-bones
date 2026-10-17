@@ -80,7 +80,7 @@ In the hub every job is tagged **ⓜ MANUAL** or **⚡ POWER**.
 | Client | Fault | What you learn |
 |---|---|---|
 | Zix the goblin mechanic — Quantum Edge 4 | Seat lift won't rise — **2 possible causes** | Loose actuator plug and pinched harness OR the factory interlock when the seat is tilted/reclined > 20° |
-| Mora the sorceress — Permobil M3 Corpus | Jerky joystick, torn boot | Restart, cleaning, cable connector, calibration; replacing the boot against moisture |
+| Mora the sorceress — Permobil M3 Corpus | Jerky joystick, torn boot | Dry it first, then restart, cleaning, cable connector (power off); calibration is a technician's job; replacing the boot against moisture |
 | Grund the golem — Drive Trident HD | Stalled, whining motor | Freewheel mode (push by hand), motor connectors, diagnosis by sound |
 | Saira the lizard — WHILL Model C2 | Red code on the controller — **3 variants** (01/02/10) | Code table: armrest, joystick touched at power-on, seat connector |
 | Matilda the badger — Permobil F5 Corpus | Won't charge after winter | Main breaker during storage, charging not below +5 °C, charger connection order, 250 kPa tyres |
@@ -399,7 +399,7 @@ Pygame. Один файл, играть можно мышью или **толь�
 | Клиент | Поломка | Чему учит |
 |---|---|---|
 | Гоблин-механик Зикс — Quantum Edge 4 | Не поднимается лифт сиденья — **2 варианта причины** | Недовставленный разъём актуатора и зажатый жгут ИЛИ заводская блокировка подъёма при наклоне/откидке больше 20° |
-| Чародейка Мора — Permobil M3 Corpus | Дёргает джойстик, порван пыльник | Перезагрузка, чистка, разъём кабеля, калибровка; замена пыльника против влаги |
+| Чародейка Мора — Permobil M3 Corpus | Дёргает джойстик, порван пыльник | Сначала просушка, потом перезагрузка, чистка, разъём кабеля (без питания); калибровка — работа техника; замена пыльника против влаги |
 | Голем Грунд — Drive Trident HD | Заглохла, вой мотора | Режим свободного хода (откатить вручную), разъёмы мотора, диагностика по звуку |
 | Ящерка Сайра — WHILL Model C2 | Красный код на пульте — **3 варианта** (01/02/10) | Таблица кодов: подлокотник, джойстик при включении, разъём сиденья |
 | Барсучиха Матильда — Permobil F5 Corpus | Не заряжается после зимы | Главный автомат на хранении, заряд не ниже +5 °C, порядок подключения зарядки, шины 250 кПа |
