@@ -40,7 +40,7 @@ def stage():
         f.write(MAIN)
     src, dst = os.path.join(ROOT, "assets"), os.path.join(APP, "assets")
     shutil.copytree(src, dst, ignore=shutil.ignore_patterns("*.ico", "README.txt", "*.mp3", "*.wav",
-                                                       "*_ai.json", "*_ai_lod.json"))
+                                                       "*_ai.json", "*_ai_lod.json", "turntable"))
     # 3D-модели (*_ai.json, 12 МБ) не берём: без numpy в браузере их не отрисовать, 3D-осмотр — схемой
     # музыка: браузер надёжно играет .ogg
     os.makedirs(os.path.join(dst, "music"), exist_ok=True)
