@@ -47,3 +47,7 @@ art_tests/_ai3d_bench.py
 art_tests/*.sh
 MUSE_3D_TASK.md
 .claude/
+
+*.tmp
+
+*.tmp

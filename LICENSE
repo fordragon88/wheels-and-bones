@@ -1,0 +1,17 @@
+Wheels & Bones — licensing
+==========================
+
+Code (game.py, build scripts, tools under art_tests/, i18n_work/, docs/*.py):
+  MIT License — see LICENSE-CODE.
+
+Game content (quest texts, dialogue, translations, documentation, artwork, 3D models, music
+in assets/ and docs/): Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+— see LICENSE-CONTENT.
+  Attribution: "Wheels & Bones" by GOAT — Grassroots Open Assistive Tech
+  (https://www.openassistivetech.org/).
+
+Third-party:
+  DejaVu fonts (assets/fonts/DejaVuSans*.ttf) — DejaVu Fonts License, see assets/fonts/LICENSE-DejaVu.txt.
+  Repair procedures and facts are based on manufacturers' service and owner's manuals collected by
+  BARC — Bay Area Repair Coalition, and on the Permobil "Seating & Positioning Guide". Product and
+  brand names belong to their owners and are used only to describe real equipment.

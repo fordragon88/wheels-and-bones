@@ -82,7 +82,7 @@ In the hub every job is tagged **ⓜ MANUAL** or **⚡ POWER**.
 | Zix the goblin mechanic — Quantum Edge 4 | Seat lift won't rise — **2 possible causes** | Loose actuator plug and pinched harness OR the factory interlock when the seat is tilted/reclined > 20° |
 | Mora the sorceress — Permobil M3 Corpus | Jerky joystick, torn boot | Dry it first, then restart, cleaning, cable connector (power off); calibration is a technician's job; replacing the boot against moisture |
 | Grund the golem — Drive Trident HD | Stalled, whining motor | Freewheel mode (push by hand), motor connectors, diagnosis by sound |
-| Saira the lizard — WHILL Model C2 | Red code on the controller — **3 variants** (01/02/10) | Code table: armrest, joystick touched at power-on, seat connector |
+| Saira the lizard — WHILL Model C2 | Red code on the joystick — **3 variants** (01/02/10) | Code table: armrest, joystick touched at power-on, seat connector |
 | Matilda the badger — Permobil F5 Corpus | Won't charge after winter | Main breaker during storage, charging not below +5 °C, charger connection order, 250 kPa tyres |
 
 All real wheelchair models, numbers and step orders come from manufacturer manuals; the pages are cited in
@@ -213,7 +213,7 @@ you think is right. The disputed mistake is not counted (except in the exam). Vi
   `BARTY_TALK` / `MARTIN_TALK`, and the Guild manual `MANUAL`.
 - **English translation** — `assets/lang_en.json`, built from `i18n_work/en*.json` by
   `python i18n_work/build_lang.py`.
-- **A readable export of all quests** will be in `docs/QUESTS.md`.
+- **A readable export of all quests** is in `docs/QUESTS.md` (English) and `docs/QUESTS_ru.md`; regenerate it with `python docs/export_quests.py`.
 - **Saves** (`save.json`, `settings.json`, `feedback.json`, `crash.log`):
   - running from source — next to `game.py`;
   - the Windows exe — `%APPDATA%\WheelsAndBones\`;
@@ -560,7 +560,7 @@ Esc** (защита от случайного выхода; прогресс з�
   реплики `CLIENT_TALK` / `BARTY_TALK` / `MARTIN_TALK`, мануал Гильдии `MANUAL`.
 - **Английский перевод** — `assets/lang_en.json`, собирается из `i18n_work/en*.json` командой
   `python i18n_work/build_lang.py`.
-- **Читаемая выгрузка всех квестов** будет в `docs/QUESTS.md`.
+- **Читаемая выгрузка всех квестов** — `docs/QUESTS.md` (English) и `docs/QUESTS_ru.md`; пересобрать: `python docs/export_quests.py`.
 - **Сохранения** (`save.json`, `settings.json`, `feedback.json`, `crash.log`):
   - запуск из исходников — рядом с `game.py`;
   - exe для Windows — `%APPDATA%\WheelsAndBones\`;
