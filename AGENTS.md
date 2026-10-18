@@ -289,11 +289,16 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-18 — Claude (Opus 5.5) — **аудитория игры — англоязычная** (русский — для удобства владельца): язык по
+  умолчанию для новых игроков — английский (у кого в settings.json сохранён ru — остаётся). Таблица замечаний
+  полностью на английском: заголовки, папка снимков «Wheels & Bones — feedback screenshots», тексты игры в строке
+  переводятся `tr_en()` при любом языке интерфейса (комментарий игрока — как написан). Скрипт — версия 2 того же
+  развёртывания (адрес не менялся).
 - 2026-10-18 — Claude (Opus 5.5) — замечания игроков → Google-таблица (выбор владельца и тестировщицы):
   `feedback_payload/feedback_send/feedback_flush_outbox` (фоновая отправка, JPEG 640×360 base64, очередь
   `feedback_outbox.json` без сети; в браузере — fetch no-cors + очередь в localStorage), веб-приложение Apps Script
   `docs/feedback/Code.gs` (ключ, лимит 300/сутки, защита от формул, снимки — в папку Диска). Настройка —
-  `docs/FEEDBACK_SETUP.md`; `FEEDBACK_URL` прописан (2026-10-18): таблица «Wheels & Bones — замечания игроков» и проект Apps Script
+  `docs/FEEDBACK_SETUP.md`; `FEEDBACK_URL` прописан (2026-10-18): таблица «Wheels & Bones — player feedback» и проект Apps Script
   «Wheels & Bones feedback» на аккаунте andrei@openassistivetech.org (лист Feedback, снимки — папка на его Диске).
   Проверка — `python art_tests/feedback_check.py`. `GAME_VERSION = "0.3"`.
 - 2026-10-18 — Claude (Opus 5.5) — реплики спокойнее (замечание тестировщицы «всё сразу»): клиент сам — раз в 22–32 с,

@@ -4,15 +4,15 @@
  * (Выполнять от имени: я; Доступ: все). Подробно — docs/FEEDBACK_SETUP.md.
  *
  * Игра шлёт POST с JSON (text/plain). Строка попадает на лист «Feedback»; уменьшенный снимок экрана
- * (JPEG, если есть) — в папку Google Диска «Wheels & Bones — снимки замечаний», в таблицу — ссылка.
+ * (JPEG, если есть) — в папку Google Диска «Wheels & Bones — feedback screenshots», в таблицу — ссылка.
  */
 const KEY = "wnb-feedback-1";        // тот же ключ, что FEEDBACK_KEY в game.py (отсекает случайный мусор)
 const MAX_PER_DAY = 300;             // не больше стольких замечаний в сутки
 const SHEET = "Feedback";
-const FOLDER = "Wheels & Bones — снимки замечаний";
-const HEADERS = ["Получено", "Время у игрока", "Версия", "Где запущено", "Язык", "Экран", "Задание", "Название",
-                 "Этап", "Шаг", "Тип", "Причина", "Игра ожидала", "Игрок выбрал", "Сообщение игры",
-                 "Комментарий", "Снимок"];
+const FOLDER = "Wheels & Bones — feedback screenshots";
+const HEADERS = ["Received", "Player time", "Version", "Platform", "Language", "Screen", "Job", "Title",
+                 "Phase", "Step", "Type", "Reason", "Game expected", "Player chose", "Game message",
+                 "Comment", "Screenshot"];
 
 function doPost(e) {
   try {
@@ -26,10 +26,11 @@ function doPost(e) {
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sh = ss.getSheetByName(SHEET) || ss.insertSheet(SHEET);
-    if (sh.getLastRow() === 0) {
-      sh.appendRow(HEADERS);
+    if (sh.getLastRow() === 0) sh.appendRow(HEADERS);
+    const head = sh.getRange(1, 1, 1, HEADERS.length);
+    if (head.getValues()[0].join("|") !== HEADERS.join("|")) {   // старые (русские) заголовки — переписать
+      head.setValues([HEADERS]).setFontWeight("bold");
       sh.setFrozenRows(1);
-      sh.getRange(1, 1, 1, HEADERS.length).setFontWeight("bold");
     }
     let shot = "";
     const b64 = String(d.screenshot_jpg_b64 || "");
@@ -58,7 +59,11 @@ function folder_() {
   const props = PropertiesService.getScriptProperties();
   const id = props.getProperty("folder_id");
   if (id) {
-    try { return DriveApp.getFolderById(id); } catch (e) {}
+    try {
+      const old = DriveApp.getFolderById(id);
+      if (old.getName() !== FOLDER) old.setName(FOLDER);
+      return old;
+    } catch (e) {}
   }
   const f = DriveApp.createFolder(FOLDER);
   props.setProperty("folder_id", f.getId());
@@ -73,6 +78,6 @@ function reply_(ok, why) {
 // Проверка из редактора: Выполнить → testPost (добавит тестовую строку).
 function testPost() {
   const r = doPost({ postData: { contents: JSON.stringify({ key: KEY, time: "test", version: "test",
-    platform: "editor", lang: "ru", scene: "hub", kind: "general", reason: "Проверка", comment: "Тестовая строка" }) } });
+    platform: "editor", lang: "en", scene: "hub", kind: "general", reason: "Test", comment: "Test row" }) } });
   Logger.log(r.getContent());
 }

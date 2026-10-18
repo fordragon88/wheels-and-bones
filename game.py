@@ -1133,11 +1133,29 @@ def web_setup_page():
     })()""")
 
 
+def tr_en(s):
+    """Строка игры по-английски при любом языке интерфейса (для таблицы замечаний)."""
+    if not s:
+        return s
+    old = LANG["code"]
+    try:
+        LANG["code"] = "en"
+        if not _TR:
+            load_lang()
+        return tr(s)
+    except Exception:
+        return s
+    finally:
+        LANG["code"] = old
+
+
 def feedback_payload(entry, shot=None):
     """Замечание для отправки: поля из feedback.json + версия, платформа и уменьшенный снимок (JPEG, base64)."""
     import base64, io
     d = {k: entry.get(k, "") for k in ("time", "lang", "scene", "job", "title", "phase", "step", "kind",
                                        "reason", "expected", "got", "game_message", "comment")}
+    for k in ("title", "step", "reason", "expected", "got", "game_message"):   # таблица — на английском
+        d[k] = tr_en(d[k])
     d.update(key=FEEDBACK_KEY, version=GAME_VERSION,
              platform="web" if IS_WEB else ("exe" if getattr(sys, "frozen", False) else "source"))
     if shot is not None:
@@ -6427,7 +6445,7 @@ class Game:
             pass
         if "--lang" in sys.argv[:-1]:
             lang = sys.argv[sys.argv.index("--lang") + 1]
-        set_lang("en" if IS_WEB else (lang or system_lang()))      # браузерная версия — только английская
+        set_lang("en" if IS_WEB else (lang or "en"))      # по умолчанию английский (аудитория); русский — переключателем
         try:
             with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
                 acc = json.load(f).get("a11y")
