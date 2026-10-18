@@ -98,6 +98,7 @@ else:
     ASSETS_DIR = os.path.join(BASE_DIR, "assets")
     DATA_DIR = BASE_DIR
 IS_WEB = sys.platform == "emscripten"          # браузерная версия (pygbag, WebAssembly)
+WEB_RES = {"high": (1920, 1080), "standard": (1280, 720)}   # качество в браузере: холст 1080p или 720p
 GAME_VERSION = "0.3"
 # Замечания игроков (флажок ⚑, «Я не согласен») уходят в Google-таблицу через веб-приложение Apps Script
 # (docs/feedback/Code.gs, настройка — docs/FEEDBACK_SETUP.md). Пустой адрес — только локальный feedback.json.
@@ -1377,8 +1378,10 @@ def _default_window():
 
 def _set_window(fullscreen):
     """Создать/переключить окно. Масштабирование кадра делает игра сама (present), без SCALED у SDL."""
-    if IS_WEB:                                        # браузер: холст страницы, масштабирует сам браузер
-        screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    if IS_WEB:                                        # браузер: холст 1080p (чётко и на весь экран) или 720p
+        res = WEB_RES.get(DISPLAY.get("web_quality", "high"), WEB_RES["high"])
+        DISPLAY["res"] = res
+        screen = pygame.display.set_mode(res)
         DISPLAY["fullscreen"] = False
         DISPLAY["screen"] = screen
         return screen
@@ -1426,8 +1429,32 @@ def init_display(fullscreen=False):
     return DISPLAY["screen"]
 
 
+def set_web_quality(q, by_user=True):
+    """Браузер: высокое (1080p) или стандартное (720p) качество; by_user=False — автоснижение на слабом ПК."""
+    if q not in WEB_RES or DISPLAY.get("web_quality", "high") == q:
+        return False
+    DISPLAY["web_quality"] = q
+    if by_user:
+        DISPLAY["web_quality_user"] = True
+    try:
+        apply_display()
+    except Exception:
+        return False
+    return True
+
+
+def web_toggle_fullscreen():
+    """Браузер: полный экран для страницы игры (работает и во встроенном на сайт окне — у iframe allowfullscreen)."""
+    web_js("(function(){var d=document;if(d.fullscreenElement||d.webkitFullscreenElement){(d.exitFullscreen||"
+           "d.webkitExitFullscreen).call(d);}else{var e=d.documentElement;(e.requestFullscreen||"
+           "e.webkitRequestFullscreen).call(e);}})()")
+
+
 def toggle_fullscreen():
     """Полный экран <-> окно (F11, Alt+Enter, кнопка в настройках)."""
+    if IS_WEB:
+        web_toggle_fullscreen()
+        return DISPLAY["fullscreen"]
     if not DISPLAY["fullscreen"]:
         DISPLAY["win_size"] = pygame.display.get_surface().get_size()   # вернуться в окно того же размера
     try:
@@ -6635,7 +6662,9 @@ class Game:
             with _atomic_open(SETTINGS_PATH) as f:
                 json.dump({"volume": dict(VOL), "lang": LANG["code"], "fullscreen": DISPLAY["fullscreen"],
                            "glow": DISPLAY["glow"], "res": list(DISPLAY["res"]) if DISPLAY["res"] else None,
-                           "gpu3d": not GL["off"], "a11y": dict(A11Y)},
+                           "gpu3d": not GL["off"], "a11y": dict(A11Y),
+                           "web_quality": DISPLAY.get("web_quality", "high"),
+                           "web_quality_user": bool(DISPLAY.get("web_quality_user"))},
                           f, ensure_ascii=False, indent=2)
         except Exception:
             pass
@@ -8264,6 +8293,10 @@ class Game:
         opts = ["auto"] + available_resolutions()
         return [(o, pygame.Rect(p.x + 32 + (i % 3) * 174, p.y + 214 + (i // 3) * 44, 164, 38)) for i, o in enumerate(opts)]
 
+    def _web_fs_rect(self):
+        p = self._sound_panel_rect()
+        return pygame.Rect(p.x + 230, p.y + 196, 230, 38)
+
     def _glow_btn_rect(self):
         p = self._sound_panel_rect()
         return pygame.Rect(p.x + 310, p.y + 320, 216, 38)
@@ -8327,6 +8360,17 @@ class Game:
                         self._set_vol_from_x(key, event.pos[0])
                         return
                 return
+            if IS_WEB:
+                for full, r in self._mode_rects():               # браузер: эти кнопки — качество
+                    if r.collidepoint(event.pos):
+                        set_web_quality("high" if full else "standard")
+                        self.save_settings()
+                        snd("tick")
+                        return
+                if self._web_fs_rect().collidepoint(event.pos):
+                    web_toggle_fullscreen()
+                    snd("tick")
+                    return
             for full, r in ([] if IS_WEB else self._mode_rects()):     # в браузере окно и размер — у страницы
                 if r.collidepoint(event.pos):
                     if full != DISPLAY["fullscreen"] and not self.headless:
@@ -8416,9 +8460,15 @@ class Game:
                           GREY if muted else WHITE, right=True)
             Button(self._sound_mute_rect(), "ВКЛЮЧИТЬ ЗВУК" if not VOL["on"] else "БЕЗ ЗВУКА",
                    GOOD if not VOL["on"] else GREY).draw(surf, mouse)
-        elif IS_WEB:                                   # браузер: размер холста и полный экран задаёт страница
-            draw_wrapped(surf, "В браузере размер и полный экран задаёт сама страница — например, клавиша F11 браузера.",
-                         (p.x + 32, p.y + 130), p.w - 64, 15, GREY)
+        elif IS_WEB:                                   # браузер: качество картинки и полный экран
+            draw_text(surf, "Качество", (p.x + 32, p.y + 137), 17, WHITE)
+            q = DISPLAY.get("web_quality", "high")
+            for full, r in self._mode_rects():
+                Button(r, "ВЫСОКОЕ 1080p" if full else "СТАНДАРТ 720p", CYAN).draw(
+                    surf, mouse, active=(q == "high") == full)
+            draw_text(surf, "Стандарт — плавнее на слабом компьютере", (p.x + 230, p.y + 172), 12, GREY)
+            draw_text(surf, "Полный экран", (p.x + 32, p.y + 205), 17, WHITE)
+            Button(self._web_fs_rect(), "ВКЛ / ВЫКЛ  (F11)", AMBER).draw(surf, mouse)
             draw_text(surf, "Свечение и частицы", (p.x + 32, p.y + 329), 17, WHITE)
             Button(self._glow_btn_rect(), "ВКЛ" if DISPLAY["glow"] else "ВЫКЛ",
                    AMBER if DISPLAY["glow"] else GREY).draw(surf, mouse, active=DISPLAY["glow"])
@@ -12002,6 +12052,14 @@ async def main():
     if IS_WEB:
         web_restore()
         web_setup_page()
+        try:
+            with open(SETTINGS_PATH, encoding="utf-8") as f:
+                st0 = json.load(f)
+            if st0.get("web_quality") in WEB_RES:
+                DISPLAY["web_quality"] = st0["web_quality"]
+                DISPLAY["web_quality_user"] = bool(st0.get("web_quality_user"))
+        except Exception:
+            pass
         if FEEDBACK_URL:
             web_js(f"window.wnbFlush && wnbFlush({json.dumps(FEEDBACK_URL)})")
     elif FEEDBACK_URL and "--selftest" not in sys.argv:
@@ -12105,6 +12163,19 @@ async def main():
         game.draw(DISPLAY["frame"])                    # кадр пересоздаётся при смене разрешения
         present(DISPLAY["frame"])
         pygame.display.flip()
+        if IS_WEB:
+            DISPLAY["_fps_t"] = DISPLAY.get("_fps_t", 0) + dt
+            if DISPLAY["_fps_t"] > 3:                 # окно замера 3 с
+                DISPLAY["_fps_t"] = 0
+                fps = clock.get_fps()
+                print(f"[wnb] fps {fps:.1f} rs {RS} scene {game.scene}", flush=True)
+                slow = fps < 20 and game.scene in ("job", "hub", "seating", "guild")
+                DISPLAY["_slow"] = DISPLAY.get("_slow", 0) + 1 if slow else 0
+                if (DISPLAY["_slow"] >= 2 and DISPLAY.get("web_quality", "high") == "high"
+                        and not DISPLAY.get("web_quality_user")):
+                    if set_web_quality("standard", by_user=False):
+                        game.flash("Качество снижено до 720p для плавности. Вернуть: настройки → Графика.", AMBER, 5)
+                        game.save_settings()
         await asyncio.sleep(0)                        # браузеру — нарисовать кадр и принять ввод
     pygame.quit()
 

@@ -23,7 +23,7 @@ import pygame          # pygbag подгружает пакеты по импо�
 async def start():
     pygame.mixer.pre_init(44100, -16, 2, 4096)   # формат браузера и большой буфер — без хрипа
     pygame.init()
-    pygame.display.set_mode((1280, 720))   # холст — сразу, внутри async (так SDL в браузере видит дисплей)
+    pygame.display.set_mode((1920, 1080))   # холст 1920×1080 (= WEB_RES в game.py) — сразу, внутри async (так SDL в браузере видит дисплей)
     import game
     await game.main()
 
@@ -71,7 +71,7 @@ def stage():
 
 def build(serve=False):
     cmd = [sys.executable, "-m", "pygbag", "--title", "Wheels & Bones", "--app_name", "wheels_and_bones",
-           "--width", "1280", "--height", "720", "--ume_block", "0"]
+           "--width", "1920", "--height", "1080", "--ume_block", "0"]
     if not serve:
         cmd.append("--build")
     cmd.append(APP)
