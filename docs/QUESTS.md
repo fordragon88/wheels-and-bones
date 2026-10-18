@@ -1380,13 +1380,17 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Order: free; must come after:* 7  
    *Value from the manual:* Left brake — open circuit. What does the flowchart say? — ✅ Replace the left motor with its brake assembly and test the system; ❌ Replace the power module; ❌ Calibrate the joystick with the programmer  
    *After the step:* The motor and brake are one unit (motor/brake assembly): replaced as a whole.
-9. Plug in the new motor's connector and screw the power module back in place  
-   *Tool:* Screwdriver  
-   *Order: free; must come after:* 8  
-   *After the step:* Don't stretch the wires; screws all the way in, without stripping the threads.
-10. Refit the shroud, switch on and run the brake test: level ground, low speed, joystick forward until the click; then back, left, right  
+9. Connect the new motor's connector to the power module  
    *Tool:* Hands  
-   *Order: free; must come after:* 9, 3  
+   *Order: free; must come after:* 8  
+   *After the step:* Don't pull on the wires: the connector should click in without strain on the harness.
+10. Screw the power module back in place  
+   *Tool:* Screwdriver  
+   *Order: free; must come after:* 9  
+   *After the step:* Screws all the way in, without stripping the threads.
+11. Refit the shroud, switch on and run the brake test: level ground, low speed, joystick forward until the click; then back, left, right  
+   *Tool:* Hands  
+   *Order: free; must come after:* 10, 3  
    *After the step:* In each direction the brake should click audibly after a couple of seconds.
 
 **Test:** #203 is gone. The brake clicks in every direction; on a slope the wheelchair holds firm. Brenna marks it in the exam log.  

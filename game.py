@@ -5049,9 +5049,12 @@ TECH_JOBS += [
                              "Калибровка — от #38. Тормоз она не починит."),
                         ])),
             # source: Q6_OM p26 (Check the brakes: level surface, 1 m clearance, listen for clicks x4)
-            T("b_back", "Подключи разъём нового мотора и прикрути модуль питания на место", "screw", "controller",
+            T("b_plug", "Подключи разъём нового мотора к модулю питания", "hands", "wiring",
               after=["b_replace"],
-              note="Провода не натягивай; винты — до упора, без срыва резьбы."),
+              note="Провода не натягивай: разъём должен защёлкнуться без усилия на жгут."),
+            T("b_back", "Прикрути модуль питания на место", "screw", "controller",
+              after=["b_plug"],
+              note="Винты — до упора, без срыва резьбы."),
             T("b_test", "Поставь кожух, включи питание и проведи тест тормозов: ровная площадка, малая "
                         "скорость, джойстик вперёд до щелчка; затем назад, влево, вправо",
               "hands", "joystick", after=["b_back", "b_free"],
@@ -8700,7 +8703,8 @@ class Game:
         for gy in range(rect.y + 16, rect.bottom - 26, 36):
             DR.line(surf, (26, 29, 40), (rect.x + 10, gy), (rect.right - 10, gy), 1)
 
-        k = min(rect.w / 155.0, rect.h / 132.0)
+        need_h = case["seat_h"] + case.get("body", {}).get("shoulder", 60) + 52   # плечи + голова + подпись позы
+        k = min(rect.w / 155.0, rect.h / max(132.0, need_h))
         floor_y = rect.bottom - 24
         x_r = rect.x + rect.w * (0.43 if show_necro else 0.36)
         seat_h, depth, leg = case["seat_h"], cfg["depth"], cfg["leg"]
@@ -10274,8 +10278,9 @@ class Game:
     # ----- tech-задание (Гильдия): свободный порядок операций -----
     def _op_rects(self):
         out = []
-        x0, y0, w, h, gx, gy = 200, 150, 520, 52, 16, 10
-        per_col = 5
+        x0, y0, w, gx, gy = 200, 150, 520, 16, 10
+        per_col = max(5, (len(self.step_order) + 1) // 2)        # больше 10 шагов — карточки ниже, по 6 в колонке
+        h = min(52, (306 - (per_col - 1) * gy) // per_col)
         for i, sid in enumerate(self.step_order):
             col = i // per_col
             row = i % per_col
@@ -10306,8 +10311,11 @@ class Game:
                 DR.rect(surf, GOOD if done else (AMBER if rect.collidepoint(mouse) else DIM),
                                  rect, 2, border_radius=6)
                 prefix = "✔ " if done else "• "
-                draw_wrapped(surf, prefix + st["instr"], (rect.x + 10, rect.y + 7),
-                             rect.w - 20, 13, GREY if done else WHITE)
+                txt = prefix + st["instr"]
+                for fs in (13, 12, 11):                        # длинная операция — мельче, но целиком в карточке
+                    if len(wrap_lines(tr(txt), rect.w - 20, fs)) * (font(fs).get_height() + 2) <= rect.h - 8:
+                        break
+                draw_wrapped(surf, txt, (rect.x + 10, rect.y + 4), rect.w - 20, fs, GREY if done else WHITE)
             lim = f" (лимит {EXAM_MAX_MISTAKES})" if self.exam_mode else ""
             draw_text(surf, f"Выполнено: {len(self.done_steps)}/{len(job['steps'])}   "
                             f"Ошибки: {self.mistakes}{lim}", (200, 466), 14, GHOST)

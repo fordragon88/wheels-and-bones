@@ -2277,5 +2277,9 @@
  "Действуй по блок-схеме: замени узел мотора с тормозом": "Follow the flowchart: replace the motor-and-brake assembly",
  "Подключи разъём нового мотора и прикрути модуль питания на место": "Plug in the new motor's connector and screw the power module back in place",
  "Провода не натягивай; винты — до упора, без срыва резьбы.": "Don't stretch the wires; screws all the way in, without stripping the threads.",
- "Поставь кожух, включи питание и проведи тест тормозов: ровная площадка, малая скорость, джойстик вперёд до щелчка; затем назад, влево, вправо": "Refit the shroud, switch on and run the brake test: level ground, low speed, joystick forward until the click; then back, left, right"
+ "Поставь кожух, включи питание и проведи тест тормозов: ровная площадка, малая скорость, джойстик вперёд до щелчка; затем назад, влево, вправо": "Refit the shroud, switch on and run the brake test: level ground, low speed, joystick forward until the click; then back, left, right",
+ "Подключи разъём нового мотора к модулю питания": "Connect the new motor's connector to the power module",
+ "Провода не натягивай: разъём должен защёлкнуться без усилия на жгут.": "Don't pull on the wires: the connector should click in without strain on the harness.",
+ "Прикрути модуль питания на место": "Screw the power module back in place",
+ "Винты — до упора, без срыва резьбы.": "Screws all the way in, without stripping the threads."
 }
