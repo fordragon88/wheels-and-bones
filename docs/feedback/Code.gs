@@ -70,8 +70,8 @@ function reply_(ok, why) {
                        .setMimeType(ContentService.MimeType.JSON);
 }
 
-// Проверка из редактора: Выполнить → testPost_ (добавит тестовую строку).
-function testPost_() {
+// Проверка из редактора: Выполнить → testPost (добавит тестовую строку).
+function testPost() {
   const r = doPost({ postData: { contents: JSON.stringify({ key: KEY, time: "test", version: "test",
     platform: "editor", lang: "ru", scene: "hub", kind: "general", reason: "Проверка", comment: "Тестовая строка" }) } });
   Logger.log(r.getContent());

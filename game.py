@@ -78,7 +78,7 @@ IS_WEB = sys.platform == "emscripten"          # браузерная верси
 GAME_VERSION = "0.3"
 # Замечания игроков (флажок ⚑, «Я не согласен») уходят в Google-таблицу через веб-приложение Apps Script
 # (docs/feedback/Code.gs, настройка — docs/FEEDBACK_SETUP.md). Пустой адрес — только локальный feedback.json.
-FEEDBACK_URL = ""
+FEEDBACK_URL = "https://script.google.com/macros/s/AKfycbyJxHpELYNd1CBpUmPLwIuT_hre-Nm-AJVJ9rCYDOrNLKKd26crV2G6omRPzTY6umtr/exec"
 FEEDBACK_KEY = "wnb-feedback-1"
 SAVE_PATH = os.path.join(DATA_DIR, "save.json")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")

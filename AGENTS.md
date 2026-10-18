@@ -293,7 +293,8 @@ python i18n_work/build_lang.py       # перевод полон
   `feedback_payload/feedback_send/feedback_flush_outbox` (фоновая отправка, JPEG 640×360 base64, очередь
   `feedback_outbox.json` без сети; в браузере — fetch no-cors + очередь в localStorage), веб-приложение Apps Script
   `docs/feedback/Code.gs` (ключ, лимит 300/сутки, защита от формул, снимки — в папку Диска). Настройка —
-  `docs/FEEDBACK_SETUP.md`; пока `FEEDBACK_URL = ""` (ждём URL от владельца) — только локальный feedback.json.
+  `docs/FEEDBACK_SETUP.md`; `FEEDBACK_URL` прописан (2026-10-18): таблица «Wheels & Bones — замечания игроков» и проект Apps Script
+  «Wheels & Bones feedback» на аккаунте andrei@openassistivetech.org (лист Feedback, снимки — папка на его Диске).
   Проверка — `python art_tests/feedback_check.py`. `GAME_VERSION = "0.3"`.
 - 2026-10-18 — Claude (Opus 5.5) — реплики спокойнее (замечание тестировщицы «всё сразу»): клиент сам — раз в 22–32 с,
   Барти — раз в 35–50 с, вступление — через 2 с и 10 с; реакции на ход — реже (≈30% клиент, 12% Барти) и с
