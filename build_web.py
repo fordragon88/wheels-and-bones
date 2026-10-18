@@ -39,9 +39,16 @@ def stage():
     with open(os.path.join(APP, "main.py"), "w", encoding="utf-8") as f:
         f.write(MAIN)
     src, dst = os.path.join(ROOT, "assets"), os.path.join(APP, "assets")
-    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("*.ico", "README.txt", "*.mp3", "*.wav",
-                                                       "*_ai.json", "*_ai_lod.json", "turntable"))
-    # 3D-модели (*_ai.json, 12 МБ) не берём: без numpy в браузере их не отрисовать, 3D-осмотр — схемой
+    skip = shutil.ignore_patterns("*.ico", "README.txt", "*.mp3", "*.wav", "*_ai.json", "*_ai_lod.json")
+
+    def ignore(d, names):
+        out = set(skip(d, names))
+        if os.path.basename(d) == "turntable":                # кадры поворота — не в пакет, а рядом на сайт
+            out |= {n for n in names if n.endswith(".png")}
+        return out
+    shutil.copytree(src, dst, ignore=ignore)
+    # 3D-модели (*_ai.json, 12 МБ) не берём: без numpy в браузере их не отрисовать. В окне диагностики
+    # коляску показывают кадры поворота (assets/turntable): игра скачивает их с сайта, когда коляска на экране
     # музыка: браузер надёжно играет .ogg
     os.makedirs(os.path.join(dst, "music"), exist_ok=True)
     for name in os.listdir(os.path.join(src, "music")):
@@ -75,6 +82,11 @@ def build(serve=False):
     if not serve:
         cmd.append("--build")
     cmd.append(APP)
+    tt = os.path.join(APP, "build", "web", "turntable")       # кадры поворота колясок — файлами рядом с игрой
+    os.makedirs(os.path.dirname(tt), exist_ok=True)
+    shutil.rmtree(tt, ignore_errors=True)
+    shutil.copytree(os.path.join(ROOT, "assets", "turntable"), tt,
+                    ignore=lambda d, names: [n for n in names if not n.endswith(".png")])
     subprocess.run(cmd, check=True, cwd=ROOT)
 
 
@@ -88,7 +100,11 @@ def deploy():
     if not os.path.isdir(os.path.join(DEPLOY, ".git")):
         subprocess.run(["git", "clone", "-q", REPO, DEPLOY], check=True)
     for n in os.listdir(web):
-        shutil.copy2(os.path.join(web, n), DEPLOY)
+        if os.path.isdir(os.path.join(web, n)):
+            shutil.rmtree(os.path.join(DEPLOY, n), ignore_errors=True)
+            shutil.copytree(os.path.join(web, n), os.path.join(DEPLOY, n))
+        else:
+            shutil.copy2(os.path.join(web, n), DEPLOY)
     git = ["git", "-C", DEPLOY, "-c", "user.name=fordragon88",
            "-c", "user.email=98241749+fordragon88@users.noreply.github.com"]
     subprocess.run(git + ["add", "-A"], check=True)
@@ -129,6 +145,7 @@ if __name__ == "__main__":
     web = os.path.join(APP, "build", "web")
     if os.path.isdir(web):
         for n in os.listdir(web):
-            print(f"  {n:32s} {os.path.getsize(os.path.join(web, n)) / 1e6:6.1f} МБ")
+            if os.path.isfile(os.path.join(web, n)):
+                print(f"  {n:32s} {os.path.getsize(os.path.join(web, n)) / 1e6:6.1f} МБ")
     if "--deploy" in sys.argv:
         deploy()

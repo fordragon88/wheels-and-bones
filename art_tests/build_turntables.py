@@ -1,8 +1,12 @@
-"""Обороты колясок для браузерной версии (там нет numpy/OpenGL — 3D-модель не отрисовать на лету):
-каждая детальная модель рендерится на GPU с N углов в кадр окна «ОСМОТР 3D» и сохраняется PNG (256 цветов).
+"""Обороты колясок для браузерной версии (там нет numpy/OpenGL — 3D-модель не отрисовать на лету).
+Каждая модель окна диагностики (облегчённая, как на десктопе) рендерится на GPU с N углов
+и сохраняется PNG (200 цветов с прозрачностью). Кружки деталей игра считает сама (project_point —
+чистый Python) по центрам деталей из index.json, поэтому они стоят на модели при любом повороте.
 python art_tests/build_turntables.py [N]   → assets/turntable/<chair>_<i>.png + assets/turntable/index.json
-Кадр i снят при yaw = -0.75 + i * 2π / N (стартовый ракурс игры), pitch = 0.28, zoom как в осмотре."""
-import os, sys, json, math, io
+Кадр i снят при yaw = YAW0 + i * 2π / N, pitch = M3D_PITCH; масштаб — как в окне диагностики (_m3d_zoom)
+при высоте окна коляски REF_H пикселей экрана. В index.json единица смещений — «единица модели после
+перспективы»: игра умножает её на свой масштаб (высота окна × z0 / 1250)."""
+import os, sys, json, math, glob
 os.environ.setdefault("SDL_VIDEODRIVER", "windows")
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 sys.path.insert(0, ROOT)
@@ -10,26 +14,49 @@ import pygame
 pygame.init()
 pygame.display.set_mode((64, 64), pygame.HIDDEN)
 import game
+import numpy as np
 from PIL import Image
 
-N = int(sys.argv[1]) if len(sys.argv) > 1 else 24
+N = int(sys.argv[1]) if len(sys.argv) > 1 else 36
 OUT = os.path.join(ROOT, "assets", "turntable")
 os.makedirs(OUT, exist_ok=True)
-W, H = 860, 524                     # _v3d_view_rect при RS = 1
-YAW0, PITCH = -0.75, 0.28
+for old in glob.glob(os.path.join(OUT, "*.png")):
+    os.remove(old)
+REF_H = 600                         # высота окна коляски в пикселях экрана (≈ 400 логических × RS 1.5)
+PAD = 60                            # поля (M3D_PAD × 1.5): модель может выходить за окно
+YAW0, PITCH = game.Game.M3D_YAW, game.Game.M3D_PITCH
 assert game.gl_ok(), "нужен OpenGL (moderngl) — запускать на компьютере с видеокартой"
 
-kinds = {}
-for j in game.ALL_JOBS:
-    for v in (j.get("variants") or [None]):
-        jj = game.resolve_job(j, j["variants"].index(v)) if v else j
-        kinds[jj.get("chair_art")] = jj.get("kind", "manual")
+
+def fit_zoom(mesh):
+    """То же, что Game._m3d_zoom: модель целиком влезает в окно при любом повороте (от размера окна не зависит)."""
+    V = np.asarray(mesh.verts, dtype=np.float64)[::3] - np.asarray(mesh.pivot)
+    cp, sp = math.cos(PITCH), math.sin(PITCH)
+    h = 300.0
+    w = int(h * 380 / 300)
+    scale, ox, oy = h / 1250.0, w / 2, h * 0.54
+    worst = 1e-6
+    for i in range(16):
+        a = i * math.pi / 8
+        X = V[:, 0] * math.cos(a) + V[:, 2] * math.sin(a)
+        Z = -V[:, 0] * math.sin(a) + V[:, 2] * math.cos(a)
+        Y = V[:, 1] * cp - Z * sp
+        k = 2600.0 / (2600.0 - (V[:, 1] * sp + Z * cp)) * scale
+        sx, sy = X * k, -Y * k
+        worst = max(worst, float(np.abs(sx).max()) / ox, float(-sy.min()) / oy, float(sy.max()) / (h - oy))
+    return 0.97 / worst
+
+
 index, total = {}, 0
-for art, fn in game.AI_MODELS.items():
-    mesh = game.get_ai_chair3d(art)
+for art in game.AI_MODELS:
+    mesh = game.get_ai_chair3d(art, lod=True)
     if mesh is None:
         continue
-    zoom = 0.8 if kinds.get(art) == "power" else 0.9
+    z0 = fit_zoom(mesh)
+    W, H = round(REF_H * 380 / 300) + 2 * PAD, REF_H + 2 * PAD
+    zoom = z0 * REF_H / H                                   # как _m3d_frame: масштаб = REF_H × z0 / 1250
+    s_ref = REF_H * z0 / 1250.0                             # пикселей на единицу
+    ax, ay = W / 2, H * 0.54                                # куда проецируется центр (pivot)
     name = os.path.splitext(art)[0]
     frames = []
     for i in range(N):
@@ -42,9 +69,11 @@ for art, fn in game.AI_MODELS.items():
         path = os.path.join(OUT, f"{name}_{i:02d}.png")
         q.save(path, "PNG", optimize=True)
         total += os.path.getsize(path)
-        frames.append([bb.x, bb.y])
-    index[art] = dict(n=N, size=[W, H], zoom=zoom, yaw0=YAW0, pitch=PITCH, offsets=frames)
+        frames.append([round((bb.x - ax) / s_ref, 2), round((bb.y - ay) / s_ref, 2)])
+    index[art] = dict(n=N, yaw0=YAW0, pitch=PITCH, z0=round(z0, 5), ref=round(s_ref, 5), offsets=frames,
+                      pivot=[round(float(c), 2) for c in mesh.pivot],
+                      centers={p: [[round(float(v), 1) for v in c] for c in cs] for p, cs in mesh.centers.items()})
     print(f"{name}: {N} кадров")
 with open(os.path.join(OUT, "index.json"), "w", encoding="utf-8") as f:
-    json.dump(index, f)
+    json.dump(index, f, separators=(",", ":"))
 print(f"всего {len(index)} колясок, {total / 1e6:.1f} МБ")

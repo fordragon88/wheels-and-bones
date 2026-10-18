@@ -57,6 +57,7 @@ import os
 import sys
 import random
 import re
+import tempfile
 import threading
 from contextlib import contextmanager
 import pygame
@@ -309,7 +310,7 @@ class LFont:
     """Шрифт: рендер нужного размера в пикселях экрана, метрики — в логических."""
 
     def __init__(self, size, bold=False):
-        px = max(1, round(size * RS))
+        px = max(1, round(size * RS * TEXT_K[min(len(TEXT_K) - 1, max(0, A11Y.get("text", 0)))]))
         path = os.path.join(ASSETS_DIR, "fonts", "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf")
         try:                                     # свой шрифт: значки ⚑ ✔ ◉ ★ ⟲ есть на любом компьютере
             self.f = pygame.font.Font(path, px)
@@ -403,10 +404,18 @@ def aa_circle(surf, color, center, radius, width=0, **kw):
     k = _rs(surf)
     x, y, r = int(round(center[0] * k)), int(round(center[1] * k)), int(round(radius * k))
     wd = _w(width, k)
-    if r <= 0 or kw or _gfx is None:
+    if r <= 0 or kw:
         return DR.circle(surf, color, center, radius, width, **kw)
     col = tuple(int(c) for c in color)
-    if wd <= 0 or wd >= r:
+    if _gfx is None and r > 1:                 # нет gfxdraw — всё сглаживаем супер-сэмплингом
+        col4 = col if len(col) == 4 else (*col, 255)
+        wd = 0 if wd >= r else wd
+        img = _aa_cached(("ring", r, col4, wd), (2 * r + 2, 2 * r + 2),
+                         lambda b, s: pygame.draw.circle(b, col4, ((r + 1) * s, (r + 1) * s), r * s, wd * s))
+        pygame.Surface.blit(surf, img, (x - r - 1, y - r - 1))
+    elif _gfx is None:
+        return DR.circle(surf, color, center, radius, width)
+    elif wd <= 0 or wd >= r:
         _gfx.filled_circle(surf, x, y, r, col)
         _gfx.aacircle(surf, x, y, r, col)
     elif wd <= 1:
@@ -542,7 +551,9 @@ def font(size, bold=False):
 
 
 # ---- Доступность: что нарисовано в кадре — для управления с клавиатуры и чтения вслух ----
-A11Y = dict(on=False, voices=True, rate=0, contrast=False, instant=False, speech_set=False)
+A11Y = dict(on=False, voices=True, rate=0, contrast=False, instant=False, speech_set=False,
+            text=1 if IS_WEB else 0)        # text — размер текста (TEXT_K); в браузере окно мельче — крупнее сразу
+TEXT_K = (1.0, 1.12, 1.25)
 CAPTURE = dict(frame=None, texts=[], buttons=[], modal=None, mute=0)
 
 
@@ -1241,9 +1252,11 @@ def feedback_payload(entry, shot=None):
     if shot is not None:
         try:
             small = pygame.transform.smoothscale(shot, (640, 360))
-            buf = io.BytesIO()
-            pygame.image.save(small, buf, "shot.jpg")
-            d["screenshot_jpg_b64"] = base64.b64encode(buf.getvalue()).decode("ascii")
+            tmp = os.path.join(tempfile.gettempdir(), f"wnb_shot_{threading.get_ident()}.jpg")
+            pygame.image.save(small, tmp)                 # через файл: в браузере pygame не пишет в память
+            with open(tmp, "rb") as f:
+                d["screenshot_jpg_b64"] = base64.b64encode(f.read()).decode("ascii")
+            os.remove(tmp)
         except Exception:
             pass
     return d
@@ -2832,6 +2845,108 @@ try:                                   # numpy ускоряет 3D в 5–10 р�
     import numpy as _np
 except Exception:
     _np = None
+
+
+TT_DIR = "turntable"                 # assets/turntable: кадры поворота колясок (art_tests/build_turntables.py)
+TT_FORCE = os.environ.get("WNB_TT") == "1"     # проверка на компьютере: кадры вместо живой модели
+_TT_CACHE = {}
+
+
+class Turntable:
+    """Коляска «вращается» по заранее снятым кадрам (браузер: нет numpy/OpenGL). Кружки деталей
+    считаются как у живой модели — project_point по centers/pivot. В браузере кадры не лежат в
+    пакете игры, а подгружаются с сайта, когда коляска впервые на экране (иначе загрузка игры ×2)."""
+
+    def __init__(self, art, d):
+        self.art, self.name = art, os.path.splitext(art)[0]
+        self.n, self.yaw0, self.pitch = d["n"], d["yaw0"], d["pitch"]
+        self.z0, self.ref, self.offsets = d["z0"], d["ref"], d["offsets"]
+        self.pivot = tuple(d["pivot"])
+        self.centers = {p: [tuple(c) for c in cs] for p, cs in d["centers"].items()}
+        self.frames, self.scaled, self.asked, self.failed = {}, {}, False, False
+
+    def index(self, yaw):
+        return int(round((yaw - self.yaw0) / (2 * math.pi / self.n))) % self.n
+
+    def file(self, i):
+        return f"{TT_DIR}/{self.name}_{i:02d}.png"
+
+    def _decode(self, i, data=None):
+        try:
+            src = os.path.join(ASSETS_DIR, self.file(i))
+            if data is not None:                              # браузер: pygame не читает картинку из памяти — через файл
+                src = os.path.join(tempfile.gettempdir(), "wnb_tt.png")
+                with open(src, "wb") as f:
+                    f.write(data)
+            self.frames[i] = pygame.image.load(src).convert_alpha()
+        except Exception as e:                                # кадр не прочитался — останется рисунок коляски
+            print(f"[wnb] turntable {self.name} {i}: {e!r}", flush=True)
+            self.failed = True
+
+    def update(self):
+        """Запросить кадры (раз) и забрать пришедшие. True — все кадры на месте."""
+        if len(self.frames) == self.n or self.failed:
+            return not self.failed
+        if not IS_WEB:                                        # компьютер: кадры лежат в assets
+            for i in range(self.n):
+                if i not in self.frames:
+                    self._decode(i)
+            return not self.failed
+        if not self.asked:
+            self.asked = True
+            web_js("(function(L){var T=window.wnbTT=window.wnbTT||{};L.forEach(function(u){if(u in T)return;"
+                   "T[u]=null;fetch(u).then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then(function(b){"
+                   "var a=new Uint8Array(b),s='';for(var i=0;i<a.length;i+=8192)s+=String.fromCharCode.apply(null,"
+                   "a.subarray(i,i+8192));T[u]=btoa(s);}).catch(function(){T[u]='!';});});})("
+                   + json.dumps([self.file(i) for i in range(self.n)]) + ")")
+        now = pygame.time.get_ticks()
+        if now - getattr(self, "_poll", -1000) < 40:          # забираем пришедшее не чаще раза за кадр
+            return False
+        self._poll = now
+        got = web_js("(function(L){var T=window.wnbTT||{},o={},k=0;for(var j=0;j<L.length&&k<6;j++){var v=T[L[j]];"
+                     "if(v){o[L[j]]=v;delete T[L[j]];k++;}}return JSON.stringify(o);})("
+                     + json.dumps([self.file(i) for i in range(self.n) if i not in self.frames]) + ")")
+        try:
+            got = json.loads(str(got)) if got else {}
+        except Exception:
+            got = {}
+        import base64
+        for u, v in got.items():
+            i = int(u[-6:-4])
+            if v == "!":
+                self.failed = True                            # нет кадров на сервере — останется рисунок
+            else:
+                self._decode(i, base64.b64decode(v))
+        return len(self.frames) == self.n and not self.failed
+
+    def image(self, i, f):
+        """Кадр i в пикселях экрана, увеличенный в f раз (кэш на один масштаб)."""
+        img = self.frames.get(i)
+        if img is None:
+            return None
+        if abs(f - 1) < 0.02:
+            return img
+        if self.scaled.get("f") != round(f, 3):
+            self.scaled = {"f": round(f, 3)}
+        out = self.scaled.get(i)
+        if out is None:
+            w, h = img.get_size()
+            out = self.scaled[i] = pygame.transform.smoothscale(img, (max(1, round(w * f)), max(1, round(h * f))))
+        return out
+
+
+def get_turntable(art):
+    """Обороты коляски (assets/turntable/index.json) или None."""
+    if "index" not in _TT_CACHE:
+        try:
+            with open(os.path.join(ASSETS_DIR, TT_DIR, "index.json"), encoding="utf-8") as f:
+                _TT_CACHE["index"] = json.load(f)
+        except Exception:
+            _TT_CACHE["index"] = {}
+    if art not in _TT_CACHE:
+        d = _TT_CACHE["index"].get(art)
+        _TT_CACHE[art] = Turntable(art, d) if d else None
+    return _TT_CACHE[art]
 
 
 def _np_pack(mesh):
@@ -5507,6 +5622,11 @@ class Speech:
 SPEECH = Speech()
 
 
+def _min_btn_sz():
+    """Мельче этого подпись кнопки не сжимается; при крупном тексте (TEXT_K) — в тех же экранных пикселях."""
+    return max(8, round(11 / TEXT_K[min(len(TEXT_K) - 1, max(0, A11Y.get("text", 0)))]))
+
+
 class Button:
     def __init__(self, rect, label, color=AMBER, sub=""):
         self.rect = pygame.Rect(rect)
@@ -5546,13 +5666,13 @@ class Button:
         cx = r.centerx
         if self.sub:
             sz = 16
-            while sz > 11 and font(sz, True).size(tr(self.label))[0] > r.w - 14:
+            while sz > _min_btn_sz() and font(sz, True).size(tr(self.label))[0] > r.w - 14:
                 sz -= 1
             draw_text(surf, self.label, (cx, r.y + 8), sz, WHITE if enabled else GREY, bold=True, center=True)
             draw_text(surf, self.sub, (cx, r.y + 30), 12, GREY, center=True)
         else:
             sz = 17                                   # длинная подпись (часто в переводе) — мельче, но в кнопке
-            while sz > 11 and font(sz, True).size(tr(self.label))[0] > r.w - 14:
+            while sz > _min_btn_sz() and font(sz, True).size(tr(self.label))[0] > r.w - 14:
                 sz -= 1
             draw_text(surf, self.label, r.center, sz, col if enabled else GREY, bold=True, center=True)
         return r
@@ -8240,11 +8360,11 @@ class Game:
         draw_wrapped(surf, "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и "
                            "доступность останутся.", (p.x + 32, p.y + 356), p.w - 64, 13, GREY)
 
-    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant")
+    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "text")
 
     def _access_rects(self):
         p = self._sound_panel_rect()
-        return [(k, pygame.Rect(p.x + 330, p.y + 118 + i * 46, 216, 38)) for i, k in enumerate(self.ACCESS_ROWS)]
+        return [(k, pygame.Rect(p.x + 330, p.y + 112 + i * 42, 216, 36)) for i, k in enumerate(self.ACCESS_ROWS)]
 
     def _access_label(self, k):
         on = tr("включено") if A11Y.get(k) else tr("выключено")
@@ -8256,7 +8376,13 @@ class Game:
             return f"{tr('Скорость голоса Windows')}: {A11Y['rate']}. " + tr("Enter — быстрее, после 10 — снова медленно")
         if k == "contrast":
             return f"{tr('Тёмный контрастный фон')}: {on}"
+        if k == "text":
+            return f"{tr('Размер текста')}: {self._text_pct()}%"
         return f"{tr('Текст сразу, без печати по буквам')}: {on}"
+
+    @staticmethod
+    def _text_pct():
+        return round(100 * TEXT_K[min(len(TEXT_K) - 1, max(0, A11Y.get("text", 0)))])
 
     def _access_toggle(self, k):
         if k == "on":
@@ -8265,6 +8391,11 @@ class Game:
             A11Y["rate"] = min(10, A11Y["rate"] + 2) if A11Y["rate"] < 10 else -4
             SPEECH.set_voice()
             self.say(f"{tr('Скорость')}: {A11Y['rate']}", True)
+        elif k == "text":
+            A11Y["text"] = (A11Y.get("text", 0) + 1) % len(TEXT_K)
+            DISPLAY["frame"] = None                   # шрифты и подписи — заново в новом размере
+            _update_rs()
+            self.say(self._access_label(k), True)
         else:
             A11Y[k] = not A11Y[k]
             self.say(self._access_label(k), True)
@@ -8407,18 +8538,21 @@ class Game:
 
     def _draw_access_tab(self, surf, p, mouse):
         names = {"on": "Озвучка (F2)", "voices": "Реплики героев вслух", "rate": "Скорость голоса",
-                 "contrast": "Контрастный фон", "instant": "Текст сразу"}
+                 "contrast": "Контрастный фон", "instant": "Текст сразу", "text": "Размер текста"}
         for k, r in self._access_rects():
-            draw_text(surf, names[k], (p.x + 32, r.y + 9), 17, WHITE)
+            draw_text(surf, names[k], (p.x + 32, r.y + 8), 17, WHITE)
             if k == "rate":
                 label = str(A11Y["rate"])
+            elif k == "text":
+                label = f"{self._text_pct()}%"
             else:
                 label = "ВКЛ" if A11Y[k] else "ВЫКЛ"
-            Button(r, label, GOOD if (k == "rate" or A11Y[k]) else GREY).draw(surf, mouse, active=bool(A11Y.get(k)))
-        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, p.y + 350), 13, GREY)
+            Button(r, label, GOOD if (k in ("rate", "text") or A11Y[k]) else GREY).draw(
+                surf, mouse, active=bool(A11Y.get(k)))
+        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, p.y + 368), 13, GREY)
         draw_wrapped(surf, "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
                            "С экранным чтецом (NVDA, JAWS) игра говорит его голосом.",
-                     (p.x + 32, p.y + 370), p.w - 64, 13, GREY)
+                     (p.x + 32, p.y + 388), p.w - 64, 13, GREY)
 
     def _draw_sound_panel(self, surf):
         _cap_modal()
@@ -9759,9 +9893,11 @@ class Game:
 
     def _m3d_mesh(self):
         """Облегчённая ИИ-модель для окна диагностики или None (тогда — картинка с хотспотами)."""
-        if (self.phase != "diagnose" or self.cur.get("track") == "tech" or _np is None
-                or self.ride_t0 is not None):
+        if self.phase != "diagnose" or self.cur.get("track") == "tech" or self.ride_t0 is not None:
             return None
+        if _np is None or TT_FORCE:                       # браузер: кадры поворота, пока не пришли — рисунок
+            tt = get_turntable(self.cur.get("chair_art"))
+            return tt if tt is not None and tt.update() else None
         return get_ai_chair3d(self.cur.get("chair_art"), lod=True)
 
     def _m3d_state(self):
@@ -9784,6 +9920,8 @@ class Game:
     def _m3d_zoom(self):
         """Зум, при котором модель целиком влезает в окно при любом повороте (раз на модель и размер окна)."""
         mesh = self._m3d_mesh()
+        if isinstance(mesh, Turntable):
+            return mesh.z0
         rect = self._chair_rect()
         key = ("m3d_fit", id(mesh), rect.size)
         z = _img_cache.get(key)
@@ -9859,7 +9997,7 @@ class Game:
         """Деталь под курсором на встроенной модели."""
         mesh = self._m3d_mesh()
         rect = self._chair_rect()
-        if mesh is None or not rect.collidepoint(pos):
+        if mesh is None or isinstance(mesh, Turntable) or not rect.collidepoint(pos):
             return None
         yaw, pitch, _ = self._m3d_view()
         fr, zoom = self._m3d_frame()
@@ -9896,7 +10034,8 @@ class Game:
                 return False
             dx, dy = event.pos[0] - s["last"][0], event.pos[1] - s["last"][1]
             s["yaw"] += dx * 0.012
-            s["pitch"] = max(-0.1, min(0.8, s["pitch"] + dy * 0.008))
+            if not isinstance(self._m3d_mesh(), Turntable):          # у кадров поворота наклон один
+                s["pitch"] = max(-0.1, min(0.8, s["pitch"] + dy * 0.008))
             s["last"] = event.pos
             if abs(s["yaw"] - s.setdefault("tick_yaw", s["yaw"])) > 0.35:
                 s["tick_yaw"] = s["yaw"]
@@ -9917,6 +10056,9 @@ class Game:
         s = self._m3d_state()
         yaw, pitch, spinning = self._m3d_view()
         fr, zoom = self._m3d_frame()
+        if isinstance(mesh, Turntable):
+            self._draw_turntable(surf, mesh, rect, mouse, yaw, fr, zoom)
+            return
         if gl_ok():                                           # GPU: подсветка детали под кружком — прямо в шейдере
             hover = None if s["drag"] else self._hotspot_at(mouse)
             key = ("gl", round(yaw, 4), round(pitch, 4), round(zoom, 4), tuple(fr), id(mesh), hover)
@@ -9974,6 +10116,30 @@ class Game:
                 s["hl_key"] = (key, hover)
             surf.blit(s["hl"], fr)
         elif not s["drag"] and rect.collidepoint(mouse):
+            draw_text(surf, "⟲ тяни — повернуть", (rect.x + 4, rect.bottom - 18), 12, (200, 196, 180))
+
+    def _draw_turntable(self, surf, tt, rect, mouse, yaw, fr, zoom):
+        """Коляска из заранее снятых кадров: ближайший к ракурсу кадр, масштаб и тень — как у живой модели."""
+        s = self._m3d_state()
+        i = tt.index(yaw)
+        scale = fr.h / 1250.0 * zoom                              # логических пикселей на единицу модели
+        ax, ay = fr.x + fr.w / 2, fr.y + fr.h * 0.54
+        key = ("tt", i, tuple(fr), round(zoom, 4))
+        if s.get("sh_key") != key:                                # мягкая тень на полу (раз на кадр)
+            loc = pygame.Rect(0, 0, fr.w, fr.h)
+            yw = tt.yaw0 + i * 2 * math.pi / tt.n
+            px = tt.pivot[0]
+            foot = [project_point((px + fx, 0, fz), yw, tt.pitch, loc, zoom, tt.pivot)[0]
+                    for fx, fz in ((-470, -310), (470, -310), (470, 310), (-470, 310))]
+            sh = Surf((max(1, fr.w // 10), max(1, fr.h // 10)), pygame.SRCALPHA)
+            DR.polygon(sh, (0, 0, 0, 110), [(x / 10, y / 10) for x, y in foot])
+            s["sh"], s["sh_key"] = TF.smoothscale(sh, fr.size), key
+        surf.blit(s["sh"], fr)
+        img = tt.image(i, scale * RS / tt.ref)
+        if img is not None:
+            ox, oy = tt.offsets[i]
+            pygame.Surface.blit(surf, img, (round((ax + ox * scale) * RS), round((ay + oy * scale) * RS)))
+        if not s["drag"] and rect.collidepoint(mouse) and self._hotspot_at(mouse) is None:
             draw_text(surf, "⟲ тяни — повернуть", (rect.x + 4, rect.bottom - 18), 12, (200, 196, 180))
 
     # ---------- 3D-осмотр: оверлей ----------
@@ -10377,8 +10543,8 @@ class Game:
                 ring = Surf((rr * 2 + 4, rr * 2 + 4), pygame.SRCALPHA)
                 aa_circle(ring, (*AMBER, int(150 * (1 - ph))), (rr + 2, rr + 2), rr, 2)
                 surf.blit(ring, (x - rr - 2, y - rr - 2))
-            aa_circle(surf, (14, 12, 20), (x, y), r + 1, 3)          # тёмная подложка: кольцо видно и на белом арте
-            aa_circle(surf, GOOD if done else AMBER, (x, y), r, 1)
+            aa_circle(surf, (14, 12, 20), (x, y), r + 2, 5)          # тёмная подложка: кольцо видно и на белом арте
+            aa_circle(surf, GOOD if done else AMBER, (x, y), r, 2)
             if (mouse[0] - x) ** 2 + (mouse[1] - y) ** 2 <= r * r:
                 hover = (pid, x, y, r)
         if hover:
@@ -11078,10 +11244,10 @@ class Game:
                   (dip.centerx, dip.y + 52), 17, WHITE, center=True)
         draw_text(surf, "принято под надзором Мастерицы Бренны (посмертно)",
                   (dip.centerx, dip.y + 84), 13, GREY, center=True)
-        draw_wrapped(surf, "Бренна: «Сдано. И вот ещё что, Бартоломью... я помню тебя. "
-                           "Ты задавал хорошие вопросы.»", (WIDTH // 2 - 380, 506), 760, 17, GHOST)
+        yb = draw_wrapped(surf, "Бренна: «Сдано. И вот ещё что, Бартоломью... я помню тебя. "
+                                "Ты задавал хорошие вопросы.»", (WIDTH // 2, 500), 760, 17, GHOST, center=True)
         draw_text(surf, "Барти: «...Мартин. МАРТИН. Она меня ПОМНИТ!»",
-                  (WIDTH // 2, 562), 16, PURPLE, center=True)
+                  (WIDTH // 2, max(556, yb + 14)), 16, PURPLE, center=True)
         Button(self._result_btn_rect(), "В ГИЛЬДИЮ", AMBER).draw(surf, mouse_pos())
 
     # ----- Гильдия Колёсников (хаб про-трека) -----
