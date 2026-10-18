@@ -75,6 +75,11 @@ else:
     ASSETS_DIR = os.path.join(BASE_DIR, "assets")
     DATA_DIR = BASE_DIR
 IS_WEB = sys.platform == "emscripten"          # браузерная версия (pygbag, WebAssembly)
+GAME_VERSION = "0.3"
+# Замечания игроков (флажок ⚑, «Я не согласен») уходят в Google-таблицу через веб-приложение Apps Script
+# (docs/feedback/Code.gs, настройка — docs/FEEDBACK_SETUP.md). Пустой адрес — только локальный feedback.json.
+FEEDBACK_URL = ""
+FEEDBACK_KEY = "wnb-feedback-1"
 SAVE_PATH = os.path.join(DATA_DIR, "save.json")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 FEEDBACK_PATH = os.path.join(DATA_DIR, "feedback.json")   # «Я не согласен»: замечания игроков к заданиям   # громкость и язык (не сбрасываются --reset)
@@ -1102,6 +1107,16 @@ def web_setup_page():
               if (S && S.audioContext && S.audioContext.state !== 'running') S.audioContext.resume(); } catch (e) {}
       }
       ['pointerdown','keydown','touchstart'].forEach(function(t){ window.addEventListener(t, unlockAudio, true); });
+      window.wnbSend = function(url, body){                 // замечание в Google-таблицу; без сети — в очередь
+        function keep(){ try { var q = JSON.parse(localStorage.getItem('wnb:outbox') || '[]'); q.push(body);
+          localStorage.setItem('wnb:outbox', JSON.stringify(q.slice(-20))); } catch (e) {} }
+        try { fetch(url, {method: 'POST', mode: 'no-cors', headers: {'Content-Type': 'text/plain'}, body: body})
+                .catch(keep); } catch (e) { keep(); }
+      };
+      window.wnbFlush = function(url){
+        try { var q = JSON.parse(localStorage.getItem('wnb:outbox') || '[]'); localStorage.removeItem('wnb:outbox');
+              q.forEach(function(b){ wnbSend(url, b); }); } catch (e) {}
+      };
       window.addEventListener('keydown', function(e){
         if (['Tab',' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','F1','F2'].indexOf(e.key) >= 0) e.preventDefault();
       });
@@ -1116,6 +1131,102 @@ def web_setup_page():
         }
       };
     })()""")
+
+
+def feedback_payload(entry, shot=None):
+    """Замечание для отправки: поля из feedback.json + версия, платформа и уменьшенный снимок (JPEG, base64)."""
+    import base64, io
+    d = {k: entry.get(k, "") for k in ("time", "lang", "scene", "job", "title", "phase", "step", "kind",
+                                       "reason", "expected", "got", "game_message", "comment")}
+    d.update(key=FEEDBACK_KEY, version=GAME_VERSION,
+             platform="web" if IS_WEB else ("exe" if getattr(sys, "frozen", False) else "source"))
+    if shot is not None:
+        try:
+            small = pygame.transform.smoothscale(shot, (640, 360))
+            buf = io.BytesIO()
+            pygame.image.save(small, buf, "shot.jpg")
+            d["screenshot_jpg_b64"] = base64.b64encode(buf.getvalue()).decode("ascii")
+        except Exception:
+            pass
+    return d
+
+
+_OUTBOX_LOCK = None
+
+
+def _outbox_path():
+    return os.path.join(DATA_DIR, "feedback_outbox.json")
+
+
+def _outbox(change):
+    """Очередь неотправленных замечаний (нет сети) — отправятся при следующем запуске."""
+    global _OUTBOX_LOCK
+    import threading
+    if _OUTBOX_LOCK is None:
+        _OUTBOX_LOCK = threading.Lock()
+    with _OUTBOX_LOCK:
+        try:
+            with open(_outbox_path(), encoding="utf-8") as f:
+                q = json.load(f)
+            if not isinstance(q, list):
+                q = []
+        except Exception:
+            q = []
+        old = list(q)
+        q = change(q)
+        try:
+            if q:
+                with open(_outbox_path(), "w", encoding="utf-8") as f:
+                    json.dump(q[-30:], f, ensure_ascii=False)
+            elif os.path.exists(_outbox_path()):
+                os.remove(_outbox_path())
+        except Exception:
+            pass
+        return old                                     # что было в очереди ДО изменения
+
+
+def _post_feedback(payload):
+    import urllib.request
+    req = urllib.request.Request(FEEDBACK_URL, data=json.dumps(payload).encode("utf-8"),
+                                 headers={"Content-Type": "text/plain;charset=utf-8"}, method="POST")
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return 200 <= r.status < 400
+
+
+def feedback_send(payload):
+    """Отправить замечание в фоне (не тормозит игру). Без сети — в очередь, уйдёт при следующем запуске."""
+    if not FEEDBACK_URL:
+        return False
+    if IS_WEB:
+        web_js(f"window.wnbSend && wnbSend({json.dumps(FEEDBACK_URL)}, {json.dumps(json.dumps(payload))})")
+        return True
+    import threading
+
+    def run():
+        try:
+            ok = _post_feedback(payload)
+        except Exception:
+            ok = False
+        if not ok:
+            _outbox(lambda q: q + [payload])
+    threading.Thread(target=run, daemon=True).start()
+    return True
+
+
+def feedback_flush_outbox():
+    """Дослать замечания, не ушедшие в прошлый раз (вызывается в фоне при запуске)."""
+    if not FEEDBACK_URL or IS_WEB:
+        return
+    pending = _outbox(lambda q: [])
+    failed = []
+    for item in pending:
+        try:
+            if not _post_feedback(item):
+                failed.append(item)
+        except Exception:
+            failed.append(item)
+    if failed:
+        _outbox(lambda q: failed + q)
 
 
 def dpi_aware():
@@ -6152,6 +6263,9 @@ class Game:
                 entry["screenshot"] = os.path.join("feedback_shots", name)
             except Exception:
                 pass
+        sent_online = False
+        if not self.headless:
+            sent_online = feedback_send(feedback_payload(entry, d.get("shot")))
         if self.headless:
             self.feedback_mem.append(entry)
         else:
@@ -6177,7 +6291,8 @@ class Game:
             refunded = True
         self.close_dispute()
         snd("ok")
-        self.flash("Спасибо! Замечание сохранено — его проверят и поправят игру."
+        self.flash(("Спасибо! Замечание отправлено разработчикам." if sent_online else
+                    "Спасибо! Замечание сохранено — его проверят и поправят игру.")
                    + (" Эта ошибка не засчитана." if refunded else ""), GOOD, 5)
 
     def handle_dispute_event(self, event):
@@ -11664,6 +11779,11 @@ async def main():
     if IS_WEB:
         web_restore()
         web_setup_page()
+        if FEEDBACK_URL:
+            web_js(f"window.wnbFlush && wnbFlush({json.dumps(FEEDBACK_URL)})")
+    elif FEEDBACK_URL and "--selftest" not in sys.argv:
+        import threading
+        threading.Thread(target=feedback_flush_outbox, daemon=True).start()
     if "--assets" in sys.argv:
         print_assets()
         return

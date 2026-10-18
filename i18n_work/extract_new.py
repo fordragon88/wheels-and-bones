@@ -14,7 +14,7 @@ out, seen = [], set()
 
 
 def add(ru, node, fmt):
-    if ru.lstrip().startswith("#version") or ru.startswith(("[А-", "(?")):   # шейдеры и регулярки — не текст игры
+    if ru.lstrip().startswith(("#version", "(function(")) or ru.startswith(("[А-", "(?")):   # шейдеры, JS, регулярки — не текст игры
         return
     if ru in ("{0} из {1}", "на"):              # язык выбирается в коде (_of, speech_clean) — не в словаре
         return
