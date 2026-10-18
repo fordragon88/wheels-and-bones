@@ -6426,13 +6426,16 @@ class Game:
         self.ghost_quip = ""
         self.client_line = ""
         self.client_queue = list(self._talk().get("intro", []))
-        self.client_next = self.t + 1.2           # клиент заговорит, когда сцена появится
+        self.client_next = self.t + 2.0           # клиент заговорит, когда сцена появится и осмотришься
+        self._talk_later = None
+        self._last_talk_t = -99.0
         self._quip_next = self.t + random.uniform(*self.QUIP_IDLE)
         self.scene = "job"
 
     # ---------- живые реплики: клиент волнуется, Барти шутит ----------
-    CLIENT_IDLE = (15.0, 22.0)            # пауза между репликами клиента, с
-    QUIP_IDLE = (24.0, 34.0)              # пауза между шутками Барти на диагностике
+    CLIENT_IDLE = (22.0, 32.0)            # пауза между репликами клиента, с
+    QUIP_IDLE = (35.0, 50.0)              # пауза между шутками Барти на диагностике
+    TALK_GAP = 5.0                        # между любыми двумя репликами персонажей — не меньше, с (не говорят хором)
 
     def _talk(self):
         return CLIENT_TALK.get(self.cur["id"], {}) if self.cur else {}
@@ -6454,6 +6457,7 @@ class Game:
         if not line:
             return
         self.client_next = self.t + random.uniform(*self.CLIENT_IDLE)
+        self._last_talk_t = self.t
         mentor = line.startswith(("Барти", "Бартоломью", "Бренна"))
         if self.cur.get("track") == "tech" or mentor:   # наставник (и клиент в Гильдии) — в пузыре наставника
             self.ghost_quip, self.ghost_quip_until = line, self.t + 7.0
@@ -6475,24 +6479,26 @@ class Game:
         line = self._pick_line(("b", kind), BARTY_TALK.get(kind, []))
         if line:
             self.ghost_quip, self.ghost_quip_until = line, self.t + secs
+            self._last_talk_t = self.t
 
     def react_mistake(self):
         if not self.cur or self.exam_mode:
             return
         self.client_queue = []
+        # реакция — не сразу: сначала игрок читает, что не так (сообщение сверху)
         if self.phase == "diagnose" and random.random() < 0.4:
-            self.barty_quip("mistake")
-        else:
-            self.client_say("mistake", 0.75)
+            self._talk_later = (self.t + 1.2, "barty", "mistake")
+        elif random.random() < 0.75:
+            self._talk_later = (self.t + 1.2, "client", "mistake")
 
     def react_good(self):
         if not self.cur or self.exam_mode:
             return
-        r = random.random()
-        if r < 0.45:
-            self.client_say("good")
-        elif r < 0.65:
-            self.barty_quip("good", secs=4.5)
+        r = random.random()                       # реже и с паузой: сверху и так «Шаг выполнен» и новая подсказка
+        if r < 0.3:
+            self._talk_later = (self.t + 1.8, "client", "good")
+        elif r < 0.42:
+            self._talk_later = (self.t + 1.8, "barty", "good")
 
     def talk_tick(self):
         """Клиент сам что-то говорит, пока ты работаешь: волнуется, болтает, делится советом."""
@@ -6501,15 +6507,24 @@ class Game:
         if self.phase not in ("diagnose", "repair") or self.mini_pending or self.v3d is not None \
                 or self.dispute_ui is not None or getattr(self, "show_manual", False):
             return
-        if self.t >= self.client_next:
+        later = getattr(self, "_talk_later", None)
+        if later and self.t >= later[0]:          # отложенная реакция на ход игрока
+            self._talk_later = None
+            if later[1] == "barty":
+                self.barty_quip(later[2], secs=5.0)
+            else:
+                self.client_say(later[2])
+            return
+        quiet = self.t - getattr(self, "_last_talk_t", -99.0) < self.TALK_GAP or self.toast_timer > 0
+        if self.t >= self.client_next and not quiet:
             if self.client_queue and not self.exam_mode:   # на экзамене болтовни нет (и вступительных реплик тоже)
                 self._show_client(self.client_queue.pop(0))
-                self.client_next = self.t + 7.5
+                self.client_next = self.t + 10.0
             elif not self.exam_mode:
                 self._talk_n += 1
                 self.client_say("learn" if self._talk_n % 2 == 0 else "worry")
         if self.phase == "diagnose" and not self.exam_mode and self.t >= getattr(self, "_quip_next", 0) \
-                and not self.client_queue:
+                and not self.client_queue and not quiet:
             if getattr(self, "_quip_next", 0) > 0:
                 self.barty_quip("leg" if random.random() < 0.3 else "idle", secs=8.0)
             self._quip_next = self.t + random.uniform(*self.QUIP_IDLE)
@@ -11431,6 +11446,8 @@ def run_selftest():
     wrong = next(i for i, o in enumerate(gt.cur["diagnosis"]) if not o["correct"])
     random.seed(3)
     gt.choose_diagnosis(wrong)
+    for _ in range(4):
+        gt.update(0.5)
     if not (gt.client_line in CLIENT_TALK["caster"]["mistake"] or gt.ghost_quip in BARTY_TALK["mistake"]):
         failures.append("на ошибку не отреагировали ни клиент, ни Барти")
     gt.draw(pygame.display.get_surface())
