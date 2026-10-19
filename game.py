@@ -5668,8 +5668,14 @@ class Button:
             sz = 16
             while sz > _min_btn_sz() and font(sz, True).size(tr(self.label))[0] > r.w - 14:
                 sz -= 1
-            draw_text(surf, self.label, (cx, r.y + 8), sz, WHITE if enabled else GREY, bold=True, center=True)
-            draw_text(surf, self.sub, (cx, r.y + 30), 12, GREY, center=True)
+            ss = 12                                   # подпись и строка под ней — блоком по центру кнопки
+            while ss > 9 and font(ss).size(tr(self.sub))[0] > r.w - 14:
+                ss -= 1
+            hl, hs = font(sz, True).get_height(), font(ss).get_height()
+            top = r.centery - (hl + 2 + hs) / 2
+            draw_text(surf, self.label, (cx, round(top + hl / 2)), sz, WHITE if enabled else GREY, bold=True,
+                      center=True)
+            draw_text(surf, self.sub, (cx, round(top + hl + 2 + hs / 2)), ss, GREY, center=True)
         else:
             sz = 17                                   # длинная подпись (часто в переводе) — мельче, но в кнопке
             while sz > _min_btn_sz() and font(sz, True).size(tr(self.label))[0] > r.w - 14:
@@ -8834,7 +8840,8 @@ class Game:
         w = 320
         lines = wrap_lines(tr(text), w - 28, 14)[:5]
         h = 38 + len(lines) * (font(14).get_height() + 2) + 10
-        x = min(max(12, r.centerx - w // 2), WIDTH - w - 12)
+        right = 60 + self.HUB_COLS * 214 - 14 if self.scene == "hub" else WIDTH - 12   # не заезжать на кнопки справа
+        x = min(max(12, r.centerx - w // 2), right - w)
         y = r.bottom + 6 if r.bottom + 6 + h < HEIGHT - 50 else r.y - h - 6
         k = ease_back((self.t - self._note_t(job["id"])) / 0.25)
         box = Surf((w, h), pygame.SRCALPHA)
@@ -8898,8 +8905,6 @@ class Game:
                 draw_text(surf, "✔ готово", (r.right - 12, r.bottom - 22), 13, GOOD, right=True)
             if hov:
                 note = (job, r, done)
-        if note:
-            self._draw_hub_note(surf, *note)
         pages = self._hub_pages()
         if pages > 1:
             page = min(getattr(self, "hub_page", 0), pages - 1)
@@ -8929,6 +8934,8 @@ class Game:
             counter += f"   ·   Гильдия: {self.tech_done_count()}/{len(TECH_JOBS)}"
         counter += "   ·   Esc — на титул/выход"
         draw_text(surf, counter, (60, HEIGHT - 40), 16, GHOST)
+        if note:                                      # записка клиента — поверх всего (не уходит под кнопки справа)
+            self._draw_hub_note(surf, *note)
 
     # ================================================================ #
     #  КАБИНЕТ ПОСАДКИ: уроки, примерка (ползунки + живая поза), проверка
