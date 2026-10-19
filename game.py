@@ -6453,6 +6453,7 @@ class Game:
         self.feedback_mem = []            # headless/тесты: замечания не пишутся в файл
         self.seat_done = set()            # Кабинет посадки: решённые примерки
         self.seat_quiz_ok = False         # и сданный зачёт
+        self.tutorial_skipped = False     # «Пропустить обучение»: всё открыто без первого ремонта
         self.seatc = None
         self.act = None                   # анимация инструмента на детали
         self.ride_t0 = None               # тест-драйв: клиент проезжает через экран
@@ -6622,10 +6623,18 @@ class Game:
         ui = self.dispute_ui
         if event.type == pygame.TEXTINPUT:
             txt = "".join(ch for ch in event.text if ch.isprintable() and ch not in "​‌‍⁠﻿")
+            if ui.pop("kd_space", False) and txt.startswith(" "):
+                txt = txt[1:]                              # этот пробел уже добавлен по нажатию клавиши
             if len(ui["text"]) < 600:
                 ui["text"] = (ui["text"] + txt)[:600]
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
+            if event.key == pygame.K_SPACE and not (getattr(event, "mod", 0) & (pygame.KMOD_CTRL | pygame.KMOD_ALT)):
+                # браузер не присылает TEXTINPUT для пробела (страница гасит пробел, чтобы не прокручиваться) —
+                # пробел ставим по нажатию; если TEXTINPUT всё же придёт (компьютер), его пробел пропустим
+                if len(ui["text"]) < 600:
+                    ui["text"] += " "
+                ui["kd_space"] = True
+            elif event.key == pygame.K_ESCAPE:
                 self.close_dispute()
             elif event.key == pygame.K_BACKSPACE:
                 ui["text"] = ui["text"][:-1]
@@ -6699,7 +6708,7 @@ class Game:
                   (tr_.x, tr_.y - 22), 14, GREY)
         aa_rect(surf, (12, 12, 18), tr_, border_radius=8)
         aa_rect(surf, DIM, tr_, 1, border_radius=8)
-        caret = "|" if int(self.t * 2) % 2 == 0 else ""
+        caret = "|" if int(self.t * 2) % 2 == 0 else " "   # погасший курсор держит место: пробел в конце виден
         draw_wrapped(surf, ui["text"] + caret, (tr_.x + 10, tr_.y + 8), tr_.w - 20, 15, WHITE, max_lines=3, raw=True)
         Button(self._dispute_cancel_rect(), "ОТМЕНА", GREY).draw(surf, mouse)
         Button(self._dispute_send_rect(), "ОТПРАВИТЬ", GOOD).draw(surf, mouse)
@@ -6818,6 +6827,7 @@ class Game:
         ids = {c["id"] for c in SEAT_CASES}
         self.seat_done = {c for c in lst("seat_done") if isinstance(c, str) and c in ids}
         self.seat_quiz_ok = data.get("seat_quiz_ok") is True
+        self.tutorial_skipped = data.get("tutorial_skipped") is True
 
     def save_progress(self):
         if self.headless:
@@ -6827,17 +6837,44 @@ class Game:
                 json.dump({"done": sorted(self.done),
                            "garage": [[j, s] for j, s in self.garage],
                            "exam_passed": self.exam_passed,
-                           "seat_done": sorted(self.seat_done), "seat_quiz_ok": self.seat_quiz_ok},
+                           "seat_done": sorted(self.seat_done), "seat_quiz_ok": self.seat_quiz_ok,
+                           "tutorial_skipped": self.tutorial_skipped},
                           f, ensure_ascii=False, indent=2)
         except Exception:
             pass
         web_persist(SAVE_PATH)
 
+    def tutorial_ok(self):
+        """Обучение пройдено (первый ремонт) или пропущено кнопкой."""
+        return "flat" in self.done or self.tutorial_skipped
+
     def available_jobs(self):
-        """Туториал (flat) первым; остальные открыты после него."""
-        if "flat" not in self.done:
+        """Туториал (flat) первым; остальные открыты после него (или после «Пропустить обучение»)."""
+        if not self.tutorial_ok():
             return ["flat"]
         return [j["id"] for j in JOBS]
+
+    def _skip_tut_rect(self):
+        """Кнопка «Пропустить обучение»: во вступлении — внизу справа, в первом задании — в верхней панели."""
+        if self.scene == "intro":
+            return pygame.Rect(WIDTH - 280, HEIGHT - 76, 250, 46)
+        if (self.scene == "job" and self.cur and self.cur.get("id") == "flat" and not self.tutorial_ok()
+                and not self.dispute_visible()):
+            return pygame.Rect(WIDTH - 390, 9, 210, 36)
+        return None
+
+    def skip_tutorial(self):
+        self.tutorial_skipped = True
+        self.v3d = None
+        self.mini_pending = self.spec_pending = None
+        self.show_manual = False
+        self.exam_mode = False
+        self.esc_timer = 0
+        self.save_progress()
+        self.scene = "hub"
+        snd("whoosh")
+        self.flash("Обучение пропущено: все клиенты уже ждут. Коляску Мартина можно починить в любой момент.",
+                   GOOD, 5)
 
     # ---------- запуск задания ----------
     def start_job(self, jid, variant=None):
@@ -7647,6 +7684,8 @@ class Game:
             if cur is None and typing:
                 self.send_dispute()
                 return True
+            if cur is None and self.scene == "intro":
+                cur = items[0]                             # Enter/пробел листают вступление («далее»); пропуск — стрелкой
             if cur is None:
                 if len(items) == 1:
                     cur = items[0]
@@ -7927,6 +7966,11 @@ class Game:
             self.show_sound = True
             snd("tick")
             return
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            sk = self._skip_tut_rect()
+            if sk is not None and sk.collidepoint(event.pos):
+                self.skip_tutorial()
+                return
         if self.v3d is not None and self.scene == "job":
             if self.handle_v3d_event(event):
                 return
@@ -7971,7 +8015,7 @@ class Game:
                     pygame.event.post(pygame.event.Event(pygame.QUIT))
 
     def click_title(self, m):
-        self.scene = "hub" if self.done else "intro"
+        self.scene = "hub" if (self.done or self.tutorial_skipped) else "intro"
 
     def click_intro(self, m):
         if not self.typing_done("intro"):          # первый клик — допечатать текст
@@ -7993,7 +8037,7 @@ class Game:
                 snd("tick")
                 return
         if self._hub_seat_rect().collidepoint(m):
-            if "flat" in self.done:
+            if self.tutorial_ok():
                 self.open_seating()
             else:
                 self.flash("Кабинет посадки откроется после первого ремонта.", CYAN, 3)
@@ -8230,6 +8274,9 @@ class Game:
             self._draw_dispute_btn(surf, mouse_pos())
         if self.scene not in ("title", "intro", "ending"):
             self._draw_feedback_flag(surf)
+        sk = self._skip_tut_rect()                      # «Пропустить обучение» — последним: с клавиатуры не первым пунктом
+        if sk is not None and self.dispute_ui is None and not self.show_sound:
+            Button(sk, "ПРОПУСТИТЬ ОБУЧЕНИЕ ▸", CYAN).draw(surf, mouse_pos())
         if self.dispute_ui is not None:
             self._draw_dispute_panel(surf, mouse_pos())
         if self.show_sound:
@@ -8329,6 +8376,7 @@ class Game:
         self.exam_passed = False
         self.seat_done = set()
         self.seat_quiz_ok = False
+        self.tutorial_skipped = False
         self.hub_page = 0
         self.cur = None
         self.exam_mode = False
@@ -8667,8 +8715,11 @@ class Game:
         DR.rect(surf, (16, 14, 22), (0, 0, WIDTH, 54))
         DR.line(surf, AMBER, (0, 54), (WIDTH, 54), 1)
         right = WIDTH - 170
+        sk = self._skip_tut_rect()
         if self.scene == "job" and self.dispute_visible():      # место занято кнопкой «Я НЕ СОГЛАСЕН»
             right = self._dispute_btn_rect().x - 12
+        elif sk is not None:                                     # первое задание: место под кнопку пропуска
+            right = sk.x - 12
         else:
             draw_text(surf, "КОЛЁСА И КОСТИ", (right, 16), 18, GHOST, bold=True, right=True)
             right -= font(18, True).size(tr("КОЛЁСА И КОСТИ"))[0] + 16
@@ -8860,7 +8911,7 @@ class Game:
         # призрак-наставник в углу
         blit_idle(surf, load_image("ghost.png", (150, 200), CYAN), (WIDTH - 220, 120), self.t,
                   "float", k=ease_back((self.st - 0.3) / 0.5))
-        seat_ok = "flat" in self.done
+        seat_ok = self.tutorial_ok()
         n_seat = len(self.seat_done) + (1 if self.seat_quiz_ok else 0)
         Button(self._hub_seat_rect(), "КАБИНЕТ ПОСАДКИ", GOOD,
                sub=(f"позиционирование: {n_seat}/{len(SEAT_CASES) + 1}" if seat_ok
@@ -12107,7 +12158,26 @@ def run_selftest():
     if VOL["on"] != vol_on or gm.dispute_ui is None or gm.dispute_ui["text"] != "ь":
         failures.append("клавиша M в окне замечания переключила звук")
     VOL["on"] = vol_on
+    E_ = pygame.event.Event                                    # пробел: и с TEXTINPUT (компьютер), и без него (браузер)
+    for evs in ([E_(pygame.KEYDOWN, key=pygame.K_SPACE, mod=0, unicode=" "), E_(pygame.TEXTINPUT, text=" ")],
+                [E_(pygame.KEYDOWN, key=pygame.K_SPACE, mod=0, unicode=" ")]):
+        gm.dispute_ui["text"] = "a"
+        for e_ in evs + [E_(pygame.TEXTINPUT, text="b")]:
+            gm.handle_event(e_)
+        if gm.dispute_ui["text"] != "a b":
+            failures.append(f"пробел в окне замечания: {gm.dispute_ui['text']!r} вместо 'a b'")
     gm.close_dispute()
+    gk = Game(headless=True)                                   # «Пропустить обучение»: всё открыто, сброс — снова закрыто
+    gk.scene, gk.intro_idx = "intro", 0
+    gk.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gk._skip_tut_rect().center))
+    if gk.scene != "hub" or len(gk.available_jobs()) != len(JOBS) or not gk.tutorial_ok():
+        failures.append("«Пропустить обучение» во вступлении не открыл мастерскую со всеми заданиями")
+    gk.reset_progress()
+    if gk.tutorial_ok() or gk.available_jobs() != ["flat"]:
+        failures.append("сброс прогресса не вернул обучение")
+    gk.start_job("flat")
+    if gk._skip_tut_rect() is None:
+        failures.append("нет кнопки «Пропустить обучение» в первом задании")
     gm.show_sound = True                                       # ⚑ при открытых настройках не открывает окно под ними
     gm.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gm._feedback_rect().center))
     if gm.dispute_ui is not None:
