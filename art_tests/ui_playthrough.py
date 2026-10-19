@@ -194,11 +194,22 @@ try:
         if g.scene == "ending":
             break
     if g.scene != "hub":
-        click((640, 600))
+        click((640, 600))                                   # финал -> гараж
+    if g.scene == "garage":                                 # из гаража — кнопкой «Назад» в мастерскую
+        click(g._back_rect().center)
+    assert g.scene == "hub", g.scene
     shot("hub_all_done")
     click(g._hub_garage_rect().center)
     assert g.scene == "garage"
     shot("garage_full")
+    click(g._garage_card_rects()[0][1].center)              # карточка -> окно с полным уроком
+    assert g.garage_open is not None, "карточка гаража не открыла урок"
+    shot("garage_lesson")
+    click((640, 360))                                       # любой клик закрывает окно
+    assert g.garage_open is None
+    if g._garage_arrow_rects():
+        click(g._garage_arrow_rects()[1][1].center)
+        shot("garage_page2")
     click(g._back_rect().center)
     click(g._hub_guild_rect().center)
     assert g.scene == "guild", f"Гильдия не открылась ({g.scene})"

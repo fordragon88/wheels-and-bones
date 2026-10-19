@@ -587,7 +587,14 @@ def _cap_modal():
     CAPTURE["modal"] = (len(CAPTURE["texts"]), len(CAPTURE["buttons"]))
 
 
-def draw_text(surf, text, pos, size=18, color=WHITE, bold=False, center=False, right=False, alpha=255):
+TEXT_PLATE = (14, 12, 20, 175)                       # тёмная подложка под текст на пёстром фоне
+
+
+def _plate(surf, rect):
+    aa_rect(surf, TEXT_PLATE, pygame.Rect(rect).inflate(16, 8), border_radius=8)
+
+
+def draw_text(surf, text, pos, size=18, color=WHITE, bold=False, center=False, right=False, alpha=255, plate=False):
     s_ = tr(str(text))
     img = font(size, bold).render(s_, True, color)
     if alpha < 255:
@@ -599,6 +606,8 @@ def draw_text(surf, text, pos, size=18, color=WHITE, bold=False, center=False, r
         rect.topright = pos
     else:
         rect.topleft = pos
+    if plate:
+        _plate(surf, rect)
     surf.blit(img, rect)
     _cap_text(surf, s_, rect)
     return rect
@@ -642,15 +651,21 @@ def wrap_lines(text, width, size=16, raw=False):
 
 
 def draw_wrapped(surf, text, pos, width, size=16, color=WHITE, center=False, line_gap=2,
-                 limit=None, alpha=255, max_lines=None, raw=False):
+                 limit=None, alpha=255, max_lines=None, raw=False, plate=False):
     """limit — сколько символов показать («печать по буквам»): переносы считаются по
-    полному тексту, поэтому слова не прыгают между строками во время печати."""
+    полному тексту, поэтому слова не прыгают между строками во время печати.
+    plate — тёмная подложка под всем блоком (текст на пёстром фоне)."""
     x, y = pos
     f = font(size)
     text = text if raw else tr(text)
     _cap_text(surf, text, pygame.Rect(x - (width // 2 if center else 0), y, width, size + 4))
     left = len(text) if limit is None else limit
     lines = wrap_lines(text, width, size, raw=True)
+    if plate and lines:
+        shown = lines[:max_lines] if max_lines else lines
+        bw = max(f.size(ln)[0] for ln in shown)
+        bh = len(shown) * (f.get_height() + line_gap) - line_gap
+        _plate(surf, pygame.Rect(x - bw // 2 if center else x, y, bw, bh))
     if max_lines and len(lines) > max_lines:
         lines = lines[:max_lines]
         last = lines[-1]
@@ -3592,7 +3607,8 @@ def seat_val_text(key, v):
         if v == 0:
             return tr("без подкладки")
         return tr(f"под левую: {abs(v)} см" if v < 0 else f"под правую: {abs(v)} см")
-    return f"{v} {tr(SEAT_SLIDERS[key][1])}".strip()
+    unit = tr(SEAT_SLIDERS[key][1])
+    return f"{v}{unit}" if unit == "°" else f"{v} {unit}".strip()
 
 SEAT_CASES = [
     dict(id="seat_troll", client="Тролль Бомм", client_art="client_troll.png", kind="manual",
@@ -3843,9 +3859,9 @@ JOBS = [
             "spokes": "Спицы звенят нормально.",
         },
         diagnosis=[
-            D("Прокол камеры — снять покрышку, заменить/заклеить камеру", True),
-            D("Погнут обод", False, "Обод ровный. Гнётся он редко и от сильного удара."),
-            D("Ослаб тормоз-замок", False, "Тормоз не влияет на спущенное колесо."),
+            D("Прокол камеры: заднее колесо спущено", True),
+            D("Погнут обод: колесо «восьмерит» и бьёт", False, "Обод ровный. Гнётся он редко и от сильного удара."),
+            D("Ослаб тормоз-замок и подтормаживает колесо", False, "Тормоз не влияет на спущенное колесо."),
         ],
         steps=[
             S("Полностью спусти остатки воздуха через ниппель.", "hands", "valve",
@@ -3903,9 +3919,9 @@ JOBS = [
                     "bearing": "Задний подшипник тихий.",
                 },
                 diagnosis=[
-                    D("Люфт штока кастора + грязь/волосы в оси", True),
-                    D("Ослабли болты крепления вилки", False, "Вилка сидит плотно — играет сам шток."),
-                    D("Спустила задняя шина", False, "Шина в норме. Тряску даёт перёд."),
+                    D("Люфт штока кастора и волосы в оси", True),
+                    D("Ослабли болты крепления вилки кастора", False, "Вилка сидит плотно — играет сам шток."),
+                    D("Спустила задняя шина — коляску тянет вбок", False, "Шина в норме. Тряску даёт перёд."),
                 ],
                 steps=[
                     S("Сними колесо кастора с вилки.", "allen", "caster",
@@ -3941,8 +3957,8 @@ JOBS = [
                 },
                 diagnosis=[
                     D("Ослабли болты крепления вилки кастора", True),
-                    D("Люфт штока + волосы в оси", False, "Шток плотный, ось чистая — дело не в них."),
-                    D("Спустила задняя шина", False, "Шина в норме. Тряску даёт перёд."),
+                    D("Люфт штока кастора и волосы в оси", False, "Шток плотный, ось чистая — дело не в них."),
+                    D("Спустила задняя шина — коляску тянет вбок", False, "Шина в норме. Тряску даёт перёд."),
                 ],
                 steps=[
                     S("Покачай вилку кастора рукой — найди люфт.", "hands", "caster",
@@ -3976,9 +3992,9 @@ JOBS = [
             "rear_wheel": "Колесо крутится свободно.",
         },
         diagnosis=[
-            D("Сначала проверить давление в шине, затем крепление тормоза", True),
-            D("Сразу менять весь тормозной узел", False, "Сперва простые причины: давление и крепёж."),
-            D("Погнута рама", False, "Рама в порядке."),
+            D("Низкое давление в шине и сдвинутый тормоз", True),
+            D("Износился тормозной узел — менять целиком", False, "Сперва простые причины: давление и крепёж."),
+            D("Погнута рама — колесо стоит криво", False, "Рама в порядке."),
         ],
         steps=[
             S("Проверь давление в шине — спущенная шина «уводит» упор тормоза.", "gauge", "tire",
@@ -4025,9 +4041,9 @@ JOBS = [
             "tube": "Камера держит давление.",
         },
         diagnosis=[
-            D("Ослабли спицы (и заодно проверить болты)", True),
-            D("Умер подшипник", False, "Подшипник даёт вой/стук, а тут именно дребезг."),
-            D("Спустила камера", False, "Камера в норме."),
+            D("Ослабли спицы заднего колеса", True),
+            D("Разбит подшипник оси — колесо болтается", False, "Подшипник даёт вой/стук, а тут именно дребезг."),
+            D("Спустила камера — шина мнётся на ходу", False, "Камера в норме."),
         ],
         steps=[
             S("Пинг-тест: проведи карандашом по спицам, вращая колесо.", "pencil", "spokes",
@@ -4069,7 +4085,7 @@ JOBS = [
                 diagnosis=[
                     D("Подшипник оси загрязнён/изношен", True),
                     D("Тормоз трёт по шине", False, "Тормоз отведён. Звук идёт из ступицы."),
-                    D("Спустила шина", False, "Шина в порядке."),
+                    D("Спустила шина — колесо катится туго и вязнет", False, "Шина в порядке."),
                 ],
                 steps=[
                     S("Сними заднее колесо: нажми кнопку быстросъёмной оси и потяни.", "hands", "axle",
@@ -4105,8 +4121,8 @@ JOBS = [
                 },
                 diagnosis=[
                     D("Тормоз-замок съехал и трёт шину", True),
-                    D("Подшипник оси изношен", False, "Подшипник тихий и ровный. Звук снаружи, у шины."),
-                    D("Спустила шина", False, "Шина накачана."),
+                    D("Подшипник оси загрязнён/изношен", False, "Подшипник тихий и ровный. Звук снаружи, у шины."),
+                    D("Спустила шина — колесо катится туго и вязнет", False, "Шина накачана."),
                 ],
                 steps=[
                     S("Ослабь два болта хомута тормоза.", "allen", "brake",
@@ -4150,8 +4166,8 @@ JOBS = [
         },
         diagnosis=[
             D("Прокол воздушной подушки", True),
-            D("Провисла стропа сиденья", False, "Стропа в норме; провал — из-за сдутой подушки."),
-            D("Ослабла спинка", False, "Бомм проваливается вниз, до основания сиденья, а не назад — и подушка при осмотре "
+            D("Провисла стропа сиденья под подушкой", False, "Стропа в норме; провал — из-за сдутой подушки."),
+            D("Ослабла спинка — тролль заваливается", False, "Бомм проваливается вниз, до основания сиденья, а не назад — и подушка при осмотре "
               "сдувается."),
         ],
         steps=[
@@ -4219,11 +4235,10 @@ JOBS = [
                     "armrest": "На подлокотнике — новенький подстаканник «Зикс-Турбо», прикручен крепко.",
                 },
                 diagnosis=[
-                    D("Сигнал не доходит до актуатора: разъём недовставлен, жгут прижат — обесточить, "
-                      "вставить до щелчка, переложить жгут", True),
-                    D("Сработала заводская блокировка подъёма", False,
+                    D("Разъём актуатора недовставлен, жгут прижат", True),
+                    D("Сработала заводская блокировка подъёма по наклону", False,
                       "При блокировке индикатор был бы красным или жёлтым, а он зелёный."),
-                    D("Разряжена батарея", False,
+                    D("Разряжена батарея — лифту не хватает тока", False,
                       "Заряд полный, и при разряде Q-Logic 3 показал бы ошибку 20 «Undervoltage»."),
                 ],
                 steps=[
@@ -4323,11 +4338,10 @@ JOBS = [
                     "freewheel": "Рычаги свободного хода подняты — моторы в режиме езды.",
                 },
                 diagnosis=[
-                    D("Заводская блокировка: наклон или откидка больше 20° запрещают подъём — вернуть сиденье ближе "
-                      "к ровному", True),
-                    D("Сгорел актуатор лифта", False,
+                    D("Блокировка: наклон или откидка больше 20°", True),
+                    D("Сгорел актуатор лифта — сиденье не двигается", False,
                       "Красный индикатор — это не поломка, а блокировка по положению сиденья."),
-                    D("Моторы в свободном ходе", False,
+                    D("Моторы в свободном ходе — пульт не даёт команд", False,
                       "Рычаги подняты, и свободный ход не мешает лифту."),
                 ],
                 steps=[
@@ -4424,9 +4438,9 @@ JOBS = [
             "battery": "Заряд в норме.",
         },
         diagnosis=[
-            D("Джойстик: просушка, перезагрузка, чистка, разъём + срочно заменить пыльник", True),
-            D("Сгорел мотор", False, "На дисплее ошибка джойстика, а не мотора, и джойстик залипает — уводит из-за него."),
-            D("Села батарея", False, "Заряд в норме — смотри осмотр батареи."),
+            D("Джойстик залит и загрязнён, пыльник порван", True),
+            D("Сгорел мотор — коляску уводит в сторону", False, "На дисплее ошибка джойстика, а не мотора, и джойстик залипает — уводит из-за него."),
+            D("Села батарея — коляска дёргается", False, "Заряд в норме — смотри осмотр батареи."),
         ],
         steps=[
             S("Выключи коляску кнопкой на пульте.", "hands", "controller",
@@ -4486,9 +4500,9 @@ JOBS = [
             "frame": "Рама цела.",
         },
         diagnosis=[
-            D("Перевести в свободный ход и откатить; затем разъёмы мотора, шум и зарядка батареи", True),
-            D("Тащить волоком с включёнными моторами", False, "На включённых моторах не катится, можно повредить привод."),
-            D("Сразу менять мотор", False, "Сперва простое: разъёмы, мусор в колёсах, шум."),
+            D("Сначала свободный ход и откатить, потом искать причину", True),
+            D("Тащить волоком на включённых моторах — так быстрее", False, "На включённых моторах не катится, можно повредить привод."),
+            D("Сразу менять мотор: он подвывал и тянул вбок", False, "Сперва простое: разъёмы, мусор в колёсах, шум."),
         ],
         steps=[
             S("Выключи питание кнопкой на пульте — даже погасший пульт: иначе после зарядки коляска проснётся "
@@ -4620,10 +4634,10 @@ JOBS += [
             "spokes": "Спицы натянуты ровно, колесо не «восьмерит».",
         },
         diagnosis=[
-            D("Низкое давление в шине + сползший хомут замка: упор не вдавливается в шину на 5 мм (3/16\")", True),
+            D("Мало давления в шине и сполз хомут замка", True),
             D("Замок сломан — менять узел целиком", False,
               "Замок исправен, его просто сдвинуло. По мануалу сначала давление, потом положение хомута."),
-            D("Ослабла быстросъёмная ось", False,
+            D("Ослабла быстросъёмная ось, колесо проворачивается", False,
               "Ось защёлкнута и без люфта. Колесо крутится, потому что его не держит замок."),
             D("Надо сильнее тянуть рычаг замка на спуске", False,
               "Замки — НЕ тормоза: ими нельзя замедлять едущую коляску. Они только держат стоящую."),
@@ -4704,10 +4718,10 @@ JOBS += [
             "anti_tip": "Антиопрокидыватели на месте, фиксатор защёлкнут.",
         },
         diagnosis=[
-            D("Стойки спинки стоят под разным углом: гайка угла с одной стороны ослабла, и стойка «уехала»", True),
+            D("Ослабла гайка угла на одной стойке спинки", True),
             D("Растянулась обивка: хватит подтянуть ремни", False,
               "Ремни меняют форму спинки, но не угол стоек. Перекос в самих стойках."),
-            D("Клиентка «неправильно сидит»", False,
+            D("Клиентка «неправильно сидит» — дело в осанке", False,
               "Дело не в посадке. Посмотри на стойки: они стоят под разным углом, так никто ровно не усидит."),
         ],
         steps=[
@@ -4787,10 +4801,10 @@ JOBS += [
             "brake": "Замки зажимаются и вдавливаются в шину больше чем на 3 мм, это норма.",
         },
         diagnosis=[
-            D("Антиопрокидыватели на разной высоте + провис троса: правый штифт не входит в рокер до конца", True),
+            D("Антиопрокидыватели на разной высоте, трос провис", True),
             D("Сломан весь механизм наклона, менять раму", False,
               "Механизм цел: штифт просто не дотягивается из-за провисшего троса. Это регулировка, а не замена."),
-            D("Ребёнок слишком активно ёрзает", False,
+            D("Ребёнок слишком активно ёрзает в кресле", False,
               "Дело не в ребёнке: коляска должна быть надёжной при любых движениях. Ищи причину в механике."),
             D("Смазать трос маслом, и всё пройдёт", False,
               "Мануал Iris запрещает смазывать механизм наклона. Провис убирают регулятором."),
@@ -4877,12 +4891,12 @@ JOBS += [
             "brake": "Замки зажимаются и держат.",
         },
         diagnosis=[
-            D("Залом троса наклона: трос тянет с трением, зуб фиксатора не садится до конца. Трос заменить", True),
+            D("Залом троса наклона: зуб фиксатора не садится", True),
             D("Подтянуть регулятор посильнее, и залом не страшен", False,
               "Ki Mobility: трос с заломом или такой, что не регулируется, ЗАМЕНЯЮТ. Регулятором залом не лечится."),
-            D("Сели газовые пружины спинки", False,
+            D("Сели газовые пружины спинки — кресло ползёт", False,
               "Газовые пружины откидывают спинку, а не наклоняют сиденье. И они держат."),
-            D("Залить трос WD-40", False,
+            D("Залить трос WD-40, чтобы ходил мягче", False,
               "Мануал прямо запрещает WD-40 и нефтяные растворители: они повреждают узлы."),
         ],
         steps=[
@@ -4972,10 +4986,10 @@ JOBS += [
                     "tire": "Задние шины литые (airless) — качать нечего, протектор в норме.",
                 },
                 diagnosis=[
-                    D("Код 02: при включении джойстик был не в нейтрали — включать, не касаясь джойстика", True),
-                    D("Батарея разряжена", False,
+                    D("Код 02: джойстик не в нейтрали при включении", True),
+                    D("Батарея разряжена — коляска выключается сама", False,
                       "Разряд — это коды 05/06, а батарея почти полная."),
-                    D("Разблокированы тормоза", False,
+                    D("Тормоза разблокированы — сработала защита", False,
                       "Это был бы код 03. Рычаги подняты — тормоза заперты."),
                 ],
                 steps=[
@@ -5033,10 +5047,10 @@ JOBS += [
                     "seat": "Сиденье сидит на стойке ровно, рычаг фиксатора опущен.",
                 },
                 diagnosis=[
-                    D("Код 01: подлокотник с пультом не встал в рабочее положение — песок в основании", True),
-                    D("При включении тронули джойстик", False,
+                    D("Код 01: подлокотник с пультом не встал на место", True),
+                    D("При включении тронули джойстик — сработала защита", False,
                       "Это код 02. А тут 01 — дело в подлокотнике."),
-                    D("Сломался мотор", False,
+                    D("Сломался мотор — коляска не может тронуться", False,
                       "Ошибки мотора — коды 60–86. Код 01 — защита, а не поломка."),
                 ],
                 steps=[
@@ -5086,9 +5100,9 @@ JOBS += [
                     "joystick": "Джойстик в центре, ходит плавно.",
                 },
                 diagnosis=[
-                    D("Код 10: сбой связи через разъём сиденья — перезапуск, переустановка сиденья, чистка контактов",
+                    D("Код 10: сбой связи через разъём сиденья",
                       True),
-                    D("Замёрзла батарея", False,
+                    D("Замёрзла батарея — на холоде не держит напряжение", False,
                       "Холод — это код 14: коляска просто едет медленнее, а не выключается."),
                     D("Сразу менять пульт и контроллер", False,
                       "Замена пульта, кабеля сиденья или контроллера — последний пункт таблицы, и это работа дилера."),
@@ -5178,7 +5192,7 @@ JOBS += [
             "frame": "На раме иней. Термометр на стене сарая показывает около +1 °C.",
         },
         diagnosis=[
-            D("Главный автомат выключен на хранение, а в сарае холоднее +5 °C: включить автомат и заряжать в тепле",
+            D("Выключен главный автомат, а в сарае ниже +5 °C",
               True),
             D("Батареи умерли за зиму — сразу менять пару", False,
               "Осенью их зарядили полностью, а цепь сейчас отсечена автоматом. Сначала включи его."),
@@ -6727,20 +6741,39 @@ class Game:
     DISPUTE_REASONS = ["Мой вариант тоже правильный", "В игре ошибка или неточность", "Непонятно сформулировано"]
 
     def _dispute_panel_rect(self):
-        return pygame.Rect(WIDTH // 2 - 340, HEIGHT // 2 - 250, 680, 500)
+        return pygame.Rect(WIDTH // 2 - 340, HEIGHT // 2 - 274, 680, 548)
 
     def _reasons(self):
         return self.FEEDBACK_REASONS if (self.dispute and self.dispute["kind"] == "general") else self.DISPUTE_REASONS
 
+    def _dispute_head(self):
+        """Шапка окна «Я не согласен»: строки (текст, размер, цвет) и сдвиг вниз остального окна.
+        Подсказка игры — до 4 строк целиком (это и есть то, с чем спорит игрок)."""
+        d, p = self.dispute, self._dispute_panel_rect()
+        w = p.w - 56
+        rows = []
+        if d["expected"] or d["got"]:
+            rows += [("Игра ожидала: " + d["expected"], 14, GOOD, 2), ("Ты выбрал: " + d["got"], 14, BAD, 2)]
+        rows.append(("Подсказка игры: " + d["msg"], 13, GREY, 4))
+        h = sum(min(mx, len(wrap_lines(t, w, sz))) * (font(sz).get_height() + 2) + 2 for t, sz, _, mx in rows)
+        dy = max(0, min(80, 58 + h - 150))           # не хватает места до «Почему не согласен?» — всё ниже
+        return rows, dy
+
+    def _dispute_dy(self):
+        d = self.dispute
+        return 0 if (not d or d["kind"] == "general") else self._dispute_head()[1]
+
     def _dispute_reason_rects(self):
         p = self._dispute_panel_rect()
         n = len(self._reasons())
-        step = 42 if n <= 3 else 34
-        return [(i, pygame.Rect(p.x + 28, p.y + 182 + i * step, p.w - 56, step - 6)) for i in range(n)]
+        dy = self._dispute_dy()
+        step = (42 if n <= 3 else 34) - (6 if dy > 40 else 0)
+        return [(i, pygame.Rect(p.x + 28, p.y + 182 + dy + i * step, p.w - 56, step - 6)) for i in range(n)]
 
     def _dispute_text_rect(self):
         p = self._dispute_panel_rect()
-        return pygame.Rect(p.x + 28, p.y + 340, p.w - 56, 78)
+        dy = self._dispute_dy()
+        return pygame.Rect(p.x + 28, p.y + 340 + dy - (18 if dy > 40 else 0), p.w - 56, 78 - (12 if dy > 40 else 0))
 
     def _dispute_send_rect(self):
         p = self._dispute_panel_rect()
@@ -6887,12 +6920,11 @@ class Game:
                 y = draw_wrapped(surf, "Шаг: " + d["step"], (p.x + 28, y), p.w - 56, 14, GREY, max_lines=2)
             draw_text(surf, "Снимок экрана приложится сам — опиши, что не так.", (p.x + 28, max(y, p.y + 110)), 14, GREY)
         else:
-            if d["expected"] or d["got"]:                # полный текст диагноза — переносом, в пределах панели
-                y = draw_wrapped(surf, "Игра ожидала: " + d["expected"], (p.x + 28, y), p.w - 56, 14, GOOD, max_lines=2) + 2
-                y = draw_wrapped(surf, "Ты выбрал: " + d["got"], (p.x + 28, y), p.w - 56, 14, BAD, max_lines=2) + 2
-            draw_wrapped(surf, "Подсказка игры: " + d["msg"], (p.x + 28, y), p.w - 56, 13, GREY,
-                         max_lines=max(1, (p.y + 150 - y) // (font(13).get_height() + 2)))
-        draw_text(surf, "Что не так?" if general else "Почему не согласен?", (p.x + 28, p.y + 156), 15, WHITE, bold=True)
+            rows, _ = self._dispute_head()
+            for text, sz, col, mx in rows:               # полный текст — переносом, в пределах панели
+                y = draw_wrapped(surf, text, (p.x + 28, y), p.w - 56, sz, col, max_lines=mx) + 2
+        draw_text(surf, "Что не так?" if general else "Почему не согласен?",
+                  (p.x + 28, self._dispute_reason_rects()[0][1].y - 26), 15, WHITE, bold=True)
         reasons = self._reasons()
         for i, r in self._dispute_reason_rects():
             Button(r, "", CYAN).draw(surf, mouse, active=i == ui["reason"])
@@ -6905,7 +6937,8 @@ class Game:
         aa_rect(surf, DIM, tr_, 1, border_radius=8)
         caret = "|" if int(self.t * 2) % 2 == 0 else " "   # погасший курсор держит место: пробел в конце виден
         lines = wrap_lines(ui["text"] + caret, tr_.w - 20, 15, raw=True)
-        draw_wrapped(surf, " ".join(lines[-3:]), (tr_.x + 10, tr_.y + 8), tr_.w - 20, 15, WHITE, raw=True)
+        vis = max(1, (tr_.h - 12) // (font(15).get_height() + 2))   # сколько строк влезает (крупный текст — меньше)
+        draw_wrapped(surf, " ".join(lines[-vis:]), (tr_.x + 10, tr_.y + 6), tr_.w - 20, 15, WHITE, raw=True)
         Button(self._dispute_cancel_rect(), "ОТМЕНА", GREY).draw(surf, mouse)
         Button(self._dispute_send_rect(), "ОТПРАВИТЬ", GOOD).draw(surf, mouse)
 
@@ -8210,6 +8243,8 @@ class Game:
                         self.esc_timer = 2.5
                         self.flash("Ещё раз Esc — покинуть ремонт (прогресс задания сбросится).",
                                    AMBER, 2.5)
+                elif self.scene == "garage" and getattr(self, "garage_open", None) is not None:
+                    self.garage_open = None                 # Esc закрывает окно урока, а не гараж
                 elif self.scene in ("garage", "guild", "result", "exam_result", "failed", "seating"):
                     self.scene = "hub"
                 elif self.scene in ("hub", "intro"):
@@ -8255,7 +8290,7 @@ class Game:
                            CYAN, 3.5)
             return
         if self._hub_garage_rect().collidepoint(m):
-            self.scene = "garage"
+            self.scene, self.garage_open = "garage", None
             return
         if self.user_done_count() >= len(JOBS) and self._hub_ending_rect().collidepoint(m):
             self.scene = "ending"
@@ -8316,12 +8351,8 @@ class Game:
             else:
                 self.scene = "hub"
 
-    def click_garage(self, m):
-        if self._back_rect().collidepoint(m):
-            self.scene = "hub"
-
     def click_ending(self, m):
-        self.scene = "garage"
+        self.scene, self.garage_open = "garage", None
 
     # ---------- клики: Гильдия и tech-задания ----------
     def click_guild(self, m):
@@ -8573,7 +8604,7 @@ class Game:
         """Что сейчас пройдено — для вкладки «ИГРА» и озвучки."""
         return [f"Починено колясок: {self.user_done_count()} из {len(JOBS)}",
                 f"Гильдия: {self.tech_done_count()} из {len(TECH_JOBS)}" + (", диплом получен" if self.exam_passed else ""),
-                f"Кабинет посадки: {len(self.seat_done)} из {len(SEAT_CASES)}" + (", зачёт сдан" if self.seat_quiz_ok else "")]
+                f"Кабинет посадки: примерки {len(self.seat_done)}/{len(SEAT_CASES)}" + (" · зачёт ✔" if self.seat_quiz_ok else "")]
 
     def reset_progress(self):
         """Сброс прогресса (починки, гараж, Гильдия, посадка). Настройки звука/графики/языка/доступности остаются."""
@@ -9121,8 +9152,12 @@ class Game:
             aa_circle(surf, (20, 18, 26), ring.center, 31)
             aa_circle(surf, GOOD if done else AMBER, ring.center, 31, 2)
             surf.blit(load_image(job["client_art"], (52, 52), GHOST), (ring.x + 3, ring.y + 3))
-            fit_text(surf, job["client"], (r.x + 12, r.y + 166), r.w - 24, 16, WHITE, bold=True)
-            draw_wrapped(surf, job["title"], (r.x + 12, r.y + 188), r.w - 24, 13, GREY, max_lines=2)
+            nsz = 15                                  # имя — до 2 строк; очень длинное — чуть мельче, но целиком
+            while nsz > 12 and len(wrap_lines(job["client"], r.w - 24, nsz)) > 2:
+                nsz -= 1
+            nl = min(2, len(wrap_lines(job["client"], r.w - 24, nsz)))
+            ny = draw_wrapped(surf, job["client"], (r.x + 12, r.y + 162), r.w - 24, nsz, WHITE, max_lines=2, line_gap=0)
+            draw_wrapped(surf, job["title"], (r.x + 12, ny + 2), r.w - 24, 12, GREY, max_lines=3 - nl)
             power = job.get("kind") == "power"
             draw_text(surf, "ЭЛЕКТРО" if power else "РУЧНАЯ",
                       (r.x + 12, r.bottom - 22), 12, CYAN if power else AMBER, bold=True)
@@ -9142,9 +9177,9 @@ class Game:
         blit_idle(surf, load_image("ghost.png", (150, 200), CYAN), (WIDTH - 220, 120), self.t,
                   "float", k=ease_back((self.st - 0.3) / 0.5))
         seat_ok = self.tutorial_ok()
-        n_seat = len(self.seat_done) + (1 if self.seat_quiz_ok else 0)
         Button(self._hub_seat_rect(), "КАБИНЕТ ПОСАДКИ", GOOD,
-               sub=(f"позиционирование: {n_seat}/{len(SEAT_CASES) + 1}" if seat_ok
+               sub=((f"примерки {len(self.seat_done)}/{len(SEAT_CASES)}" + (" · зачёт ✔" if self.seat_quiz_ok else ""))
+                    if seat_ok
                     else "откроется после первого ремонта")).draw(surf, mouse, enabled=seat_ok)
         guild_ok = self.guild_unlocked()
         Button(self._hub_guild_rect(), "ГИЛЬДИЯ КОЛЁСНИКОВ", CYAN,
@@ -10154,8 +10189,8 @@ class Game:
             pt_deg = round(pose.get("p", 0))
             badge_col = BAD if pt_deg > 12 else (AMBER if pt_deg > 5 else GOOD)
             status_txt = f"Завал таза назад: {pt_deg}° (на крестце)" if pt_deg > 5 else "Таз в нейтрали · позвоночник стабилен"
-            sw_ = font(12, True).size(tr(status_txt))[0] + 12          # подпись — на тёмной плашке, поверх рисунка
-            aa_rect(surf, (16, 12, 24, 215), (rect.x + 134, rect.y + 10, sw_, 18), border_radius=4)
+            sw_, sh_ = font(12, True).size(tr(status_txt))          # подпись — на тёмной плашке, поверх рисунка
+            aa_rect(surf, (16, 12, 24, 225), (rect.x + 134, rect.y + 10, sw_ + 12, sh_ + 4), border_radius=4)
             draw_text(surf, status_txt, (rect.x + 140, rect.y + 12), 12, badge_col, bold=True)
 
         if not highlight:
@@ -10171,6 +10206,8 @@ class Game:
         if pose.get("dangle"):
             zones.append(((ankle[0] + 4.0, ankle[1] - 3.0), AMBER, "стопы висят без опоры", 84, -30))
         used_ys = []
+        lab_h = font(12, True).get_height() + 4                    # плашка по высоте шрифта (крупный текст — выше)
+        labels = []
         for zi, ((zx, zy), col, label, dx_l, dy_l) in enumerate(zones):
             p_ = T(zx, zy)
             add_glow(surf, (int(p_[0]), int(p_[1])), int(10 * k), col, 0.9)
@@ -10178,13 +10215,15 @@ class Game:
             aa_circle(surf, WHITE, (int(p_[0]), int(p_[1])), max(4, int(4.2 * k)), 1)
             lx = max(rect.x + 205, min(rect.right - 95, int(p_[0] + dx_l)))
             ly = max(rect.y + 48, min(floor_y - 24, int(p_[1] + dy_l)))
-            for uy in used_ys:
-                if abs(ly - uy) < 18:
-                    ly = min(floor_y - 24, uy + 19)
+            for uy in sorted(used_ys):
+                if abs(ly - uy) < lab_h + 2:
+                    ly = min(floor_y - 24, uy + lab_h + 3)
             used_ys.append(ly)
-            DR.line(surf, col, (int(p_[0]), int(p_[1])), (lx, ly + 7), 1)
+            DR.line(surf, col, (int(p_[0]), int(p_[1])), (lx, ly), 1)
+            labels.append((lx, ly, label, col))
+        for lx, ly, label, col in labels:                          # подписи — последними: линии и нити их не режут
             tw = font(12, True).size(tr(label))[0] + 10
-            aa_rect(surf, (16, 12, 24, 215), (lx - tw // 2, ly - 1, tw, 16), border_radius=4)
+            aa_rect(surf, (16, 12, 24, 235), (lx - tw // 2, ly - lab_h // 2, tw, lab_h), border_radius=4)   # текст — по центру ly
             draw_text(surf, label, (lx, ly), 12, col, bold=True, center=True)
 
     def _seat_front(self, surf, rect, corrected=False, show_pads=True):
@@ -10412,14 +10451,22 @@ class Game:
                                    for pt_ in les["points"]) > HEIGHT - 16 - y:
                 psz -= 1
             for pt_ in les["points"]:
-                y = draw_wrapped(surf, "• " + pt_, (780, y), 476, psz, WHITE) + 8
+                y = draw_wrapped(surf, "• " + pt_, (780, y), 476, psz, WHITE, plate=True) + 8
             draw_text(surf, "По руководству Permobil «Seating & Positioning Guide»",
                       (cv.right - 14, cv.bottom - 18), 11, GREY, right=True)
         elif sc["tab"] == "fit":
             case = SEAT_CASES[sc["case"]]
             checks, pose = self.seat_eval(case, sc["cfg"])
             xray = sc.get("xray", True)
-            scene_r = pygame.Rect(cv.x + 8, cv.y + 98, cv.w - 16, cv.h - 122)
+            # шапка: история клиента и карта терапевта — целиком (в карте числа, которые надо выставить);
+            # рисунок под ними занимает остаток окна
+            st_lines = wrap_lines(case["story"], cv.w - 362, 14)
+            chart = f"{tr('Карта терапевта')}: {tr(case['therapist'])}"
+            ch_lines = wrap_lines(chart, cv.w - 126, 13)
+            lh14, lh13 = font(14).get_height() + 2, font(13).get_height() + 2
+            ch_y = cv.y + 10 + max(len(st_lines) * lh14, 36)
+            head_bottom = max(cv.y + 98, ch_y + len(ch_lines) * lh13 + 6)
+            scene_r = pygame.Rect(cv.x + 8, head_bottom, cv.w - 16, cv.bottom - 24 - head_bottom)
             clip_r = pygame.Rect(cv.x + 4, scene_r.y - 4, cv.w - 8, cv.bottom - scene_r.y)
             view = sc.get("view", "side")
             if view in ("front", "top"):
@@ -10448,10 +10495,8 @@ class Game:
                 Button(r, "", GOOD if done else CYAN).draw(surf, mouse, active=i == sc["case"])
                 fit_text(surf, ("✔ " if done else "") + SEAT_CASES[i]["client"], (r.x + 10, r.y + 8), r.w - 20, 14, WHITE)
             b = case["body"]
-            sy_ = draw_wrapped(surf, case["story"], (cv.x + 112, cv.y + 10), cv.w - 362, 14, WHITE, max_lines=3)
-            th_lines = max(1, min(2, (cv.y + 104 - (sy_ + 2)) // (font(13).get_height() + 2)))
-            draw_wrapped(surf, f"{tr('Карта терапевта')}: {tr(case['therapist'])}", (cv.x + 112, max(cv.y + 44, sy_ + 2)),
-                         cv.w - 126, 13, CYAN, max_lines=th_lines)
+            draw_wrapped(surf, case["story"], (cv.x + 112, cv.y + 10), cv.w - 362, 14, WHITE)
+            draw_wrapped(surf, chart, (cv.x + 112, ch_y), cv.w - 126, 13, CYAN)
             draw_text(surf, self._seat_measure_text(case), (cv.x + 14, cv.bottom - 18), 11, AMBER)
             sliders = self._seat_slider_rects()
             for key, track in sliders:
@@ -10469,18 +10514,32 @@ class Game:
                 aa_circle(surf, WHITE, (kx, track.centery), 10 if hov else 8)
                 aa_circle(surf, GOOD if ok else AMBER, (kx, track.centery), 10 if hov else 8, 3)
             y = sliders[-1][1].y + 24
-            for key, ok, text in checks:
-                y = draw_wrapped(surf, ("✔ " if ok else "⚠ ") + text, (780, y), 476, 13, GOOD if ok else AMBER) + 2
+            room = self._seat_btn_rect().y - 6 - y          # список — до кнопки «Готово», не под неё
+            order = [c for c in checks if not c[1]] + [c for c in checks if c[1]]   # сначала то, что ещё не так
+            csz = 13
+            def need(sz):
+                return sum(len(wrap_lines(("✔ " if ok else "⚠ ") + t, 476, sz)) * (font(sz).get_height() + 2) + 2
+                           for _, ok, t in order)
+            while csz > 10 and need(csz) > room:
+                csz -= 1
+            bottom = self._seat_btn_rect().y - 6
+            for key, ok, text in order:
+                left = (bottom - y) // (font(csz).get_height() + 2)
+                if left < 1:
+                    break
+                y = draw_wrapped(surf, ("✔ " if ok else "⚠ ") + text, (780, y), 476, csz, GOOD if ok else AMBER,
+                                 max_lines=left) + 2
             Button(self._seat_btn_rect(), "СЛЕДУЮЩИЙ КЛИЕНТ ▶" if sc["solved"] else "ГОТОВО — ПРОВЕРИТЬ ПОСАДКУ",
                    GOOD if sc["solved"] else AMBER).draw(surf, mouse)
         else:
             if sc["quiz_done"]:
                 ok = sc["score"] >= SEAT_QUIZ_PASS
+                self._draw_necro_puppeteer(surf, cv, [(cv.centerx + 40, cv.centery - 52, GOOD if ok else AMBER, True)],
+                                           bad_flag=not ok)          # нить — к надписи сверху, текст — поверх
                 draw_text(surf, f"Верно {sc['score']} из {len(SEAT_QUIZ)}", (cv.centerx + 40, cv.centery - 20), 30,
-                          GOOD if ok else AMBER, bold=True, center=True)
+                          GOOD if ok else AMBER, bold=True, center=True, plate=True)
                 draw_text(surf, "Зачёт по посадке сдан!" if ok else f"Для зачёта нужно {SEAT_QUIZ_PASS}. Перечитай уроки.",
-                          (cv.centerx + 40, cv.centery + 24), 18, WHITE, center=True)
-                self._draw_necro_puppeteer(surf, cv, [(cv.centerx + 40, cv.centery - 20, GOOD if ok else AMBER, True)], bad_flag=not ok)
+                          (cv.centerx + 40, cv.centery + 24), 18, WHITE, center=True, plate=True)
                 Button(self._seat_btn_rect(), "ПРОЙТИ ЕЩЁ РАЗ", CYAN).draw(surf, mouse)
                 return
             q = SEAT_QUIZ[sc["quiz"]]
@@ -10493,8 +10552,8 @@ class Game:
                                       highlight=sc["picked"] is not None, show_necro=True)
             else:
                 self._draw_seat_909090_myth(surf, cv)
-            draw_text(surf, f"Вопрос {sc['quiz'] + 1} из {len(SEAT_QUIZ)}", (780, 120), 15, GREY)
-            draw_wrapped(surf, q["q"], (780, 146), 476, 20, WHITE)
+            draw_text(surf, f"Вопрос {sc['quiz'] + 1} из {len(SEAT_QUIZ)}", (780, 120), 15, GREY, plate=True)
+            draw_wrapped(surf, q["q"], (780, 146), 476, 20, WHITE, plate=True)
             for i, r in self._seat_quiz_rects():
                 text, ok, fb = q["options"][i]
                 col = CYAN
@@ -11390,9 +11449,12 @@ class Game:
         else:
             step = 22
         r = 7 if step >= 22 else max(4, step // 3)
+        aa_rect(surf, (14, 12, 20, 190), (x - r - 7, y - r - 6, (n - 1) * step + 2 * r + 14, 2 * r + 12), border_radius=r + 6)
         for i in range(n):
             c = GOOD if i < self.step_idx else (AMBER if i == self.step_idx else DIM)
             aa_circle(surf, c, (x + i * step, y), r)
+            if i > self.step_idx:                     # впереди: светлая обводка — видно на любом фоне
+                aa_circle(surf, (150, 150, 170), (x + i * step, y), r, 1)
             if i == self.step_idx:
                 aa_circle(surf, AMBER, (x + i * step, y), r + 3, 2)
 
@@ -11547,7 +11609,7 @@ class Game:
         self._topbar(surf, ("ЭКЗАМЕН: " if self.exam_mode else "Гильдия: ") + job["title"])
         mouse = mouse_pos()
         blit_idle(surf, load_image(job["client_art"], (150, 190), GHOST), (24, 70), self.t)
-        draw_text(surf, job["client"], (24, 266), 15, WHITE, bold=True)
+        draw_wrapped(surf, job["client"], (24, 266), 168, 15, WHITE, max_lines=2)   # не заходит под карточки шагов
 
         if self.phase == "repair":
             head = ("ЭКЗАМЕН ГИЛЬДИИ — подсказок нет, мануал разрешён" if self.exam_mode
@@ -11908,7 +11970,7 @@ class Game:
                   "Бренна: «В мастерской ошибка стоит железа. На дороге — жизни. Заново, ученик.»")
         draw_wrapped(surf, brenna, (card.x + 26, 432), card.w - 52, 18, GHOST)
         draw_text(surf, "Барти: «Не красней, Мартин. Меня она гоняла так же. Посмертно.»",
-                  (WIDTH // 2, 508), 16, PURPLE, center=True)
+                  (WIDTH // 2, 508), 16, PURPLE, center=True, plate=True)
         mouse = mouse_pos()
         Button(self._fail_retry_rect(), "ПЕРЕСДАТЬ" if self.exam_mode else "ЗАНОВО",
                AMBER).draw(surf, mouse)
@@ -11950,9 +12012,10 @@ class Game:
         draw_text(surf, "принято под надзором Мастерицы Бренны (посмертно)",
                   (dip.centerx, dip.y + 84), 13, GREY, center=True)
         yb = draw_wrapped(surf, "Бренна: «Сдано. И вот ещё что, Бартоломью... я помню тебя. "
-                                "Ты задавал хорошие вопросы.»", (WIDTH // 2, 500), 760, 17, GHOST, center=True)
+                                "Ты задавал хорошие вопросы.»", (WIDTH // 2, 500), 760, 17, GHOST, center=True,
+                                plate=True)
         draw_text(surf, "Барти: «...Мартин. МАРТИН. Она меня ПОМНИТ!»",
-                  (WIDTH // 2, max(556, yb + 14)), 16, PURPLE, center=True)
+                  (WIDTH // 2, max(556, yb + 14)), 16, PURPLE, center=True, plate=True)
         Button(self._result_btn_rect(), "В ГИЛЬДИЮ", AMBER).draw(surf, mouse_pos())
 
     # ----- Гильдия Колёсников (хаб про-трека) -----
@@ -11984,7 +12047,7 @@ class Game:
         else:
             draw_wrapped(surf, "Здесь ремонт по-взрослому: порядок шагов выбираешь сам, значения — "
                                "только из мануала, а нарушение техники безопасности проваливает задание.",
-                         (60, 104), 680, 14, GREY)
+                         (60, 104), 680, 14, GREY, plate=True)
         for i, (jid, rect) in enumerate(self._guild_job_rects()):
             job = self.job_by_id(jid)
             done = jid in self.done
@@ -12011,7 +12074,7 @@ class Game:
         else:
             line = ("Барти: «Это ОНА, Мартин! Та самая мастерица, про которую я рассказывал! "
                     "...Она меня не помнит. Обидно.»")
-        draw_wrapped(surf, line, (WIDTH - 470, 452), 420, 15, GHOST, max_lines=5)   # под Бренной, не на карточках
+        draw_wrapped(surf, line, (WIDTH - 470, 452), 420, 15, GHOST, max_lines=5, plate=True)   # под Бренной
         Button(self._guild_back_rect(), "НАЗАД", AMBER).draw(surf, mouse)
 
     # ----- результат -----
@@ -12046,7 +12109,7 @@ class Game:
                 img = font(40).render("★" if i < stars else "☆", True, AMBER)
                 img = TF.rotozoom(img, 0, k)
                 surf.blit(img, img.get_rect(center=c))
-        draw_wrapped(surf, job["thanks"], (WIDTH // 2, 185), 760, 20, WHITE, center=True,
+        draw_wrapped(surf, job["thanks"], (WIDTH // 2, 185), 760, 20, WHITE, center=True, plate=st > 1.2,
                      limit=self.typed("thanks", job["thanks"]) if st > 1.2 else 0)
         # карточка «что ты узнал»
         fsz = 18                                     # длинный факт — мельче, но целиком в карточке (до y≈450)
@@ -12062,10 +12125,10 @@ class Game:
         draw_text(surf, "ЧТО ТЫ УЗНАЛ (по-настоящему):", (card.x + 24, card.y + 18), 18, GHOST, bold=True)
         draw_wrapped(surf, job["fact"], (card.x + 24, card.y + 54), card.w - 48, fsz, WHITE)
         gy = max(470, 250 + card.h + 14)
-        draw_text(surf, self.result_gag, (WIDTH // 2, gy), 17, PURPLE, center=True)
+        draw_text(surf, self.result_gag, (WIDTH // 2, gy), 17, PURPLE, center=True, plate=True)
         if self.result_gag in LEG_GAGS and st > 1.4:
             kind = LEG_GAG_KIND[LEG_GAGS.index(self.result_gag)]
-            top = gy + 18
+            top = gy + font(17).get_height() // 2 + 12     # сценка — ниже подписи, нога не пробегает по тексту
             draw_leg_gag(surf, kind, st - 1.4, pygame.Rect(260, top, 760, max(60, HEIGHT - 114 - top)))
         if self.cur.get("track") == "tech":
             nxt = "В ГИЛЬДИЮ"
@@ -12079,41 +12142,105 @@ class Game:
     def _back_rect(self):
         return pygame.Rect(40, HEIGHT - 70, 160, 48)
 
+    GARAGE_PER = 9                  # карточек на странице гаража (3 × 3): текст «чему научился» помещается
+
+    def _garage_pages(self):
+        return max(1, -(-len(self.garage) // self.GARAGE_PER))
+
+    def _garage_card_rects(self):
+        """Карточки текущей страницы гаража: [(индекс в garage, rect)]."""
+        page = min(getattr(self, "garage_page", 0), self._garage_pages() - 1)
+        items = list(range(len(self.garage)))[page * self.GARAGE_PER:(page + 1) * self.GARAGE_PER]
+        cols, gx, gy = 3, 20, 14
+        cw = (WIDTH - 80 - (cols - 1) * gx) // cols
+        ch = (HEIGHT - 76 - 10 - 72 - 2 * gy) // 3
+        x0 = (WIDTH - cols * cw - (cols - 1) * gx) // 2
+        return [(i, pygame.Rect(x0 + (k % cols) * (cw + gx), 72 + (k // cols) * (ch + gy), cw, ch))
+                for k, i in enumerate(items)]
+
+    def _garage_arrow_rects(self):
+        if self._garage_pages() < 2:
+            return []
+        return [(-1, pygame.Rect(WIDTH // 2 - 120, HEIGHT - 66, 54, 40)), (1, pygame.Rect(WIDTH // 2 + 66, HEIGHT - 66, 54, 40))]
+
+    def _garage_popup_rect(self):
+        return pygame.Rect(WIDTH // 2 - 380, 110, 760, 470)
+
+    def _garage_close_rect(self):
+        p = self._garage_popup_rect()
+        return pygame.Rect(p.centerx - 90, p.bottom - 64, 180, 46)
+
+    def click_garage(self, m):
+        if getattr(self, "garage_open", None) is not None:      # окно урока: любой клик закрывает
+            self.garage_open = None
+            snd("tick")
+            return
+        if self._back_rect().collidepoint(m):
+            self.scene = "hub"
+            return
+        for d, r in self._garage_arrow_rects():
+            if r.collidepoint(m):
+                self.garage_page = (getattr(self, "garage_page", 0) + d) % self._garage_pages()
+                snd("tick")
+                return
+        for i, r in self._garage_card_rects():
+            if r.collidepoint(m):
+                self.garage_open = i
+                snd("tick")
+                return
+
     def draw_garage(self, surf):
         self._bg(surf, "bg_garage.png", PURPLE)
         self._topbar(surf, "Гараж-коллекция")
+        mouse = mouse_pos()
         if not self.garage:
             draw_text(surf, "Пока пусто. Почини хотя бы одну коляску!", (WIDTH // 2, 300), 22, GREY, center=True)
-        n = len(self.garage)
-        cols = 3 if n <= 9 else 4       # с заданиями Гильдии коллекция шире
-        gx = 20
-        rows = max(1, -(-n // cols))
-        gy = 20 if rows <= 4 else 10
-        cw = (WIDTH - 80 - (cols - 1) * gx) // cols
-        # все ряды — между шапкой (y=90) и кнопкой «НАЗАД» (y=HEIGHT-70)
-        ch = min(150 if cols == 3 else 128, (HEIGHT - 70 - 10 - 90 - (rows - 1) * gy) // rows)
-        art = min(120 if cols == 3 else 96, ch - 12)
-        tx = art + 20
-        x0 = (WIDTH - cols * cw - (cols - 1) * gx) // 2
-        for i, (jid, stars) in enumerate(self.garage):
+        for k, (i, rect) in enumerate(self._garage_card_rects()):
+            jid, stars = self.garage[i]
             job = self.job_by_id(jid)
-            col, row = i % cols, i // cols
-            rect = pygame.Rect(x0 + col * (cw + gx), 90 + row * (ch + gy), cw, ch)
-            rect = rect.move(0, int(40 * (1 - appear(self.st, 0.06 * i, 0.4))))
-            s = Surf(rect.size, pygame.SRCALPHA)
-            s.fill((30, 28, 40, 230))
-            surf.blit(s, rect)
-            aa_rect(surf, PURPLE, rect, 2, border_radius=8)
-            surf.blit(load_image(job["chair_art"], (art, art), AMBER),
-                      (rect.x + 10, rect.y + (ch - art) // 2))
-            fit_text(surf, job["client"], (rect.x + tx, rect.y + 14), cw - tx - 10, 15, WHITE, bold=True)
-            fit_text(surf, job["title"], (rect.x + tx, rect.y + 36), cw - tx - 10, 12, GREY)
-            draw_text(surf, "★" * stars + "☆" * (3 - stars), (rect.x + tx, rect.y + 56), 18, AMBER)
-            if cols == 3:
-                lh = font(11).get_height() + 2
-                draw_wrapped(surf, job["fact"], (rect.x + tx, rect.y + 80), cw - tx - 12, 11, GHOST,
-                             max_lines=max(1, (ch - 86) // lh))
-        Button(self._back_rect(), "НАЗАД", AMBER).draw(surf, mouse_pos())
+            rect = rect.move(0, int(40 * (1 - appear(self.st, 0.06 * k, 0.4))))
+            Button(rect, "", PURPLE).draw(surf, mouse, offset=(0, 0))
+            art = min(110, rect.h - 16)
+            surf.blit(load_image(job["chair_art"], (art, art), AMBER), (rect.x + 8, rect.y + (rect.h - art) // 2))
+            tx, tw = rect.x + art + 18, rect.w - art - 28
+            y = draw_wrapped(surf, job["client"], (tx, rect.y + 10), tw, 15, WHITE, max_lines=2)
+            y = draw_wrapped(surf, job["title"], (tx, y), tw, 12, GREY, max_lines=2)
+            draw_text(surf, "★" * stars + "☆" * (3 - stars), (tx, y + 2), 16, AMBER)
+            lh = font(11).get_height() + 2
+            left = max(1, (rect.bottom - 22 - (y + 24)) // lh)
+            draw_wrapped(surf, job["fact"], (tx, y + 24), tw, 11, GHOST, max_lines=left)
+            draw_text(surf, "▸ " + tr("подробнее"), (rect.right - 10, rect.bottom - 18), 11, CYAN, right=True)
+        pages = self._garage_pages()
+        if pages > 1:
+            page = min(getattr(self, "garage_page", 0), pages - 1)
+            for d, r in self._garage_arrow_rects():
+                Button(r, "◀" if d < 0 else "▶", AMBER).draw(surf, mouse)
+            draw_text(surf, f"{page + 1} / {pages}", (WIDTH // 2, HEIGHT - 54), 16, WHITE, center=True)
+        Button(self._back_rect(), "НАЗАД", AMBER).draw(surf, mouse)
+        gi = getattr(self, "garage_open", None)
+        if gi is not None and gi < len(self.garage):            # окно с полным уроком задания
+            _cap_modal()
+            dim = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
+            dim.fill((8, 8, 12, 170))
+            surf.blit(dim, (0, 0))
+            jid, stars = self.garage[gi]
+            job = self.job_by_id(jid)
+            p = self._garage_popup_rect()
+            aa_rect(surf, (20, 18, 30, 248), p, border_radius=14)
+            aa_rect(surf, PURPLE, p, 2, border_radius=14)
+            surf.blit(load_image(job["chair_art"], (170, 170), AMBER), (p.x + 24, p.y + 24))
+            surf.blit(load_image(job["client_art"], (110, 130), GHOST), (p.x + 54, p.y + 210))
+            x, w = p.x + 220, p.w - 250
+            y = draw_wrapped(surf, job["client"], (x, p.y + 26), w, 22, WHITE)
+            y = draw_wrapped(surf, job["title"], (x, y + 2), w, 16, GREY)
+            draw_text(surf, "★" * stars + "☆" * (3 - stars), (x, y + 6), 22, AMBER)
+            draw_text(surf, "ЧЕМУ НАУЧИЛСЯ", (x, y + 46), 15, CYAN, bold=True)
+            fy = y + 70
+            fsz = 17
+            while fsz > 12 and len(wrap_lines(job["fact"], w, fsz)) * (font(fsz).get_height() + 3) > p.bottom - 80 - fy:
+                fsz -= 1
+            draw_wrapped(surf, job["fact"], (x, fy), w, fsz, WHITE, line_gap=3)
+            Button(self._garage_close_rect(), "ЗАКРЫТЬ", AMBER).draw(surf, mouse)
 
     # ----- финал -----
     def draw_ending(self, surf):

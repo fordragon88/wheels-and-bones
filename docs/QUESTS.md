@@ -22,9 +22,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Punctured tube — remove the tire, replace/patch the tube
-- ❌ Bent rim — The rim is true. Rims rarely bend, and only from a hard impact.
-- ❌ Loose wheel lock — The wheel lock doesn't cause a flat tire.
+- ✅ (correct) Punctured inner tube: the rear wheel is flat
+- ❌ Bent rim: the wheel wobbles and bumps — The rim is true. Rims rarely bend, and only from a hard impact.
+- ❌ Loose wheel lock dragging on the wheel — The wheel lock doesn't cause a flat tire.
 
 **Repair steps**
 
@@ -88,9 +88,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Caster stem play + dirt/hair in the axle
-- ❌ Loose fork mounting bolts — The fork is firmly seated — it's the stem itself that has play.
-- ❌ Flat rear tire — The tire is fine. The shaking comes from the front.
+- ✅ (correct) Caster stem play and hair in the axle
+- ❌ Loose caster fork mounting bolts — The fork is firmly seated — it's the stem itself that has play.
+- ❌ Flat rear tire — the chair pulls to one side — The tire is fine. The shaking comes from the front.
 
 **Repair steps**
 
@@ -138,8 +138,8 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Diagnosis options**
 
 - ✅ (correct) Loose caster fork mounting bolts
-- ❌ Stem play + hair in the axle — The stem is tight, the axle is clean — it's not them.
-- ❌ Flat rear tire — The tire is fine. The shaking comes from the front.
+- ❌ Caster stem play and hair in the axle — The stem is tight, the axle is clean — it's not them.
+- ❌ Flat rear tire — the chair pulls to one side — The tire is fine. The shaking comes from the front.
 
 **Repair steps**
 
@@ -175,9 +175,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Check tire pressure first, then the wheel lock mounting
-- ❌ Replace the whole wheel lock assembly right away — Simple causes first: pressure and mounting.
-- ❌ Bent frame — The frame is fine.
+- ✅ (correct) Low tire pressure and a shifted wheel lock
+- ❌ Worn wheel lock — replace the whole assembly — Simple causes first: pressure and mounting.
+- ❌ Bent frame — the wheel sits crooked — The frame is fine.
 
 **Repair steps**
 
@@ -228,9 +228,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Loose spokes (and check the bolts too)
-- ❌ Dead bearing — A bearing whines or knocks; this is a rattle.
-- ❌ Flat inner tube — The inner tube is fine.
+- ✅ (correct) Loose spokes on the rear wheel
+- ❌ Worn axle bearing — the wheel wobbles — A bearing whines or knocks; this is a rattle.
+- ❌ Flat inner tube — the tire squashes as it rolls — The inner tube is fine.
 
 **Repair steps**
 
@@ -272,7 +272,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 - ✅ (correct) Axle bearing dirty/worn
 - ❌ Wheel lock rubs the tire — The lock is released. The sound comes from the hub.
-- ❌ Flat tire — The tire is fine.
+- ❌ Flat tire — the wheel rolls stiffly and drags — The tire is fine.
 
 **Repair steps**
 
@@ -322,8 +322,8 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Diagnosis options**
 
 - ✅ (correct) Wheel lock slipped and rubs the tire
-- ❌ Axle bearing worn — The bearing is quiet and smooth. The sound is outside, by the tire.
-- ❌ Flat tire — The tire is inflated.
+- ❌ Axle bearing dirty/worn — The bearing is quiet and smooth. The sound is outside, by the tire.
+- ❌ Flat tire — the wheel rolls stiffly and drags — The tire is inflated.
 
 **Repair steps**
 
@@ -366,8 +366,8 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Diagnosis options**
 
 - ✅ (correct) Air cushion puncture
-- ❌ Sagging seat sling — The sling is fine; the sinking is from the deflated cushion.
-- ❌ Loose backrest — Bomm sinks down to the seat base, not backwards — and on inspection the cushion was losing air.
+- ❌ The seat sling under the cushion sags — The sling is fine; the sinking is from the deflated cushion.
+- ❌ Loose backrest — the troll slumps — Bomm sinks down to the seat base, not backwards — and on inspection the cushion was losing air.
 
 **Repair steps**
 
@@ -419,9 +419,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Signal isn't reaching the actuator: connector not fully seated, harness pinched — power down, push in until it clicks, reroute the harness
-- ❌ The factory lift lockout has tripped — If it were locked out, the indicator would be red or yellow, but it's green.
-- ❌ Battery is dead — Charge is full, and if drained the Q-Logic 3 would show error 20 “Undervoltage”.
+- ✅ (correct) Actuator connector not fully seated, harness pinched
+- ❌ The factory lift lockout tripped because of tilt — If it were locked out, the indicator would be red or yellow, but it's green.
+- ❌ Battery is low — not enough power for the lift — Charge is full, and if drained the Q-Logic 3 would show error 20 “Undervoltage”.
 
 **Repair steps**
 
@@ -505,9 +505,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Factory lockout: tilt or recline greater than 20° prohibits lifting — return the seat closer to level
-- ❌ The lift actuator burned out — A red indicator isn't a breakdown, it's a lockout based on seat position.
-- ❌ Motors in freewheel — The levers are up, and freewheel doesn't interfere with the elevator.
+- ✅ (correct) Lockout: tilt or recline over 20°
+- ❌ The lift actuator burned out — the seat won't move — A red indicator isn't a breakdown, it's a lockout based on seat position.
+- ❌ Motors in freewheel — the joystick won't send commands — The levers are up, and freewheel doesn't interfere with the elevator.
 
 **Repair steps**
 
@@ -577,9 +577,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Joystick: dry out, restart, clean, connector + replace the boot right away
-- ❌ Burnt-out motor — The display shows a joystick error, not a motor error, and the joystick sticks — that's what makes it veer.
-- ❌ Dead battery — Charge is normal — see the battery inspection.
+- ✅ (correct) Joystick got wet and dirty, the boot is torn
+- ❌ Burnt-out motor — the chair veers to one side — The display shows a joystick error, not a motor error, and the joystick sticks — that's what makes it veer.
+- ❌ Low battery — the chair jerks — Charge is normal — see the battery inspection.
 
 **Repair steps**
 
@@ -643,9 +643,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Put it in freewheel and roll it away; then motor connectors, noise and charging the battery
-- ❌ Drag it with the motors engaged — It won't roll with the motors engaged; you could damage the drive.
-- ❌ Replace the motor right away — Simple things first: connectors, debris in the wheels, noise.
+- ✅ (correct) Freewheel and roll it out first, then find the cause
+- ❌ Drag it with the motors engaged — it's quicker — It won't roll with the motors engaged; you could damage the drive.
+- ❌ Replace the motor at once: it whined and pulled aside — Simple things first: connectors, debris in the wheels, noise.
 
 **Repair steps**
 
@@ -700,9 +700,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Low tire pressure + slipped wheel-lock clamp: the shoe doesn't dig 5 mm (3/16") into the tire
+- ✅ (correct) Low tire pressure and the wheel-lock clamp slipped
 - ❌ The lock is broken — replace the whole assembly — The lock is fine, it just shifted. Per the manual, pressure first, then clamp position.
-- ❌ Loose quick-release axle — The axle is latched and has no play. The wheel turns because the lock isn't holding it.
+- ❌ The quick-release axle is loose and the wheel slips — The axle is latched and has no play. The wheel turns because the lock isn't holding it.
 - ❌ You need to pull the lock lever harder on descents — Locks are NOT brakes: you can't slow a moving chair with them. They only hold a parked one.
 
 **Repair steps**
@@ -765,9 +765,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) The backrest posts are at different angles: the angle nut on one side came loose and the post “slid”
+- ✅ (correct) The angle nut on one backrest post came loose
 - ❌ The upholstery stretched: tightening the straps will do — The straps change the shape of the backrest, but not the angle of the posts. The skew is in the posts themselves.
-- ❌ The client “sits wrong” — It's not about seating. Look at the posts: they're at different angles, no one could sit straight like that.
+- ❌ The client “sits wrong” — it's her posture — It's not about seating. Look at the posts: they're at different angles, no one could sit straight like that.
 
 **Repair steps**
 
@@ -825,9 +825,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Anti-tippers at different heights + slack cable: the right pin doesn't fully enter the rocker
+- ✅ (correct) Anti-tippers at different heights, cable slack
 - ❌ The whole tilt mechanism is broken, replace the frame — The mechanism is intact: the pin just doesn't reach because of the slack cable. This is an adjustment, not a replacement.
-- ❌ The child fidgets too much — It's not the child: the wheelchair must be reliable under any movement. Look for the cause in the mechanics.
+- ❌ The child fidgets too much in the seat — It's not the child: the wheelchair must be reliable under any movement. Look for the cause in the mechanics.
 - ❌ Grease the cable with oil and it'll all go away — The Iris manual forbids lubricating the tilt mechanism. The slack is removed with the adjuster.
 
 **Repair steps**
@@ -888,10 +888,10 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Kink in the tilt cable: the cable pulls with friction, the locking tooth doesn't seat fully. Replace the cable
+- ✅ (correct) Kinked tilt cable: the locking tooth doesn't seat
 - ❌ Tighten the adjuster harder and the kink is nothing to worry about — Ki Mobility: a cable with a kink or one that can't be adjusted is REPLACED. A kink isn't cured with the adjuster.
-- ❌ The backrest gas springs are worn out — The gas springs recline the backrest, they don't tilt the seat. And they hold.
-- ❌ Soak the cable in WD-40 — The manual explicitly forbids WD-40 and petroleum solvents: they damage the components.
+- ❌ The backrest gas springs are worn — the seat creeps — The gas springs recline the backrest, they don't tilt the seat. And they hold.
+- ❌ Soak the cable in WD-40 so it moves smoother — The manual explicitly forbids WD-40 and petroleum solvents: they damage the components.
 
 **Repair steps**
 
@@ -960,9 +960,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Code 02: the joystick was not in neutral at power-on — turn it on without touching the joystick
-- ❌ Battery discharged — Low charge is codes 05/06, and the battery is nearly full.
-- ❌ Brakes released — That would be code 03. The levers are up — the brakes are locked.
+- ✅ (correct) Code 02: joystick not in neutral at power-on
+- ❌ Battery is flat — the chair shuts itself off — Low charge is codes 05/06, and the battery is nearly full.
+- ❌ Brakes are released — a safety cut-out kicked in — That would be code 03. The levers are up — the brakes are locked.
 
 **Repair steps**
 
@@ -1012,9 +1012,9 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Code 01: the armrest with the joystick did not reach the operating position — sand in the base
-- ❌ The joystick was touched at power-on — That is code 02. Here it's 01 — it's the armrest.
-- ❌ The motor failed — Motor errors are codes 60–86. Code 01 is a safeguard, not a fault.
+- ✅ (correct) Code 01: the joystick armrest isn't in position
+- ❌ The joystick was touched at power-on — protection kicked in — That is code 02. Here it's 01 — it's the armrest.
+- ❌ A motor failed — the chair can't move off — Motor errors are codes 60–86. Code 01 is a safeguard, not a fault.
 
 **Repair steps**
 
@@ -1060,8 +1060,8 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Code 10: communication fault through the seat connector — restart, reinstall the seat, clean the contacts
-- ❌ The battery froze — Cold is code 14: the wheelchair just drives slower, it doesn't shut off.
+- ✅ (correct) Code 10: communication fault at the seat connector
+- ❌ The battery froze — it can't hold voltage in the cold — Cold is code 14: the wheelchair just drives slower, it doesn't shut off.
 - ❌ Replace the joystick and the controller at once — Replacing the joystick, the seat cable or the controller is the last item in the table, and it's dealer work.
 
 **Repair steps**
@@ -1141,7 +1141,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) The main circuit breaker is off for storage, and the shed is colder than +5 °C: switch the breaker on and charge somewhere warm
+- ✅ (correct) The main breaker is off, and the shed is below +5 °C
 - ❌ The batteries died over the winter — replace the pair right away — They were fully charged in autumn, and the circuit is now cut off by the breaker. Switch it on first.
 - ❌ The charging breaker burned out — open up the electronics — The charging breaker resets itself after 5 minutes. And only a technician touches the electronics.
 
