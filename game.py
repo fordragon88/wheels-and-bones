@@ -554,7 +554,8 @@ def font(size, bold=False):
 
 # ---- Доступность: что нарисовано в кадре — для управления с клавиатуры и чтения вслух ----
 A11Y = dict(on=False, voices=True, rate=0, contrast=False, instant=False, speech_set=False,
-            text=1 if IS_WEB else 0)        # text — размер текста (TEXT_K); в браузере окно мельче — крупнее сразу
+            text=2 if IS_WEB else 0, text_set=False)   # text — размер текста (TEXT_K): в браузере окно мельче —
+                                                         # сразу 125 %; text_set — игрок выбрал размер сам
 TEXT_K = (1.0, 1.12, 1.25)
 CAPTURE = dict(frame=None, texts=[], buttons=[], modal=None, mute=0)
 
@@ -6786,14 +6787,16 @@ class Game:
         reasons = self._reasons()
         for i, r in self._dispute_reason_rects():
             Button(r, "", CYAN).draw(surf, mouse, active=i == ui["reason"])
-            draw_text(surf, ("◉  " if i == ui["reason"] else "○  ") + reasons[i], (r.x + 14, r.y + (8 if r.h > 32 else 5)), 16, WHITE)
+            draw_text(surf, ("◉  " if i == ui["reason"] else "○  ") + reasons[i],
+                      (r.x + 14, r.centery - font(16).get_height() // 2), 16, WHITE)
         tr_ = self._dispute_text_rect()
         draw_text(surf, "Опиши, что не так и как правильно" if general else "Как правильно, по-твоему? (можно не писать)",
                   (tr_.x, tr_.y - 22), 14, GREY)
         aa_rect(surf, (12, 12, 18), tr_, border_radius=8)
         aa_rect(surf, DIM, tr_, 1, border_radius=8)
         caret = "|" if int(self.t * 2) % 2 == 0 else " "   # погасший курсор держит место: пробел в конце виден
-        draw_wrapped(surf, ui["text"] + caret, (tr_.x + 10, tr_.y + 8), tr_.w - 20, 15, WHITE, max_lines=3, raw=True)
+        lines = wrap_lines(ui["text"] + caret, tr_.w - 20, 15, raw=True)
+        draw_wrapped(surf, " ".join(lines[-3:]), (tr_.x + 10, tr_.y + 8), tr_.w - 20, 15, WHITE, raw=True)
         Button(self._dispute_cancel_rect(), "ОТМЕНА", GREY).draw(surf, mouse)
         Button(self._dispute_send_rect(), "ОТПРАВИТЬ", GOOD).draw(surf, mouse)
 
@@ -6856,6 +6859,8 @@ class Game:
         except Exception:
             acc = None
         if isinstance(acc, dict):
+            if not acc.get("text_set"):              # размер текста игрок не выбирал — берём текущий по умолчанию
+                acc = {k: v for k, v in acc.items() if k != "text"}
             for k in A11Y:                           # старый/испорченный файл: неверный тип — оставляем значение по умолчанию
                 v = acc.get(k)
                 if isinstance(A11Y[k], bool):
@@ -8536,6 +8541,7 @@ class Game:
             self.say(f"{tr('Скорость')}: {A11Y['rate']}", True)
         elif k == "text":
             A11Y["text"] = (A11Y.get("text", 0) + 1) % len(TEXT_K)
+            A11Y["text_set"] = True                   # свой выбор игрока — размер по умолчанию его не перебьёт
             DISPLAY["frame"] = None                   # шрифты и подписи — заново в новом размере
             _update_rs()
             self.say(self._access_label(k), True)
@@ -8701,7 +8707,7 @@ class Game:
         draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, p.y + 368), 13, GREY)
         draw_wrapped(surf, "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
                            "С экранным чтецом (NVDA, JAWS) игра говорит его голосом.",
-                     (p.x + 32, p.y + 388), p.w - 64, 13, GREY)
+                     (p.x + 32, p.y + 388), self._sound_close_rect().x - p.x - 48, 13, GREY)
 
     def _draw_sound_panel(self, surf):
         _cap_modal()
@@ -8760,7 +8766,7 @@ class Game:
             for full, r in self._mode_rects():
                 Button(r, "ВЕСЬ ЭКРАН" if full else "В ОКНЕ", CYAN).draw(surf, mouse, active=full == DISPLAY["fullscreen"])
             draw_text(surf, "F11 или Alt+Enter — переключить", (p.x + 230, p.y + 172), 12, GREY)
-            draw_text(surf, "Разрешение", (p.x + 32, p.y + 190), 17, WHITE)
+            draw_text(surf, "Разрешение", (p.x + 32, p.y + 186), 17, WHITE)
             cur = DISPLAY["res"] or "auto"
             for opt, r in self._res_rects():
                 label = "АВТО" if opt == "auto" else f"{opt[0]}×{opt[1]}"
@@ -8797,6 +8803,9 @@ class Game:
             reserve = 112
         if self.scene == "job" and self.dispute_visible():
             reserve = WIDTH - self._dispute_btn_rect().x + 6
+        sk = self._skip_tut_rect()
+        if sk is not None and sk.y < 60:              # первое задание: сообщение не уходит под «Пропустить обучение»
+            reserve = WIDTH - sk.x + 6
         w = WIDTH - 16 - reserve
         lines = wrap_lines(self.toast, w - 40, 16)
         h = 12 + len(lines) * (font(16).get_height() + 2)
