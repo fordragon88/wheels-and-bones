@@ -99,7 +99,8 @@ else:
     ASSETS_DIR = os.path.join(BASE_DIR, "assets")
     DATA_DIR = BASE_DIR
 IS_WEB = sys.platform == "emscripten"          # браузерная версия (pygbag, WebAssembly)
-WEB_RES = {"high": (1920, 1080), "standard": (1280, 720)}   # качество в браузере: холст 1080p или 720p
+WEB_RES = {"standard": (1280, 720), "high": (1920, 1080), "ultra": (2560, 1440)}   # холст в браузере
+WEB_LEVELS = ("standard", "high", "ultra")     # «авто» выбирает по размеру окна игры на экране (и скорости ПК)
 GAME_VERSION = "0.3"
 # Замечания игроков (флажок ⚑, «Я не согласен») уходят в Google-таблицу через веб-приложение Apps Script
 # (docs/feedback/Code.gs, настройка — docs/FEEDBACK_SETUP.md). Пустой адрес — только локальный feedback.json.
@@ -1420,8 +1421,8 @@ def _default_window():
 
 def _set_window(fullscreen):
     """Создать/переключить окно. Масштабирование кадра делает игра сама (present), без SCALED у SDL."""
-    if IS_WEB:                                        # браузер: холст 1080p (чётко и на весь экран) или 720p
-        res = WEB_RES.get(DISPLAY.get("web_quality", "high"), WEB_RES["high"])
+    if IS_WEB:                                        # браузер: холст 720p…1440p (размер — web_target_res)
+        res = web_target_res()
         DISPLAY["res"] = res
         screen = pygame.display.set_mode(res)
         DISPLAY["fullscreen"] = False
@@ -1471,17 +1472,64 @@ def init_display(fullscreen=False):
     return DISPLAY["screen"]
 
 
+def web_target_res():
+    """Браузер: размер холста. Выбор игрока (1080p/720p) или «авто»: ближайший не меньше окна игры на экране
+    (ширина × devicePixelRatio). Холст крупнее окна браузер ужимает грубо — тонкие линии рвутся, текст «сыпется»;
+    поэтому в маленьком окне на сайте — 720p, на весь экран — 1080p, на 4K/Retina — 1440p. web_cap — потолок
+    после замедления (fps < 20)."""
+    q = DISPLAY.get("web_quality", "auto")
+    if q in WEB_RES:
+        return WEB_RES[q]
+    px = DISPLAY.get("web_px") or 1920
+    cap = DISPLAY.get("web_cap", len(WEB_LEVELS) - 1)
+    lvl = next((i for i, k in enumerate(WEB_LEVELS) if WEB_RES[k][0] >= px * 0.9), len(WEB_LEVELS) - 1)
+    return WEB_RES[WEB_LEVELS[max(0, min(lvl, cap))]]
+
+
+def web_measure():
+    """Сколько реальных пикселей занимает окно игры (по ширине, область 16:9). 0 — ещё не известно."""
+    v = web_js("(function(){var c=document.getElementById('canvas');if(!c)return 0;var r=c.getBoundingClientRect();"
+               "return Math.round(Math.min(r.width,r.height*16/9)*(window.devicePixelRatio||1));})()")
+    try:
+        return int(v or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def set_web_quality(q, by_user=True):
-    """Браузер: высокое (1080p) или стандартное (720p) качество; by_user=False — автоснижение на слабом ПК."""
-    if q not in WEB_RES or DISPLAY.get("web_quality", "high") == q:
+    """Браузер: «auto», «high» (1080p) или «standard» (720p); by_user=False — выбор игры, не игрока."""
+    if q != "auto" and q not in WEB_RES:
         return False
     DISPLAY["web_quality"] = q
     if by_user:
-        DISPLAY["web_quality_user"] = True
+        DISPLAY["web_quality_user"] = q != "auto"
+        DISPLAY.pop("web_cap", None)                  # игрок выбрал сам — потолок от замедления сбрасываем
+    if DISPLAY.get("res") == web_target_res():
+        return True
     try:
         apply_display()
     except Exception:
         return False
+    return True
+
+
+def web_auto_resize(px):
+    """«Авто»: окно игры на экране стало другого размера (полный экран, поворот, окно браузера) — холст под него.
+    Меняем, только если тот же новый размер держится две проверки подряд (без дёрганья при перетаскивании окна)."""
+    if not px:
+        return False
+    old = DISPLAY.get("web_px")
+    DISPLAY["web_px"] = px
+    want = web_target_res()
+    if want == DISPLAY.get("res"):
+        DISPLAY.pop("_want", None)
+        return False
+    if DISPLAY.get("_want") != want:
+        DISPLAY["_want"] = want
+        DISPLAY["web_px"] = old
+        return False
+    DISPLAY.pop("_want", None)
+    apply_display()
     return True
 
 
@@ -6830,7 +6878,7 @@ class Game:
                 json.dump({"volume": dict(VOL), "lang": LANG["code"], "fullscreen": DISPLAY["fullscreen"],
                            "glow": DISPLAY["glow"], "res": list(DISPLAY["res"]) if DISPLAY["res"] else None,
                            "gpu3d": not GL["off"], "a11y": dict(A11Y),
-                           "web_quality": DISPLAY.get("web_quality", "high"),
+                           "web_quality": DISPLAY.get("web_quality", "auto"),
                            "web_quality_user": bool(DISPLAY.get("web_quality_user"))},
                           f, ensure_ascii=False, indent=2)
         except Exception:
@@ -8519,6 +8567,12 @@ class Game:
         opts = ["auto"] + available_resolutions()
         return [(o, pygame.Rect(p.x + 32 + (i % 3) * 174, p.y + 214 + (i // 3) * 44, 164, 38)) for i, o in enumerate(opts)]
 
+    WEB_Q = (("auto", "АВТО"), ("high", "1080p"), ("standard", "720p"))
+
+    def _webq_rects(self):
+        p = self._sound_panel_rect()
+        return [(q, pygame.Rect(p.x + 230 + i * 108, p.y + 128, 100, 38)) for i, (q, _) in enumerate(self.WEB_Q)]
+
     def _web_fs_rect(self):
         p = self._sound_panel_rect()
         return pygame.Rect(p.x + 230, p.y + 196, 230, 38)
@@ -8587,9 +8641,9 @@ class Game:
                         return
                 return
             if IS_WEB:
-                for full, r in self._mode_rects():               # браузер: эти кнопки — качество
+                for q, r in self._webq_rects():                  # браузер: качество картинки
                     if r.collidepoint(event.pos):
-                        set_web_quality("high" if full else "standard")
+                        set_web_quality(q)
                         self.save_settings()
                         snd("tick")
                         return
@@ -8691,11 +8745,11 @@ class Game:
                    GOOD if not VOL["on"] else GREY).draw(surf, mouse)
         elif IS_WEB:                                   # браузер: качество картинки и полный экран
             draw_text(surf, "Качество", (p.x + 32, p.y + 137), 17, WHITE)
-            q = DISPLAY.get("web_quality", "high")
-            for full, r in self._mode_rects():
-                Button(r, "ВЫСОКОЕ 1080p" if full else "СТАНДАРТ 720p", CYAN).draw(
-                    surf, mouse, active=(q == "high") == full)
-            draw_text(surf, "Стандарт — плавнее на слабом компьютере", (p.x + 230, p.y + 172), 12, GREY)
+            q = DISPLAY.get("web_quality", "auto")
+            for (qk, label), (_, r) in zip(self.WEB_Q, self._webq_rects()):
+                Button(r, label, CYAN).draw(surf, mouse, active=q == qk)
+            draw_text(surf, "Авто — по размеру окна игры. Сейчас: {0}p".format(DISPLAY.get("res", (1920, 1080))[1]),
+                      (p.x + 230, p.y + 172), 12, GREY)
             draw_text(surf, "Полный экран", (p.x + 32, p.y + 205), 17, WHITE)
             Button(self._web_fs_rect(), "ВКЛ / ВЫКЛ  (F11)", AMBER).draw(surf, mouse)
             draw_text(surf, "Свечение и частицы", (p.x + 32, p.y + 329), 17, WHITE)
@@ -12345,12 +12399,13 @@ async def main():
     if IS_WEB:
         web_restore()
         web_setup_page()
+        DISPLAY["web_px"] = web_measure()             # «авто»: холст сразу под окно игры на странице
         try:
             with open(SETTINGS_PATH, encoding="utf-8-sig") as f:
                 st0 = json.load(f)
-            if st0.get("web_quality") in WEB_RES:
+            if st0.get("web_quality") in WEB_RES and st0.get("web_quality_user"):   # свой выбор игрока
                 DISPLAY["web_quality"] = st0["web_quality"]
-                DISPLAY["web_quality_user"] = bool(st0.get("web_quality_user"))
+                DISPLAY["web_quality_user"] = True
         except Exception:
             pass
         if FEEDBACK_URL:
@@ -12456,18 +12511,23 @@ async def main():
         present(DISPLAY["frame"])
         pygame.display.flip()
         if IS_WEB:
+            DISPLAY["_px_t"] = DISPLAY.get("_px_t", 0) + dt
+            if DISPLAY["_px_t"] > 1 and DISPLAY.get("web_quality", "auto") == "auto":   # окно игры поменялось?
+                DISPLAY["_px_t"] = 0
+                web_auto_resize(web_measure())
             DISPLAY["_fps_t"] = DISPLAY.get("_fps_t", 0) + dt
             if DISPLAY["_fps_t"] > 3:                 # окно замера 3 с
                 DISPLAY["_fps_t"] = 0
                 fps = clock.get_fps()
-                print(f"[wnb] fps {fps:.1f} rs {RS} scene {game.scene}", flush=True)
+                print(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} scene {game.scene}", flush=True)
                 slow = fps < 20 and game.scene in ("job", "hub", "seating", "guild")
                 DISPLAY["_slow"] = DISPLAY.get("_slow", 0) + 1 if slow else 0
-                if (DISPLAY["_slow"] >= 2 and DISPLAY.get("web_quality", "high") == "high"
-                        and not DISPLAY.get("web_quality_user")):
-                    if set_web_quality("standard", by_user=False):
-                        game.flash("Качество снижено до 720p для плавности. Вернуть: настройки → Графика.", AMBER, 5)
-                        game.save_settings()
+                lvl = next((i for i, k in enumerate(WEB_LEVELS) if WEB_RES[k] == DISPLAY.get("res")), 0)
+                if DISPLAY["_slow"] >= 2 and DISPLAY.get("web_quality", "auto") == "auto" and lvl > 0:
+                    DISPLAY["web_cap"] = lvl - 1           # слабый ПК: на ступень ниже и не выше этого потолка
+                    DISPLAY["_slow"] = 0
+                    apply_display()
+                    game.flash("Качество снижено для плавности. Настройки → Графика.", AMBER, 5)
         await asyncio.sleep(0)                        # браузеру — нарисовать кадр и принять ввод
     pygame.quit()
 
