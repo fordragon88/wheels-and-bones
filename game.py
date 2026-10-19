@@ -7398,7 +7398,6 @@ class Game:
         ("T", "прочитать весь экран"),
         ("H", "подсказка призрака"),
         ("C", "что сказал клиент"),
-        ("V", "3D-осмотр коляски"),
         ("F1", "справка по клавишам"),
         ("F2", "озвучка: включить или выключить"),
         ("M", "звук: включить или выключить"),
@@ -7989,10 +7988,6 @@ class Game:
             if handler:
                 handler(event.pos)
         elif event.type == pygame.KEYDOWN:
-            if (event.key == pygame.K_v and self.scene == "job" and self.cur and self.cur.get("track") != "tech"
-                    and not self.mini_pending and not self.show_manual and not self.spec_pending):
-                self.open_v3d()
-                return
             if event.key == pygame.K_ESCAPE:
                 if self.scene == "job":
                     # сначала закрываем оверлеи; двойной Esc — покинуть ремонт
@@ -8061,6 +8056,16 @@ class Game:
         if self.user_done_count() >= len(JOBS) and self._hub_ending_rect().collidepoint(m):
             self.scene = "ending"
 
+    def _part_clicked(self, pid):
+        """Клик по детали (кружок, строка списка, сама модель): осмотр в диагнозе, инструмент — в ремонте."""
+        if self.phase == "diagnose":
+            self.inspect_part(pid)
+        elif self.phase == "repair":
+            if self.sel_tool is None:
+                self.flash("Сначала выбери инструмент внизу.", AMBER, 2.5)
+            else:
+                self.do_action(self.sel_tool, pid)
+
     def click_job(self, m):
         if self.cur.get("track") == "tech":
             self.click_job_tech(m)
@@ -8069,12 +8074,9 @@ class Game:
             self._click_mini(m)
             return
         if self.phase == "diagnose":
-            if self._v3d_btn_rect().collidepoint(m):
-                self.open_v3d()
-                return
             for pid, rect in self._part_rects():
                 if rect.collidepoint(m):
-                    self.inspect_part(pid)
+                    self._part_clicked(pid)
                     return
             for i, rect in self._diag_rects():
                 if rect.collidepoint(m):
@@ -8082,7 +8084,7 @@ class Game:
                     return
             pid = self._hotspot_at(m)
             if pid:
-                self.inspect_part(pid)
+                self._part_clicked(pid)
                 return
         elif self.phase == "repair":
             for tid, rect in self._tool_rects():
@@ -8091,17 +8093,11 @@ class Game:
                     return
             for pid, rect in self._part_rects():
                 if rect.collidepoint(m):
-                    if self.sel_tool is None:
-                        self.flash("Сначала выбери инструмент внизу.", AMBER, 2.5)
-                    else:
-                        self.do_action(self.sel_tool, pid)
+                    self._part_clicked(pid)
                     return
             pid = self._hotspot_at(m)
             if pid:
-                if self.sel_tool is None:
-                    self.flash("Сначала выбери инструмент внизу.", AMBER, 2.5)
-                else:
-                    self.do_action(self.sel_tool, pid)
+                self._part_clicked(pid)
                 return
         elif self.phase == "test":
             if self._test_btn_rect().collidepoint(m) and self.ride_t0 is None:
@@ -9951,7 +9947,8 @@ class Game:
 
     def _m3d_mesh(self):
         """Облегчённая ИИ-модель для окна диагностики или None (тогда — картинка с хотспотами)."""
-        if self.phase != "diagnose" or self.cur.get("track") == "tech" or self.ride_t0 is not None:
+        if (self.phase not in ("diagnose", "repair", "test") or self.cur.get("track") == "tech"
+                or self.ride_t0 is not None):
             return None
         if _np is None or TT_FORCE:                       # браузер: кадры поворота, пока не пришли — рисунок
             tt = get_turntable(self.cur.get("chair_art"))
@@ -10103,9 +10100,9 @@ class Game:
             s["drag"] = False
             sx, sy = s["start"] or event.pos
             if abs(event.pos[0] - sx) + abs(event.pos[1] - sy) < 6:
-                pid = self._m3d_pick(event.pos)        # просто клик по модели — осмотр этой детали
-                if pid:
-                    self.inspect_part(pid)
+                pid = self._m3d_pick(event.pos)        # просто клик по модели — как клик по этой детали
+                if pid and pid in self.cur["parts"]:
+                    self._part_clicked(pid)
             return True
         return False
 
@@ -10201,6 +10198,8 @@ class Game:
             draw_text(surf, "⟲ тяни — повернуть", (rect.x + 4, rect.bottom - 18), 12, (200, 196, 180))
 
     # ---------- 3D-осмотр: оверлей ----------
+    # С 2026-10-19 из интерфейса не открывается (ни кнопки, ни клавиши V): модель крутится прямо на экране
+    # задания во всех фазах. Код оставлен для art_tests/v3d_sheet.py и на случай возврата окна.
     V3D_SS = 2                      # суперсэмплинг модели (сглаживание)
 
     def open_v3d(self):
@@ -10673,7 +10672,6 @@ class Game:
                 text = job["diagnosis"][i]["text"]
                 draw_wrapped(surf, text, (rect.x + 12, rect.y + 6), rect.w - 24, dsize, WHITE if unlocked else GREY)
             self._draw_parts(surf, mouse, "ОСМОТРЕТЬ")
-            Button(self._v3d_btn_rect(), "ОСМОТР 3D", CYAN).draw(surf, mouse)
         elif self.phase == "repair":
             n = len(job["steps"])
             hdr = draw_text(surf, f"РЕМОНТ — шаг {self.step_idx + 1}/{n}", (360, 70), 20, AMBER, bold=True)
@@ -12005,24 +12003,25 @@ def run_selftest():
         if len(gf.feedback_mem) != 1 or gf.feedback_mem[0]["reason"] != Game.FEEDBACK_REASONS[0]:
             failures.append("общее замечание не сохранилось")
 
-    # 3D в окне диагностики: у каждой детали задания есть кружок, кружки не перекрываются
+    # 3D на экране задания (осмотр и ремонт): у каждой детали задания есть кружок, кружки не перекрываются
     if _np is not None:
         for base in JOBS:
             for job in _resolved(base):
-                gq = Game(headless=True)
-                gq.cur = job
-                gq.phase = "diagnose"
-                gq.inspected = set()
-                if gq._m3d_mesh() is None:
-                    continue
-                spots = gq._chair_hotspots()
-                miss = [p for p in job["parts"] if p not in {q[0] for q in spots}]
-                if miss:
-                    failures.append(f"3D-окно {job['id']}: нет кружков у {miss}")
-                for i, (p1, x1, y1, r1) in enumerate(spots):
-                    for p2, x2, y2, r2 in spots[i + 1:]:
-                        if (x1 - x2) ** 2 + (y1 - y2) ** 2 < (r1 + r2 - 2) ** 2:
-                            failures.append(f"3D-окно {job['id']}: кружки {p1} и {p2} перекрываются")
+                for phase_ in ("diagnose", "repair"):
+                    gq = Game(headless=True)
+                    gq.cur = job
+                    gq.phase = phase_
+                    gq.inspected = set()
+                    if gq._m3d_mesh() is None:
+                        continue
+                    spots = gq._chair_hotspots()
+                    miss = [p for p in job["parts"] if p not in {q[0] for q in spots}]
+                    if miss:
+                        failures.append(f"3D {phase_} {job['id']}: нет кружков у {miss}")
+                    for i, (p1, x1, y1, r1) in enumerate(spots):
+                        for p2, x2, y2, r2 in spots[i + 1:]:
+                            if (x1 - x2) ** 2 + (y1 - y2) ** 2 < (r1 + r2 - 2) ** 2:
+                                failures.append(f"3D {phase_} {job['id']}: кружки {p1} и {p2} перекрываются")
     # хотспоты схемы коляски ссылаются на существующие детали
     for kind, spots in CHAIR_HOTSPOTS.items():
         for pid in spots:

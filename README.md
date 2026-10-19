@@ -39,10 +39,10 @@ Every client is a separate job with a real fault:
 
 1. **Diagnosis.** Inspect the parts of the chair — the diagnosis stays locked until you have gathered evidence
    (at least 2 inspections). Some clients have **different faults behind the same symptom**, so on a repeat
-   visit the cause may differ: trust the inspection, not your memory. **3D INSPECTION** (or the **V** key) opens a
-   3D model of the chair in real proportions — tyres, rims, pushrims, spokes, hub bearings, cross-brace,
-   casters, brakes; on power chairs also motors, freewheel levers, battery and joystick controller. Drag to rotate,
-   scroll to zoom, click a part to inspect it.
+   visit the cause may differ: trust the inspection, not your memory. The chair on screen is a 3D model in real
+   proportions — tyres, rims, pushrims, spokes, hub bearings, cross-brace, casters, brakes; on power chairs also
+   motors, freewheel levers, battery and joystick controller. Drag it to rotate (during diagnosis and repair),
+   scroll to zoom, right-click to reset the view, click a part circle to inspect it.
 2. **Repair.** Perform real steps **in the right order**: pick a tool at the bottom, then click the part — right
    on the chair picture or in the list on the right. A wrong tool or part gets an explanation ("you lever a tube
    off with a tyre lever, not a wrench"). Each correct step comes with a short learning note.
@@ -142,7 +142,7 @@ pip install pygame          # on new Python (3.12+), where pygame won't install:
 python game.py
 ```
 
-Optional: `numpy` enables the 3D inspection; on Windows `cytolk` and `pywin32` enable speech.
+Optional: `numpy` enables the live 3D chair (without it — pre-rendered turntable frames); on Windows `cytolk` and `pywin32` enable speech.
 
 On Windows the easiest way is to double-click **`start_game.bat`**: it starts the game and, if something goes
 wrong, keeps the window with the error message open instead of closing silently.
@@ -168,7 +168,7 @@ The whole game can be played **with the keyboard alone**, and it **talks**:
 - arrows — choose an item (← → move sliders), **Tab** / Shift+Tab — next/previous group, **Enter** / Space —
   press, **Esc** — back;
 - **R** — repeat where you are and what to do; **T** — read the whole screen; **H** — ghost hint;
-  **C** — what the client said; **F1** — help with all keys; **F2** — speech on/off; **V** — 3D inspection.
+  **C** — what the client said; **F1** — help with all keys; **F2** — speech on/off.
 
 If a screen reader is running (NVDA, JAWS), the game speaks **through it** via Tolk (including braille displays);
 otherwise it uses the Windows voice in the game's language. With a screen reader running, speech turns on by
@@ -353,12 +353,11 @@ Pygame. Один файл, играть можно мышью или **толь�
 1. **Диагностика.** Осматриваешь детали коляски (клик) — диагноз заблокирован,
    пока не соберёшь улики (минимум 2 осмотра). У части клиентов под одним
    симптомом живут **разные поломки**: при повторном визите причина может
-   оказаться другой, так что решает осмотр, а не память. Кнопка **ОСМОТР 3D**
-   (или клавиша **V**) открывает 3D-модель коляски в реальных пропорциях (шины,
-   обод, обруч, спицы, ступица с подшипниками, X-крестовина, касторы, тормоз; у
-   электроколяски — моторы, расцепление, батарея, контроллер с джойстиком): крути
-   мышью с инерцией, зум колесом, клик по детали — осмотр; список деталей справа
-   разворачивает модель нужной стороной, неосмотренные детали пульсируют.
+   оказаться другой, так что решает осмотр, а не память. Коляска на экране — 3D-модель
+   в реальных пропорциях (шины, обод, обруч, спицы, ступица с подшипниками, X-крестовина,
+   касторы, тормоз; у электроколяски — моторы, расцепление, батарея, контроллер с
+   джойстиком): тяни мышью — повернуть (и в осмотре, и в ремонте), колесо — зум, правая
+   кнопка — исходный вид, клик по кружку детали — осмотр; неосмотренные детали пульсируют.
 2. **Ремонт.** Выполняешь реальные шаги **по порядку**: выбираешь нужный
    инструмент внизу, затем кликаешь деталь — **прямо на схеме коляски** (детали
    подсвечиваются и подписываются) или в списке справа. Неверный инструмент или
@@ -472,7 +471,7 @@ pip install pygame          # на новых Python (3.12+), где pygame не
 python game.py
 ```
 
-Необязательно: `numpy` включает 3D-осмотр; на Windows `cytolk` и `pywin32` — озвучку.
+Необязательно: `numpy` включает живую 3D-модель коляски (без него — заранее снятые кадры поворота); на Windows `cytolk` и `pywin32` — озвучку.
 
 На Windows проще всего — двойной клик по **`start_game.bat`**: он запускает
 игру и, если что-то пошло не так, оставляет окно с текстом ошибки открытым
@@ -499,7 +498,7 @@ python game.py --feedback   # показать замечания игроков
 - стрелки — выбрать пункт (← → двигают ползунки), **Tab** / Shift+Tab — следующая/предыдущая группа,
   **Enter** / Пробел — нажать, Esc — назад;
 - **R** — повторить, где ты и что делать; **T** — прочитать весь экран; **H** — подсказка призрака;
-  **C** — что сказал клиент; **F1** — все клавиши; **F2** — озвучка вкл/выкл; **V** — 3D-осмотр.
+  **C** — что сказал клиент; **F1** — все клавиши; **F2** — озвучка вкл/выкл.
 
 Если запущен экранный чтец (NVDA, JAWS), игра говорит **его голосом** через Tolk (и на брайлевский дисплей);
 без чтеца — голосом Windows на языке игры. Под чтецом озвучка включается сама. В настройках

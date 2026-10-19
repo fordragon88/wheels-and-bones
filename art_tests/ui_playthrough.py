@@ -92,22 +92,22 @@ def play_base_job(jid):
     assert g.scene == "job", f"{jid}: клик по карточке не открыл задание"
     shot("job_diag")
     # осмотр: две детали — одна по схеме, одна по списку
+    tick(40)                                              # 3D-коляска доворачивается к зрителю (~1 с) — кружки едут
     spots = g._chair_hotspots()
     if spots:
         click(spots[0][1:3])
     click(g._part_rects()[-1][1].center)
-    # 3D-осмотр: открыть, повращать, закрыть
-    click(g._v3d_btn_rect().center)
-    assert g.v3d is not None, "кнопка ОСМОТР 3D не открыла 3D"
-    shot("v3d_" + g.cur["kind"])
-    vr = g._v3d_view_rect()
-    g.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=vr.center))
-    g.handle_event(pygame.event.Event(pygame.MOUSEMOTION, pos=(vr.centerx + 120, vr.centery), rel=(120, 0), buttons=(1, 0, 0)))
-    g.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=(vr.centerx + 120, vr.centery)))
-    click(g._v3d_part_rects()[0][1].center)
-    tick(20)
-    click(g._v3d_close_rect().center)
-    assert g.v3d is None
+    # 3D прямо на экране задания: потянуть коляску мышью (за пустое место окна) — поворот
+    if g._m3d_mesh() is not None:
+        cr = g._chair_rect()
+        p0 = (cr.x + 6, cr.y + 6)
+        yaw0 = g._m3d_view()[0]
+        g.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=p0))
+        g.handle_event(pygame.event.Event(pygame.MOUSEMOTION, pos=(p0[0] + 120, p0[1]), rel=(120, 0), buttons=(1, 0, 0)))
+        g.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=(p0[0] + 120, p0[1])))
+        assert abs(g._m3d_view()[0] - yaw0) > 0.5, "коляска не повернулась от перетаскивания"
+        tick(10)
+        shot("m3d_" + g.cur["kind"])
     # диагноз
     ci = next(i for i, d in enumerate(g.cur["diagnosis"]) if d["correct"])
     click(rect_of(g._diag_rects(), ci).center)
