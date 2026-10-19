@@ -518,7 +518,8 @@ def tr(s):
 
 
 def set_lang(code):
-    LANG["code"] = code if code in ("ru", "en") else "ru"
+    code = str(code).lower()
+    LANG["code"] = code if code in ("ru", "en") else "en"      # неизвестный язык — английский (аудитория игры)
     if LANG["code"] == "en" and not _TR:
         load_lang()
     _tool_icon_cache.clear()
@@ -1249,16 +1250,22 @@ def feedback_payload(entry, shot=None):
         d[k] = tr_en(d[k])
     d.update(key=FEEDBACK_KEY, version=GAME_VERSION,
              platform="web" if IS_WEB else ("exe" if getattr(sys, "frozen", False) else "source"))
-    if shot is not None:
-        try:
-            small = pygame.transform.smoothscale(shot, (640, 360))
-            tmp = os.path.join(tempfile.gettempdir(), f"wnb_shot_{threading.get_ident()}.jpg")
-            pygame.image.save(small, tmp)                 # через файл: в браузере pygame не пишет в память
-            with open(tmp, "rb") as f:
-                d["screenshot_jpg_b64"] = base64.b64encode(f.read()).decode("ascii")
-            os.remove(tmp)
-        except Exception:
-            pass
+    return _with_shot(d, shot) if shot is not None else d
+
+
+def _with_shot(payload, shot):
+    """Копия замечания с уменьшенным снимком (JPEG, base64). Тяжело (~0,1–0,3 с) — на компьютере зовётся в фоне."""
+    import base64
+    d = dict(payload)
+    try:
+        small = pygame.transform.smoothscale(shot, (640, 360))
+        tmp = os.path.join(tempfile.gettempdir(), f"wnb_shot_{threading.get_ident()}.jpg")
+        pygame.image.save(small, tmp)                 # через файл: в браузере pygame не пишет в память
+        with open(tmp, "rb") as f:
+            d["screenshot_jpg_b64"] = base64.b64encode(f.read()).decode("ascii")
+        os.remove(tmp)
+    except Exception:
+        pass
     return d
 
 
@@ -1273,7 +1280,7 @@ def _outbox(change):
     """Очередь неотправленных замечаний (нет сети) — отправятся при следующем запуске."""
     with _OUTBOX_LOCK:
         try:
-            with open(_outbox_path(), encoding="utf-8") as f:
+            with open(_outbox_path(), encoding="utf-8-sig") as f:
                 q = json.load(f)
             if not isinstance(q, list):
                 q = []
@@ -1300,40 +1307,62 @@ def _post_feedback(payload):
         return 200 <= r.status < 400
 
 
-def feedback_send(payload):
-    """Отправить замечание в фоне (не тормозит игру). Без сети — в очередь, уйдёт при следующем запуске."""
-    if not FEEDBACK_URL:
-        return False
-    if IS_WEB:
+def feedback_send(payload, shot=None, local_png=None):
+    """Отправить замечание в фоне (игра не замирает). Сначала оно ложится в очередь на диске и убирается оттуда
+    только после ответа сервера: закрыли игру во время отправки или нет сети — уйдёт при следующем запуске.
+    shot — снимок экрана (уменьшенный JPEG для таблицы), local_png — куда сохранить полный снимок (имя .jpg);
+    кодирование — в фоне (pygame держит интерпретатор, поэтому форматы выбраны быстрые).
+    True — замечание уходит на сервер (FEEDBACK_URL задан)."""
+    if IS_WEB:                                        # в браузере потоков нет; очередь — в localStorage (wnbSend)
+        if not FEEDBACK_URL:
+            return False
+        if shot is not None:
+            payload = _with_shot(payload, shot)
         web_js(f"window.wnbSend && wnbSend({json.dumps(FEEDBACK_URL)}, {json.dumps(json.dumps(payload))})")
         return True
-    import threading
+    import uuid
+    payload = dict(payload, uid=payload.get("uid") or uuid.uuid4().hex)
+    uid = payload["uid"]
+    if FEEDBACK_URL:
+        _outbox(lambda q: q + [payload])
 
     def run():
+        if local_png and shot is not None:
+            try:
+                pygame.image.save(shot, local_png)
+            except Exception:
+                pass
+        if not FEEDBACK_URL:
+            return
+        full = payload
+        if shot is not None:
+            full = _with_shot(payload, shot)
+            _outbox(lambda q: [full if x.get("uid") == uid else x for x in q])
         try:
-            ok = _post_feedback(payload)
+            ok = _post_feedback(full)
         except Exception:
             ok = False
-        if not ok:
-            _outbox(lambda q: q + [payload])
+        if ok:
+            _outbox(lambda q: [x for x in q if x.get("uid") != uid])
     threading.Thread(target=run, daemon=True).start()
-    return True
+    return bool(FEEDBACK_URL)
 
 
 def feedback_flush_outbox():
-    """Дослать замечания, не ушедшие в прошлый раз (вызывается в фоне при запуске)."""
+    """Дослать замечания, не ушедшие в прошлый раз (вызывается в фоне при запуске). Каждое убирается из очереди
+    только после успешной отправки — закрыли игру посреди досылки, остальные не пропадут."""
     if not FEEDBACK_URL or IS_WEB:
         return
-    pending = _outbox(lambda q: [])
-    failed = []
-    for item in pending:
+    import uuid
+    _outbox(lambda q: [x if isinstance(x, dict) and x.get("uid") else dict(x, uid=uuid.uuid4().hex)
+                       for x in q if isinstance(x, dict)])
+    for item in _outbox(lambda q: q):
         try:
-            if not _post_feedback(item):
-                failed.append(item)
+            ok = _post_feedback(item)
         except Exception:
-            failed.append(item)
-    if failed:
-        _outbox(lambda q: failed + q)
+            ok = False
+        if ok:
+            _outbox(lambda q, u=item["uid"]: [x for x in q if x.get("uid") != u])
 
 
 def dpi_aware():
@@ -6584,23 +6613,24 @@ class Game:
                      job=d["job"], title=d["title"], phase=d["phase"], step=d["step"], kind=d["kind"],
                      expected=d["expected"], got=d["got"], game_message=d["msg"],
                      reason=self._reasons()[ui["reason"]], comment=ui["text"].strip(), scene=d.get("scene", "job"))
+        local_png = None
         if d.get("shot") is not None and not self.headless and not IS_WEB:
             try:
                 fdir = os.path.join(DATA_DIR, "feedback_shots")
                 os.makedirs(fdir, exist_ok=True)
-                name = "shot_" + entry["time"].replace(":", "-") + ".png"
-                pygame.image.save(d["shot"], os.path.join(fdir, name))
+                name = "shot_" + entry["time"].replace(":", "-") + ".jpg"   # JPEG: ~30 мс, PNG держал игру 0,4 с
+                local_png = os.path.join(fdir, name)          # сам файл пишется в фоне (feedback_send)
                 entry["screenshot"] = os.path.join("feedback_shots", name)
             except Exception:
                 pass
         sent_online = False
         if not self.headless:
-            sent_online = feedback_send(feedback_payload(entry, d.get("shot")))
+            sent_online = feedback_send(feedback_payload(entry), d.get("shot"), local_png)
         if self.headless:
             self.feedback_mem.append(entry)
         else:
             try:
-                with open(FEEDBACK_PATH, encoding="utf-8") as f:
+                with open(FEEDBACK_PATH, encoding="utf-8-sig") as f:
                     data = json.load(f)
             except Exception:
                 data = []
@@ -6621,7 +6651,7 @@ class Game:
             refunded = True
         self.close_dispute()
         snd("ok")
-        self.flash(("Спасибо! Замечание отправлено разработчикам." if sent_online else
+        self.flash(("Спасибо! Замечание отправляется разработчикам." if sent_online else
                     "Спасибо! Замечание сохранено — его проверят и поправят игру.")
                    + (" Эта ошибка не засчитана." if refunded else ""), GOOD, 5)
 
@@ -6743,12 +6773,14 @@ class Game:
 
     def load_settings(self):
         try:
-            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            with open(SETTINGS_PATH, "r", encoding="utf-8-sig") as f:
                 data = json.load(f).get("volume", {})
             for k in ("master", "music", "sfx", "amb"):
                 try:
                     if k in data:
-                        VOL[k] = max(0.0, min(1.0, float(data[k])))
+                        v = float(data[k])
+                        if math.isfinite(v):                   # NaN/inf в файле — оставляем как было
+                            VOL[k] = max(0.0, min(1.0, v))
                 except (TypeError, ValueError):
                     pass
             if "on" in data:
@@ -6756,14 +6788,14 @@ class Game:
         except Exception:
             pass
         try:
-            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            with open(SETTINGS_PATH, "r", encoding="utf-8-sig") as f:
                 DISPLAY["glow"] = bool(json.load(f).get("glow", True))
         except Exception:
             pass
         apply_volume()
         lang = None
         try:
-            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            with open(SETTINGS_PATH, "r", encoding="utf-8-sig") as f:
                 lang = json.load(f).get("lang")
         except Exception:
             pass
@@ -6771,7 +6803,7 @@ class Game:
             lang = sys.argv[sys.argv.index("--lang") + 1]
         set_lang("en" if IS_WEB else (lang or "en"))      # по умолчанию английский (аудитория); русский — переключателем
         try:
-            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            with open(SETTINGS_PATH, "r", encoding="utf-8-sig") as f:
                 acc = json.load(f).get("a11y")
         except Exception:
             acc = None
@@ -6807,7 +6839,7 @@ class Game:
 
     def load_progress(self):
         try:
-            with open(SAVE_PATH, "r", encoding="utf-8") as f:
+            with open(SAVE_PATH, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
         except Exception:
             return
@@ -6991,18 +7023,23 @@ class Game:
         """Клиент сам что-то говорит, пока ты работаешь: волнуется, болтает, делится советом."""
         if self.scene != "job" or not self.cur or self.ride_t0 is not None:
             return
-        if self.phase not in ("diagnose", "repair") or self.mini_pending or self.v3d is not None \
-                or self.dispute_ui is not None or getattr(self, "show_manual", False):
+        if self.phase not in ("diagnose", "repair", "test") or self.mini_pending or self.v3d is not None                 or self.dispute_ui is not None or getattr(self, "show_manual", False):
             return
+        quiet = self.t - getattr(self, "_last_talk_t", -99.0) < self.TALK_GAP or self.toast_timer > 0
         later = getattr(self, "_talk_later", None)
         if later and self.t >= later[0]:          # отложенная реакция на ход игрока
+            if quiet:                             # не перебиваем реплику и сообщение сверху; устарела — молчим
+                if self.t - later[0] > 4.0:
+                    self._talk_later = None
+                return
             self._talk_later = None
             if later[1] == "barty":
                 self.barty_quip(later[2], secs=5.0)
             else:
                 self.client_say(later[2])
             return
-        quiet = self.t - getattr(self, "_last_talk_t", -99.0) < self.TALK_GAP or self.toast_timer > 0
+        if self.phase == "test":                  # перед проверкой — только отложенная реплика
+            return
         if self.t >= self.client_next and not quiet:
             if self.client_queue and not self.exam_mode:   # на экзамене болтовни нет (и вступительных реплик тоже)
                 self._show_client(self.client_queue.pop(0))
@@ -7056,7 +7093,7 @@ class Game:
             self.flash("Диагноз верный! Приступаем к ремонту.", GOOD, 3)
             self._set_step_ghost()
             self.client_queue = []
-            self.client_say("good")
+            self._talk_later = (self.t + 1.8, "client", "good")   # после сообщения сверху, не одновременно с ним
             return True
         else:
             self.mistakes += 1
@@ -7168,7 +7205,7 @@ class Game:
         if self.step_idx >= len(self.cur["steps"]):
             self.phase = "test"
             self.ghost_line = "Бартоломью: «Кажется, всё. Прокатим — проверим!»"
-            self.client_say("test")
+            self._talk_later = (self.t + 1.5, "client", "test")
         else:
             self._set_step_ghost()
             self.react_good()
@@ -7263,7 +7300,7 @@ class Game:
             self.ghost_line = ("Экзамен: сборка окончена. Финальная проверка." if self.exam_mode
                                else "Бренна: «Закончил? Слова дешёвые. Проверим под нагрузкой.»")
             if not self.exam_mode:
-                self.client_say("test")
+                self._talk_later = (self.t + 1.5, "client", "test")
         else:
             self.react_good()
 
@@ -7939,6 +7976,10 @@ class Game:
                 toggle_fullscreen()
                 self.save_settings()
             return
+        if self.kb["help"] and event.type in (pygame.MOUSEBUTTONDOWN, pygame.TEXTINPUT):
+            if event.type == pygame.MOUSEBUTTONDOWN:     # справка F1 модальна и поверх окна замечания:
+                self.toggle_help()                       # клик — закрыть её, а не «Отправить» под ней
+            return                                       # буквы при открытой справке в комментарий не идут
         if self.dispute_ui is not None:                  # окно замечания модально (и ловит ввод текста):
             self.handle_dispute_event(event)             # буквы, в т.ч. «m»/«ь», — это текст, а не горячие клавиши
             return
@@ -7946,9 +7987,6 @@ class Game:
             on = toggle_sound()
             self.save_settings()
             self.flash("Звук включён" if on else "Звук выключен (M — включить)", GHOST, 1.8)
-            return
-        if self.kb["help"] and event.type == pygame.MOUSEBUTTONDOWN:   # справка F1 модальна: клик — закрыть
-            self.toggle_help()
             return
         if self.show_sound:                              # панель настроек модальна (⚑ и «Я не согласен» — под ней)
             self.handle_sound_event(event)
@@ -8380,6 +8418,13 @@ class Game:
         self.seat_quiz_ok = False
         self.tutorial_skipped = False
         self.hub_page = 0
+        self.mini_pending = self.spec_pending = None          # окна задания, поверх которых открыли настройки
+        self.show_manual = False
+        self.v3d = self.m3d = None
+        self.act = self.ride_t0 = None
+        self.dispute = self.seatc = None
+        self.esc_timer = 0
+        self._talk_later = None
         self.cur = None
         self.exam_mode = False
         self.save_progress()
@@ -12057,8 +12102,14 @@ def run_selftest():
     wrong = next(i for i, o in enumerate(gt.cur["diagnosis"]) if not o["correct"])
     random.seed(3)
     gt.choose_diagnosis(wrong)
-    for _ in range(4):
-        gt.update(0.5)
+    toast_seen = []
+    for _ in range(40):                                   # реакция ждёт конца сообщения сверху и паузы TALK_GAP
+        gt.update(0.25)
+        if gt.client_line in CLIENT_TALK["caster"]["mistake"] or gt.ghost_quip in BARTY_TALK["mistake"]:
+            toast_seen.append(gt.toast_timer > 0.3)
+            break
+    if toast_seen and toast_seen[0]:
+        failures.append("реакция на ошибку прозвучала, пока висит сообщение сверху")
     if not (gt.client_line in CLIENT_TALK["caster"]["mistake"] or gt.ghost_quip in BARTY_TALK["mistake"]):
         failures.append("на ошибку не отреагировали ни клиент, ни Барти")
     gt.draw(pygame.display.get_surface())
@@ -12213,7 +12264,7 @@ def run_selftest():
             gs.open_feedback()
             gs.headless = False
             gs.send_dispute()
-            with open(FEEDBACK_PATH, encoding="utf-8") as f:
+            with open(FEEDBACK_PATH, encoding="utf-8-sig") as f:
                 if not isinstance(json.load(f), list):
                     failures.append("feedback.json не исправлен на список")
         except Exception as e:
@@ -12295,7 +12346,7 @@ async def main():
         web_restore()
         web_setup_page()
         try:
-            with open(SETTINGS_PATH, encoding="utf-8") as f:
+            with open(SETTINGS_PATH, encoding="utf-8-sig") as f:
                 st0 = json.load(f)
             if st0.get("web_quality") in WEB_RES:
                 DISPLAY["web_quality"] = st0["web_quality"]
@@ -12304,9 +12355,8 @@ async def main():
             pass
         if FEEDBACK_URL:
             web_js(f"window.wnbFlush && wnbFlush({json.dumps(FEEDBACK_URL)})")
-    elif FEEDBACK_URL and "--selftest" not in sys.argv:
-        import threading
-        threading.Thread(target=feedback_flush_outbox, daemon=True).start()
+    elif FEEDBACK_URL and not any(a in sys.argv for a in ("--selftest", "--assets", "--feedback")):
+        threading.Thread(target=feedback_flush_outbox, daemon=True).start()   # досылка — только в настоящей игре
     if "--assets" in sys.argv:
         print_assets()
         return
@@ -12315,7 +12365,7 @@ async def main():
         return
     if "--feedback" in sys.argv:                            # замечания «Я не согласен» от игроков
         try:
-            with open(FEEDBACK_PATH, encoding="utf-8") as f:
+            with open(FEEDBACK_PATH, encoding="utf-8-sig") as f:
                 data = json.load(f)
         except Exception:
             data = []
@@ -12343,7 +12393,7 @@ async def main():
     set_lang(LANG["code"])
     global RS
     try:
-        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+        with open(SETTINGS_PATH, "r", encoding="utf-8-sig") as f:
             st_ = json.load(f)
     except Exception:
         st_ = {}
