@@ -530,6 +530,21 @@ def set_lang(code):
         pass
 
 
+def system_reduced_motion():
+    """В системе выключены анимации: браузер — prefers-reduced-motion, Windows — «Анимация в Windows» выкл."""
+    if IS_WEB:
+        return bool(web_js("window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches"))
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            v = ctypes.c_int(1)
+            if ctypes.windll.user32.SystemParametersInfoW(0x1042, 0, ctypes.byref(v), 0):   # SPI_GETCLIENTAREAANIMATION
+                return not v.value
+        except Exception:
+            pass
+    return False
+
+
 def system_lang():
     """Язык по умолчанию — по системе (русская Windows → ru, иначе en)."""
     try:
@@ -554,7 +569,8 @@ def font(size, bold=False):
 
 # ---- Доступность: что нарисовано в кадре — для управления с клавиатуры и чтения вслух ----
 A11Y = dict(on=False, voices=True, rate=0, contrast=False, instant=False, speech_set=False,
-            text=2 if IS_WEB else 0, text_set=False)   # text — размер текста (TEXT_K): в браузере окно мельче —
+            text=2 if IS_WEB else 0, text_set=False,
+            calm=False, calm_set=False)                 # calm — без анимации (по умолчанию — как в системе)   # text — размер текста (TEXT_K): в браузере окно мельче —
                                                          # сразу 125 %; text_set — игрок выбрал размер сам
 TEXT_K = (1.0, 1.12, 1.25)
 CAPTURE = dict(frame=None, texts=[], buttons=[], modal=None, mute=0)
@@ -665,13 +681,27 @@ def clamp01(x):
     return 0.0 if x < 0 else (1.0 if x > 1 else x)
 
 
+def calm():
+    """«Без анимации» (Доступность): появления сразу на месте, ничего не качается, не мерцает и не летит."""
+    return A11Y.get("calm", False)
+
+
+def wsin(x):
+    """Колебание для украшений (дыхание, пульс, покачивание); без анимации — покой."""
+    return 0.0 if A11Y.get("calm") else math.sin(x)
+
+
 def ease_out(x):
+    if A11Y.get("calm"):
+        return 1.0
     x = clamp01(x)
     return 1 - (1 - x) ** 3
 
 
 def ease_back(x, s=1.70158):
     """С лёгким перелётом — для «выпрыгивающих» элементов."""
+    if A11Y.get("calm"):
+        return 1.0
     x = clamp01(x) - 1
     return 1 + (s + 1) * x ** 3 + s * x ** 2
 
@@ -714,8 +744,8 @@ def blit_idle(surf, img, pos, t, mode="breathe", phase=0.0, k=1.0, rock=0.0):
     (призраки); k — масштаб появления; rock — покачивание в градусах (танец)."""
     w, h = img.get_size()
     if mode == "float":
-        dy = 7 * math.sin(t * 1.6 + phase)
-        ang = 2.5 * math.sin(t * 1.1 + phase) + rock
+        dy = 7 * wsin(t * 1.6 + phase)
+        ang = 2.5 * wsin(t * 1.1 + phase) + rock
         out = TF.rotozoom(img, ang, k) if (ang or k != 1) else img
         surf.blit(out, out.get_rect(center=(pos[0] + w // 2, pos[1] + h // 2 + dy)))
         return
@@ -723,7 +753,10 @@ def blit_idle(surf, img, pos, t, mode="breathe", phase=0.0, k=1.0, rock=0.0):
         img = TF.rotozoom(img, rock, k)
         surf.blit(img, img.get_rect(midbottom=(pos[0] + w // 2, pos[1] + h)))
         return
-    sy = 1 + 0.014 * math.sin(t * 2.1 + phase)
+    sy = 1 + 0.014 * wsin(t * 2.1 + phase)
+    if sy == 1:                                       # без анимации: обычный кадр
+        surf.blit(img, pos)
+        return
     if not (isinstance(surf, Surf) and isinstance(img, Surf)):      # запасной путь (обычные поверхности)
         cut = int(h * 0.55)
         surf.blit(img, (pos[0], pos[1] + cut), pygame.Rect(0, cut, w, h - cut))
@@ -757,6 +790,8 @@ def draw_spin_wheel(surf, center, r, ang, k=1.0, col=(205, 210, 225)):
     """Вращающееся колесо коляски (для титула): шина, обод, спицы, ступица."""
     if k <= 0.01:
         return
+    if calm():
+        ang = 0.3
     R = max(4, int(r * k))
     S = R * 2 + 8
     big = Surf((S * 2, S * 2), pygame.SRCALPHA)
@@ -772,6 +807,8 @@ def draw_spin_wheel(surf, center, r, ang, k=1.0, col=(205, 210, 225)):
 
 
 def draw_confetti(surf, t, n=80, top=-20, height=780):
+    if calm():
+        return
     pal = [(240, 190, 90), (120, 210, 160), (230, 120, 170), (120, 180, 240), (250, 240, 170)]
     for i in range(n):
         sp = 60 + 70 * _h01(i, 1)
@@ -787,7 +824,7 @@ def draw_confetti(surf, t, n=80, top=-20, height=780):
 
 def draw_burst(surf, center, ph, color=(255, 210, 90), n=10, dist=70):
     """Вспышка искр (ph 0..1) — для звёзд и успехов."""
-    if not 0 < ph < 1:
+    if not 0 < ph < 1 or calm():
         return
     for i in range(n):
         a = i * 2 * math.pi / n + 0.3
@@ -797,7 +834,7 @@ def draw_burst(surf, center, ph, color=(255, 210, 90), n=10, dist=70):
 
 def draw_ambient(surf, name, t):
     """Частицы поверх фона: у каждой сцены своя жизнь."""
-    if not DISPLAY["glow"]:
+    if not DISPLAY["glow"] or calm():
         return
     if name == "bg_workshop.png":            # луч из круглого окна и пылинки в нём
         add_glow(surf, (150, 170), 200, (70, 55, 28), 0.6 + 0.15 * math.sin(t * 0.7))
@@ -952,6 +989,8 @@ def draw_leg(surf, center, ang=0.0, scale=1.0):
 
 def draw_leg_gag(surf, kind, t, rect):
     """Сценка с ногой в полосе rect; t — время сценки (петля ~4.6 с)."""
+    if calm():
+        return
     P = 4.6
     u = t % P
     floor = rect.bottom - 30
@@ -1028,7 +1067,7 @@ def _bolt_points(a, b, seed, rough=0.22, n=9):
 def draw_zap(surf, pos, u, size=1.0):
     """Разряд тока в точке pos (u — 0..1): две-три дрожащие молнии сверху, вспышка и искры."""
     x, y = pos
-    if u >= 1:
+    if u >= 1 or calm():
         return
     fade = 1 - u
     seed = int(u * 14)                                       # ~14 смен формы за анимацию — мерцание
@@ -5771,7 +5810,7 @@ def _hover_amt(key, target):
     amt, last = _HOVER.get(key, (0.0, now))
     if target >= 1 and amt < 0.04:
         snd("hover")
-    amt += (target - amt) * min(1.0, max(0.0, now - last) * 14)
+    amt += (target - amt) * (1.0 if A11Y.get("calm") else min(1.0, max(0.0, now - last) * 14))
     _HOVER[key] = (amt, now)
     return amt
 
@@ -6859,6 +6898,8 @@ class Game:
         except Exception:
             acc = None
         if isinstance(acc, dict):
+            if not acc.get("calm_set"):              # анимацию игрок не выключал сам — как в системе (ниже)
+                acc = {k: v for k, v in acc.items() if k != "calm"}
             if not acc.get("text_set"):              # размер текста игрок не выбирал — берём текущий по умолчанию
                 acc = {k: v for k, v in acc.items() if k != "text"}
             for k in A11Y:                           # старый/испорченный файл: неверный тип — оставляем значение по умолчанию
@@ -6868,6 +6909,8 @@ class Game:
                         A11Y[k] = v
                 elif isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
                     A11Y[k] = int(max(-10, min(10, v)))
+        if not A11Y.get("calm_set"):
+            A11Y["calm"] = system_reduced_motion()
         if not A11Y.get("speech_set") and screen_reader_running():   # NVDA/JAWS/Диктор — говорим, пока не выключили F2
             A11Y["on"] = True
         if "--speak" in sys.argv:
@@ -7229,7 +7272,8 @@ class Game:
 
     def _draw_action(self, surf):
         a = self.act
-        if not a:
+        if not a or calm():
+            self.act = None
             return
         dur = 0.95 if a["ok"] else (0.75 if a.get("zap") else 0.6)
         u = (self.t - a["t0"]) / dur
@@ -7266,7 +7310,7 @@ class Game:
     RIDE_SECS = 2.3
 
     def start_ride(self):
-        self.ride_t0 = self.t
+        self.ride_t0 = self.t - (self.RIDE_SECS if calm() else 0)   # без анимации — проверка сразу, без проезда
         snd("whoosh")
 
     def _draw_ride(self, surf):
@@ -7275,7 +7319,7 @@ class Game:
         e = k * k * (3 - 2 * k)
         img = load_image(self.cur["client_art"], (230, 250), GHOST)
         x = -260 + (WIDTH + 520) * e
-        y = 290 - int(4 * abs(math.sin(self.t * 18)))
+        y = 290 - int(4 * abs(wsin(self.t * 18)))
         for i in range(6):                                  # линии скорости
             ly = y + 60 + i * 26
             ln = 60 + 40 * _h01(i, 3)
@@ -7991,7 +8035,7 @@ class Game:
             self.say(cur["label"], True, raw=cur.get("raw", False))                   # нажали, а экран не изменился — что теперь на кнопке
         if self.kb["active"] and cur and cur["rect"] is not None and self.kb["help"] is False:
             r = cur["rect"].inflate(12, 12) if cur["rect"].h > 12 else cur["rect"].inflate(24, 30)
-            pulse = 0.5 + 0.5 * math.sin(self.t * 5)
+            pulse = 0.5 + 0.5 * wsin(self.t * 5)
             aa_rect(surf, (0, 0, 0), r.inflate(10, 10), 3, border_radius=13)
             aa_rect(surf, (255, 255, 255), r, 3, border_radius=10)
             aa_rect(surf, AMBER, r.inflate(6, 6), 3 + int(pulse), border_radius=12)
@@ -8347,7 +8391,7 @@ class Game:
 
     def draw(self, surf):
         if self.scene != self._scene_seen:          # смена сцены: растворяем прошлый кадр
-            if self._scene_seen is not None:
+            if self._scene_seen is not None and not calm():   # без анимации — без растворения
                 self._fade_from = self._last_frame
                 self._fade_t0 = self.t
                 snd("whoosh")
@@ -8508,11 +8552,11 @@ class Game:
         draw_wrapped(surf, "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и "
                            "доступность останутся.", (p.x + 32, p.y + 356), p.w - 64, 13, GREY)
 
-    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "text")
+    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "calm", "text")
 
     def _access_rects(self):
         p = self._sound_panel_rect()
-        return [(k, pygame.Rect(p.x + 330, p.y + 112 + i * 42, 216, 36)) for i, k in enumerate(self.ACCESS_ROWS)]
+        return [(k, pygame.Rect(p.x + 330, p.y + 110 + i * 38, 216, 32)) for i, k in enumerate(self.ACCESS_ROWS)]
 
     def _access_label(self, k):
         on = tr("включено") if A11Y.get(k) else tr("выключено")
@@ -8526,6 +8570,8 @@ class Game:
             return f"{tr('Тёмный контрастный фон')}: {on}"
         if k == "text":
             return f"{tr('Размер текста')}: {self._text_pct()}%"
+        if k == "calm":
+            return f"{tr('Без анимации')}: {on}"
         return f"{tr('Текст сразу, без печати по буквам')}: {on}"
 
     @staticmethod
@@ -8547,6 +8593,8 @@ class Game:
             self.say(self._access_label(k), True)
         else:
             A11Y[k] = not A11Y[k]
+            if k == "calm":
+                A11Y["calm_set"] = True               # свой выбор — системная настройка его не перебьёт
             self.say(self._access_label(k), True)
         snd("tick")
         self.save_settings()
@@ -8693,9 +8741,10 @@ class Game:
 
     def _draw_access_tab(self, surf, p, mouse):
         names = {"on": "Озвучка (F2)", "voices": "Реплики героев вслух", "rate": "Скорость голоса",
-                 "contrast": "Контрастный фон", "instant": "Текст сразу", "text": "Размер текста"}
+                 "contrast": "Контрастный фон", "instant": "Текст сразу", "calm": "Без анимации",
+                 "text": "Размер текста"}
         for k, r in self._access_rects():
-            draw_text(surf, names[k], (p.x + 32, r.y + 8), 17, WHITE)
+            draw_text(surf, names[k], (p.x + 32, r.centery - font(17).get_height() // 2), 17, WHITE)
             if k == "rate":
                 label = str(A11Y["rate"])
             elif k == "text":
@@ -8704,10 +8753,10 @@ class Game:
                 label = "ВКЛ" if A11Y[k] else "ВЫКЛ"
             Button(r, label, GOOD if (k in ("rate", "text") or A11Y[k]) else GREY).draw(
                 surf, mouse, active=bool(A11Y.get(k)))
-        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, p.y + 368), 13, GREY)
+        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, p.y + 382), 13, GREY)
         draw_wrapped(surf, "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
                            "С экранным чтецом (NVDA, JAWS) игра говорит его голосом.",
-                     (p.x + 32, p.y + 388), self._sound_close_rect().x - p.x - 48, 13, GREY)
+                     (p.x + 32, p.y + 400), self._sound_close_rect().x - p.x - 48, 13, GREY)
 
     def _draw_sound_panel(self, surf):
         _cap_modal()
@@ -8836,16 +8885,19 @@ class Game:
         fit_text(surf, title, (24, 15), right - 24, 22, AMBER, bold=True)
 
     # ----- титул -----
-    def _wave_title(self, surf, text, center, size, color, st, delay=0.0):
-        """Заголовок: буквы падают по очереди с перелётом, потом мягко «дышат» волной."""
-        f = font(size, True)
+    def _wave_title(self, surf, text, center, size, color, st, delay=0.0, max_w=None):
+        """Заголовок: буквы падают по очереди с перелётом, потом мягко «дышат» волной.
+        max_w — не шире (крупный текст в настройках не должен наезжать на рисунок вокруг)."""
         text = tr(text)
+        while max_w and size > 30 and font(size, True).size(text)[0] > max_w:
+            size -= 2
+        f = font(size, True)
         x = center[0] - f.size(text)[0] // 2
         for i, ch in enumerate(text):
             d = delay + 0.05 * i
             k = ease_back((st - d) / 0.55)
-            a = int(255 * clamp01((st - d) / 0.2))
-            y = center[1] - f.get_height() // 2 - int(70 * (1 - k)) + 4 * math.sin(self.t * 2.2 + i * 0.55)
+            a = 255 if calm() else int(255 * clamp01((st - d) / 0.2))
+            y = center[1] - f.get_height() // 2 - int(70 * (1 - k)) + 4 * wsin(self.t * 2.2 + i * 0.55)
             if a > 0 and ch != " ":
                 sh = f.render(ch, True, (20, 14, 10))
                 sh.set_alpha(a // 2)
@@ -8860,7 +8912,7 @@ class Game:
         st = self.st
         for cx, d in ((WIDTH // 2 - 510, 1), (WIDTH // 2 + 510, -1)):
             draw_spin_wheel(surf, (cx, 205), 50, self.t * 1.3 * d, ease_back((st - 0.7) / 0.6))
-        self._wave_title(surf, "КОЛЁСА И КОСТИ", (WIDTH // 2, 210), 76, AMBER, st)
+        self._wave_title(surf, "КОЛЁСА И КОСТИ", (WIDTH // 2, 210), 76, AMBER, st, max_w=2 * 510 - 140)
         draw_text(surf, "ремонтная мастерская Мартина", (WIDTH // 2, 285), 26, GHOST, center=True,
                   alpha=255 * appear(st, 0.9, 0.6))
         draw_text(surf, "Обучающий симулятор ремонта инвалидных колясок в фэнтези-мире",
@@ -8874,7 +8926,7 @@ class Game:
                       self.t, "float", k=gk)
         if st > 1.6:
             label = "[ клик — продолжить ]" if self.done else "[ клик — начать ]"
-            pulse = 0.5 + 0.5 * math.sin(self.t * 3.2)
+            pulse = 0.5 + 0.5 * wsin(self.t * 3.2)
             draw_text(surf, label, (WIDTH // 2, 470), 24, AMBER, bold=True, center=True,
                       alpha=150 + 105 * pulse)
         draw_text(surf, "M — sound · progress saves automatically" if IS_WEB else
@@ -9130,7 +9182,10 @@ class Game:
         surf.blit(s, bubble)
         aa_rect(surf, PURPLE, bubble, 2, border_radius=8)
         blit_idle(surf, load_image("mentor_necro_head.png", (68, 68), PURPLE), (24, 104), self.t, "breathe")
-        draw_wrapped(surf, line, (bubble.x + 12, bubble.y + 8), bubble.w - 24, 14, (226, 214, 246),
+        sz = 14                                       # крупный текст: мельче, но реплика целиком в плашке
+        while sz > 10 and len(wrap_lines(line, bubble.w - 24, sz)) * (font(sz).get_height() + 2) > bubble.h - 10:
+            sz -= 1
+        draw_wrapped(surf, line, (bubble.x + 12, bubble.y + 5), bubble.w - 24, sz, (226, 214, 246),
                      limit=self.typed("seat_say", line, cps=95), max_lines=3)
 
     def _seat_slider_rects(self):
@@ -9316,19 +9371,19 @@ class Game:
         """Некромантская нить управления от посоха Мортимера к кости скелета."""
         x0, y0 = float(p_staff[0]), float(p_staff[1])
         x3, y3 = float(p_target[0]), float(p_target[1])
-        mx, my = (x0 + x3) * 0.5, min(y0, y3) - 26.0 - 9.0 * math.sin(self.t * 2.4 + phase)
+        mx, my = (x0 + x3) * 0.5, min(y0, y3) - 26.0 - 9.0 * wsin(self.t * 2.4 + phase)
         pts = []
         n = 16
         for i in range(n + 1):
             t = i / n
             u = 1.0 - t
             bx = u * u * x0 + 2 * u * t * mx + t * t * x3
-            by = u * u * y0 + 2 * u * t * my + t * t * y3 + 3.2 * math.sin(t * math.pi * 2 + self.t * 4.0 + phase)
+            by = u * u * y0 + 2 * u * t * my + t * t * y3 + 3.2 * wsin(t * math.pi * 2 + self.t * 4.0 + phase)
             pts.append((bx, by))
         glow_c = col if active else (152, 114, 218)
         DR.lines(surf, _shade(glow_c, 0.62), False, pts, 3 if active else 2)
         DR.lines(surf, (232, 210, 255) if active else glow_c, False, pts, 1)
-        u_spark = (self.t * 0.75 + phase * 0.23) % 1.0
+        u_spark = 0.5 if calm() else (self.t * 0.75 + phase * 0.23) % 1.0
         idx = min(n, int(u_spark * n))
         sx, sy = int(pts[idx][0]), int(pts[idx][1])
         aa_circle(surf, GHOST if not active else col, (sx, sy), 3)
@@ -9345,8 +9400,8 @@ class Game:
         DR.ellipse(surf, (118, 80, 166), (rcx - 38, rcy - 5, 76, 10), 1)
         blit_idle(surf, load_image("mentor_necro.png", (nw, nh), PURPLE), (nx, ny), self.t, "breathe")
         staff_x = nx + int(nw * 0.14)
-        staff_y = ny + int(nh * 0.08) + int(3.0 * math.sin(self.t * 2.5))
-        pulse = 0.65 + 0.35 * math.sin(self.t * 4.5)
+        staff_y = ny + int(nh * 0.08) + int(3.0 * wsin(self.t * 2.5))
+        pulse = 0.65 + 0.35 * wsin(self.t * 4.5)
         orb_col = BAD if bad_flag else GHOST
         add_glow(surf, (staff_x, staff_y), int(20 * pulse), PURPLE, 0.85)
         add_glow(surf, (staff_x, staff_y), int(10 * pulse), orb_col, 0.9)
@@ -10574,7 +10629,7 @@ class Game:
             pygame.Surface.blit(view, shadow, sb.topleft, sb)
         # модель
         side_hl = v.get("hl")
-        pulse = 0.5 + 0.5 * math.sin(self.t * 6)
+        pulse = 0.5 + 0.5 * wsin(self.t * 6)
         hover = None
         glr = gl_render(mesh, yaw, pitch, (round(vr.w * RS), round(vr.h * RS)), zoom,
                         hl_part=side_hl, hl_col=AMBER, hl_amt=0.45 * pulse,
@@ -10702,7 +10757,7 @@ class Game:
                 surf.blit(disc, (x - r - 1, y - r - 1))
         for i, (pid, x, y, r) in enumerate(self._chair_hotspots()):
             done = self.phase == "diagnose" and pid in self.inspected
-            if self.phase == "diagnose" and not done:   # неосмотренное зовёт пульсом
+            if self.phase == "diagnose" and not done and not calm():   # неосмотренное зовёт пульсом
                 ph = (self.t * 0.8 + i * 0.17) % 1.0
                 rr = int(r + 10 * ease_out(ph))
                 ring = Surf((rr * 2 + 4, rr * 2 + 4), pygame.SRCALPHA)
@@ -10885,7 +10940,7 @@ class Game:
                 continue
             r = rect.move(0, -int(6 * h))
             if active:
-                add_glow(surf, r.center, 44, (110, 80, 20), 0.55 + 0.25 * math.sin(self.t * 4))
+                add_glow(surf, r.center, 44, (110, 80, 20), 0.55 + 0.25 * wsin(self.t * 4))
             tile = Surf(r.size, pygame.SRCALPHA)
             aa_rect(tile, (52, 48, 64, 235), tile.get_rect(), border_radius=12)
             border = AMBER if active else tuple(int(d + (a_ - d) * h) for d, a_ in zip(DIM, GHOST))
@@ -10895,7 +10950,7 @@ class Game:
             surf.blit(tile, tile.get_rect(center=r.center))
             ang = 0.0
             if active:
-                ang = 7 * math.sin(self.t * 5)
+                ang = 7 * wsin(self.t * 5)
                 since = self.t - getattr(self, "_miss_t", -9)
                 if since < 0.45:
                     ang += 22 * math.sin(since * 55) * (1 - since / 0.45)
@@ -10936,7 +10991,7 @@ class Game:
                 or getattr(self, "spec_pending", None) or getattr(self, "show_manual", False)
                 or any(r.collidepoint(mouse) for _, r in self._tool_rects())):
             return
-        ic = TF.rotozoom(tool_icon(self.sel_tool, 34), -12 + 4 * math.sin(self.t * 4), 1.0)
+        ic = TF.rotozoom(tool_icon(self.sel_tool, 34), -12 + 4 * wsin(self.t * 4), 1.0)
         surf.blit(ic, ic.get_rect(center=(mouse[0] + 22, mouse[1] + 20)))
 
     def _speaker_img(self, line):
@@ -11345,7 +11400,7 @@ class Game:
 
     def draw_failed(self, surf):
         self._bg(surf, "bg_guild.png", BAD)
-        if getattr(self, "_fail_zap", False) and self.st < 0.9:          # разряд: вспышка и молнии через экран
+        if getattr(self, "_fail_zap", False) and self.st < 0.9 and not calm():          # разряд: вспышка и молнии через экран
             k = self.st / 0.9
             if k < 0.15:
                 fl = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -11401,7 +11456,7 @@ class Game:
         s.fill((40, 34, 20, 240))
         surf.blit(s, dip)
         aa_rect(surf, AMBER, dip, 3, border_radius=10)
-        add_glow(surf, dip.center, 260, (60, 45, 10), 0.4 + 0.3 * math.sin(self.t * 2))
+        add_glow(surf, dip.center, 260, (60, 45, 10), 0.4 + 0.3 * wsin(self.t * 2))
         draw_text(surf, "— ДИПЛОМ ГИЛЬДИИ КОЛЁСНИКОВ —", (dip.centerx, dip.y + 16), 20,
                   AMBER, bold=True, center=True)
         draw_text(surf, "Мартин, зомби — сертифицированный техник по ремонту кресел-колясок",
@@ -11483,7 +11538,7 @@ class Game:
         st = self.st
         # довольный клиент слева, Барти справа
         cimg = load_image(job["client_art"], (210, 250), GHOST)
-        hop = int(18 * abs(math.sin(st * 6)) * max(0.0, 1 - st / 1.6))
+        hop = int(18 * abs(wsin(st * 6)) * max(0.0, 1 - st / 1.6))
         blit_idle(surf, cimg, (24, 300 - hop), self.t)
         blit_idle(surf, load_image("ghost.png", (150, 200), CYAN), (WIDTH - 200, 290), self.t, "float",
                   k=ease_back((st - 0.5) / 0.5))
@@ -11579,13 +11634,13 @@ class Game:
         self._bg(surf, "bg_party.png", GHOST)
         st = self.st
         # Мартин танцует в коляске (качается и подпрыгивает), Барти кружит рядом
-        rock = 6 * math.sin(self.t * 4.2)
-        bounce = int(8 * abs(math.sin(self.t * 4.2)))
+        rock = 6 * wsin(self.t * 4.2)
+        bounce = int(8 * abs(wsin(self.t * 4.2)))
         mx = -260 + int(320 * ease_out(st / 1.2))
         blit_idle(surf, load_image("martin.png", (240, 270), GHOST), (mx, HEIGHT - 290 - bounce), self.t,
                   rock=rock)
         blit_idle(surf, load_image("ghost.png", (170, 220), CYAN), (WIDTH - 230, HEIGHT - 300), self.t,
-                  "float", rock=8 * math.sin(self.t * 2.1), k=ease_back((st - 0.6) / 0.6))
+                  "float", rock=8 * wsin(self.t * 2.1), k=ease_back((st - 0.6) / 0.6))
         draw_confetti(surf, self.t)
         panel = pygame.Rect(WIDTH // 2 - 440, 205, 880, 270)
         pk = appear(st, 0.5, 0.5)
@@ -11604,7 +11659,7 @@ class Game:
         draw_text(surf, f"Коллекция: {len(self.garage)} колясок починено и спасено.",
                   (WIDTH // 2, 430), 18, PURPLE, center=True)
         draw_text(surf, "[ клик — посмотреть гараж ]", (WIDTH // 2, 510), 20, AMBER, center=True,
-                  alpha=150 + 105 * (0.5 + 0.5 * math.sin(self.t * 3.2)))
+                  alpha=150 + 105 * (0.5 + 0.5 * wsin(self.t * 3.2)))
 
 
 # ----------------------------------------------------------------------------- #
@@ -12287,6 +12342,30 @@ def run_selftest():
         if gm.dispute_ui["text"] != "a b":
             failures.append(f"пробел в окне замечания: {gm.dispute_ui['text']!r} вместо 'a b'")
     gm.close_dispute()
+    calm0, inst0 = A11Y["calm"], A11Y["instant"]             # «Без анимации»: кадр не меняется, тест-драйв — сразу
+    A11Y["calm"] = A11Y["instant"] = True                      # (печать по буквам — отдельная настройка «Текст сразу»)
+    try:
+        gc = Game(headless=True)
+        gc.done = {j["id"] for j in JOBS}
+        gc.start_job("caster", 0)
+        gc.client_queue, gc.client_next, gc._quip_next = [], 1e9, 1e9   # без новых реплик во время замера
+        for _ in range(40):
+            gc.update(1 / 30)
+        sc = pygame.display.get_surface()
+        gc.draw(sc)
+        f1 = pygame.image.tobytes(sc, "RGB")
+        for _ in range(20):
+            gc.update(1 / 30)
+        gc.draw(sc)
+        if pygame.image.tobytes(sc, "RGB") != f1:
+            failures.append("«Без анимации»: экран задания продолжает двигаться")
+        gc.phase = "test"
+        gc.start_ride()
+        gc.update(1 / 30)
+        if gc.ride_t0 is not None:
+            failures.append("«Без анимации»: тест-драйв не завершился сразу")
+    finally:
+        A11Y["calm"], A11Y["instant"] = calm0, inst0
     gk = Game(headless=True)                                   # «Пропустить обучение»: всё открыто, сброс — снова закрыто
     gk.scene, gk.intro_idx = "intro", 0
     gk.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gk._skip_tut_rect().center))

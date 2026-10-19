@@ -12,5 +12,6 @@
  "Спасибо! Замечание отправляется разработчикам.": "Thank you! Your note is on its way to the developers.",
  "АВТО": "AUTO",
  "Авто — по размеру окна игры. Сейчас: {0}p": "Auto matches the game window. Now: {0}p",
- "Качество снижено для плавности. Настройки → Графика.": "Quality lowered for smoother play. Settings → Graphics."
+ "Качество снижено для плавности. Настройки → Графика.": "Quality lowered for smoother play. Settings → Graphics.",
+ "Без анимации": "Reduce motion"
 }
