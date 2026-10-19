@@ -470,6 +470,7 @@ def load_lang():
             if len(ru) >= 2:
                 _TR_PARTS.append((ru, en))
     _TR_PARTS.sort(key=lambda p: -len(p[0]))
+    _TR_FMT.sort(key=lambda t: -len(re.sub(r"\(\.\*\?\)|\\", "", t[0].pattern)))   # точный шаблон раньше общего («{0} см»)
     return True
 
 
@@ -3572,7 +3573,26 @@ SEAT_SLIDERS = {   # ключ: (подпись, единица, мин, макс
     "back_h": ("Высота спинки", "см", 20, 75),
     "back_a": ("Угол спинки к сиденью", "°", 85, 130),
     "tilt":   ("Наклон сиденья (tilt)", "°", 0, 50),
+    # вид спереди / сверху (перекос и поворот таза)
+    "base":   ("Основа сиденья", "", 0, 1),
+    "seat_w": ("Ширина сиденья", "см", 30, 56),
+    "foot_l": ("Левая подножка (сиденье → подножка)", "см", 20, 55),
+    "foot_r": ("Правая подножка (сиденье → подножка)", "см", 20, 55),
+    "build":  ("Подкладка (− под левую, + под правую кость)", "см", -3, 3),
+    "depth_l": ("Глубина сиденья слева", "см", 20, 60),
+    "depth_r": ("Глубина сиденья справа", "см", 20, 60),
 }
+
+
+def seat_val_text(key, v):
+    """Значение ползунка примерки словами (основа, подкладка) или числом с единицей."""
+    if key == "base":
+        return tr("жёсткая") if v else tr("гамак (провисает)")
+    if key == "build":
+        if v == 0:
+            return tr("без подкладки")
+        return tr(f"под левую: {abs(v)} см" if v < 0 else f"под правую: {abs(v)} см")
+    return f"{v} {tr(SEAT_SLIDERS[key][1])}".strip()
 
 SEAT_CASES = [
     dict(id="seat_troll", client="Тролль Бомм", client_art="client_troll.png", kind="manual",
@@ -3635,6 +3655,44 @@ SEAT_CASES = [
          start=dict(depth=36, leg=27, back_h=33, back_a=90, tilt=15),
          fact="Наклон в пространстве (tilt-in-space) сохраняет углы в тазобедренных и коленных суставах, "
               "снимая нагрузку с таза и помогая удерживать голову и корпус."),
+    # --- вид спереди и сверху: перекос и поворот таза (Permobil, «Pelvic Obliquity» / «Pelvic Rotation»;
+    #     таблица Lange & Presperin Pedersen «Positioning Chart») ---
+    dict(id="seat_dryad", view="front", client="Дриада Ивушка", client_art="client_cross6.png", kind="manual",
+         skin=(150, 190, 120), seat_h=48,
+         body=dict(thigh=45, shank=42, scap=36, shoulder=55, hip=38),
+         story="К вечеру Ивушку клонит вбок: левая сторона таза ниже, позвоночник изгибается. "
+               "Сиденье у неё — провисший гамак, коляска досталась от тётушки-дуба.",
+         therapist="Перекос исправимый: убрать причины в коляске. Жёсткая основа вместо гамака, ширина сиденья "
+                   "по бёдрам (38–40 см), обе подножки на одной высоте — по голени (42 см).",
+         back=(33, 40), angle=(92, 100), sliders=["base", "seat_w", "foot_l", "foot_r"],
+         start=dict(base=0, seat_w=44, foot_l=42, foot_r=38),
+         solution=dict(base=1, seat_w=39, foot_l=42, foot_r=42),
+         fact="Перекос таза чаще создаёт сама коляска: провисший гамак, слишком широкое сиденье, низкая спинка, "
+              "одна подножка или разные по высоте, подлокотник не той высоты."),
+    dict(id="seat_owl", view="front", client="Бабушка Агата", client_art="client_focuscr.png", kind="manual",
+         skin=(196, 176, 150), seat_h=47,
+         body=dict(thigh=43, shank=40, scap=34, shoulder=52, hip=40),
+         fixed=dict(obl=8, high=1, gap=2),
+         story="У Агаты давний НЕисправимый перекос: левая седалищная кость ниже и натёрта, под правой — зазор "
+               "2 см. Кто-то подложил подушечку под левую сторону, «чтобы выпрямить», — стало больнее.",
+         therapist="Перекос неисправимый — не выпрямлять, а учесть: жёсткая основа и подкладка под ВЫСОКУЮ "
+                   "сторону, заполнить зазор (2 см) и разгрузить нижнюю кость.",
+         back=(33, 40), angle=(95, 105), sliders=["base", "build"],
+         start=dict(base=0, build=-2), solution=dict(base=1, build=2),
+         fact="Исправимый перекос выравнивают подкладкой под НИЖНЮЮ сторону, понемногу. Неисправимый учитывают: "
+              "заполняют высокую сторону, чтобы нижняя седалищная кость не перегружалась."),
+    dict(id="seat_orc", view="top", client="Орк Гра", client_art="client_orc.png", kind="manual",
+         skin=(130, 160, 90), seat_h=51,
+         body=dict(thigh=48, thigh_l=48, thigh_r=44, shank=45, scap=40, shoulder=60, hip=44),
+         fixed=dict(rot=-6),
+         story="После старого перелома правое бедро у Гра короче на 4 см, таз развёрнут и не выпрямляется: "
+               "левое колено впереди. В узкой коляске его крутит ещё сильнее, а край подушки режет под правым коленом.",
+         therapist="Поворот таза неисправимый — учесть, не выправлять: ширина сиденья по бёдрам (44–46 см), "
+                   "глубина своя для каждой ноги — бедро минус 5 см (слева 43, справа 39).",
+         back=(36, 44), angle=(92, 100), sliders=["seat_w", "depth_l", "depth_r"],
+         start=dict(seat_w=41, depth_l=43, depth_r=43), solution=dict(seat_w=45, depth_l=43, depth_r=39),
+         fact="При неисправимом повороте таза глубину сиденья меряют по длинной ноге, а с короткой стороны "
+              "подушку укорачивают. Слишком узкое сиденье само разворачивает таз."),
 ]
 
 SEAT_LESSONS = [
@@ -3662,12 +3720,14 @@ SEAT_LESSONS = [
                  "Обе подножки — на одной высоте. До пола — не меньше 5 см (2″), чтобы не цеплять пороги."],
          pose=dict(knee_up=True)),
     dict(title="Перекос и поворот таза",
-         points=["Перекос: одна сторона таза выше, корпус кренится, со временем — сколиоз.",
-                 "Причины: провисшее или слишком широкое сиденье, низкая спинка, одна подножка "
-                 "или разные по высоте, подлокотник не той высоты.",
-                 "Боковые упоры ставят по схеме «три точки»: у вершины изгиба, под мышкой "
-                 "(с зазором — там нервы) и низко у таза.",
-                 "Поворот таза и «ветром сдутые» колени лечат контурами подушки, а не ремнями."],
+         points=["Перекос: одна сторона таза ниже, позвоночник изгибается — со временем сколиоз. "
+                 "Причины в коляске: провисший гамак, широкое сиденье, низкая спинка, разные подножки, подлокотник.",
+                 "Исправимый перекос выравнивают подкладкой под НИЖНЮЮ сторону, понемногу. Неисправимый учитывают: "
+                 "подкладка под ВЫСОКУЮ сторону, чтобы разгрузить нижнюю седалищную кость.",
+                 "Боковые упоры — «три точки»: у вершины изгиба, под мышкой (с зазором — там нервы) и низко у таза.",
+                 "Поворот таза (одно колено впереди): узкое сиденье само разворачивает таз. Исправимый выправляют "
+                 "маленькими шагами — контурная подушка с ложементами для ног. Неисправимый учитывают: "
+                 "глубина сиденья своя для каждой ноги."],
          pose=dict(front=True)),
     dict(title="Исправить или учесть",
          points=["Исправимую позу корректируют к самой нейтральной, которую человек может держать весь день.",
@@ -3719,13 +3779,20 @@ SEAT_QUIZ = [
                   ("Только откинуть спинку", False, "Откидывание без наклона усиливает сдвиг тканей."),
                   ("Поднять подъёмные подножки — ноги вперёд", False,
                    "Подъёмные подножки тянут таз назад, на крестец, и вес с таза не снимают.")]),
+    dict(pose=dict(front=True), q="Перекос таза неисправимый. Куда положить подкладку?",
+         desc="На рисунке: вид спереди, одна сторона таза ниже, позвоночник изогнут.",
+         options=[("Под высокую сторону: заполнить зазор и разгрузить нижнюю седалищную кость", True, ""),
+                  ("Под нижнюю сторону — выровнять таз", False,
+                   "Так выравнивают только исправимый перекос. Неисправимый выпрямлять нельзя: боль и давление."),
+                  ("Никуда: неисправимый перекос не трогают", False,
+                   "«Учесть» — значит подстроить коляску: заполнить высокую сторону.")]),
     dict(pose=dict(front=True), q="Где ставят боковые упоры при сколиозе?",
          desc="На рисунке: вид спереди, позвоночник изогнут дугой вбок.",
          options=[("В три точки: вершина изгиба, под мышкой с зазором, низко у таза", True, ""),
                   ("Вплотную в подмышку — так надёжнее", False, "Под мышкой оставляют зазор: там нервы."),
                   ("Только один упор на вершине изгиба", False, "Одна точка не удержит изгиб.")]),
 ]
-SEAT_QUIZ_PASS = 5
+SEAT_QUIZ_PASS = 6
 
 # Хозяин кабинета — некромант Мортимер: тысячу лет изучает кости, поэтому лучше всех знает таз.
 # Шутит над собой и своим мрачным ремеслом, а не над клиентами.
@@ -3745,6 +3812,9 @@ SEAT_MENTOR = {
         "Мортимер: «Наклон в сорок пять градусов — и вес уходит с таза. Почти левитация, только по науке.»",
     ],
     "solved": "Мортимер: «Ни одна косточка не стонет! Мои скелеты позавидовали бы такой посадке.»",
+    "view_front": "Мортимер: «Сбоку этот скелет сидит безупречно. А спереди — перекос! Кости любят прятаться.»",
+    "view_top": "Мортимер: «Посмотрим сверху, как ворон. Одно колено впереди другого — таз развёрнут.»",
+    "side_ok": "Мортимер: «Видишь? Сбоку не придерёшься. Поэтому я всегда обхожу скелет кругом.»",
     "fail": "Мортимер: «Тьма сгущается... над седалищными буграми. Посмотри, что ещё горит жёлтым.»",
     "right": "Мортимер: «Верно! Кости одобрительно стучат.»",
     "wrong": "Мортимер: «Мимо! Не страшно — я однажды поднял скелет задом наперёд.»",
@@ -7596,7 +7666,7 @@ class Game:
                 for k, r in self._seat_slider_rects():
                     label, unit, lo, hi = SEAT_SLIDERS[k]
                     state = next((t for ck, ok, t in checks if ck == k), "")
-                    add("Ползунки", f"{tr(label)}: {sc['cfg'][k]} {tr(unit)}. {tr(state)}", r,
+                    add("Ползунки", f"{tr(label)}: {seat_val_text(k, sc['cfg'][k])}. {tr(state)}", r,
                         adj=lambda d, k=k: self._a11y_seat_adj(k, d), key=("seat", k))
         self._a11y_generic(items, add)
         if not (self.show_sound or self.dispute_ui is not None or self.mini_pending or self.show_manual
@@ -7984,8 +8054,7 @@ class Game:
             b = case["body"]
             return (f"{tr('Примерка')}: {tr(case['client'])}. {tr(case['story'])} "
                     f"{tr('Карта терапевта')}: {tr(case['therapist'])} "
-                    f"{tr('Мерки')}: {tr('бедро')} {b['thigh']} {tr('см')}, {tr('голень')} {b['shank']} {tr('см')}, "
-                    f"{tr('до лопаток')} {b['scap']} {tr('см')}, {tr('до плеч')} {b['shoulder']} {tr('см')}. "
+                    f"{self._seat_measure_text(case)}. "
                     + tr("Двигай ползунки стрелками влево-вправо, потом «Проверить посадку»."))
         if sc["quiz_done"]:
             return f"{tr('Зачёт')}: {_of(sc['score'], len(SEAT_QUIZ))}."
@@ -9110,12 +9179,137 @@ class Game:
         c = SEAT_CASES[i]
         cfg = dict(c["start"])
         cfg.setdefault("tilt", 0)
-        self.seatc.update(case=i, cfg=cfg, solved=False)
+        self.seatc.update(case=i, cfg=cfg, solved=False, view=c.get("view", "side"), focus=None)
+        if c.get("view"):                                   # перекос/поворот: сбоку не видно — Мортимер подсказывает
+            self.seatc["say"] = SEAT_MENTOR["view_" + c["view"]]
 
     @staticmethod
     def seat_eval(case, cfg):
         """Оценка посадки: список проверок (ключ, ок?, текст) + параметры позы для рисунка.
-        Правила — из руководства Permobil; карта терапевта задаёт диапазоны спинки и угла."""
+        Вид клиента: сбоку (по умолчанию), спереди — перекос таза, сверху — поворот таза."""
+        view = case.get("view")
+        if view == "front":
+            return Game._seat_eval_front(case, cfg)
+        if view == "top":
+            return Game._seat_eval_top(case, cfg)
+        return Game._seat_eval_side(case, cfg)
+
+    @staticmethod
+    def _seat_side_cfg(case):
+        """Клиент с перекосом/поворотом сбоку: по меркам — сбоку посадка ровная (проблема видна спереди/сверху)."""
+        b = case["body"]
+        return dict(depth=b["thigh"] - 5, leg=b["shank"], back_h=sum(case["back"]) // 2,
+                    back_a=sum(case["angle"]) // 2, tilt=0)
+
+    @staticmethod
+    def _seat_eval_front(case, cfg):
+        """Вид спереди — перекос таза. Причины в коляске (Permobil): гамак, широкое сиденье, подножки
+        на разной высоте. Исправимый — убрать причины; неисправимый (fixed) — подкладка под ВЫСОКУЮ сторону."""
+        b, fx, keys = case["body"], case.get("fixed", {}), case["sliders"]
+        hip, sh = b["hip"], b["shank"]
+        checks, obl, shift = [], 0.0, 0.0
+        if "base" in keys:
+            if cfg["base"]:
+                checks.append(("base", True, "Жёсткая основа: таз не проваливается"))
+            else:
+                checks.append(("base", False, "Гамак провисает: таз проваливается к одной стороне"))
+                obl += 4
+        if "seat_w" in keys:
+            w = cfg["seat_w"]
+            if w < hip:
+                checks.append(("seat_w", False, "Сиденье уже бёдер: давит на бёдра"))
+            elif w > hip + 2:
+                checks.append(("seat_w", False, "Сиденье шире бёдер: таз съезжает и опускается на одну сторону"))
+                obl += 0.8 * (w - hip - 2)
+                shift = -0.5 * (w - hip - 2)
+            else:
+                checks.append(("seat_w", True, "Ширина сиденья по бёдрам"))
+        if "foot_l" in keys:
+            fl, fr = cfg["foot_l"], cfg["foot_r"]
+            for key, v, hi_t, lo_t, ok_t in (
+                    ("foot_l", fl, "Левая подножка высоко: колено задрано", "Левая подножка низко: стопа не стоит",
+                     "Левая подножка по голени"),
+                    ("foot_r", fr, "Правая подножка высоко: колено задрано", "Правая подножка низко: стопа не стоит",
+                     "Правая подножка по голени")):
+                if v < sh - 1.5:
+                    checks.append((key, False, hi_t))
+                elif v > sh + 1.5:
+                    checks.append((key, False, lo_t))
+                else:
+                    checks.append((key, True, ok_t))
+            if abs(fl - fr) > 1:
+                checks.append(("feet", False, "Подножки на разной высоте: таз перекашивается"))
+            obl += 1.2 * (fl - fr)                           # выше правая подножка — правая сторона таза выше
+        pose = dict(shift=shift)
+        if fx:                                                # неисправимый перекос: таз не выпрямляется
+            high, gap = fx["high"], fx["gap"]
+            obl = fx["obl"] * high                           # + — левая сторона ниже
+            filled = cfg.get("build", 0) * high               # > 0 — подкладка под высокой стороной
+            if cfg.get("build", 0) == 0:
+                checks.append(("build", False, "Под высокой стороной зазор: вся нагрузка на нижнюю седалищную кость"))
+            elif filled < 0:
+                checks.append(("build", False, "Подкладка под НИЖНЕЙ стороной: неисправимый перекос так не выпрямить — "
+                                               "боль и давление"))
+            elif filled < gap - 0.5:
+                checks.append(("build", False, "Зазор под высокой стороной заполнен не до конца"))
+            elif filled > gap + 0.5:
+                checks.append(("build", False, "Подкладка выше зазора: теперь перегружена высокая сторона"))
+            else:
+                checks.append(("build", True, "Высокая сторона заполнена: давление ровное, голова ровнее"))
+            ok_b = gap - 0.5 <= filled <= gap + 0.5
+            pose.update(gap_cm=max(0.0, gap - max(0, filled)), gap_side=high,
+                        lean=obl * (0.15 if ok_b else (0.9 if filled < 0 else 0.6)))
+            low_key, high_key = ("press_l", "press_r") if high > 0 else ("press_r", "press_l")
+            pose[low_key] = filled < gap - 0.5
+            pose[high_key] = filled > gap + 0.5
+            status = "Перекос неисправимый: учитываем, не выпрямляем"
+        else:
+            pose["lean"] = obl * 0.6
+            pose["press_l"], pose["press_r"] = obl > 2, obl < -2
+            status = "Таз ровный" if abs(obl) < 1 else f"Перекос таза: {abs(obl):.0f}°"
+        ok = all(o for _, o, _ in checks)
+        pose.update(obl=max(-14.0, min(14.0, obl)), ok=ok, status=status)
+        return checks, pose
+
+    @staticmethod
+    def _seat_eval_top(case, cfg):
+        """Вид сверху — поворот таза. Узкое сиденье разворачивает таз (Permobil); неисправимый поворот учитывают:
+        глубина сиденья своя для каждой ноги (по длинной ноге, короткую сторону укорачивают)."""
+        b, fx = case["body"], case.get("fixed", {})
+        hip = b["hip"]
+        rot = fx.get("rot", 0.0)
+        checks, shift = [], 0.0
+        w = cfg["seat_w"]
+        if w < hip:
+            checks.append(("seat_w", False, "Сиденье уже бёдер: таз разворачивается, чтобы поместиться"))
+            rot += math.copysign(1.5 * (hip - w), rot or 1)
+        elif w > hip + 2:
+            checks.append(("seat_w", False, "Сиденье шире бёдер: таз съезжает вбок"))
+            shift = 0.5 * (w - hip - 2)
+        else:
+            checks.append(("seat_w", True, "Ширина сиденья по бёдрам"))
+        press = {}
+        for key, sd, thigh, long_t, short_t, ok_t in (
+                ("depth_l", -1, b.get("thigh_l", b["thigh"]), "Слева край подушки давит под колено",
+                 "Слева бедру не хватает опоры", "Глубина слева по бедру"),
+                ("depth_r", 1, b.get("thigh_r", b["thigh"]), "Справа край подушки давит под колено",
+                 "Справа бедру не хватает опоры", "Глубина справа по бедру")):
+            tgt, d = thigh - 5, cfg[key]
+            press[sd] = d > tgt + 2
+            if d > tgt + 2:
+                checks.append((key, False, long_t))
+            elif d < tgt - 3:
+                checks.append((key, False, short_t))
+            else:
+                checks.append((key, True, ok_t))
+        ok = all(o for _, o, _ in checks)
+        status = ("Поворот учли: глубина своя для каждой ноги" if ok else
+                  "Таз развёрнут сильнее: сиденье узкое" if w < hip else "Поворот таза: подстрой сиденье под ноги")
+        return checks, dict(rot=max(-16.0, min(16.0, rot)), shift=shift, ok=ok, status=status, knee_press=press)
+
+    @staticmethod
+    def _seat_eval_side(case, cfg):
+        """Вид сбоку. Правила — из руководства Permobil; карта терапевта задаёт диапазоны спинки и угла."""
         b = case["body"]
         tgt_depth, tgt_leg = b["thigh"] - 5, b["shank"]
         d, lg, bh, ba, tl = cfg["depth"], cfg["leg"], cfg["back_h"], cfg["back_a"], cfg.get("tilt", 0)
@@ -9166,6 +9360,18 @@ class Game:
                     knee_up=high > 0, dangle=low > 0)
         return checks, pose
 
+    @staticmethod
+    def _seat_measure_text(case):
+        """Мерки клиента одной строкой (каждое слово — через словарь: в EN не остаётся кириллицы)."""
+        b, cm = case["body"], tr("см")
+        if case.get("view") == "top":
+            return tr(f"Мерки: бедро слева {b['thigh_l']} см · справа {b['thigh_r']} см · "
+                      f"ширина бёдер {b['hip']} см · голень {b['shank']} см")
+        if case.get("view") == "front":
+            return tr(f"Мерки: ширина бёдер {b['hip']} см · голень {b['shank']} см · бедро {b['thigh']} см")
+        return (f"{tr('Мерки')}: {tr('бедро')} {b['thigh']} {cm} · {tr('голень')} {b['shank']} {cm} · "
+                f"{tr('лопатка')} {b['scap']} {cm} · {tr('плечо')} {b['shoulder']} {cm}")
+
     def _seat_canvas(self):
         return pygame.Rect(24, 176, 730, 488)
 
@@ -9192,7 +9398,7 @@ class Game:
         c = SEAT_CASES[self.seatc["case"]]
         row_h = ((len(SEAT_CASES) + 1) // 2) * 40
         y0 = 112 + row_h + 26
-        keys = ["depth", "leg", "back_h", "back_a"] + (["tilt"] if c.get("tilt") else [])
+        keys = c.get("sliders") or ["depth", "leg", "back_h", "back_a"] + (["tilt"] if c.get("tilt") else [])
         return [(k, pygame.Rect(800, y0 + i * 44, 290, 8)) for i, k in enumerate(keys)]
 
     def _seat_tab_rects(self):
@@ -9280,7 +9486,12 @@ class Game:
                 return
         elif sc["tab"] == "fit":
             if self._seat_demo_toggle_rect().collidepoint(m):
-                sc["xray"] = not sc.get("xray", True)
+                cv_ = SEAT_CASES[sc["case"]].get("view")
+                if cv_:                                     # перекос/поворот: вид спереди (сверху) ⇄ сбоку
+                    sc["view"] = "side" if sc.get("view") == cv_ else cv_
+                    sc["say"] = SEAT_MENTOR["side_ok" if sc["view"] == "side" else "view_" + cv_]
+                else:
+                    sc["xray"] = not sc.get("xray", True)
                 snd("tick")
                 return
             for k, r in self._seat_slider_rects():
@@ -9407,6 +9618,252 @@ class Game:
         add_glow(surf, (staff_x, staff_y), int(10 * pulse), orb_col, 0.9)
         for i, (tx, ty, col_t, is_act) in enumerate(targets):
             self._draw_necro_thread(surf, (staff_x, staff_y), (tx, ty), col=col_t, active=is_act, phase=i * 1.3)
+
+    # ---------- примерка: вид спереди (перекос таза) и вид сверху (поворот таза) ----------
+    def _seat_grid(self, surf, rect):
+        for gx in range(rect.x + 20, rect.right - 10, 36):
+            DR.line(surf, (26, 29, 40), (gx, rect.y + 8), (gx, rect.bottom - 26), 1)
+        for gy in range(rect.y + 16, rect.bottom - 26, 36):
+            DR.line(surf, (26, 29, 40), (rect.x + 10, gy), (rect.right - 10, gy), 1)
+
+    def _seat_front_fit(self, surf, rect, case, cfg, pose, show_necro=True):
+        """Вид спереди для примерки: коляска (основа — гамак или жёсткая, ширина, две подножки, подкладка
+        под седалищную кость) и скелет с перекосом таза pose["obl"] (°, + — левая сторона ниже), изгибом
+        позвоночника и наклоном головы pose["lean"]. Стиль — как у схемы урока «Перекос и поворот таза»."""
+        self._seat_grid(surf, rect)
+        BONE, BONE_D, OUT = (234, 226, 206), (188, 178, 156), (38, 32, 44)
+        b = case["body"]
+        fl, fr = cfg.get("foot_l", b["shank"]), cfg.get("foot_r", b["shank"])
+        s = (rect.h - 34) / float(max(fl, fr) + b["shoulder"] + 26)      # пикселей на см: от подножек до макушки
+        cx = rect.centerx + (66 if show_necro else 0)
+        seat_y = rect.bottom - 14 - max(fl, fr) * s
+        w = cfg.get("seat_w", b["hip"] + 1)
+        half = w * s / 2
+        sling = cfg.get("base", 1) == 0
+        sag = 3.0 * s if sling else 0.0
+        bh = sum(case["back"]) / 2
+        # спинка за корпусом и колёса по бокам
+        aa_rect(surf, (44, 48, 72), (cx - half, seat_y - bh * s - 6 * s, w * s, bh * s + 4 * s), border_radius=10)
+        aa_rect(surf, (76, 84, 122), (cx - half, seat_y - bh * s - 6 * s, w * s, bh * s + 4 * s), 2, border_radius=10)
+        for sd in (-1, 1):
+            wx = cx + sd * (half + 6 * s)
+            aa_rect(surf, (34, 36, 44), (wx - 2.4 * s, seat_y - 34 * s, 4.8 * s, 62 * s), border_radius=6)
+            aa_rect(surf, (168, 174, 188), (wx - 0.9 * s, seat_y - 32 * s, 1.8 * s, 58 * s), border_radius=3)
+            DR.line(surf, (168, 174, 188), (cx + sd * half, seat_y - 2 * s), (cx + sd * half, seat_y + 20 * s),
+                    max(2, int(0.8 * s)))
+        # основа: гамак провисает дугой, жёсткая — ровная доска; сверху подушка
+        base = [(cx - half + (2 * half) * i / 12, seat_y + sag * math.sin(math.pi * i / 12)) for i in range(13)]
+        cush = 5 * s
+        top_pts = [(x, y - cush) for x, y in base]
+        DR.polygon(surf, (58, 66, 112), top_pts + list(reversed(base)))
+        DR.polygon(surf, (98, 110, 168), top_pts + list(reversed(base)), 2)
+        DR.lines(surf, (130, 136, 156) if sling else (210, 186, 130), False, base, max(3, int(1.0 * s)))
+        if sling:
+            draw_text(surf, "гамак провисает", (cx + half + 10 * s, seat_y + sag - 6), 11, AMBER, bold=True)
+        # подкладка под седалищную кость (− левая, + правая)
+        bld = cfg.get("build", 0)
+        it_dx = 7.5 * s
+        if bld:
+            sd = 1 if bld > 0 else -1
+            bx, by_top = cx + sd * it_dx, seat_y - cush - abs(bld) * s
+            aa_rect(surf, CYAN, (bx - 5 * s, by_top, 10 * s, abs(bld) * s + 1), border_radius=3)
+            aa_rect(surf, WHITE, (bx - 5 * s, by_top, 10 * s, abs(bld) * s + 1), 1, border_radius=3)
+        # таз: поворот на obl вокруг центра; нижняя сторона опускается к подушке
+        obl = math.radians(pose.get("obl", 0.0))
+        pc = (cx + pose.get("shift", 0.0) * s, seat_y - cush - 7 * s - sag * 0.5)
+
+        def rp(dx, dy):
+            return (pc[0] + dx * math.cos(-obl) - dy * math.sin(-obl), pc[1] + dx * math.sin(-obl) + dy * math.cos(-obl))
+        p_col = GOOD if pose.get("ok") else AMBER
+        hw = b["hip"] * 0.38 * s
+        for sd in (-1, 1):                                       # крылья подвздошных костей
+            wing = [rp(sd * 1.5 * s, -2 * s), rp(sd * hw * 0.55, -9 * s), rp(sd * hw * 1.05, -11 * s),
+                    rp(sd * hw * 1.12, -6 * s), rp(sd * hw * 0.7, 4 * s), rp(sd * 2 * s, 6 * s)]
+            DR.polygon(surf, BONE, wing)
+            DR.polygon(surf, OUT, wing, 2)
+            aa_circle(surf, (44, 48, 72), (int(rp(sd * hw * 0.45, 1 * s)[0]), int(rp(sd * hw * 0.45, 1 * s)[1])),
+                      max(2, int(1.6 * s)))
+        sac = [rp(-3.5 * s, -9 * s), rp(3.5 * s, -9 * s), rp(0, 4 * s)]
+        DR.polygon(surf, BONE_D, sac)
+        DR.polygon(surf, OUT, sac, 2)
+        DR.line(surf, p_col, rp(-hw * 1.05, -11 * s), rp(hw * 1.05, -11 * s), max(3, int(0.9 * s)))
+        DR.line(surf, (96, 104, 132), (pc[0] - hw * 1.3, pc[1] - 11 * s), (pc[0] + hw * 1.3, pc[1] - 11 * s), 1)
+        ischia = {sd: rp(sd * it_dx, 6 * s) for sd in (-1, 1)}
+        # ноги: бедро к нам (коротко), колено, голень вниз к подножке
+        for sd, foot in ((-1, fl), (1, fr)):
+            hx, hy = rp(sd * hw * 0.85, 2 * s)
+            kx, ky = cx + sd * (hw * 0.95), seat_y - cush + 1 * s
+            plate_y = seat_y + foot * s
+            ank = min(plate_y - 1.2 * s, ky + b["shank"] * s)
+            self._draw_bone_seg(surf, (hx, hy), (kx, ky), 2.2 * s, 1.9 * s, BONE, OUT)
+            self._draw_bone_seg(surf, (kx, ky + 1 * s), (kx, ank), 1.7 * s, 1.4 * s, BONE, OUT)
+            aa_rect(surf, BONE, (kx - 3 * s, ank - 0.6 * s, 6 * s, 2.4 * s), border_radius=3)
+            aa_rect(surf, OUT, (kx - 3 * s, ank - 0.6 * s, 6 * s, 2.4 * s), 1, border_radius=3)
+            aa_rect(surf, (96, 100, 116), (kx - 6 * s, plate_y, 12 * s, 2.2 * s), border_radius=2)
+            if ank < plate_y - 2 * s:                           # стопа не достаёт до подножки
+                DR.line(surf, AMBER, (kx, ank + 2.5 * s), (kx, plate_y), 2)
+        for sd in (-1, 1):                                       # давление под седалищными костями
+            over = pose.get("press_l" if sd < 0 else "press_r", False)
+            ix, iy = ischia[sd]
+            aa_circle(surf, BAD if over else GOOD, (int(ix), int(iy)), max(3, int(1.5 * s)))
+            if over:
+                add_glow(surf, (ix, iy), int(7 * s), (200, 40, 40), 0.85)
+        # позвоночник: от крестца уходит к нижней стороне, выгибается и возвращается к плечам
+        lean = pose.get("lean", 0.0)
+        base_pt = rp(0, -9 * s)
+        sh_c = (cx + lean * 1.3 * s, seat_y - cush - b["shoulder"] * 0.86 * s)
+        apex = (base_pt[0] - math.sin(obl) * 22 * s + lean * 0.3 * s, (base_pt[1] + sh_c[1]) / 2)
+        spine = []
+        for i in range(15):
+            t = i / 14
+            u = 1 - t
+            spine.append((u * u * base_pt[0] + 2 * u * t * apex[0] + t * t * sh_c[0],
+                          u * u * base_pt[1] + 2 * u * t * apex[1] + t * t * sh_c[1]))
+        DR.lines(surf, BONE_D, False, spine, max(3, int(1.4 * s)))
+        for ri, vi in enumerate(range(6, 13)):                   # рёбра «гармошкой», как в уроке
+            rx, ry = spine[vi]
+            rw = (11 - abs(ri - 3) * 1.2) * s
+            for sd in (-1, 1):
+                mid = (rx + sd * rw * 0.95, ry + 2.5 * s)
+                inn = (rx + sd * rw * 0.38, ry + 5.5 * s)
+                DR.lines(surf, OUT, False, [(rx, ry), mid, inn], max(2, int(1.0 * s)))
+                DR.lines(surf, BONE, False, [(rx, ry), mid, inn], max(1, int(0.6 * s)))
+        for vx, vy in spine:
+            aa_circle(surf, BONE, (int(vx), int(vy)), max(3, int(1.3 * s)))
+            aa_circle(surf, OUT, (int(vx), int(vy)), max(3, int(1.3 * s)), 1)
+        tl = math.radians(-lean * 1.1)
+        shl = (sh_c[0] - 19 * s * math.cos(tl), sh_c[1] - 19 * s * math.sin(tl))
+        shr = (sh_c[0] + 19 * s * math.cos(tl), sh_c[1] + 19 * s * math.sin(tl))
+        self._draw_bone_seg(surf, (sh_c[0], sh_c[1] + 1 * s), shl, 1.2 * s, 1.3 * s, BONE, OUT)
+        self._draw_bone_seg(surf, (sh_c[0], sh_c[1] + 1 * s), shr, 1.2 * s, 1.3 * s, BONE, OUT)
+        for sh_, sd in ((shl, -1), (shr, 1)):
+            self._draw_bone_seg(surf, sh_, (sh_[0] + sd * 2 * s, sh_[1] + 26 * s), 1.5 * s, 1.2 * s, BONE_D, OUT)
+        hx_, hy_ = sh_c[0] + lean * 0.9 * s, sh_c[1] - 13 * s
+        hr = 8.5 * s
+        aa_circle(surf, BONE, (int(hx_), int(hy_)), int(hr))
+        aa_circle(surf, OUT, (int(hx_), int(hy_)), int(hr), 2)
+        aa_rect(surf, BONE, (hx_ - 4.5 * s, hy_ + 2.5 * s, 9 * s, 6.5 * s), border_radius=4)
+        aa_rect(surf, OUT, (hx_ - 4.5 * s, hy_ + 2.5 * s, 9 * s, 6.5 * s), 2, border_radius=4)
+        for sd in (-1, 1):
+            ex, ey = hx_ + sd * 2.8 * s, hy_ - 0.5 * s
+            aa_circle(surf, (26, 22, 34), (int(ex), int(ey)), max(3, int(1.8 * s)))
+            aa_circle(surf, GHOST, (int(ex), int(ey)), max(1, int(0.7 * s)))
+        gap = pose.get("gap_cm", 0)
+        if gap > 0.4:                                            # зазор под высокой седалищной костью
+            sd = pose.get("gap_side", 1)
+            gx, gy = ischia[sd]
+            DR.line(surf, AMBER, (gx, gy + 1.6 * s), (gx, seat_y - cush), 2)
+            draw_text(surf, f"зазор под костью {gap:.0f} см", (gx + sd * 3 * s, gy + 2), 12, AMBER, bold=True,
+                      right=sd < 0)
+        status = pose.get("status", "")
+        if status:
+            draw_text(surf, status, (rect.x + 150, rect.y + 12), 12, GOOD if pose.get("ok") else AMBER, bold=True)
+        if show_necro:
+            low = -1 if pose.get("obl", 0) >= 0 else 1
+            tg = [(hx_, hy_ - hr, PURPLE, False), (apex[0], apex[1], CYAN, False),
+                  (ischia[low][0], ischia[low][1], p_col, not pose.get("ok"))]
+            self._draw_necro_puppeteer(surf, rect, tg, bad_flag=not pose.get("ok"))
+        draw_text(surf, "Вид спереди", (rect.right - 14, rect.y + 12), 12, GREY, bold=True, right=True)
+
+    def _seat_top(self, surf, rect, case, cfg, pose, show_necro=True):
+        """Вид сверху: сиденье (глубина слева и справа своя), спинка, колёса, таз и бёдра скелета.
+        pose["rot"] — поворот таза, ° (+ — правое бедро впереди)."""
+        self._seat_grid(surf, rect)
+        BONE, BONE_D, OUT = (234, 226, 206), (188, 178, 156), (38, 32, 44)
+        b = case["body"]
+        cx = rect.centerx + (70 if show_necro else 0)
+        top = rect.y + 64
+        s = (rect.bottom - 36 - top) / 68.0                     # пикселей на см: от спинки до подножек
+        seat_w = cfg.get("seat_w", b["hip"] + 1)
+        dl, dr = cfg.get("depth_l", b["thigh"] - 5), cfg.get("depth_r", b["thigh"] - 5)
+        half = seat_w * s / 2
+        for sd in (-1, 1):                                       # колёса (сверху — полосы), касторы
+            wx = cx + sd * (half + 5 * s)
+            aa_rect(surf, (34, 36, 44), (wx - 2.2 * s, top - 8 * s, 4.4 * s, 58 * s), border_radius=6)
+            aa_rect(surf, (150, 156, 170), (wx - 0.8 * s, top - 6 * s, 1.6 * s, 54 * s), border_radius=3)
+            aa_rect(surf, (40, 42, 50), (cx + sd * (half - 1 * s) - 1.6 * s, top + 52 * s, 3.2 * s, 7 * s), border_radius=3)
+        aa_rect(surf, (52, 58, 92), (cx - half - 2 * s, top - 8 * s, seat_w * s + 4 * s, 6 * s), border_radius=5)
+        aa_rect(surf, (98, 110, 168), (cx - half - 2 * s, top - 8 * s, seat_w * s + 4 * s, 6 * s), 2, border_radius=5)
+        for sd, d in ((-1, dl), (1, dr)):                        # подушка: своя глубина у каждой половины
+            x0 = cx if sd > 0 else cx - half
+            aa_rect(surf, (58, 66, 112), (x0, top - 2 * s, half, d * s), border_radius=6)
+            aa_rect(surf, (98, 110, 168), (x0, top - 2 * s, half, d * s), 2, border_radius=6)
+        for sd in (-1, 1):
+            fx = cx + sd * half * 0.5
+            aa_rect(surf, (90, 94, 108), (fx - 6 * s, top + 58 * s, 12 * s, 5 * s), border_radius=3)
+        rot = math.radians(pose.get("rot", 0.0))
+        pc = (cx + pose.get("shift", 0.0) * s, top + 7 * s)
+        hip_hw = (b["hip"] / 2 - 6) * s
+
+        def rp(dx, dy):
+            return (pc[0] + dx * math.cos(rot) - dy * math.sin(rot), pc[1] + dx * math.sin(rot) + dy * math.cos(rot))
+        p_col = GOOD if pose.get("ok") else AMBER
+        for sd in (-1, 1):                                       # крылья таза сверху — изогнутые гребни
+            crest = [rp(sd * (2 + 13 * t) * s, (-6 + 9 * t * t) * s) for t in (0, 0.25, 0.5, 0.75, 1.0)]
+            DR.lines(surf, OUT, False, crest, max(5, int(2.2 * s)))
+            DR.lines(surf, BONE, False, crest, max(3, int(1.5 * s)))
+        sac = [rp(-3 * s, -6 * s), rp(3 * s, -6 * s), rp(0, 2 * s)]
+        DR.polygon(surf, BONE_D, sac)
+        DR.polygon(surf, OUT, sac, 2)
+        hips = {sd: rp(sd * hip_hw, 3 * s) for sd in (-1, 1)}
+        DR.line(surf, p_col, rp(-15 * s, 3 * s), rp(15 * s, 3 * s), max(3, int(0.6 * s)))
+        knees = {}
+        for sd in (-1, 1):
+            L = (b.get("thigh_l" if sd < 0 else "thigh_r", b["thigh"]) - 7) * s   # колено чуть дальше края подушки
+            ang = sd * math.radians(3) + rot * 0.3
+            hx, hy = hips[sd]
+            knees[sd] = (hx - L * math.sin(ang) * 0, hy + L)
+            kx, ky = knees[sd]
+            self._draw_bone_seg(surf, (hx, hy), (kx, ky), 1.4 * s, 1.1 * s, BONE, OUT)
+            aa_circle(surf, BONE, (int(kx), int(ky)), max(3, int(2.0 * s)))
+            aa_circle(surf, OUT, (int(kx), int(ky)), max(3, int(2.0 * s)), 2)
+            if pose.get("knee_press", {}).get(sd):             # край подушки режет под коленом
+                add_glow(surf, (kx, ky - 1 * s), int(5 * s), (200, 40, 40), 0.8)
+        sh_rot = rot * 0.6                                       # грудной отдел поворачивается за тазом
+        shl = (cx - 18 * s * math.cos(sh_rot), top - 4 * s - 18 * s * math.sin(sh_rot))
+        shr = (cx + 18 * s * math.cos(sh_rot), top - 4 * s + 18 * s * math.sin(sh_rot))
+        self._draw_bone_seg(surf, shl, shr, 1.1 * s, 1.1 * s, BONE_D, OUT)
+        aa_circle(surf, BONE, (int(cx), int(top - 4 * s)), max(4, int(6 * s)))
+        aa_circle(surf, OUT, (int(cx), int(top - 4 * s)), max(4, int(6 * s)), 2)
+        dk = (knees[-1][1] - knees[1][1]) / s
+        if abs(dk) >= 1:
+            fwd, back = (knees[-1], knees[1]) if dk > 0 else (knees[1], knees[-1])
+            lab = tr(f"левое колено впереди на {abs(dk):.0f} см" if dk > 0 else f"правое колено впереди на {abs(dk):.0f} см")
+            ly = (back[1] + fwd[1]) / 2 - 8
+            xl = max(knees[-1][0], knees[1][0]) + 7 * s
+            left = xl + 2.5 * s + font(12, True).size(lab)[0] > rect.right - 10   # не влезает справа — слева от колен
+            if left:
+                xl = min(knees[-1][0], knees[1][0]) - 7 * s
+            DR.line(surf, AMBER, (xl, back[1]), (xl, fwd[1]), 2)
+            for yy in (back[1], fwd[1]):
+                DR.line(surf, AMBER, (xl - 1.5 * s, yy), (xl + 1.5 * s, yy), 2)
+            lw, lh = font(12, True).size(lab)
+            if left:                                           # слева — Мортимер: подпись под коленями
+                lx, ly = (knees[-1][0] + knees[1][0]) / 2 - lw / 2, fwd[1] + 3 * s
+            else:
+                lx = xl + 2.5 * s
+            aa_rect(surf, (16, 12, 24, 220), (lx - 5, ly - 2, lw + 10, lh + 4), border_radius=4)   # плашка — читается поверх рисунка
+            draw_text(surf, lab, (lx, ly), 12, AMBER, bold=True)
+        status = pose.get("status", "")
+        if status:
+            draw_text(surf, status, (rect.x + 150, rect.y + 12), 12, GOOD if pose.get("ok") else AMBER, bold=True)
+        if show_necro:
+            tg = [(knees[-1][0], knees[-1][1], p_col, not pose.get("ok")), (knees[1][0], knees[1][1], p_col, False),
+                  (pc[0], pc[1], CYAN, False)]
+            self._draw_necro_puppeteer(surf, rect, tg, bad_flag=not pose.get("ok"))
+        draw_text(surf, "Вид сверху", (rect.right - 14, rect.y + 12), 12, GREY, bold=True, right=True)
+
+    def _seat_view_draw(self, surf, rect, case, cfg, pose, view, clip):
+        """Вид примерки в рамке clip (череп посоха не налезает на тексты)."""
+        old = surf.get_clip()
+        surf.set_clip(_rr(clip, _rs(surf)).clip(old))
+        try:
+            if view == "front":
+                self._seat_front_fit(surf, rect, case, cfg, pose)
+            else:
+                self._seat_top(surf, rect, case, cfg, pose)
+        finally:
+            surf.set_clip(old)
 
     # ---------- рисунок: скелет-марионетка и клиент в коляске сбоку ----------
     def _draw_seat_scene(self, surf, rect, case, cfg, pose, highlight=True, show_necro=True, show_body=False,
@@ -9730,7 +10187,7 @@ class Game:
             aa_rect(surf, (16, 12, 24, 215), (lx - tw // 2, ly - 1, tw, 16), border_radius=4)
             draw_text(surf, label, (lx, ly), 12, col, bold=True, center=True)
 
-    def _seat_front(self, surf, rect, corrected=False):
+    def _seat_front(self, surf, rect, corrected=False, show_pads=True):
         """Схема спереди: перекос таза, сколиотическая дуга позвоночника, грудная клетка, череп,
         три точки боковой поддержки и некромант Мортимер, выправляющий скелет нитями."""
         for gx in range(rect.x + 20, rect.right - 10, 36):
@@ -9831,14 +10288,21 @@ class Game:
             ((sh_l[0] - 18 * k, by - 184 * k), 1, "2. Под мышкой (зазор)"),
             ((pl[0] - 24 * k, by - 44 * k), 1, "3. Низко у таза"),
         )
-        for (px, py), dir_s, lab in pads:
+        labels = []                                        # подписи упоров — после Мортимера (не прячутся за ним)
+        for (px, py), dir_s, lab in (pads if show_pads else ()):
             pad_r = pygame.Rect(int(px - 8 * k), int(py - 20 * k), int(16 * k), int(40 * k))
             aa_rect(surf, CYAN, pad_r, border_radius=5)
             aa_rect(surf, WHITE, pad_r, 1, border_radius=5)
             ax0 = px - dir_s * 22 * k
             ax1 = px - dir_s * 10 * k
             DR.line(surf, GOOD, (ax0, py), (ax1, py), 2)
-            draw_text(surf, lab, (px + (16 if dir_s < 0 else -16) * k, py - 7), 12, CYAN, bold=True, right=dir_s > 0)
+            lw_ = font(12, True).size(tr(lab))[0]
+            tx = px + (16 if dir_s < 0 else -16) * k
+            if dir_s > 0:
+                tx = max(tx, rect.x + 8 + lw_)                # не за левый край рамки
+            else:
+                tx = min(tx, rect.right - 8 - lw_)
+            labels.append((tx, py, lw_, lab, dir_s))
 
         targets = [
             (h_cx, h_cy - hr, PURPLE, False),
@@ -9847,6 +10311,10 @@ class Game:
             (sh_l[0], sh_l[1], CYAN, False),
         ]
         self._draw_necro_puppeteer(surf, rect, targets, bad_flag=not corrected)
+        for tx, py, lw_, lab, dir_s in labels:
+            x0_ = tx - lw_ if dir_s > 0 else tx
+            aa_rect(surf, (16, 12, 24, 215), (x0_ - 4, py - 9, lw_ + 8, 20), border_radius=4)
+            draw_text(surf, lab, (tx, py - 7), 12, CYAN, bold=True, right=dir_s > 0)
         status = "Три точки держат ось позвоночника" if corrected else "Таз перекошен → дуга сколиоза"
         draw_text(surf, status, (rect.x + 140, rect.y + 12), 12, GOOD if corrected else AMBER, bold=True)
 
@@ -9939,8 +10407,12 @@ class Game:
             y = 112 + ((len(SEAT_LESSONS) + 1) // 2) * 44 + 10
             draw_text(surf, les["title"], (780, y), 20, AMBER, bold=True)
             y += 32
+            psz = 15                                       # крупный текст: урок целиком помещается до низа окна
+            while psz > 10 and sum(len(wrap_lines("• " + pt_, 476, psz)) * (font(psz).get_height() + 2) + 8
+                                   for pt_ in les["points"]) > HEIGHT - 16 - y:
+                psz -= 1
             for pt_ in les["points"]:
-                y = draw_wrapped(surf, "• " + pt_, (780, y), 476, 15, WHITE) + 8
+                y = draw_wrapped(surf, "• " + pt_, (780, y), 476, psz, WHITE) + 8
             draw_text(surf, "По руководству Permobil «Seating & Positioning Guide»",
                       (cv.right - 14, cv.bottom - 18), 11, GREY, right=True)
         elif sc["tab"] == "fit":
@@ -9948,12 +10420,29 @@ class Game:
             checks, pose = self.seat_eval(case, sc["cfg"])
             xray = sc.get("xray", True)
             scene_r = pygame.Rect(cv.x + 8, cv.y + 98, cv.w - 16, cv.h - 122)
-            self._draw_seat_scene(surf, scene_r, case, sc["cfg"], pose, show_necro=True, show_body=xray,
-                                  clip=pygame.Rect(cv.x + 4, scene_r.y - 4, cv.w - 8, cv.bottom - scene_r.y))
+            clip_r = pygame.Rect(cv.x + 4, scene_r.y - 4, cv.w - 8, cv.bottom - scene_r.y)
+            view = sc.get("view", "side")
+            if view in ("front", "top"):
+                self._seat_view_draw(surf, scene_r, case, sc["cfg"], pose, view, clip_r)
+            elif case.get("view"):                          # особый клиент сбоку: по меркам всё ровно
+                scfg = self._seat_side_cfg(case)
+                _, spose = self._seat_eval_side(case, scfg)
+                self._draw_seat_scene(surf, scene_r, case, scfg, spose, show_necro=True, show_body=xray, clip=clip_r)
+                note = ("Сбоку посадка ровная — перекос виден только спереди" if case["view"] == "front" else
+                        "Сбоку посадка ровная — поворот таза виден только сверху")
+                nw = font(13, True).size(tr(note))[0] + 16
+                aa_rect(surf, (16, 12, 24, 225), (cv.right - 14 - nw, cv.bottom - 56, nw, 24), border_radius=5)
+                draw_text(surf, note, (cv.right - 22, cv.bottom - 53), 13, AMBER, bold=True, right=True)
+            else:
+                self._draw_seat_scene(surf, scene_r, case, sc["cfg"], pose, show_necro=True, show_body=xray, clip=clip_r)
             blit_idle(surf, load_image(case["client_art"], (92, 108), GHOST), (cv.x + 12, cv.y + 6), self.t)
             tbtn = self._seat_demo_toggle_rect()
-            Button(tbtn, "РЕНТГЕН: ВКЛ" if xray else "РЕНТГЕН: СКЕЛЕТ",
-                   PURPLE if xray else CYAN).draw(surf, mouse, active=xray)
+            if case.get("view"):
+                vname = {"front": "ВИД: СПЕРЕДИ  ⇄", "top": "ВИД: СВЕРХУ  ⇄", "side": "ВИД: СБОКУ  ⇄"}[view]
+                Button(tbtn, vname, CYAN).draw(surf, mouse, active=view != "side")
+            else:
+                Button(tbtn, "РЕНТГЕН: ВКЛ" if xray else "РЕНТГЕН: СКЕЛЕТ",
+                       PURPLE if xray else CYAN).draw(surf, mouse, active=xray)
             for i, r in self._seat_list_rects():
                 done = SEAT_CASES[i]["id"] in self.seat_done
                 Button(r, "", GOOD if done else CYAN).draw(surf, mouse, active=i == sc["case"])
@@ -9961,19 +10450,16 @@ class Game:
             b = case["body"]
             sy_ = draw_wrapped(surf, case["story"], (cv.x + 112, cv.y + 10), cv.w - 362, 14, WHITE, max_lines=3)
             th_lines = max(1, min(2, (cv.y + 104 - (sy_ + 2)) // (font(13).get_height() + 2)))
-            draw_wrapped(surf, "Карта терапевта: " + case["therapist"], (cv.x + 112, max(cv.y + 44, sy_ + 2)),
+            draw_wrapped(surf, f"{tr('Карта терапевта')}: {tr(case['therapist'])}", (cv.x + 112, max(cv.y + 44, sy_ + 2)),
                          cv.w - 126, 13, CYAN, max_lines=th_lines)
-            cm = tr("см")                               # каждое слово — через словарь (в EN не остаётся кириллицы)
-            draw_text(surf, f"{tr('Мерки')}: {tr('бедро')} {b['thigh']} {cm} · {tr('голень')} {b['shank']} {cm} · "
-                            f"{tr('лопатка')} {b['scap']} {cm} · {tr('плечо')} {b['shoulder']} {cm}",
-                      (cv.x + 14, cv.bottom - 18), 11, AMBER)
+            draw_text(surf, self._seat_measure_text(case), (cv.x + 14, cv.bottom - 18), 11, AMBER)
             sliders = self._seat_slider_rects()
             for key, track in sliders:
                 label, unit, lo, hi = SEAT_SLIDERS[key]
                 v = sc["cfg"][key]
                 ok = next((o for kk, o, _ in checks if kk == key), True)
                 draw_text(surf, label, (track.x, track.y - 20), 13, WHITE)
-                draw_text(surf, f"{v} {unit}", (track.right + 66, track.y - 9), 14, GOOD if ok else AMBER, right=True)
+                fit_text(surf, seat_val_text(key, v), (track.right + 8, track.y - 9), 150, 14, GOOD if ok else AMBER)
                 aa_rect(surf, (44, 46, 60), track, border_radius=4)
                 fill = track.copy()
                 fill.w = int(track.w * (v - lo) / (hi - lo))
@@ -10000,7 +10486,7 @@ class Game:
             q = SEAT_QUIZ[sc["quiz"]]
             qpose = q.get("pose")
             if qpose and qpose.get("front"):
-                self._seat_front(surf, cv, corrected=False)
+                self._seat_front(surf, cv, corrected=False, show_pads=False)   # без подписей упоров — не подсказка
             elif qpose:
                 case, cfg, pose = self._seat_demo_pose(cv, qpose)
                 self._draw_seat_scene(surf, cv.inflate(-16, -24), case, cfg, pose,
@@ -12073,8 +12559,13 @@ def run_selftest():
     # Кабинет посадки: правила из уроков решают каждую примерку, старт — неправильный, у вопросов один ответ
     for case in SEAT_CASES:
         b = case["body"]
-        good = dict(depth=b["thigh"] - 5, leg=b["shank"], back_h=sum(case["back"]) // 2,
-                    back_a=sum(case["angle"]) // 2, tilt=case.get("tilt", 0))
+        good = case.get("solution") or dict(depth=b["thigh"] - 5, leg=b["shank"], back_h=sum(case["back"]) // 2,
+                                            back_a=sum(case["angle"]) // 2, tilt=case.get("tilt", 0))
+        if case.get("view") and not all(o for _, o, _ in Game._seat_eval_side(case, Game._seat_side_cfg(case))[0]):
+            failures.append(f"посадка {case['id']}: сбоку по меркам не ровно (должна быть видна только спереди/сверху)")
+        for k in case.get("sliders", []):
+            if k not in SEAT_SLIDERS or k not in case["start"]:
+                failures.append(f"посадка {case['id']}: ползунок {k} без описания или стартового значения")
         bad = [t for k, ok, t in Game.seat_eval(case, good)[0] if not ok]
         if bad:
             failures.append(f"посадка {case['id']}: по правилам не решается: {bad}")
@@ -12100,6 +12591,9 @@ def run_selftest():
                 gs.seatc["lesson"] = i
             elif tab == "fit":
                 gs._seat_load_case(i)
+                if SEAT_CASES[i].get("view"):               # и вид сбоку у клиентов с перекосом/поворотом
+                    gs.draw(scr)
+                    gs.seatc["view"] = "side"
             else:
                 gs.seatc.update(quiz=i, picked=0)
             gs.draw(scr)                                     # все экраны кабинета рисуются без падений
