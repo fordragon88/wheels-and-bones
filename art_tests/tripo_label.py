@@ -1,6 +1,7 @@
 """Разметка деталей облегчённой модели Tripo и запись в формат игры (assets/models/chair_<key>_ai[_lod].json).
 
-python tripo_label.py <key>        (читает art_tests/tripo/<key>_full.npz; правила — SPECS ниже)
+python tripo_label.py <key> [--target N] [--dir D]   (читает D/<key>_full.npz, пишет в D и D/models; D по умолчанию
+                                                      art_tests/tripo; правила — SPECS ниже)
 
 Правила по порядку, грань берёт первую подходящую деталь (по центру грани), остальное — «frame».
   wheel  — колесо: центр (x, y) и радиус уточняются по точкам обода; по расстоянию до оси:
@@ -9,7 +10,7 @@ python tripo_label.py <key>        (читает art_tests/tripo/<key>_full.npz;
 До разметки — правка геометрии: drop (убрать грани в коробке x/y/|z|, можно светлее lum) и move (перенести
 грани в коробке x/y/z на d; общие с остальной моделью вершины копируются).
 Оси игры: x — вперёд, y — вверх, пол 0, z — вбок (пульт/правая сторона = +z), мм."""
-import sys, json, math
+import os, sys, json, math
 import numpy as np
 from scipy.spatial import cKDTree
 import fast_simplification
@@ -216,7 +217,8 @@ def to_json(V, F, C, lab, names, src):
 if __name__ == "__main__":
     key = sys.argv[1]
     spec = SPECS[key]
-    d = np.load(f"art_tests/tripo/{key}_full.npz")
+    D = sys.argv[sys.argv.index("--dir") + 1] if "--dir" in sys.argv else "art_tests/tripo"
+    d = np.load(f"{D}/{key}_full.npz")
     V, F, C = edit(d["V"], d["F"], d["C"], spec)
     if "--target" in sys.argv:                           # меньше граней для «полной» модели игры
         t = int(sys.argv[sys.argv.index("--target") + 1])
@@ -233,13 +235,14 @@ if __name__ == "__main__":
             k = lum[fi] / 170.0
             C[F[fi]] = np.clip(tgt * k, 0, 255)
     V, F, C, lab, names = add_hubs(V, F, C, lab, names, wheels)
-    np.savez_compressed(f"art_tests/tripo/{key}_labels.npz", lab=lab, names=np.array(names))
-    np.savez_compressed(f"art_tests/tripo/{key}_labeled_mesh.npz", V=V, F=F, C=C, lab=lab, names=np.array(names))
+    np.savez_compressed(f"{D}/{key}_labels.npz", lab=lab, names=np.array(names))
+    np.savez_compressed(f"{D}/{key}_labeled_mesh.npz", V=V, F=F, C=C, lab=lab, names=np.array(names))
     for cx, cy, R, w in wheels:
         print(f"  колесо {w['kind']}: центр ({cx:.0f}, {cy:.0f}) R {R:.0f}")
     cnt = np.bincount(lab, minlength=len(names))
     print("  детали:", {n: int(c) for n, c in zip(names, cnt)})
-    out = f"art_tests/tripo/models/{spec['art']}_ai.json"   # в assets/ — только официальные файлы с подписки Tripo
+    os.makedirs(f"{D}/models", exist_ok=True)
+    out = f"{D}/models/{spec['art']}_ai.json"   # в assets/ — только официальные файлы с подписки Tripo
     json.dump(to_json(V, F, C, lab, names, "Tripo"), open(out, "w"), separators=(",", ":"))
     # облегчённая копия для окна диагностики: детали — по ближайшей грани полной модели
     Vs, Fs = fast_simplification.simplify(V.astype(np.float32), F.astype(np.int32), target_reduction=1 - 11000 / len(F))
