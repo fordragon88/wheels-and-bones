@@ -6,6 +6,8 @@ python tripo_label.py <key>        (читает art_tests/tripo/<key>_full.npz;
   wheel  — колесо: центр (x, y) и радиус уточняются по точкам обода; по расстоянию до оси:
            шина / обод / спицы / подшипник / ось, обруч (pushrim) — снаружи плоскости колеса;
   box    — коробка x/y/|z| (мм), можно ограничить стороной (z>0 / z<0).
+До разметки — правка геометрии: drop (убрать грани в коробке x/y/|z|, можно светлее lum) и move (перенести
+грани в коробке x/y/z на d; общие с остальной моделью вершины копируются).
 Оси игры: x — вперёд, y — вверх, пол 0, z — вбок (пульт/правая сторона = +z), мм."""
 import sys, json, math
 import numpy as np
@@ -28,6 +30,8 @@ SPECS = {
     "rusalka": dict(art="chair_rusalka", wheels=[
         dict(c=(-110, 300), R=300, z=(225, 305), kind="spoked"),
         dict(c=(265, 48), R=50, z=(205, 275), kind="caster")],
+        drop=[dict(x=(-420, -322), y=(480, 680), az=(100, 230)),          # «рога» за спинкой — мусор Tripo
+              dict(x=(-322, -306), y=(570, 680), az=(100, 230), lum=45)],
         boxes=[("caster_stem", (235, 305), (55, 270), (195, 280)),
                ("footrest", (320, 430), (40, 240), (0, INF)),
                ("brake", (110, 210), (330, 430), (170, 270)),
@@ -47,8 +51,13 @@ SPECS = {
     "leshy": dict(art="chair_leshy", wheels=[
         dict(c=(-430, 215), R=215, z=(215, 355), kind="power"),
         dict(c=(200, 215), R=215, z=(215, 355), kind="power")],
+        # Tripo поставил пульт по центру перед сиденьем — переносим на правый подлокотник (как у X8 и под правой
+        # рукой Лешего на рисунке); наклонную панель пульта убираем — на рисунке её нет
+        move=[dict(x=(0, 340), y=(628, 900), z=(-110, 120), d=(-40, 0, 255))],
+        drop=[dict(x=(-130, 100), y=(630, 700), az=(0, 70)),                 # остаток крепления пульта на сиденье
+              dict(x=(205, 345), y=(740, 905), az=(0, 125))],                # наклонная панель пульта
         boxes=[("freewheel", (-700, -545), (250, 440), (0, 220)),
-               ("joystick", (95, 240), (690, 860), (0, INF)),
+               ("joystick", (78, 300), (690, 860), (180, INF)),
                ("footrest", (300, 720), (200, 340), (0, INF)),
                ("motor", (-560, 330), (110, 320), (120, 215)),
                ("battery", (-330, 160), (140, 420), (0, 150)),
@@ -94,6 +103,30 @@ def refine_wheel(V, w):
     lowest = V[band & (np.abs(V[:, 0] - cx) < 0.3 * R0), 1]
     R = cy - (lowest.min() if len(lowest) else 0.0)      # колесо стоит на полу: радиус = высота оси над низом шины
     return cx, cy, R
+
+
+def edit(V, F, C, spec):
+    P = V[F].mean(1)
+    L = C[F].mean(1).mean(1)
+    keep = np.ones(len(F), bool)
+    for b in spec.get("drop", []):
+        az = np.abs(P[:, 2])
+        keep &= ~((P[:, 0] >= b["x"][0]) & (P[:, 0] < b["x"][1]) & (P[:, 1] >= b["y"][0]) & (P[:, 1] <= b["y"][1])
+                  & (az >= b["az"][0]) & (az <= b["az"][1]) & (L > b.get("lum", -1)))
+    for b in spec.get("move", []):
+        m = keep & (P[:, 0] >= b["x"][0]) & (P[:, 0] <= b["x"][1]) & (P[:, 1] >= b["y"][0]) & (P[:, 1] <= b["y"][1])             & (P[:, 2] >= b["z"][0]) & (P[:, 2] <= b["z"][1])
+        vi = np.unique(F[m])
+        remap = np.full(len(V), -1)
+        remap[vi] = len(V) + np.arange(len(vi))
+        V = np.vstack([V, V[vi] + np.asarray(b["d"], float)])
+        C = np.vstack([C, C[vi]])
+        F = F.copy()
+        F[m] = remap[F[m]]
+    F = F[keep]
+    used = np.unique(F)                                  # убрать осиротевшие вершины
+    remap = np.full(len(V), -1)
+    remap[used] = np.arange(len(used))
+    return V[used], remap[F], C[used]
 
 
 def label(V, F, C, spec):
@@ -184,7 +217,7 @@ if __name__ == "__main__":
     key = sys.argv[1]
     spec = SPECS[key]
     d = np.load(f"art_tests/tripo/{key}_full.npz")
-    V, F, C = d["V"], d["F"], d["C"]
+    V, F, C = edit(d["V"], d["F"], d["C"], spec)
     if "--target" in sys.argv:                           # меньше граней для «полной» модели игры
         t = int(sys.argv[sys.argv.index("--target") + 1])
         Vs, Fs = fast_simplification.simplify(V.astype(np.float32), F.astype(np.int32), target_reduction=1 - t / len(F))

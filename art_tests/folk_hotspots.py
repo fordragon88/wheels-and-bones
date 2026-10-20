@@ -19,7 +19,7 @@ FW, FH, UP = 380, 300, 2
 CHAIRS = {"yaga": "d100", "rusalka": "x3", "leshy": "x8", "ra": "nitrum_em", "gorynych": "jazzy614"}
 # ручные поправки (рамка 380x300), где проекция попала мимо детали на рисунке
 OVERRIDE = {
-    "leshy": {"tire": (173, 277), "rim": (193, 253), "motor": (127, 233), "axle": (77, 220), "freewheel": (83, 177), "joystick": (210, 123)},
+    "leshy": {"tire": (173, 277), "rim": (193, 253), "motor": (127, 233), "axle": (77, 220), "freewheel": (83, 177), "joystick": (125, 131)},
     "gorynych": {"breaker": (220, 180), "tire": (147, 255), "battery": (180, 196), "joystick": (161, 119),
                  "controller": (182, 139)},
 }
