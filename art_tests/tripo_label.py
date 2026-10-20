@@ -107,7 +107,7 @@ def refine_wheel(V, w):
 
 def edit(V, F, C, spec):
     P = V[F].mean(1)
-    L = C[F].mean(1).mean(1)
+    L = C[F][:, :, :3].mean((1, 2))                      # яркость (у C могут быть ещё столбцы — UV и т.п.)
     keep = np.ones(len(F), bool)
     for b in spec.get("drop", []):
         az = np.abs(P[:, 2])

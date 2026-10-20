@@ -17,11 +17,12 @@ from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
 import fast_simplification
 
-CT = {5126: np.float32, 5121: np.uint8, 5123: np.uint16, 5125: np.uint32}
+CT = {5126: np.float32, 5120: np.int8, 5121: np.uint8, 5122: np.int16, 5123: np.uint16, 5125: np.uint32}
 NC = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
 
 
-def read_glb(path):
+def read_glb(path, full=False):
+    """V, F, C (цвет вершин из текстуры); full=True — ещё UV, нормали (или None) и (байты текстуры, mime)."""
     raw = open(path, "rb").read()
     jl = struct.unpack("<I", raw[12:16])[0]
     js = json.loads(raw[20:20 + jl])
@@ -70,6 +71,14 @@ def read_glb(path):
     u = np.clip((UV[:, 0] % 1.0) * (w - 1), 0, w - 1)
     v = np.clip((UV[:, 1] % 1.0) * (h - 1), 0, h - 1)    # glTF: v сверху вниз — как у картинки
     C = T[v.astype(int), u.astype(int)].astype(np.float32)
+    if full:
+        N = None
+        if "NORMAL" in A:
+            N = acc(A["NORMAL"]).astype(np.float64) @ world[ni][:3, :3].T
+            N /= np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-9)
+        img = js["images"][tex_i]
+        raw_img = bin_[bv.get("byteOffset", 0):bv.get("byteOffset", 0) + bv["byteLength"]]
+        return V, F, C, UV, N, (bytes(raw_img), img.get("mimeType", "image/png"))
     return V, F, C
 
 

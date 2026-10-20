@@ -300,6 +300,15 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-20 — Claude (Opus 5.5) — **архив очищенных моделей Tripo для владельца**: `art_tests/tripo_export.py`
+  (venv meshenv) → art_tests/export/wheels_and_bones_folk_chairs.zip (174 МБ, не в git). На каждую коляску:
+  `*_clean.glb` — исходник Tripo (Downloads/Scene*.glb: Scene — Яга, (1) — Леший, (2) — Горыныч, (3) — Ра, (4) — Ольга)
+  в полном качестве с текстурой, без оторванных кусков и с правками SPECS (drop/move); `*_game.glb` — модель игры,
+  детали отдельными объектами; preview.png; reference/ (картинка для 3D, мануал, рисунки игры). Оси glTF: Y вверх,
+  +Z вперёд, метры. В корне README.md и TASK_cleanup.md — задание на дочистку другой модели (Gemini).
+  read_glb(full=True) отдаёт UV, нормали, текстуру; в CT добавлены int8/int16. edit() берёт яркость из первых 3
+  столбцов C. (art_tests/tripo_export.py, tripo_export_README.md, tripo_export_TASK.md, tripo_convert.py, tripo_label.py)
+
 - 2026-10-20 — Claude (Opus 5.5) — **правки моделей Tripo**: в `tripo_label.py` до разметки — правка геометрии
   (`drop` — убрать грани в коробке, можно только светлее `lum`; `move` — перенести грани, общие вершины копируются).
   Леший (X8): пульт стоял по центру перед сиденьем → перенесён на правый подлокотник (как на рисунке с Лешим — под
