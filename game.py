@@ -350,9 +350,47 @@ class LFont:
         return getattr(self.f, name)
 
 
+FINGER = {"t": -10 ** 9, "id": None, "pos": None}   # последнее касание (палец), логические координаты
+
+
 def mouse_pos():
-    """Мышь в логических координатах 1280x720."""
+    """Мышь в логических координатах 1280x720 (на сенсорном экране — где последнее касание)."""
+    if FINGER["pos"] is not None and pygame.time.get_ticks() - FINGER["t"] < 60000:
+        return FINGER["pos"]
     return window_to_logical(pygame.mouse.get_pos())
+
+
+def finger_events(event, batch_has_finger=False):
+    """Касание пальцем -> события мыши в логических координатах (клик ровно там, куда коснулись; протянуть —
+    как тянуть мышью). Мышиные события, которые браузер и SDL сами делают из касания, отбрасываются — у них
+    бывает устаревшее место. Возврат: список событий для игры или None (событие не про касания)."""
+    t = pygame.time.get_ticks()
+    if event.type in (pygame.FINGERDOWN, pygame.FINGERUP, pygame.FINGERMOTION):
+        surf = pygame.display.get_surface()
+        sw, sh = surf.get_size() if surf else (WIDTH, HEIGHT)
+        lp = window_to_logical((event.x * sw, event.y * sh))
+        FINGER["t"] = t
+        E = pygame.event.Event
+        if event.type == pygame.FINGERDOWN:
+            if FINGER["id"] is not None and FINGER["id"] != event.finger_id:
+                return []                                   # второй палец — не щёлкает
+            FINGER["id"], FINGER["pos"] = event.finger_id, lp
+            return [E(pygame.MOUSEMOTION, pos=lp, rel=(0, 0), buttons=(0, 0, 0), touch=True),
+                    E(pygame.MOUSEBUTTONDOWN, pos=lp, button=1, touch=True)]
+        if event.finger_id != FINGER["id"]:
+            return []
+        old = FINGER["pos"] or lp
+        FINGER["pos"] = lp
+        if event.type == pygame.FINGERMOTION:
+            return [E(pygame.MOUSEMOTION, pos=lp, rel=(lp[0] - old[0], lp[1] - old[1]), buttons=(1, 0, 0), touch=True)]
+        FINGER["id"] = None
+        return [E(pygame.MOUSEBUTTONUP, pos=lp, button=1, touch=True)]
+    if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION, pygame.MOUSEWHEEL):
+        if getattr(event, "touch", False) or batch_has_finger or t - FINGER["t"] < 700:
+            return []                                       # «мышь», сделанная из касания (браузер шлёт её ДО пальца)
+        if event.type != pygame.MOUSEWHEEL:
+            FINGER["pos"] = None                            # настоящая мышь — снова её место
+    return None
 
 
 def pick_render_scale():
@@ -1236,6 +1274,64 @@ def web_persist(path):
     web_js(f"localStorage.setItem({json.dumps('wnb:' + os.path.basename(path))}, {json.dumps(text)})")
 
 
+TOUCH = {"on": False}                         # браузер на телефоне/планшете (палец вместо мыши)
+
+
+def web_setup_touch():
+    """Браузер, сенсорный экран: страница не прокручивается и не масштабируется пальцем, на телефоне — просьба
+    повернуть экран, полный экран по первому касанию (Android — ещё и альбомная ориентация), кнопка ⛶,
+    поле для экранной клавиатуры (отзыв). Возврат: True — сенсорный экран."""
+    r = web_js("""(function(){
+      var touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+      if (!touch || document.getElementById('wnb-rotate')) return touch ? 'y' : 'n';
+      var c = document.getElementById('canvas');
+      if (c) c.style.touchAction = 'none';
+      document.documentElement.style.overscrollBehavior = 'none';
+      document.body.style.touchAction = 'none';
+      var phone = Math.min(screen.width, screen.height) < 700;
+      var ov = document.createElement('div'); ov.id = 'wnb-rotate';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;align-items:center;' +
+        'justify-content:center;background:#1d1b24;color:#f0b85a;font:bold 22px sans-serif;text-align:center;padding:24px';
+      ov.innerHTML = '<div style="font-size:72px;line-height:1">&#x21BB;</div><div style="margin-top:12px">' +
+        'Turn your phone sideways to play</div>';
+      document.body.appendChild(ov);
+      function chk(){ ov.style.display = (phone && screen.height > screen.width && innerHeight > innerWidth * 0.9)
+        ? 'flex' : 'none'; }
+      window.addEventListener('resize', chk); window.addEventListener('orientationchange', chk); chk();
+      function full(){ var d = document.documentElement, f = d.requestFullscreen || d.webkitRequestFullscreen;
+        if (document.fullscreenElement || document.webkitFullscreenElement || !f) return;
+        try { var p = f.call(d); if (p && p.then) p.then(function(){ try { screen.orientation.lock('landscape')
+          .catch(function(){}); } catch (e) {} }).catch(function(){}); } catch (e) {} }
+      if (phone) window.addEventListener('touchend', full, {once: true});
+      var b = document.createElement('button'); b.id = 'wnb-full'; b.type = 'button'; b.textContent = '\\u26F6';
+      b.setAttribute('aria-label', 'Fullscreen');
+      b.style.cssText = 'position:fixed;left:6px;top:6px;z-index:9998;width:40px;height:40px;border:0;border-radius:8px;' +
+        'background:rgba(0,0,0,.45);color:#fff;font-size:22px;opacity:.8';
+      b.onclick = function(){ if (document.fullscreenElement) { document.exitFullscreen && document.exitFullscreen(); }
+        else full(); };
+      document.body.appendChild(b);
+      window.wnbText = function(x, y, w, h, fs, show){     // comment box over the canvas (on-screen keyboard)
+        var t = document.getElementById('wnb-text');
+        if (!show) { if (t) { t.style.display = 'none'; t.blur(); } return ''; }
+        if (!t) { t = document.createElement('textarea'); t.id = 'wnb-text'; t.maxLength = 600;
+          t.setAttribute('aria-label', 'Comment');
+          t.style.cssText = 'position:fixed;z-index:9997;box-sizing:border-box;resize:none;border:2px solid #6fd3e0;' +
+            'border-radius:6px;background:#15131c;color:#fff;padding:4px 8px;font-family:sans-serif;outline:none';
+          ['keydown', 'keyup', 'keypress'].forEach(function(n){        // keys go to the text, not to SDL
+            t.addEventListener(n, function(e){ e.stopPropagation(); }); });
+          document.body.appendChild(t); }
+        var r = c.getBoundingClientRect(), kx = r.width / 1280, ky = r.height / 720;
+        t.style.left = (r.left + x * kx) + 'px'; t.style.top = (r.top + y * ky) + 'px';
+        t.style.width = (w * kx) + 'px'; t.style.height = (h * ky) + 'px';
+        t.style.fontSize = Math.max(14, fs * ky) + 'px'; t.style.display = 'block';
+        return t.value;
+      };
+      return 'y';
+    })()""")
+    TOUCH["on"] = str(r) == "y"
+    return TOUCH["on"]
+
+
 def web_setup_page():
     """Браузер: живые области для экранных чтецов и клавиши, которые не должна забирать страница."""
     web_js("""(function(){
@@ -1273,6 +1369,8 @@ def web_setup_page():
         catch (e) {}
       };
       window.addEventListener('keydown', function(e){
+        var t = e.target && e.target.tagName;
+        if (t === 'TEXTAREA' || t === 'INPUT') return;        // поле отзыва на телефоне: пробел и стрелки — тексту
         if (['Tab',' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','F1','F2'].indexOf(e.key) >= 0) e.preventDefault();
       });
       window.wnbSay = function(text, interrupt, voice){
@@ -8763,11 +8861,11 @@ class Game:
         if self.scene == "credits" and self.handle_credits_event(event):
             return
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.dispute_visible()
-                and self._dispute_btn_rect().collidepoint(event.pos)):
+                and self._tap(self._dispute_btn_rect(), event.pos)):
             self.open_dispute()
             return
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.scene not in ("title", "intro", "ending")
-                and self._feedback_rect().collidepoint(event.pos)):
+                and self._tap(self._feedback_rect(), event.pos)):
             self.open_feedback()
             return
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
@@ -8776,7 +8874,7 @@ class Game:
             self.toggle_lang()
             return
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
-                and self._speaker_rect().collidepoint(event.pos)):
+                and self._tap(self._speaker_rect(), event.pos)):
             self.show_sound = True
             snd("tick")
             return
@@ -8872,6 +8970,9 @@ class Game:
         if event.type == pygame.MOUSEWHEEL:
             self.credits_scroll(-event.y * 60)
             return True
+        if event.type == pygame.MOUSEMOTION and event.buttons[0]:     # протянуть пальцем / мышью
+            self.credits_scroll(-event.rel[1])
+            return True
         if event.type == pygame.KEYDOWN:
             d = {pygame.K_UP: -60, pygame.K_DOWN: 60, pygame.K_PAGEUP: -300, pygame.K_PAGEDOWN: 300,
                  pygame.K_HOME: -1e6, pygame.K_END: 1e6}.get(event.key)
@@ -8908,8 +9009,8 @@ class Game:
         surf.blit(shade, (0, 0))
         self._wave_title(surf, "ТИТРЫ", (WIDTH // 2, 70), 44, AMBER, self.st)
         Button(self._credits_back_rect(), "НАЗАД", GOOD).draw(surf, mouse_pos())
-        draw_text(surf, "колесо мыши / ↑ ↓ — листать · Esc — назад", (WIDTH // 2, HEIGHT - 47), 15, GREY,
-                  center=True)
+        draw_text(surf, "протяни пальцем — листать" if TOUCH["on"] else "колесо мыши / ↑ ↓ — листать · Esc — назад",
+                  (WIDTH // 2, HEIGHT - 47), 15, GREY, center=True)
 
     def click_title(self, m):
         cb = self._credits_btn_rect()
@@ -9108,8 +9209,30 @@ class Game:
             return "guild"
         return "workshop"
 
+    def _touch_text(self):
+        """Сенсорный экран: поле отзыва — настоящее поле страницы поверх холста (вызывает экранную клавиатуру)."""
+        if not TOUCH["on"]:
+            return
+        show = self.dispute_ui is not None and not self.kb["help"] and not self.show_sound
+        if show:
+            if not getattr(self, "_wtext", False):           # новое окно — поле с текстом окна (обычно пусто)
+                web_js("var t=document.getElementById('wnb-text'); if (t) t.value=" + json.dumps(self.dispute_ui["text"]))
+                self._wtext = True
+            r = self._dispute_text_rect()
+            v = web_js(f"wnbText({r.x}, {r.y}, {r.w}, {r.h}, 18, 1)")
+            if v is not None:
+                self.dispute_ui["text"] = str(v)[:600]
+        elif getattr(self, "_wtext", False):
+            web_js("wnbText(0, 0, 0, 0, 0, 0)")
+            self._wtext = False
+
+    def _tap(self, rect, pos):
+        """Попадание по кнопке; на сенсорном экране маленькие значки «шире» пальца — запас по краям."""
+        return (rect.inflate(18, 18) if TOUCH["on"] else rect).collidepoint(pos)
+
     def update(self, dt):
         self.t += dt
+        self._touch_text()
         if self.scene == "credits" and not calm() and self.t - self.scene_t0 > 1.2:
             self.credits_y = min(self.credits_y + 26 * dt, self._credits_max())   # медленно вверх
         if not self.headless:
@@ -9695,17 +9818,20 @@ class Game:
             blit_idle(surf, load_image("ghost.png", (190, 240), CYAN), (WIDTH - 250, HEIGHT - 330),
                       self.t, "float", k=gk)
         if st > 1.6:
-            label = "[ клик — продолжить ]" if self.done else "[ клик — начать ]"
+            label = ("[ тап — продолжить ]" if self.done else "[ тап — начать ]") if TOUCH["on"] else                 ("[ клик — продолжить ]" if self.done else "[ клик — начать ]")
             pulse = 0.5 + 0.5 * wsin(self.t * 3.2)
             draw_text(surf, label, (WIDTH // 2, 470), 24, AMBER, bold=True, center=True,
                       alpha=150 + 105 * pulse)
         if st > 1.6:
             Button(self._credits_btn_rect(), "ТИТРЫ", GHOST).draw(surf, mouse_pos())
-        draw_text(surf, "M — sound · progress saves automatically" if IS_WEB else
-                  "Esc — выход · M — звук · прогресс сохраняется автоматически",
-                  (WIDTH // 2, HEIGHT - 36), 15, GREY, center=True)
-        draw_text(surf, "F1 — управление с клавиатуры · F2 — озвучка для незрячих",
-                  (WIDTH // 2, HEIGHT - 62), 15, CYAN, center=True)
+        if TOUCH["on"]:                                     # телефон/планшет: клавиш нет
+            draw_text(surf, "прогресс сохраняется автоматически", (WIDTH // 2, HEIGHT - 36), 15, GREY, center=True)
+        else:
+            draw_text(surf, "M — sound · progress saves automatically" if IS_WEB else
+                      "Esc — выход · M — звук · прогресс сохраняется автоматически",
+                      (WIDTH // 2, HEIGHT - 36), 15, GREY, center=True)
+            draw_text(surf, "F1 — управление с клавиатуры · F2 — озвучка для незрячих",
+                      (WIDTH // 2, HEIGHT - 62), 15, CYAN, center=True)
 
     # ----- интро -----
     def draw_intro(self, surf):
@@ -9735,7 +9861,7 @@ class Game:
                   alpha=255 * sk)
         draw_wrapped(surf, text, (panel.centerx, panel.y + 70), panel.w - 50, 19, WHITE, center=True,
                      line_gap=4, limit=n)
-        draw_text(surf, f"{idx + 1}/{len(self.intro_slides)}   [ клик — далее ]",
+        draw_text(surf, f"{idx + 1}/{len(self.intro_slides)}   " + ("[ тап — далее ]" if TOUCH["on"] else "[ клик — далее ]"),
                   (panel.centerx, panel.bottom - 34), 15, GREY, center=True)
 
     # ----- хаб (мастерская) -----
@@ -12952,7 +13078,8 @@ class Game:
                      (WIDTH // 2, 330), 800, 19, GHOST, center=True)
         draw_text(surf, f"Коллекция: {len(self.garage)} колясок починено и спасено.",
                   (WIDTH // 2, 430), 18, PURPLE, center=True)
-        draw_text(surf, "[ клик — посмотреть гараж ]", (WIDTH // 2, 510), 20, AMBER, center=True,
+        draw_text(surf, "[ тап — посмотреть гараж ]" if TOUCH["on"] else "[ клик — посмотреть гараж ]",
+                  (WIDTH // 2, 510), 20, AMBER, center=True,
                   alpha=150 + 105 * (0.5 + 0.5 * wsin(self.t * 3.2)))
         Button(self._credits_btn_rect(), "ТИТРЫ", GHOST).draw(surf, mouse_pos())
 
@@ -13306,6 +13433,19 @@ def run_selftest():
     g.draw(pygame.display.get_surface())
     _esc(g)
     assert g.scene == "title", "Esc из титров — обратно на титул"
+    # касание пальцем: клик ровно там, куда коснулись; «мышь», которую браузер делает из касания, — мимо
+    g.scene_t0 = g.t - 5
+    sw, sh = pygame.display.get_surface().get_size()
+    cb = g._credits_btn_rect().center
+    _fx, _fy = cb[0] * RS / sw, cb[1] * RS / sh
+    for _ev in (pygame.event.Event(pygame.FINGERDOWN, x=_fx, y=_fy, dx=0, dy=0, finger_id=1, touch_id=1, pressure=1),
+                pygame.event.Event(pygame.FINGERUP, x=_fx, y=_fy, dx=0, dy=0, finger_id=1, touch_id=1, pressure=0)):
+        for _e in finger_events(_ev):
+            g.handle_event(_e)
+    assert g.scene == "credits", f"касание по «ТИТРЫ» должно открыть титры: {g.scene}"
+    assert finger_events(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(5, 5), button=1, touch=False)) == [],         "мышиное эхо касания должно отбрасываться"
+    FINGER.update(t=-10 ** 9, pos=None)
+    _esc(g)
     for _h, _lines in CREDITS:
         for _x in [_h] + _lines:
             if re.search("[А-Яа-яЁё]", _x):
@@ -13802,6 +13942,7 @@ async def main():
     if IS_WEB:
         web_restore()
         web_setup_page()
+        web_setup_touch()
         DISPLAY["web_px"] = web_measure()             # «авто»: холст сразу под окно игры на странице
         try:
             with open(SETTINGS_PATH, encoding="utf-8-sig") as f:
@@ -13889,12 +14030,19 @@ async def main():
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0
-        for event in pygame.event.get():
+        evs = pygame.event.get()
+        has_finger = any(e.type in (pygame.FINGERDOWN, pygame.FINGERUP, pygame.FINGERMOTION) for e in evs)
+        for event in evs:
             if event.type == pygame.QUIT:
                 running = IS_WEB                              # в браузере «выход» некуда — остаёмся в игре
             elif event.type == pygame.VIDEORESIZE:            # окно растянули/развернули — масштаб пересчитаем чуть позже
                 DISPLAY["resize_at"] = pygame.time.get_ticks()
             else:
+                fe = finger_events(event, has_finger)
+                if fe is not None:                            # касания: уже в логических координатах
+                    for e in fe:
+                        game.handle_event(e)
+                    continue
                 if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION):
                     d = dict(event.dict)
                     d["pos"] = window_to_logical(d["pos"])
