@@ -100,7 +100,8 @@ else:
     DATA_DIR = BASE_DIR
 IS_WEB = sys.platform == "emscripten"          # браузерная версия (pygbag, WebAssembly)
 WEB_RES = {"standard": (1280, 720), "high": (1920, 1080), "ultra": (2560, 1440)}   # холст в браузере
-WEB_LEVELS = ("standard", "high", "ultra")     # «авто» выбирает по размеру окна игры на экране (и скорости ПК)
+WEB_LEVELS = ("standard", "high", "ultra")
+WEB_MIN_W = 768                                # «авто» в браузере: холст не меньше (масштаб рендера 0,6)     # «авто» выбирает по размеру окна игры на экране (и скорости ПК)
 GAME_VERSION = "0.3"
 # Замечания игроков (флажок ⚑, «Я не согласен») уходят в Google-таблицу через веб-приложение Apps Script
 # (docs/feedback/Code.gs, настройка — docs/FEEDBACK_SETUP.md). Пустой адрес — только локальный feedback.json.
@@ -1141,19 +1142,46 @@ def _fit(surf, size):
     return out
 
 
+def asset_path(name):
+    """Путь к картинке из assets; браузерная сборка хранит крупные PNG как .jpg (у рисунков с прозрачностью —
+    ещё <имя>.a.png: прозрачность отдельно, см. build_web.py). None — нет."""
+    path = os.path.join(ASSETS_DIR, name)
+    if os.path.exists(path):
+        return path
+    if name.endswith(".png") and os.path.exists(path[:-4] + ".jpg"):
+        return path[:-4] + ".jpg"
+    return None
+
+
+def _load_split(jpg, apng):
+    """Цвет из JPEG + прозрачность из серой PNG -> одна картинка RGBA (без numpy: срезы байтов)."""
+    rgb = pygame.image.load(jpg)
+    a = pygame.image.load(apng)
+    w, h = rgb.get_size()
+    if a.get_size() != (w, h):
+        a = pygame.transform.smoothscale(a.convert(24), (w, h))
+    rb = pygame.image.tobytes(rgb.convert(24) if rgb.get_bitsize() != 24 else rgb, "RGB")
+    ab = pygame.image.tobytes(a.convert(24) if a.get_bitsize() != 24 else a, "RGB")
+    out = bytearray(w * h * 4)
+    out[0::4], out[1::4], out[2::4], out[3::4] = rb[0::3], rb[1::3], rb[2::3], ab[0::3]
+    return pygame.image.frombytes(bytes(out), (w, h), "RGBA")
+
+
+def asset_exists(name):
+    return asset_path(name) is not None
+
+
 def load_image(name, size=None, color=GHOST):
     key = (name, size)
     if key in _img_cache:
         return _img_cache[key]
-    path = os.path.join(ASSETS_DIR, name)
-    if not os.path.exists(path) and name.endswith(".png"):      # браузерная сборка: фоны сжаты в .jpg
-        alt = path[:-4] + ".jpg"
-        if os.path.exists(alt):
-            path = alt
+    path = asset_path(name)
     surf = None
-    if os.path.exists(path):
+    if path:
         try:
-            real = pygame.image.load(path).convert_alpha()
+            ap = path[:-4] + ".a.png"
+            real = (_load_split(path, ap) if path.endswith(".jpg") and os.path.exists(ap)
+                    else pygame.image.load(path)).convert_alpha()
             L = tuple(size) if size else real.get_size()
             if size or RS != 1:                 # вписать в логический размер — сразу в пикселях экрана
                 k = min(L[0] * RS / real.get_width(), L[1] * RS / real.get_height())
@@ -1186,7 +1214,7 @@ def tool_icon(tid, size):
     key = (tid, size)
     if key not in _tool_icon_cache:
         name = f"tool_{tid}.png"
-        if os.path.exists(os.path.join(ASSETS_DIR, name)):
+        if asset_exists(name):
             surf = load_image(name, (size, size))
         else:
             surf = Surf((size, size), pygame.SRCALPHA)
@@ -1739,7 +1767,7 @@ def _fit_view(w, h):
 def rs_for(res, view_h=None):
     """Масштаб рендера: выбранное разрешение, а в режиме АВТО — по высоте области игры в окне (не больше ×2)."""
     if res:
-        return max(1.0, min(3.0, res[1] / HEIGHT))
+        return max(0.6 if IS_WEB else 1.0, min(3.0, res[1] / HEIGHT))   # браузер: холст бывает и меньше 720p
     if view_h is None:
         return pick_render_scale()
     return max(1.0, min(2.0, view_h / HEIGHT))          # ровно под окно — кадр выводится без масштабирования
@@ -1757,7 +1785,7 @@ def _default_window():
 
 def _set_window(fullscreen):
     """Создать/переключить окно. Масштабирование кадра делает игра сама (present), без SCALED у SDL."""
-    if IS_WEB:                                        # браузер: холст 720p…1440p (размер — web_target_res)
+    if IS_WEB:                                        # браузер: холст под окно игры (размер — web_target_res)
         res = web_target_res()
         DISPLAY["res"] = res
         screen = pygame.display.set_mode(res)
@@ -1809,17 +1837,18 @@ def init_display(fullscreen=False):
 
 
 def web_target_res():
-    """Браузер: размер холста. Выбор игрока (1080p/720p) или «авто»: ближайший не меньше окна игры на экране
-    (ширина × devicePixelRatio). Холст крупнее окна браузер ужимает грубо — тонкие линии рвутся, текст «сыпется»;
-    поэтому в маленьком окне на сайте — 720p, на весь экран — 1080p, на 4K/Retina — 1440p. web_cap — потолок
-    после замедления (fps < 20)."""
+    """Браузер: размер холста. Выбор игрока (1080p/720p) или «авто»: ровно размер окна игры на экране
+    (ширина × devicePixelRatio, кратно 16, от WEB_MIN_W до 1440p). Холст другого размера браузер растягивает или
+    ужимает грубо — тонкие кольца и линии рвутся, текст «сыпется». web_cap — потолок после замедления (fps < 20)."""
     q = DISPLAY.get("web_quality", "auto")
     if q in WEB_RES:
         return WEB_RES[q]
     px = DISPLAY.get("web_px") or 1920
     cap = DISPLAY.get("web_cap", len(WEB_LEVELS) - 1)
-    lvl = next((i for i, k in enumerate(WEB_LEVELS) if WEB_RES[k][0] >= px * 0.9), len(WEB_LEVELS) - 1)
-    return WEB_RES[WEB_LEVELS[max(0, min(lvl, cap))]]
+    top = WEB_RES[WEB_LEVELS[max(0, min(cap, len(WEB_LEVELS) - 1))]][0]
+    # холст ровно с окно игры (пиксель в пиксель): браузеру нечего ужимать — кружки и линии не рвутся
+    w = int(max(WEB_MIN_W, min(top, round(px / 16) * 16)))
+    return (w, w * 9 // 16)
 
 
 def web_measure():
@@ -1857,8 +1886,9 @@ def web_auto_resize(px):
     old = DISPLAY.get("web_px")
     DISPLAY["web_px"] = px
     want = web_target_res()
-    if want == DISPLAY.get("res"):
-        DISPLAY.pop("_want", None)
+    cur = DISPLAY.get("res")
+    if want == cur or (cur and abs(want[0] - cur[0]) <= max(16, cur[0] * 0.02)):
+        DISPLAY.pop("_want", None)                  # разница в пару процентов — не пересобираем кадр
         return False
     if DISPLAY.get("_want") != want:
         DISPLAY["_want"] = want
@@ -5974,7 +6004,7 @@ FOLK_HOTSPOTS_PATH = os.path.join(ASSETS_DIR, "models", "folk_hotspots.json")
 def _folk_ready(job):
     """Задание включается, когда на месте его картинки (кладёт build_new_v2_assets.py --install).
     3D-модель необязательна: без неё в окне осмотра — рисунок коляски с кружками (folk_hotspots.json)."""
-    return all(os.path.exists(os.path.join(ASSETS_DIR, f)) for f in (job["client_art"], job["chair_art"]))
+    return all(asset_exists(f) for f in (job["client_art"], job["chair_art"]))
 
 
 _FOLK_ON = [j for j in FOLK_JOBS if _folk_ready(j)]
@@ -13803,6 +13833,19 @@ def run_selftest():
     g.draw(pygame.display.get_surface())
     _esc(g)
     assert g.scene == "title", "Esc из титров — обратно на титул"
+    # браузер, «авто»: холст ровно с окно игры (кратно 16), в пределах WEB_MIN_W…1440p, потолок после замедления
+    _d0 = {k: DISPLAY.get(k) for k in ("web_px", "web_cap", "web_quality")}
+    DISPLAY["web_quality"] = "auto"; DISPLAY.pop("web_cap", None)
+    for _px, _want in ((1100, (1104, 621)), (1920, (1920, 1080)), (3000, (2560, 1440)), (500, (WEB_MIN_W, WEB_MIN_W * 9 // 16))):
+        DISPLAY["web_px"] = _px
+        assert web_target_res() == _want, f"холст для {_px} px: {web_target_res()} вместо {_want}"
+    DISPLAY["web_px"], DISPLAY["web_cap"] = 2000, 0
+    assert web_target_res()[0] <= WEB_RES["standard"][0], "после замедления холст не больше 720p"
+    for _k, _v in _d0.items():
+        if _v is None:
+            DISPLAY.pop(_k, None)
+        else:
+            DISPLAY[_k] = _v
     # геймпад: Start — настройки, B — закрыть; стик держат — стрелка повторяется; простой джойстик — тоже
     E_ = pygame.event.Event
     g.scene = "hub"; g.show_sound = False; g.draw(pygame.display.get_surface())
@@ -14492,9 +14535,10 @@ async def main():
                 print(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} scene {game.scene}", flush=True)
                 slow = fps < 20 and game.scene in ("job", "hub", "seating", "guild")
                 DISPLAY["_slow"] = DISPLAY.get("_slow", 0) + 1 if slow else 0
-                lvl = next((i for i, k in enumerate(WEB_LEVELS) if WEB_RES[k] == DISPLAY.get("res")), 0)
-                if DISPLAY["_slow"] >= 2 and DISPLAY.get("web_quality", "auto") == "auto" and lvl > 0:
-                    DISPLAY["web_cap"] = lvl - 1           # слабый ПК: на ступень ниже и не выше этого потолка
+                cw = (DISPLAY.get("res") or WEB_RES["standard"])[0]
+                lower = [i for i, k in enumerate(WEB_LEVELS) if WEB_RES[k][0] < cw]   # ступени меньше нынешнего холста
+                if DISPLAY["_slow"] >= 2 and DISPLAY.get("web_quality", "auto") == "auto" and lower:
+                    DISPLAY["web_cap"] = lower[-1]         # слабый ПК: холст не больше этой ступени
                     DISPLAY["_slow"] = 0
                     apply_display()
                     game.flash("Качество снижено для плавности. Настройки → Графика.", AMBER, 5)

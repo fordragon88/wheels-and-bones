@@ -31,6 +31,23 @@ asyncio.run(start())
 '''
 
 
+def _bleed(im):
+    """Цвет под прозрачными пикселями — от соседних видимых: без этого JPEG даёт тёмную кайму по контуру."""
+    import numpy as np
+    from PIL import Image, ImageFilter
+    a = np.asarray(im.split()[3], np.float32) / 255
+    rgb = np.asarray(im.convert("RGB"), np.float32)
+    out = rgb.copy()
+    pm = Image.fromarray(np.uint8(np.clip(rgb * a[..., None], 0, 255)))
+    wa = Image.fromarray(np.uint8(a * 255))
+    for r in (2, 6, 16, 40):
+        bp = np.asarray(pm.filter(ImageFilter.GaussianBlur(r)), np.float32)
+        bw = np.asarray(wa.filter(ImageFilter.GaussianBlur(r)), np.float32) / 255
+        m = (a < 0.5) & (bw > 0.02)
+        out[m] = (bp / np.maximum(bw[..., None], 1e-3))[m]
+    return Image.fromarray(np.uint8(np.clip(out, 0, 255)))
+
+
 def stage():
     if os.path.isdir(APP):
         shutil.rmtree(APP)
@@ -57,19 +74,21 @@ def stage():
             out = os.path.join(dst, "music", base + ".ogg")
             subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", os.path.join(src, "music", name),
                             "-ac", "1", "-c:a", "libvorbis", "-q:a", "3", out], check=True)
-    # картинки легче в 3–6 раз: фоны → JPEG, крупные рисунки → 256 цветов с прозрачностью
+    # крупные картинки легче в 3–5 раз без «ряби» палитры в 256 цветов: цвет — JPEG, у рисунков прозрачность —
+    # отдельной серой PNG <имя>.a.png (WebP браузерный pygame не читает). Игра собирает их сама (asset_path)
     from PIL import Image
     for name in os.listdir(dst):
         fp = os.path.join(dst, name)
-        if not name.endswith(".png") or os.path.getsize(fp) < 150_000:
+        if not name.endswith(".png") or name.endswith(".a.png") or os.path.getsize(fp) < 150_000:
             continue
         im = Image.open(fp)
         if name.startswith("bg_"):
-            im.convert("RGB").save(fp[:-4] + ".jpg", "JPEG", quality=86, optimize=True)
-            os.remove(fp)
+            im.convert("RGB").save(fp[:-4] + ".jpg", "JPEG", quality=90, optimize=True)
         else:
-            im.convert("RGBA").quantize(colors=256, method=Image.Quantize.FASTOCTREE,
-                                        dither=Image.Dither.FLOYDSTEINBERG).save(fp, "PNG", optimize=True)
+            im = im.convert("RGBA")
+            _bleed(im).save(fp[:-4] + ".jpg", "JPEG", quality=88, optimize=True)
+            im.split()[3].save(fp[:-4] + ".a.png", "PNG", optimize=True)
+        os.remove(fp)
     # значок вкладки
     import pygame
     icon = pygame.image.load(os.path.join(src, "ghost.png"))
