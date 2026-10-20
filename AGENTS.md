@@ -303,8 +303,8 @@ python i18n_work/build_lang.py       # перевод полон
 - 2026-10-20 — Claude (Opus 5.5) — **фольклорные персонажи опубликованы**: модели владелец сгенерировал в Tripo AI
   на бесплатном тарифе — это CC BY 4.0 (нужно видимое указание авторства). В assets/ установлены картинки клиентов и
   колясок, кадры поворота (index_folk.json) и folk_hotspots.json; файлов моделей (*_ai.json) в игре нет. Авторство Tripo —
-  LICENSE-CONTENT («Third-party content»), web_deploy/README.md («Credits») и подвал страницы (wordpress_embed.html —
-  владелец вставляет на сайт сам). Проверки: selftest (python, py), keyboard_playthrough ru/en, ui_playthrough,
+  LICENSE-CONTENT («Third-party content»), web_deploy/README.md («Credits»), README.md (раздел Art / Арт). На странице
+  сайта (wordpress_embed.html) — по решению владельца НЕ указываем. Проверки: selftest (python, py), keyboard_playthrough ru/en, ui_playthrough,
   check_en_coverage. (assets/*, LICENSE-CONTENT, wordpress_embed.html)
 
 - 2026-10-20 — Claude (Opus 5.5) — **фольклорные коляски без файлов моделей**: в игру идут только кадры поворота
