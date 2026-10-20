@@ -300,13 +300,20 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-20 — Claude (Opus 5.5) — **фольклорные персонажи опубликованы**: модели владелец сгенерировал в Tripo AI
+  на бесплатном тарифе — это CC BY 4.0 (нужно видимое указание авторства). В assets/ установлены картинки клиентов и
+  колясок, кадры поворота (index_folk.json) и folk_hotspots.json; файлов моделей (*_ai.json) в игре нет. Авторство Tripo —
+  LICENSE-CONTENT («Third-party content»), web_deploy/README.md («Credits») и подвал страницы (wordpress_embed.html —
+  владелец вставляет на сайт сам). Проверки: selftest (python, py), keyboard_playthrough ru/en, ui_playthrough,
+  check_en_coverage. (assets/*, LICENSE-CONTENT, wordpress_embed.html)
+
 - 2026-10-20 — Claude (Opus 5.5) — **фольклорные коляски без файлов моделей**: в игру идут только кадры поворота
   (36 ракурсов) + данные деталей (pivot, centers, смещения кадров) — `python art_tests/build_turntables.py --folk` →
   art_tests/new_v2/assets/turntable/ (`chair_<k>_NN.png` + `index_folk.json`, 5 колясок, 4 МБ). `get_turntable` читает
   index.json и index_folk.json; `_m3d_mesh` на десктопе берёт кадры, если у коляски нет модели; `_folk_ready` требует
   только картинки (модели — по желанию, `--install --with-3d`). `--install`/`--uninstall` копируют/убирают и кадры.
   selftest пропускает проверку процедурной 3D, если у коляски есть кадры. Кадры — тоже рендер моделей Tripo, вопрос
-  прав тот же: в коммите/на сайте их нет до решения владельца. С установленными кадрами пройдено: selftest (python, py),
+  прав тот же (решено — см. запись выше). С установленными кадрами пройдено: selftest (python, py),
   keyboard_playthrough ru/en, ui_playthrough, check_en_coverage; без них — selftest 15 заданий.
   (game.py, art_tests/build_new_v2_assets.py, art_tests/build_turntables.py)
 
@@ -317,8 +324,8 @@ python i18n_work/build_lang.py       # перевод полон
   ошибок), `gorynych_jazzy` (Jazzy 614: перегруз 136 кг выбивает главный автомат; три головы Го/Ры/Ныч со своими
   характерами). Источники — страницы мануалов в комментариях `# source:`. **Задания включаются только когда на месте
   их файлы** (`_folk_ready`: assets/client_*, chair_*; 3D — кадры, см. запись выше; 2D-хотспоты — assets/models/folk_hotspots.json):
-  `python art_tests/build_new_v2_assets.py --install` / `--uninstall`. В коммитах и на сайте файлов НЕТ, пока 3D не
-  заменены официальными GLB с подписки Tripo. 2D-хотспоты — `art_tests/folk_hotspots.py` (проекция 3D + ручные поправки).
+  `python art_tests/build_new_v2_assets.py --install` / `--uninstall`. С 2026-10-20 файлы (картинки + кадры, без моделей)
+  в репозитории и на сайте — см. запись про лицензию Tripo. 2D-хотспоты — `art_tests/folk_hotspots.py` (проекция 3D + ручные поправки).
   Насос мини-игры прибавляет 6–12 за нажатие: зелёная зона должна быть ≥ 12 единиц (поэтому кПа/psi подобраны так).
   Векторные заглушки для новых клиентов — по аналогии со второй волной. Подписи деталей в списке — fit_text.
   Перевод — i18n_work/en9_fixes13.json (306 строк). С установленными файлами пройдено: selftest (python, py),
