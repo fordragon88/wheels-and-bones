@@ -9364,7 +9364,7 @@ class Game:
         area = pygame.Rect(0, 120, WIDTH, HEIGHT - 210)
         rows, _ = self._credits_layout()
         old = surf.get_clip()
-        surf.set_clip(area)
+        surf.set_clip(_rr(area, _rs(surf)).clip(old))        # рамка — в пикселях экрана (RS ≠ 1 в браузере)
         top = area.y + 44 - int(self.credits_y)
         for text, size, col, bold, y in rows:
             yy = top + y
