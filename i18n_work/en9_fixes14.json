@@ -55,5 +55,10 @@
  "нажать (одна кнопка: нажать — выбрать, держать — назад)": "press (one button: press to select, hold to go back)",
  "Лёгкий шрифт": "Easy-read font",
  "Шрифт для лёгкого чтения (Atkinson Hyperlegible)": "Easy-read font (Atkinson Hyperlegible)",
- "Только для английского языка": "English only"
+ "Только для английского языка": "English only",
+ "Геймпад подключён: крестовина — пункты, A — выбрать, B — назад, Start — настройки.": "Gamepad connected: D-pad — items, A — select, B — back, Start — settings.",
+ "Геймпад: крестовина": "Gamepad: D-pad",
+ "выбрать пункт; LB, RB — группы": "choose an item; LB, RB — groups",
+ "Геймпад: A, B, Start": "Gamepad: A, B, Start",
+ "нажать, назад, настройки": "press, back, settings"
 }

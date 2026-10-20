@@ -414,6 +414,115 @@ class LFont:
 
 FINGER = {"t": -10 ** 9, "id": None, "pos": None}   # последнее касание (палец), логические координаты
 
+# ---- геймпад: те же клавиши, что у управления с клавиатуры (стандартная раскладка SDL, как у Xbox) ----
+try:
+    from pygame._sdl2 import controller as _pad_ctl
+except Exception:
+    _pad_ctl = None
+PAD = {"ctrl": {}, "joy": {}, "dir": None, "src": None, "next": 0.0}
+PAD_EVENTS = tuple(getattr(pygame, n) for n in (
+    "CONTROLLERBUTTONDOWN", "CONTROLLERBUTTONUP", "CONTROLLERAXISMOTION", "CONTROLLERDEVICEADDED",
+    "CONTROLLERDEVICEREMOVED", "JOYBUTTONDOWN", "JOYBUTTONUP", "JOYHATMOTION", "JOYAXISMOTION",
+    "JOYDEVICEADDED", "JOYDEVICEREMOVED") if hasattr(pygame, n))
+PAD_REPEAT = (0.42, 0.13)               # удержание крестовины/стика: первый повтор, потом каждые
+# кнопки: A — выбрать, B — назад, X — подсказка, Y — где я, LB/RB — группы, Start — настройки, Back — справка
+_PAD_BTN = {}
+if _pad_ctl is not None:
+    _PAD_BTN = {pygame.CONTROLLER_BUTTON_A: "a", pygame.CONTROLLER_BUTTON_B: "b", pygame.CONTROLLER_BUTTON_X: "x",
+                pygame.CONTROLLER_BUTTON_Y: "y", pygame.CONTROLLER_BUTTON_LEFTSHOULDER: "lb",
+                pygame.CONTROLLER_BUTTON_RIGHTSHOULDER: "rb", pygame.CONTROLLER_BUTTON_START: "start",
+                pygame.CONTROLLER_BUTTON_BACK: "back", pygame.CONTROLLER_BUTTON_DPAD_UP: "up",
+                pygame.CONTROLLER_BUTTON_DPAD_DOWN: "down", pygame.CONTROLLER_BUTTON_DPAD_LEFT: "left",
+                pygame.CONTROLLER_BUTTON_DPAD_RIGHT: "right"}
+# простой джойстик без раскладки SDL: XInput (компьютер) / стандарт W3C Gamepad (браузер)
+_JOY_BTN = ({0: "a", 1: "b", 2: "x", 3: "y", 4: "lb", 5: "rb", 8: "back", 9: "start",
+             12: "up", 13: "down", 14: "left", 15: "right"} if sys.platform == "emscripten" else
+            {0: "a", 1: "b", 2: "x", 3: "y", 4: "lb", 5: "rb", 6: "back", 7: "start"})
+_PAD_DIR = {"up": pygame.K_UP, "down": pygame.K_DOWN, "left": pygame.K_LEFT, "right": pygame.K_RIGHT}
+
+
+def pad_open(index):
+    """Открыть геймпад/джойстик (при запуске и при подключении). True — геймпад с раскладкой SDL."""
+    try:
+        if _pad_ctl is not None and _pad_ctl.is_controller(index):
+            c = _pad_ctl.Controller(index)
+            PAD["ctrl"][c.as_joystick().get_instance_id()] = c
+            return True
+        j = pygame.joystick.Joystick(index)
+        PAD["joy"][j.get_instance_id()] = j
+    except Exception:
+        pass
+    return False
+
+
+def pad_init():
+    try:
+        if _pad_ctl is not None:
+            _pad_ctl.init()
+        pygame.joystick.init()
+        for i in range(pygame.joystick.get_count()):
+            pad_open(i)
+    except Exception:
+        pass
+
+
+def pad_actions(event):
+    """Событие геймпада -> список (действие, нажато?) или None — событие не про геймпад."""
+    t = event.type
+    if t not in PAD_EVENTS:
+        return None
+    iid = getattr(event, "instance_id", None)
+    C = pygame
+    if t in (getattr(C, "CONTROLLERBUTTONDOWN", -1), getattr(C, "CONTROLLERBUTTONUP", -1)):
+        a = _PAD_BTN.get(event.button)
+        return [(a, t == C.CONTROLLERBUTTONDOWN)] if a else []
+    if t == getattr(C, "CONTROLLERAXISMOTION", -1):
+        if event.axis not in (C.CONTROLLER_AXIS_LEFTX, C.CONTROLLER_AXIS_LEFTY):
+            return []
+        v = event.value / 32767.0
+        neg, pos = ("left", "right") if event.axis == C.CONTROLLER_AXIS_LEFTX else ("up", "down")
+        return _pad_stick(v, neg, pos)
+    if iid in PAD["ctrl"]:
+        return []                                       # тот же геймпад шлёт и JOY-события — их не берём
+    if t in (C.JOYBUTTONDOWN, C.JOYBUTTONUP):
+        a = _JOY_BTN.get(event.button)
+        return [(a, t == C.JOYBUTTONDOWN)] if a else []
+    if t == C.JOYHATMOTION:
+        x, y = event.value
+        out = [(d, False) for d in ("up", "down", "left", "right")]
+        if y > 0: out.append(("up", True))
+        elif y < 0: out.append(("down", True))
+        elif x < 0: out.append(("left", True))
+        elif x > 0: out.append(("right", True))
+        return out
+    if t == C.JOYAXISMOTION:
+        if event.axis not in (0, 1):
+            return []
+        return _pad_stick(event.value, *(("left", "right") if event.axis == 0 else ("up", "down")))
+    if t in (getattr(C, "CONTROLLERDEVICEADDED", -1), C.JOYDEVICEADDED):
+        idx = getattr(event, "device_index", None)
+        known = len(PAD["ctrl"]) + len(PAD["joy"])
+        if idx is not None:
+            pad_open(idx)
+        return [("added", True)] if len(PAD["ctrl"]) + len(PAD["joy"]) > known else []
+    if t in (getattr(C, "CONTROLLERDEVICEREMOVED", -1), C.JOYDEVICEREMOVED):
+        PAD["ctrl"].pop(iid, None)
+        PAD["joy"].pop(iid, None)
+        PAD["dir"] = None
+        return []
+    return []
+
+
+def _pad_stick(v, neg, pos):
+    """Стик как крестовина: дальше половины — направление (с повтором), ближе трети — отпущен."""
+    if v <= -0.5:
+        return [(neg, True)] if PAD["dir"] != neg else []
+    if v >= 0.5:
+        return [(pos, True)] if PAD["dir"] != pos else []
+    if abs(v) < 0.33 and PAD["dir"] in (neg, pos):
+        return [(PAD["dir"], False)]
+    return []
+
 
 def mouse_pos():
     """Мышь в логических координатах 1280x720 (на сенсорном экране — где последнее касание)."""
@@ -8367,6 +8476,8 @@ class Game:
         ("F2", "озвучка: включить или выключить"),
         ("M", "звук: включить или выключить"),
         ("F11", "весь экран или окно"),
+        ("Геймпад: крестовина", "выбрать пункт; LB, RB — группы"),
+        ("Геймпад: A, B, Start", "нажать, назад, настройки"),
     ]
 
     def say(self, text, interrupt=False, raw=False):
@@ -8682,6 +8793,51 @@ class Game:
         i = ((idx if idx is not None else (-1 if d > 0 else 0)) + d) % len(items)
         self._a11y_focus(items[i], items)
         return True
+
+    # ---------- геймпад ----------
+    def _pad_key(self, k, down=True, mod=0):
+        self.handle_event(pygame.event.Event(pygame.KEYDOWN if down else pygame.KEYUP, key=k, mod=mod, unicode=""))
+
+    def pad_action(self, act, down):
+        """Кнопка геймпада -> клавиша управления с клавиатуры."""
+        if act == "added":
+            self.flash("Геймпад подключён: крестовина — пункты, A — выбрать, B — назад, Start — настройки.", GOOD, 4)
+            return
+        if act in _PAD_DIR:
+            k = _PAD_DIR[act]
+            if down:
+                PAD["dir"], PAD["next"] = act, self.t + PAD_REPEAT[0]
+                self._pad_key(k)
+            elif PAD["dir"] == act:
+                PAD["dir"] = None
+            return
+        if act == "a":                                   # и нажатие, и отпускание (одна кнопка различает долгое)
+            self._pad_key(pygame.K_RETURN, down)
+            return
+        if not down:
+            return
+        if act == "b":
+            self._pad_key(pygame.K_ESCAPE)
+        elif act == "x":
+            self._pad_key(pygame.K_h)
+        elif act == "y":
+            self._pad_key(pygame.K_r)
+        elif act in ("lb", "rb"):
+            self._pad_key(pygame.K_TAB, mod=pygame.KMOD_SHIFT if act == "lb" else 0)
+        elif act == "back":
+            self._pad_key(pygame.K_F1)
+        elif act == "start":
+            if self.show_sound:
+                self._pad_key(pygame.K_ESCAPE)
+            elif self.dispute_ui is None and not self.kb["help"]:
+                self._a11y_open_settings()
+
+    def pad_tick(self):
+        """Держат крестовину/стик — повтор стрелки."""
+        d = PAD["dir"]
+        if d is not None and self.t >= PAD["next"]:
+            PAD["next"] = self.t + PAD_REPEAT[1]
+            self._pad_key(_PAD_DIR[d])
 
     # ---------- одна кнопка (switch access): пункты выделяются сами, нажатие — выбрать, долгое — назад ----------
     _SCAN_KEYS = (pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER)
@@ -9013,6 +9169,10 @@ class Game:
         draw_text(surf, "Esc или F1 — закрыть", (p.x + 28, p.bottom - 44), 15, GREY)
 
     def handle_event(self, event):
+        if event.type in PAD_EVENTS:
+            for act, down in pad_actions(event) or ():
+                self.pad_action(act, down)
+            return
         if A11Y.get("scan") and self._scan_event(event):
             return
         if event.type == pygame.MOUSEMOTION:
@@ -9416,6 +9576,7 @@ class Game:
         self.t += dt
         self._touch_text()
         self.scan_tick()
+        self.pad_tick()
         if self.scene == "credits" and not calm() and self.t - self.scene_t0 > 1.2:
             self.credits_y = min(self.credits_y + 26 * dt, self._credits_max())   # медленно вверх
         if not self.headless:
@@ -13642,6 +13803,34 @@ def run_selftest():
     g.draw(pygame.display.get_surface())
     _esc(g)
     assert g.scene == "title", "Esc из титров — обратно на титул"
+    # геймпад: Start — настройки, B — закрыть; стик держат — стрелка повторяется; простой джойстик — тоже
+    E_ = pygame.event.Event
+    g.scene = "hub"; g.show_sound = False; g.draw(pygame.display.get_surface())
+    g.handle_event(E_(pygame.CONTROLLERBUTTONDOWN, instance_id=0, button=pygame.CONTROLLER_BUTTON_START))
+    assert g.show_sound, "геймпад: Start должен открыть настройки"
+    g.handle_event(E_(pygame.CONTROLLERBUTTONDOWN, instance_id=0, button=pygame.CONTROLLER_BUTTON_B))
+    assert not g.show_sound, "геймпад: B — закрыть настройки"
+    g.draw(pygame.display.get_surface())
+    _moves = []
+    _orig = g._a11y_focus
+    g._a11y_focus = lambda it, items: (_moves.append(it["key"]), _orig(it, items))
+    g.handle_event(E_(pygame.CONTROLLERAXISMOTION, instance_id=0, axis=pygame.CONTROLLER_AXIS_LEFTY, value=30000))
+    for _ in range(12):
+        g.update(0.1)
+    g.handle_event(E_(pygame.CONTROLLERAXISMOTION, instance_id=0, axis=pygame.CONTROLLER_AXIS_LEFTY, value=0))
+    n = len(_moves)
+    g.update(0.5)
+    assert n >= 4 and len(_moves) == n, f"геймпад: стик вниз — повтор, отпустил — стоп ({n}, {len(_moves)})"
+    PAD["joy"][7] = None                                          # простой джойстик: крестовина-шляпка и кнопка 1 = B
+    g.handle_event(E_(pygame.JOYHATMOTION, instance_id=7, joy=7, hat=0, value=(0, -1)))
+    g.handle_event(E_(pygame.JOYHATMOTION, instance_id=7, joy=7, hat=0, value=(0, 0)))
+    assert len(_moves) == n + 1, "геймпад: шляпка простого джойстика — стрелка"
+    PAD["ctrl"][8] = None                                         # тот же геймпад шлёт и JOY-события — не дублируем
+    g.handle_event(E_(pygame.JOYHATMOTION, instance_id=8, joy=8, hat=0, value=(0, -1)))
+    assert len(_moves) == n + 1, "геймпад: JOY-события от геймпада с раскладкой SDL — не второй раз"
+    PAD["joy"].pop(7, None); PAD["ctrl"].pop(8, None); PAD["dir"] = None
+    g._a11y_focus = _orig
+    g.scene = "title"; g.kb["key"] = None; g.draw(pygame.display.get_surface())
     # одна кнопка: выделение идёт само, короткое нажатие — выбрать, долгое — назад
     _scan0 = A11Y["scan"]
     A11Y["scan"] = 1
@@ -14216,6 +14405,7 @@ async def main():
     if not IS_WEB:                                      # в браузере микшер уже открыт в main.py
         pygame.mixer.pre_init(22050, -16, 1, 512)
     pygame.init()
+    pad_init()
     if "--mute" not in sys.argv:
         build_sounds()
     set_lang(LANG["code"])

@@ -238,6 +238,7 @@ python game.py --selftest            # SELFTEST OK — данные, задан�
 py game.py --selftest                # то же на Python 3.14 / pygame-ce
 python art_tests/ui_playthrough.py   # бот проходит всю игру кликами (снимки в art_tests/audit_shots)
 python art_tests/switch_playthrough.py  # то же одной кнопкой (сканирование)
+python art_tests/pad_playthrough.py     # то же кнопками геймпада
 python art_tests/monkey_test.py      # тысячи случайных действий, «уникальных падений: 0» (долго)
 python art_tests/rs_smoke.py 2       # все сцены при рендере ×2
 python i18n_work/build_lang.py       # перевод полон
@@ -300,6 +301,16 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-10-21 — Claude (Opus 5.5) — **геймпад**: кнопки = клавиши управления с клавиатуры (`pad_actions` → `pad_action`):
+  крестовина/левый стик — стрелки (удержание — повтор `PAD_REPEAT` 0,42 / 0,13 с, `pad_tick`), A — Enter (нажатие и
+  отпускание: в режиме одной кнопки A — та самая кнопка), B — Esc, X — подсказка (H), Y — где я (R), LB/RB — Shift+Tab /
+  Tab, Back — справка F1, Start — настройки. Раскладка SDL GameController (`pygame._sdl2.controller`, Xbox/PS/…);
+  джойстик без неё — XInput (компьютер) или W3C standard (браузер), шляпка — крестовина; JOY-события от геймпада
+  с раскладкой SDL отбрасываются (не двойные). `pad_init()` после pygame.init в main, подключение на лету — тост.
+  Тесты: `art_tests/pad_playthrough.py [en]` (вся игра кнопками геймпада), selftest (Start/B, стик с повтором,
+  шляпка, без дублей); в браузере — поддельный Gamepad API (Playwright): A и Start работают. Живой геймпад не проверен.
+  (game.py, art_tests/pad_playthrough.py, i18n_work/en9_fixes14.json, assets/lang_en.json)
 
 - 2026-10-21 — Claude (Opus 5.5) — **шрифт для лёгкого чтения**: «Доступность → Лёгкий шрифт» (`A11Y['font']`, только
   английский — в Atkinson нет кириллицы; `easy_font_on()`). LFont рисует буквы Atkinson Hyperlegible (×1,08 — он уже
