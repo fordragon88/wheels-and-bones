@@ -1,3 +1,5 @@
+# Final text of the in-game CREDITS screen (source: CREDITS in game.py, English: i18n_work/en9_fixes14.json)
+
 WHEELS & BONES
 A free game about keeping wheels turning.
 Made by GOAT — Grassroots Open Assistive Tech
@@ -6,8 +8,8 @@ openassistivetech.org
 REPAIR KNOW-HOW
 Steps and facts come from real service and owner's manuals
 collected by BARC — Bay Area Repair Coalition, a GOAT program:
-Permobil, Quantum/Pride, Invacare, Ki Mobility, Sunrise/Quickie,
-TiLite, Etac, Progeo, Drive, WHILL and ROHO.
+Permobil, Quantum/Pride, Invacare, Ki Mobility, Sunrise/Quickie, TiLite,
+Etac, Progeo, Drive, WHILL, ROHO, Vermeiren, Panthera, Magic Mobility and Alber.
 
 SEATING LESSONS
 Based on the Permobil "Seating & Positioning Guide".
@@ -15,6 +17,7 @@ Based on the Permobil "Seating & Positioning Guide".
 ART, MODELS & MUSIC
 Made with AI tools, edited by our human team.
 Images: ComfyUI with Qwen-Image. Music: YuE.
+3D models of the folk-tale clients' wheelchairs: Tripo AI (CC BY 4.0).
 
 CODE
 Built with a little help from Claude (Anthropic).
@@ -29,5 +32,6 @@ Learn here, then fix with your wheelchair's manual in hand,
 or ask a qualified technician. Brand names belong to their owners.
 
 THANK YOU
+Testing: Olga.
 To our testers, to every volunteer with a wrench,
 and to everyone who keeps wheelchairs rolling.

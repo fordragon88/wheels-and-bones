@@ -183,6 +183,12 @@ def play_tech_job(jid):
 
 try:
     shot("title")
+    tick(60)
+    click(g._credits_btn_rect().center)              # титры: открыть, долистать, назад
+    assert g.scene == "credits", g.scene
+    shot("credits")
+    click(g._credits_back_rect().center)
+    assert g.scene == "title", g.scene
     click((640, 400))
     while g.scene == "intro":
         shot("intro")

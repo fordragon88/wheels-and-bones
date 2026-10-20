@@ -6275,6 +6275,28 @@ def _min_btn_sz():
     return max(8, round(11 / TEXT_K[min(len(TEXT_K) - 1, max(0, A11Y.get("text", 0)))]))
 
 
+# Титры (экран «ТИТРЫ» с титула и с вечеринки). Текст владельца — docs/credits_draft_en.txt; английский — в словаре.
+CREDITS = [
+    ("КОЛЁСА И КОСТИ", ["Бесплатная игра о том, как держать колёса на ходу.",
+                        "Сделано GOAT — Grassroots Open Assistive Tech", "openassistivetech.org"]),
+    ("ЗНАНИЯ ПО РЕМОНТУ", ["Шаги и факты — из настоящих сервисных мануалов и руководств пользователя,",
+                           "собранных BARC — Bay Area Repair Coalition, программой GOAT:",
+                           "Permobil, Quantum/Pride, Invacare, Ki Mobility, Sunrise/Quickie, TiLite,",
+                           "Etac, Progeo, Drive, WHILL, ROHO, Vermeiren, Panthera, Magic Mobility и Alber."]),
+    ("УРОКИ ПОСАДКИ", ["По руководству Permobil «Seating & Positioning Guide»."]),
+    ("АРТ, МОДЕЛИ И МУЗЫКА", ["Сделаны с помощью ИИ-инструментов и доработаны нашей командой.",
+                              "Рисунки: ComfyUI и Qwen-Image. Музыка: YuE.",
+                              "3D-модели колясок фольклорных клиентов: Tripo AI (CC BY 4.0)."]),
+    ("КОД", ["Написан при небольшой помощи Claude (Anthropic).", "Мартин и Барти передают привет."]),
+    ("ШРИФТЫ И ЛИЦЕНЗИИ", ["Шрифты: DejaVu Sans и Atkinson Hyperlegible (Braille Institute).",
+                           "Код: MIT. Содержимое игры: CC BY-SA 4.0 — делитесь и переделывайте, указывая GOAT."]),
+    ("БЕЗОПАСНОСТЬ", ["Учись здесь, а настоящую коляску чини с её мануалом в руках",
+                      "или доверь квалифицированному технику. Названия брендов принадлежат их владельцам."]),
+    ("СПАСИБО", ["Тестирование: Ольга.", "Нашим тестировщикам, каждому волонтёру с гаечным ключом",
+                 "и всем, кто помогает коляскам катиться."]),
+]
+
+
 class Button:
     def __init__(self, rect, label, color=AMBER, sub=""):
         self.rect = pygame.Rect(rect)
@@ -8215,6 +8237,9 @@ class Game:
         elif self.scene == "title":
             add("Меню", tr("Продолжить игру" if self.done else "Начать игру"), act=lambda: self.click_title((0, 0)),
                 key="start")
+            add("Меню", tr("Титры"), self._credits_btn_rect(), act=self.open_credits, key="credits")
+        elif self.scene == "credits":
+            add("Меню", tr("Назад"), self._credits_back_rect(), act=self.close_credits, key="cback")
         elif self.scene == "intro":
             add("Меню", tr("Далее"), act=self._a11y_intro_next, key="next")
         elif self.scene == "hub":
@@ -8231,6 +8256,7 @@ class Game:
                     key=("page", d))
         elif self.scene == "ending":
             add("Меню", tr("Посмотреть гараж"), act=lambda: self.click_ending((0, 0)), key="garage")
+            add("Меню", tr("Титры"), self._credits_btn_rect(), act=self.open_credits, key="credits")
         elif self.scene == "seating" and self.seatc:
             sc = self.seatc
             if sc["tab"] == "fit" and not sc["solved"]:
@@ -8466,8 +8492,8 @@ class Game:
             if cur is None and typing:
                 self.send_dispute()
                 return True
-            if cur is None and self.scene == "intro":
-                cur = items[0]                             # Enter/пробел листают вступление («далее»); пропуск — стрелкой
+            if cur is None and self.scene in ("intro", "title", "ending"):
+                cur = items[0]                             # Enter: «далее» / «начать» / «гараж»; пропуск и титры — стрелкой
             if cur is None:
                 if len(items) == 1:
                     cur = items[0]
@@ -8550,6 +8576,9 @@ class Game:
             idx = min(self.intro_idx, len(self.intro_slides) - 1)
             title, text = self.intro_slides[idx]
             return f"{tr(title)}. {tr(text)} " + tr("Enter — далее.")
+        if sc == "credits":
+            return (tr("Титры.") + " " + " ".join(tr(h) + ". " + " ".join(tr(x) for x in lines) for h, lines in CREDITS)
+                    + " " + tr("Esc — назад."))
         if sc == "hub":
             return (f"{tr('Мастерская.')} {tr('Починено')}: {_of(self.user_done_count(), len(JOBS))}. "
                     + tr("Стрелки — выбрать клиента, Enter — взять заказ, Tab — другие разделы."))
@@ -8730,6 +8759,8 @@ class Game:
         if self.show_sound:                              # панель настроек модальна (⚑ и «Я не согласен» — под ней)
             self.handle_sound_event(event)
             return
+        if self.scene == "credits" and self.handle_credits_event(event):
+            return
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.dispute_visible()
                 and self._dispute_btn_rect().collidepoint(event.pos)):
             self.open_dispute()
@@ -8791,10 +8822,99 @@ class Game:
                     self.scene = "title"
                 elif self.scene == "ending":
                     self.scene = "hub"
+                elif self.scene == "credits":
+                    self.close_credits()
                 elif self.scene == "title":
                     pygame.event.post(pygame.event.Event(pygame.QUIT))
 
+    def _credits_btn_rect(self):
+        if self.scene == "title":
+            return pygame.Rect(WIDTH // 2 - 80, 520, 160, 40)
+        if self.scene == "ending":
+            return pygame.Rect(WIDTH // 2 - 80, 560, 160, 40)
+        return None
+
+    def _credits_back_rect(self):
+        return pygame.Rect(WIDTH - 200, HEIGHT - 70, 170, 46)
+
+    def open_credits(self):
+        self.credits_from = self.scene
+        self.credits_y = 0.0
+        self.scene = "credits"
+        snd("tick")
+
+    def _credits_layout(self):
+        """Строки титров: (текст, размер, цвет, жирный, y от начала)."""
+        out, y = [], 0
+        for i, (head, lines) in enumerate(CREDITS):
+            out.append((head, 30 if i == 0 else 22, AMBER, True, y))
+            y += 46 if i == 0 else 36
+            for ln in lines:
+                out.append((ln, 18, WHITE if i else GHOST, False, y))
+                y += 27
+            y += 34
+        return out, y
+
+    def _credits_max(self):
+        return max(0.0, self._credits_layout()[1] - (HEIGHT - 290))
+
+    def click_credits(self, m):
+        if self._credits_back_rect().collidepoint(m):
+            self.close_credits()
+
+    def close_credits(self):
+        self.scene = getattr(self, "credits_from", "title") or "title"
+        snd("tick")
+
+    def handle_credits_event(self, event):
+        """Титры: колесо мыши и ↑ ↓ PgUp PgDn Home End листают."""
+        if event.type == pygame.MOUSEWHEEL:
+            self.credits_scroll(-event.y * 60)
+            return True
+        if event.type == pygame.KEYDOWN:
+            d = {pygame.K_UP: -60, pygame.K_DOWN: 60, pygame.K_PAGEUP: -300, pygame.K_PAGEDOWN: 300,
+                 pygame.K_HOME: -1e6, pygame.K_END: 1e6}.get(event.key)
+            if d is not None:
+                self.credits_scroll(d)
+                return True
+        return False
+
+    def credits_scroll(self, d):
+        self.credits_y = max(0.0, min(self._credits_max(), self.credits_y + d))
+
+    def draw_credits(self, surf):
+        self._bg(surf, "bg_party.png" if self.credits_from == "ending" else "bg_workshop.png", WOOD)
+        dim = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
+        dim.fill((12, 10, 18, 205))
+        surf.blit(dim, (0, 0))
+        area = pygame.Rect(0, 120, WIDTH, HEIGHT - 210)
+        rows, _ = self._credits_layout()
+        old = surf.get_clip()
+        surf.set_clip(area)
+        top = area.y + 44 - int(self.credits_y)
+        for text, size, col, bold, y in rows:
+            yy = top + y
+            if area.y - 40 < yy < area.bottom + 10:
+                draw_text(surf, text, (WIDTH // 2, yy), size, col, bold=bold, center=True)
+        surf.set_clip(old)
+        shade = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)            # края — плавно в темноту (без шва)
+        shade.fill((12, 10, 18, 200), (0, 0, WIDTH, area.y))
+        shade.fill((12, 10, 18, 200), (0, area.bottom, WIDTH, HEIGHT - area.bottom))
+        for k in range(36):
+            a = int(200 * (36 - k) / 36)
+            shade.fill((12, 10, 18, a), (0, area.y + k, WIDTH, 1))
+            shade.fill((12, 10, 18, a), (0, area.bottom - 1 - k, WIDTH, 1))
+        surf.blit(shade, (0, 0))
+        self._wave_title(surf, "ТИТРЫ", (WIDTH // 2, 70), 44, AMBER, self.st)
+        Button(self._credits_back_rect(), "НАЗАД", GOOD).draw(surf, mouse_pos())
+        draw_text(surf, "колесо мыши / ↑ ↓ — листать · Esc — назад", (WIDTH // 2, HEIGHT - 47), 15, GREY,
+                  center=True)
+
     def click_title(self, m):
+        cb = self._credits_btn_rect()
+        if cb is not None and cb.collidepoint(m) and self.st > 1.6:
+            self.open_credits()
+            return
         self.scene = "hub" if (self.done or self.tutorial_skipped) else "intro"
         if self.scene == "intro":                  # после сброса прогресса вступление — снова с первого слайда
             self.intro_idx = 0
@@ -8895,6 +9015,10 @@ class Game:
                 self.scene = "hub"
 
     def click_ending(self, m):
+        cb = self._credits_btn_rect()
+        if cb is not None and cb.collidepoint(m):
+            self.open_credits()
+            return
         self.scene, self.garage_open = "garage", None
 
     # ---------- клики: Гильдия и tech-задания ----------
@@ -8975,7 +9099,7 @@ class Game:
         sc = self.scene
         if sc == "intro":
             return "road"
-        if sc == "ending":
+        if sc == "ending" or (sc == "credits" and getattr(self, "credits_from", "") == "ending"):
             return "party"
         if sc in ("guild", "exam_result", "failed"):
             return "guild"
@@ -8985,6 +9109,8 @@ class Game:
 
     def update(self, dt):
         self.t += dt
+        if self.scene == "credits" and not calm() and self.t - self.scene_t0 > 1.2:
+            self.credits_y = min(self.credits_y + 26 * dt, self._credits_max())   # медленно вверх
         if not self.headless:
             music_update(self.music_theme(), self.t)
         if self.toast_timer > 0:
@@ -9572,6 +9698,8 @@ class Game:
             pulse = 0.5 + 0.5 * wsin(self.t * 3.2)
             draw_text(surf, label, (WIDTH // 2, 470), 24, AMBER, bold=True, center=True,
                       alpha=150 + 105 * pulse)
+        if st > 1.6:
+            Button(self._credits_btn_rect(), "ТИТРЫ", GHOST).draw(surf, mouse_pos())
         draw_text(surf, "M — sound · progress saves automatically" if IS_WEB else
                   "Esc — выход · M — звук · прогресс сохраняется автоматически",
                   (WIDTH // 2, HEIGHT - 36), 15, GREY, center=True)
@@ -12817,6 +12945,7 @@ class Game:
                   (WIDTH // 2, 430), 18, PURPLE, center=True)
         draw_text(surf, "[ клик — посмотреть гараж ]", (WIDTH // 2, 510), 20, AMBER, center=True,
                   alpha=150 + 105 * (0.5 + 0.5 * wsin(self.t * 3.2)))
+        Button(self._credits_btn_rect(), "ТИТРЫ", GHOST).draw(surf, mouse_pos())
 
 
 # ----------------------------------------------------------------------------- #
@@ -13160,6 +13289,18 @@ def run_selftest():
     assert g.scene == "hub", "двойной Esc должен выводить из ремонта в мастерскую"
     _esc(g)
     assert g.scene == "title", "Esc из мастерской должен вести на титул"
+    # титры: открываются с титула, листаются, Esc — обратно; весь текст переведён
+    g.open_credits()
+    assert g.scene == "credits" and g.credits_from == "title"
+    g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_END, mod=0, unicode=""))
+    assert abs(g.credits_y - g._credits_max()) < 1e-6, "End в титрах — к концу"
+    g.draw(pygame.display.get_surface())
+    _esc(g)
+    assert g.scene == "title", "Esc из титров — обратно на титул"
+    for _h, _lines in CREDITS:
+        for _x in [_h] + _lines:
+            if re.search("[А-Яа-яЁё]", _x):
+                assert tr_en(_x) != _x, f"титры без перевода: {_x}"
     pygame.event.clear()
     _esc(g)
     assert any(e.type == pygame.QUIT for e in pygame.event.get()), \
