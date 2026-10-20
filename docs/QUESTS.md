@@ -186,7 +186,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Hint:* Barty: “Go straight for the bolts!” ...nope — pressure first.  
    *After the step:* The #1 cause of “the lock won't hold” is low tire pressure.
 2. Top up the tire through the valve to the correct pressure.  
-   *Tool:* Pump → *Part:* Tire (also accepted: Valve, Rear wheel)
+   *Tool:* Pump → *Part:* Tire (also accepted: Rear wheel, Valve)
 3. Tighten the wheel lock mechanism bolts.  
    *Tool:* Hex key → *Part:* Wheel lock (also accepted: Bolts/nuts)  
    *After the step:* Don't overdo it: overtighten them and the lock gets stiff to engage.
@@ -1180,8 +1180,305 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *After the step:* When the chair goes back into storage: charge it fully and switch the breaker off; once a month switch it on and top up the batteries.
 
 **Test:** The charge indicator on the joystick is full, the tires are firm. Matilda does a lap around the workshop and stops right by the jar of honey.  
-**What you learn:** Before long storage, charge the F5 fully and switch off the main circuit breaker. Once a month, switch the breaker on, charge the batteries and switch it off again. Store and charge in a dry place no lower than +5 °C. Connect the charger to the wheelchair first, then to the wall outlet. Drive-wheel tires — 250 kPa (35 psi).  
+**What you learn:** Before long storage, charge the F5 fully and switch off the main circuit breaker. Once a month, switch the breaker on, charge the batteries and switch it off again. Store and charge in a dry place no lower than +5 °C. Connect the charger to the wheelchair first, then to the wall outlet. Drive-wheel tires — 250 kPa (36 psi).  
 **Client says:** Matilda: “So switching the breaker off is right, you just have to switch it back on later! Here's some honey, master, and don't argue.”  
+
+---
+
+### 16. Raised the seat — the wheel locks won't hold
+- **Client:** Baba Yaga  
+- **Wheelchair:** Vermeiren D100 (folding, steel)  
+- **Symptom:** Yaga raised the seat “to see farther from the hut window.” Now the wheelchair rolls downhill on its own, even with the locks on, and the front casters wobble while moving.
+
+**Inspection clues (what the player sees)**
+
+- *Wheel lock* — The lever is clicked shut, but the lock shoe barely touches the tire: the wheel now sits higher.
+- *Axle (QR)* — The axle plate was moved to holes 3 and 4 — the position for a 530 mm seat.
+- *Caster stem* — The front caster forks stayed in hole A and are tilted, not vertical to the floor.
+- *Caster (front)* — The casters are intact, but they wobble while moving because the fork is tilted.
+- *Rear wheel* — The quick-release axle button is locked in, the wheel holds firmly.
+- *Tire* — The tires are solid polyurethane: no pumping needed. The tread is clean, no oil or dirt.
+
+**Diagnosis options**
+
+- ✅ (correct) Wheels raised, but forks and locks were not
+- ❌ Worn lock shoes — replace the wheel locks — The wheel locks are fine, they just don't reach the tire: the wheel was moved higher, but the lock stayed where it was.
+- ❌ The cross-brace under the seat is loose — The cross-brace holds the frame firmly. The casters wobble because the fork is tilted.
+
+**Repair steps**
+
+1. Release the wheel lock and remove the rear wheel: press the button in the center of the hub.  
+   *Tool:* Hands → *Part:* Rear wheel  
+   *After the step:* Only remove a wheel with the lock released.
+2. Compare the axle and fork positions with the seat height table.  
+   *Tool:* Eyes → *Part:* Axle (QR)  
+   *Mini-game:* meter  
+   *After the step:* On the D100, height is changed by moving the wheels: each height has its own hole, both at the back and at the front.
+3. Check that the axle bushings are tightened firmly.  
+   *Tool:* Socket wrench → *Part:* Axle (QR)  
+   *After the step:* The D100 manual says to check the bushings after moving the plate.
+4. Unscrew the fork bolt, move the front wheel to hole C, and tighten.  
+   *Tool:* Socket wrench → *Part:* Caster stem (also accepted: Caster (front))  
+   *Hint:* Barty: “Just leave it, it wobbles — that means it's fun!”  
+   *After the step:* The wheel should spin easily, but with no play.  
+   *If wrong:* The fork is moved with a socket wrench: unscrew the bolt, move it, tighten.
+5. Look from the side: the fork must be vertical to the floor.  
+   *Tool:* Eyes → *Part:* Caster stem  
+   *After the step:* A tilted fork makes the casters wobble while moving.
+6. Fit the rear wheel: hold the button down, push the axle all the way in, release, and tug the wheel.  
+   *Tool:* Hands → *Part:* Rear wheel  
+   *After the step:* The wheel must not come off without pressing the button.
+7. Pull the wheel lock lever back and loosen the lock bolts.  
+   *Tool:* Hex key → *Part:* Wheel lock  
+   *After the step:* The bolts are loosened so the lock can slide along its rail.
+8. Slide the lock along the rail toward the wheel and tighten the bolts.  
+   *Tool:* Hex key → *Part:* Wheel lock  
+   *After the step:* The wheel is higher now — the lock has to catch up with the tire.
+9. Engage the wheel locks and push the wheelchair hard: the wheels must not turn.  
+   *Tool:* Hands → *Part:* Tire (also accepted: Wheel lock)  
+   *Hint:* Barty: “Can I use them to slow down on a hill?” No: these are parking locks, not for braking while moving.  
+   *After the step:* If a wheel turns — repeat the adjustment.  
+   *If wrong:* The test is simple: engage the lock and push the wheelchair.
+
+**Test:** Yaga locks the wheelchair on the hut's porch and bounces on the seat: it doesn't budge. She releases the locks — and the casters roll straight, no wobble.  
+**What you learn:** The D100 has three seat heights: 470, 500 and 530 mm. Height is changed by moving the wheels, both at the back and at the front: the forks must end up vertical to the floor. After that, the wheel locks are adjusted again. The top hole of the plate is for the drum brake, not for the axle.  
+**Client says:** Baba Yaga: “Well, dearie, you've done me proud! I'll give my mortar to a museum — now I fly in a wheelchair.”  
+
+---
+
+### 17. Crunchy and stiff after the sea
+- **Client:** Olga the Mermaid  
+- **Wheelchair:** Panthera X3 (ultralight, carbon)  
+- **Symptom:** Olga spent all day racing along the pier and the beach. Now a front caster crunches, the rear wheel won't come off — the axle button is stuck — and the lock won't hold on wet boards.
+
+**Inspection clues (what the player sees)**
+
+- *Caster (front)* — The caster spins stiffly and crunches: sand and hair between the wheel and the fork, salt on the outside of the bearings.
+- *Caster stem* — The fork is intact, but a salty crust has built up on the spacers.
+- *Axle (QR)* — The quick-release axle button is stiff to press: sand and salt inside, no lubricant left.
+- *Tire* — The tires are soft: the pressure is clearly below spec.
+- *Wheel lock* — The engaged lock barely presses the soft tire, and the wheel turns.
+
+**Diagnosis options**
+
+- ✅ (correct) Sand and salt in the caster and axle, soft tires
+- ❌ Broken bearing — replace the whole caster — The bearing is fine, it's just clogged with sand and salt. It gets cleaned and lubricated.
+- ❌ The carbon frame cracked after a wave — The frame is intact. The caster crunches, and the quick-release axle is stiff.
+
+**Repair steps**
+
+1. With two 4 mm hex keys, undo the caster bolt and take out the wheel.  
+   *Tool:* Hex key → *Part:* Caster (front)  
+   *After the step:* Hold the bolt from both sides: one key holds, the other turns.
+2. Clean the sand and hair off the spacers between the wheel and the fork.  
+   *Tool:* Brush/tweezers → *Part:* Caster stem (also accepted: Caster (front))  
+   *Hint:* Barty: “Sand is almost a lubricant, just a hard one!”  
+   *After the step:* Panthera: hair and dust in the fork damage the caster bearings.  
+   *If wrong:* Sand is cleaned out with a brush or tweezers.
+3. Wipe the outside of the caster bearings with a cloth.  
+   *Tool:* Cloth → *Part:* Caster (front)  
+   *After the step:* First remove the salt, then lubricate.
+4. Put one drop of oil into each caster bearing.  
+   *Tool:* Lubricant → *Part:* Caster (front)  
+   *After the step:* The manual recommends a general-purpose oil like CRC 5-56.
+5. Look at the bolt thread before reassembly.  
+   *Tool:* Eyes → *Part:* Caster (front)  
+   *Mini-game:* meter  
+   *After the step:* The thread should still have threadlocker on it — blue, red or green.
+6. Put the caster back and tighten it with a 4 mm hex key: it should spin easily.  
+   *Tool:* Hex key → *Part:* Caster (front)  
+   *After the step:* Tightened? Spin it: no crunching and no sticking.
+7. Press the axle button and remove the rear wheel, pulling it straight off.  
+   *Tool:* Hands → *Part:* Axle (QR)  
+   *After the step:* A sticky button means the axle needs lubricant.
+8. Put a few drops of oil on the quick-release mechanism in the axle bushing.  
+   *Tool:* Lubricant → *Part:* Axle (QR)  
+   *After the step:* After sand, rain and salt water, the axle is lubricated more often than once a month.
+9. Push the wheel on until it clicks: the button should pop out; pull the wheel toward you.  
+   *Tool:* Hands → *Part:* Axle (QR)  
+   *After the step:* The wheel must not come off without pressing the button.
+10. Inflate the tires to the pressure in the manual.  
+   *Tool:* Pump → *Part:* Tire (also accepted: Valve)  
+   *Mini-game:* pump  
+   *After the step:* The lock only holds on a properly inflated tire.
+11. Loosen the lock mount with a 12 mm wrench and set it along the rail.  
+   *Tool:* Adjustable wrench → *Part:* Wheel lock  
+   *Mini-game:* gap  
+   *After the step:* When engaged, the shoe should press about 4 mm into the tire.
+12. Tighten the lock mount with the 12 mm wrench and check the second lock the same way.  
+   *Tool:* Adjustable wrench → *Part:* Wheel lock  
+   *After the step:* Both locks must be set the same.
+
+**Test:** Olga rolls onto the wet pier, engages the locks and waves her tail: she stays put. The caster spins silently, and the rear wheel comes off with one button.  
+**What you learn:** Panthera: sand and salt water mean cleaning more often than usual. The caster fork is cleaned of hair and sand, the bearings get a drop of oil each, and the quick-release axle is lubricated after sand, salt and rain. Tires — 8 bar: the lock only holds on an inflated tire.  
+**Client says:** Olga: “Thank you! Now I'm queen of the waves — in the sea and on the shore.”  
+
+---
+
+### 18. Stuck in a swamp — pulls to the side
+- **Client:** Leshy  
+- **Wheelchair:** Magic Mobility Extreme X8 (all-wheel drive, off-road)  
+- **Symptom:** Leshy got stuck in a bog and kept pushing the joystick for a long time. The wheelchair stopped, and once it cooled down it drove again — but it pulls to the left, and grass is sticking out of the wheels.
+
+**Inspection clues (what the player sees)**
+
+- *Motor* — The left front motor is still warm. Grass and thin twigs are wound around it.
+- *Tire* — The left tires are soft, the right ones are at the off-road pressure: the pressure is uneven.
+- *Axle (QR)* — A long sedge stem is wound around the axles.
+- *Rim* — The left front wheel nuts are tightened less than the others.
+- *Freewheel lever* — The freewheel levers are in the “drive” position.
+- *Joystick knob* — The joystick returns to center, the boot is intact.
+
+**Diagnosis options**
+
+- ✅ (correct) The motor overheated in the bog, uneven tires
+- ❌ The joystick broke — that's why it pulls left — The joystick works. It pulls because of uneven tire pressure.
+- ❌ Dead batteries — fit new ones right away — The wheelchair stopped because the motor overheated, not because of the batteries.
+
+**Repair steps**
+
+1. Switch the wheelchair off and let the motor cool: don't push the joystick if the wheels aren't moving.  
+   *Tool:* Hands → *Part:* Joystick knob  
+   *Hint:* Barty: “Push harder, maybe it'll get out!”  
+   *After the step:* Never spin the wheels for more than a few seconds: the motor overheats and gets damaged.  
+   *If wrong:* First switch the wheelchair off and let the motor cool.
+2. Feel the motor: if it's hot, we wait until it cools.  
+   *Tool:* Hands → *Part:* Motor  
+   *After the step:* Overheat protection saves the motor and the controller.
+3. Pull out the grass and twigs around the motors and axles.  
+   *Tool:* Brush/tweezers → *Part:* Axle (QR) (also accepted: Motor)  
+   *After the step:* The manual says to check once a week that nothing is clogging the motors and axles.
+4. Check the pressure in all four tires with a pressure gauge.  
+   *Tool:* Pressure gauge → *Part:* Tire  
+   *After the step:* Uneven pressure pulls the wheelchair to one side.
+5. Inflate the left tires to the off-road pressure — the same as the right ones.  
+   *Tool:* Pump → *Part:* Tire (also accepted: Valve)  
+   *Mini-game:* pump  
+   *After the step:* Off-road, lower pressure gives better grip. But all four tires must be the same.
+6. Check the wheel nut torque with a torque wrench.  
+   *Tool:* Socket wrench → *Part:* Rim  
+   *Mini-game:* meter  
+   *After the step:* Wheel nuts are tightened to the torque in the manual.
+7. Check that the freewheel levers are in the “drive” position.  
+   *Tool:* Hands → *Part:* Freewheel lever  
+   *After the step:* In freewheel mode there are no brakes.
+8. Switch the wheelchair on and nudge the joystick: both electric brakes should click.  
+   *Tool:* Hands → *Part:* Joystick knob  
+   *After the step:* A daily check from the manual: you can hear each brake within a couple of seconds.
+
+**Test:** Leshy rolls out onto a forest path and drives straight, without drifting to the side. The motors hum evenly.  
+**What you learn:** Magic Mobility: if the wheelchair is stuck, don't push the joystick for more than a few seconds — the motor will overheat. Uneven tire pressure pulls the wheelchair to the side. Off-road, the pressure is lower, but the same in all tires. A power wheelchair does not go into water or swamps.  
+**Client says:** Leshy: “Oh, thank you, master! Now I can walk the forest... I mean, roll through it. Just not into the swamp.”  
+
+---
+
+### 19. Charging stops in the sun
+- **Client:** Ra, the Sun God  
+- **Wheelchair:** Quickie Nitrum + Alber e-motion power-assist wheels  
+- **Symptom:** Ra puts the motorized wheels on charge right under the noon sun by the pyramid. After a minute the lights flash white, the wheel beeps four times — and charging stops.
+
+**Inspection clues (what the player sees)**
+
+- *Motor* — The wheel hub is hot. All five lights flash white, the wheel beeps four times. There is sand and metal dust in the magnetic charging socket.
+- *Wheel lock* — The parking locks are released, even though the wheelchair is on charge.
+- *Rear wheel* — The motorized wheels sit straight in their mounts, with no play.
+- *Tire* — The pressure is the same in both wheels.
+- *Axle (QR)* — The axles are clicked in.
+- *Caster (front)* — The front casters spin freely.
+
+**Diagnosis options**
+
+- ✅ (correct) Charging stopped because of heat above +40 °C
+- ❌ The battery in the hub burned out — open it up — Never open the battery in the wheel. By the error table, this is temperature, not a fault.
+- ❌ The charger is faulty — borrow someone else's — Only the original Alber charger is allowed. And the signal is about heat, not the charger.
+
+**Repair steps**
+
+1. Look at the hub lights and count the beeps.  
+   *Tool:* Eyes → *Part:* Motor  
+   *Mini-game:* meter  
+   *After the step:* On the e-motion, each error has its own pattern of lights and beeps.
+2. Unplug the connector from the wheel, then the charger plug from the wall outlet.  
+   *Tool:* Charger → *Part:* Motor  
+   *After the step:* The wheel first, then the wall outlet.
+3. Switch off both wheels with the button on the hub.  
+   *Tool:* Hands → *Part:* Motor  
+   *After the step:* Both wheels must be switched off before charging.
+4. Roll the wheelchair into the shade, somewhere cool.  
+   *Tool:* Hands → *Part:* Rear wheel  
+   *Hint:* Barty: “He's the sun god — he can just shine a bit more quietly!”  
+   *After the step:* Charge only at 0…40 °C, and don't leave the wheels in the sun or near heat sources.  
+   *If wrong:* The wheelchair is rolled into the shade by hand.
+5. Engage the wheelchair's parking locks.  
+   *Tool:* Hands → *Part:* Wheel lock  
+   *After the step:* The e-motion wheels have no brakes of their own. We charge them on the wheelchair with the locks engaged.
+6. Wipe the magnetic charging socket with a dry cloth.  
+   *Tool:* Cloth → *Part:* Motor  
+   *After the step:* The magnet attracts metal dust, and it blocks the contact. Only a dry cloth.
+7. Put the plug into the socket on the hub button: the magnet snaps it into place.  
+   *Tool:* Charger → *Part:* Motor  
+   *After the step:* While charging, don't press on the pushrims — charging may stop.
+8. Check: the charging lights flash green and the wheel gives a short beep.  
+   *Tool:* Eyes → *Part:* Motor  
+   *After the step:* It's charging. A full charge takes up to 6 hours; it can't overcharge — it stops by itself.
+
+**Test:** In the shade of the columns, the charge lights run green. In the morning Ra rides around the pyramid — the wheels help him push with ease.  
+**What you learn:** Alber e-motion wheels charge only at 0…40 °C; otherwise charging stops by itself: all lights flash white, 4 beeps. The wheels have no brakes of their own — use the wheelchair's parking locks. If a battery catches fire — no water: use sand or a Class D fire extinguisher.  
+**Client says:** Ra: “Even the sun needs shade. I thank you, mortal master!”  
+
+---
+
+### 20. Uphill, the circuit breaker trips
+- **Client:** Zmey Gorynych  
+- **Wheelchair:** Pride Jazzy 614 (mid-wheel drive)  
+- **Symptom:** Gorynych drives uphill to the castle — and the wheelchair freezes. A minute later it drives again, and on the next slope it stops again. The three heads argue about whose fault it is.
+
+**Inspection clues (what the player sees)**
+
+- *Main circuit breaker* — The main circuit breaker button on the front of the base has popped out: the protection has tripped.
+- *Backrest (posts, upholstery)* — A heavy chest of gold is tied to the backrest — about forty kilograms.
+- *Tire* — The drive tires are soft: the pressure is below the number on the sidewall.
+- *Battery* — The batteries are fully charged.
+- *Joystick* — The joystick connector is plugged in firmly, the harness doesn't rub on the floor.
+- *Joystick knob* — The joystick works and returns to center.
+
+**Diagnosis options**
+
+- ✅ (correct) Overload: Gorynych plus the chest weigh more than 136 kg
+- ❌ A motor burned out — replace both at once — The motors are fine. The breaker trips to protect them from overload.
+- ❌ Dead batteries — fit new ones — The batteries are charged. The wheelchair stops from overload, not from empty batteries.
+
+**Repair steps**
+
+1. Turn off the joystick.  
+   *Tool:* Hands → *Part:* Joystick  
+   *After the step:* Work on the circuit breaker only with the joystick switched off.
+2. Untie the chest from the backrest: cargo counts toward the wheelchair's weight limit too.  
+   *Tool:* Hands → *Part:* Backrest (posts, upholstery)  
+   *Hint:* Barty: “Keep the chest — and put his little dragon nephew on his lap too!”  
+   *After the step:* The weight limit covers the rider and everything hanging on the wheelchair.  
+   *If wrong:* The chest is removed by hand. And the wheelchair never carries passengers.
+3. Compare Gorynych's weight with the wheelchair's limit.  
+   *Tool:* Eyes → *Part:* Joystick  
+   *Mini-game:* meter  
+   *After the step:* Every wheelchair has its own weight limit — it's in the specifications table.
+4. Inflate the drive tires to the number on the sidewall.  
+   *Tool:* Pump → *Part:* Tire (also accepted: Valve)  
+   *Mini-game:* pump  
+   *After the step:* Soft tires put more load on the motors.
+5. Check that the harness connectors are plugged in firmly.  
+   *Tool:* Hands → *Part:* Joystick  
+   *After the step:* A loose connector can also cut the power.
+6. Wait about a minute and press the main circuit breaker button.  
+   *Tool:* Hands → *Part:* Main circuit breaker  
+   *After the step:* The breaker needs to “rest” for about a minute. If it trips again and again — take it to Pride service.
+7. Switch on the joystick and check the battery indicator.  
+   *Tool:* Hands → *Part:* Joystick knob  
+   *After the step:* The indicator is on — power is back.
+
+**Test:** Without the chest, Gorynych drives uphill to the castle without stopping. All three heads are happy.  
+**What you learn:** The Jazzy 614 main circuit breaker trips on overload and protects the motors and electronics. Wait a minute, press the button, switch on the joystick; if it trips again and again — take it to service. The Jazzy 614 weight limit is 136 kg, and it includes everything hanging on the wheelchair. No passengers.  
+**Client says:** Go: “Hooray, let's go!” Ry: “Well, fine, thank you, I suppose.” Nych: “Wake me up at the castle.”  
 
 ---
 

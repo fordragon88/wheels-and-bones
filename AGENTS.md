@@ -310,6 +310,10 @@ python i18n_work/build_lang.py       # перевод полон
   пустой (monkey_test/fuzz2 раньше могли отправить в таблицу). Проверки: selftest (python, py), keyboard ru/en,
   ui_playthrough, check_en_coverage, check_feedback_ui, monkey 24k действий — 0 падений; очередь — в node.
   Codex CLI: `npm i -g @openai/codex`, `codex exec -m gpt-6-luna -s read-only - < prompt.txt` (промпт — через stdin).
+  Содержание (Codex): Леший — «правые шины в норме», подкачать левые «как у правых» (раньше «правые тугие» и
+  «все четыре одинаково» спорили с шагом); F5 — 250 кПа = 36 psi (было 35). Проверка всех пар кПа/psi в game.py — ок.
+  kimi-k3 не доделал: недельный лимит Cline Pass. (game.py, i18n_work/en6.json, en9_fixes13.json, assets/lang_en.json,
+  docs/QUESTS*.md)
 
 - 2026-10-20 — Claude (Opus 5.5) — **модели колясок: лучшее из нашей чистки и Gemini**. `art_tests/tripo_merge.py`:
   геометрия Яги, Ольги, Лешего, Горыныча — из `*_fixed.glb` Gemini (ровнее обивка, нет обрубков и шипов), цвет — kNN из
