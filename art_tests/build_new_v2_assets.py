@@ -1,6 +1,7 @@
 """Ассеты новых персонажей (Баба Яга, Ольга, Леший, Ра, Горыныч): art_tests/new_v2/cut/*.png -> art_tests/new_v2/assets/
 (коляски — в рамку 380x300 ×2, как build_new_assets.py; клиенты — по контуру, высота до 640 px).
-С ключом --install копирует в assets/ (только когда 3D-модели взяты из официальных файлов Tripo)."""
+--install кладёт в assets/ картинки, 3D-модели и хотспоты (задания включатся сами); --uninstall убирает.
+В публичную версию — только когда 3D-модели взяты из официальных файлов Tripo."""
 import os, sys, shutil
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 import pygame
@@ -34,7 +35,21 @@ for k in KEYS:
         img = pygame.transform.smoothscale(img, (round(img.get_width() * q), 640))
     pygame.image.save(img, os.path.join(OUT, f"client_{k}.png"))
     print(k, "ok")
-if "--install" in sys.argv:
-    for f in os.listdir(OUT):
-        shutil.copy(os.path.join(OUT, f), os.path.join(HERE, "..", "assets", f))
-    print("скопировано в assets/")
+A = os.path.join(HERE, "..", "assets")
+FILES = [f"{p}_{k}.png" for k in KEYS for p in ("chair", "client")]
+MODELS = [f"chair_{k}_ai{s}.json" for k in KEYS for s in ("", "_lod")]
+if "--install" in sys.argv:              # картинки, 3D-модели (art_tests/tripo/models) и 2D-хотспоты — в игру
+    for f in FILES:
+        shutil.copy(os.path.join(OUT, f), os.path.join(A, f))
+    for f in MODELS:
+        shutil.copy(os.path.join(HERE, "tripo", "models", f), os.path.join(A, "models", f))
+    shutil.copy(os.path.join(OUT, "models", "folk_hotspots.json"), os.path.join(A, "models", "folk_hotspots.json"))
+    print("установлено в assets/")
+if "--uninstall" in sys.argv:            # убрать из игры (перед коммитом/выкладкой, пока нет официальных GLB Tripo)
+    for f in FILES:
+        if os.path.exists(os.path.join(A, f)):
+            os.remove(os.path.join(A, f))
+    for f in MODELS + ["folk_hotspots.json"]:
+        if os.path.exists(os.path.join(A, "models", f)):
+            os.remove(os.path.join(A, "models", f))
+    print("убрано из assets/")
