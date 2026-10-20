@@ -300,6 +300,13 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-20 — Claude (Opus 5.5) — **арт новых персонажей**: Баба Яга, русалка Ольга (короткие рыжие волосы), Леший,
+  **Ра** (вместо Жар-птицы), **Змей Горыныч** (вместо Райдзю). `art_tests/gen_new_chars.py chair|seat <key> [seeds]` —
+  Qwen 2.1 edit в ComfyUI: коляска перерисовывается по рендеру нашей 3D-модели (input/wnb_ref3d_<k>.png), затем персонаж
+  садится в неё (у Ра — коляска firebird, у Горыныча — raiju). Вырезка BiRefNet-HR-matting, сборка
+  `art_tests/build_new_v2_assets.py` в art_tests/new_v2/assets (в assets/ — только с --install, после официальных GLB
+  Tripo). Заданий для них ещё нет. (art_tests/gen_new_chars.py, art_tests/build_new_v2_assets.py, art_tests/tripo_label.py)
+
 - 2026-10-20 — Claude (Opus 5.5) — **конвертер моделей Tripo → игра** (новые персонажи: Баба Яга — Vermeiren D100,
   русалка Ольга — Panthera X3, Леший — Magic Mobility Extreme X8, Райдзю — Pride Jazzy 614, Жар-птица — Quickie Nitrum
   с колёсами-мотор-ступицами e-motion). `art_tests/tripo_convert.py`: меш узла 0 (остальное в GLB вьюпорта — оси/сетка),

@@ -33,8 +33,8 @@ SPECS = {
                ("brake", (110, 210), (330, 430), (170, 270)),
                ("backrest", (-380, -250), (440, 780), (0, INF)),
                ("seat", (-170, 240), (440, 570), (0, 240))]),
-    # Жар-птица — Quickie Nitrum + колёса с мотором в ступице (e-motion): ступицу дорисовываем
-    "firebird": dict(art="chair_firebird", wheels=[
+    # Ра (бог солнца) — Quickie Nitrum + колёса с мотором в ступице (e-motion): ступицу дорисовываем
+    "firebird": dict(art="chair_ra", wheels=[
         dict(c=(-100, 300), R=300, z=(245, 325), kind="spoked", hub=dict(r=105, w=55, part="motor")),
         dict(c=(280, 45), R=46, z=(205, 270), kind="caster")],
         boxes=[("caster_stem", (255, 325), (55, 200), (195, 275)),
@@ -53,8 +53,8 @@ SPECS = {
                ("battery", (-330, 160), (140, 420), (0, 150)),
                ("backrest", (-420, -140), (720, 1400), (0, INF)),
                ("seat", (-160, 320), (600, 730), (0, INF))]),
-    # Райдзю — Pride Jazzy 614 (среднеприводная)
-    "raiju": dict(art="chair_raiju", wheels=[
+    # Змей Горыныч — Pride Jazzy 614 (среднеприводная)
+    "raiju": dict(art="chair_gorynych", wheels=[
         dict(c=(20, 160), R=160, z=(215, 310), kind="power"),
         dict(c=(345, 62), R=64, z=(215, 310), kind="caster"),
         dict(c=(-400, 62), R=64, z=(215, 310), kind="caster")],
