@@ -1077,7 +1077,7 @@ def draw_spin_wheel(surf, center, r, ang, k=1.0, col=(205, 210, 225)):
 
 
 def draw_confetti(surf, t, n=80, top=-20, height=780):
-    if calm():
+    if calm() or not DISPLAY["glow"]:                  # конфетти — частицы: выключаются «Свечением и частицами»
         return
     pal = [(240, 190, 90), (120, 210, 160), (230, 120, 170), (120, 180, 240), (250, 240, 170)]
     for i in range(n):
@@ -10864,10 +10864,11 @@ class Game:
         glow_c = col if active else (152, 114, 218)
         DR.lines(surf, _shade(glow_c, 0.62), False, pts, 3 if active else 2)
         DR.lines(surf, (232, 210, 255) if active else glow_c, False, pts, 1)
-        u_spark = 0.5 if calm() else (self.t * 0.75 + phase * 0.23) % 1.0
-        idx = min(n, int(u_spark * n))
-        sx, sy = int(pts[idx][0]), int(pts[idx][1])
-        aa_circle(surf, GHOST if not active else col, (sx, sy), 3)
+        if DISPLAY["glow"]:                                  # искра бежит по нити — частица (настройка «Свечение»)
+            u_spark = 0.5 if calm() else (self.t * 0.75 + phase * 0.23) % 1.0
+            idx = min(n, int(u_spark * n))
+            sx, sy = int(pts[idx][0]), int(pts[idx][1])
+            aa_circle(surf, GHOST if not active else col, (sx, sy), 3)
         aa_circle(surf, glow_c, (int(x3), int(y3)), 4)
 
     def _draw_necro_puppeteer(self, surf, rect, targets, bad_flag=False):
