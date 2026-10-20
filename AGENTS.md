@@ -300,13 +300,23 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-20 — Claude (Opus 5.5) — **фольклорные коляски без файлов моделей**: в игру идут только кадры поворота
+  (36 ракурсов) + данные деталей (pivot, centers, смещения кадров) — `python art_tests/build_turntables.py --folk` →
+  art_tests/new_v2/assets/turntable/ (`chair_<k>_NN.png` + `index_folk.json`, 5 колясок, 4 МБ). `get_turntable` читает
+  index.json и index_folk.json; `_m3d_mesh` на десктопе берёт кадры, если у коляски нет модели; `_folk_ready` требует
+  только картинки (модели — по желанию, `--install --with-3d`). `--install`/`--uninstall` копируют/убирают и кадры.
+  selftest пропускает проверку процедурной 3D, если у коляски есть кадры. Кадры — тоже рендер моделей Tripo, вопрос
+  прав тот же: в коммите/на сайте их нет до решения владельца. С установленными кадрами пройдено: selftest (python, py),
+  keyboard_playthrough ru/en, ui_playthrough, check_en_coverage; без них — selftest 15 заданий.
+  (game.py, art_tests/build_new_v2_assets.py, art_tests/build_turntables.py)
+
 - 2026-10-20 — Claude (Opus 5.5) — **5 заданий фольклорных клиентов** (`FOLK_JOBS` перед `TECH_JOBS`, реплики `FOLK_TALK`
   перед `BARTY_TALK`): `yaga_d100` (Vermeiren D100: подняла сиденье, вилки и тормоза не переставлены), `olga_x3`
   (Panthera X3: песок и соль в касторе и оси, мягкие шины, тормоз ≈4 мм), `leshy_x8` (Magic Mobility X8: перегрев мотора
   в болоте, разное давление, гайки 47–50 Н·м), `ra_emotion` (Nitrum + Alber e-motion: зарядка при 0…40 °C, таблица
   ошибок), `gorynych_jazzy` (Jazzy 614: перегруз 136 кг выбивает главный автомат; три головы Го/Ры/Ныч со своими
   характерами). Источники — страницы мануалов в комментариях `# source:`. **Задания включаются только когда на месте
-  их файлы** (`_folk_ready`: assets/client_*, chair_*, models/chair_*_ai.json; 2D-хотспоты — assets/models/folk_hotspots.json):
+  их файлы** (`_folk_ready`: assets/client_*, chair_*; 3D — кадры, см. запись выше; 2D-хотспоты — assets/models/folk_hotspots.json):
   `python art_tests/build_new_v2_assets.py --install` / `--uninstall`. В коммитах и на сайте файлов НЕТ, пока 3D не
   заменены официальными GLB с подписки Tripo. 2D-хотспоты — `art_tests/folk_hotspots.py` (проекция 3D + ручные поправки).
   Насос мини-игры прибавляет 6–12 за нажатие: зелёная зона должна быть ≥ 12 единиц (поэтому кПа/psi подобраны так).

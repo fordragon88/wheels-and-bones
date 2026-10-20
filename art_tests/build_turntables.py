@@ -17,8 +17,18 @@ import game
 import numpy as np
 from PIL import Image
 
-N = int(sys.argv[1]) if len(sys.argv) > 1 else 36
-OUT = os.path.join(ROOT, "assets", "turntable")
+FOLK = "--folk" in sys.argv          # фольклорные клиенты: модели из art_tests/tripo/models -> art_tests/new_v2/assets
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+N = int(args[0]) if args else 36
+if FOLK:
+    OUT = os.path.join(ROOT, "art_tests", "new_v2", "assets", "turntable")
+    for k in ("yaga", "rusalka", "leshy", "ra", "gorynych"):
+        game.AI_MODELS = {} if k == "yaga" else game.AI_MODELS
+        game.AI_MODELS[f"chair_{k}.png"] = os.path.relpath(
+            os.path.join(ROOT, "art_tests", "tripo", "models", f"chair_{k}_ai.json"),
+            os.path.join(game.ASSETS_DIR, "models"))
+else:
+    OUT = os.path.join(ROOT, "assets", "turntable")
 os.makedirs(OUT, exist_ok=True)
 for old in glob.glob(os.path.join(OUT, "*.png")):
     os.remove(old)
@@ -74,6 +84,6 @@ for art in game.AI_MODELS:
                       pivot=[round(float(c), 2) for c in mesh.pivot],
                       centers={p: [[round(float(v), 1) for v in c] for c in cs] for p, cs in mesh.centers.items()})
     print(f"{name}: {N} кадров")
-with open(os.path.join(OUT, "index.json"), "w", encoding="utf-8") as f:
+with open(os.path.join(OUT, "index_folk.json" if FOLK else "index.json"), "w", encoding="utf-8") as f:
     json.dump(index, f, separators=(",", ":"))
 print(f"всего {len(index)} колясок, {total / 1e6:.1f} МБ")

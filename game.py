@@ -3076,11 +3076,13 @@ class Turntable:
 def get_turntable(art):
     """Обороты коляски (assets/turntable/index.json) или None."""
     if "index" not in _TT_CACHE:
-        try:
-            with open(os.path.join(ASSETS_DIR, TT_DIR, "index.json"), encoding="utf-8") as f:
-                _TT_CACHE["index"] = json.load(f)
-        except Exception:
-            _TT_CACHE["index"] = {}
+        _TT_CACHE["index"] = {}
+        for name in ("index.json", "index_folk.json"):      # index_folk — коляски, у которых есть только кадры
+            try:
+                with open(os.path.join(ASSETS_DIR, TT_DIR, name), encoding="utf-8") as f:
+                    _TT_CACHE["index"].update(json.load(f))
+            except Exception:
+                pass
     if art not in _TT_CACHE:
         d = _TT_CACHE["index"].get(art)
         _TT_CACHE[art] = Turntable(art, d) if d else None
@@ -5678,17 +5680,17 @@ FOLK_HOTSPOTS_PATH = os.path.join(ASSETS_DIR, "models", "folk_hotspots.json")
 
 
 def _folk_ready(job):
-    """Задание включается, только если на месте его картинки и 3D-модели (их кладёт build_new_v2_assets.py --install)."""
-    key = job["chair_art"][len("chair_"):-len(".png")]
-    files = [job["client_art"], job["chair_art"], os.path.join("models", f"chair_{key}_ai.json")]
-    return all(os.path.exists(os.path.join(ASSETS_DIR, f)) for f in files)
+    """Задание включается, когда на месте его картинки (кладёт build_new_v2_assets.py --install).
+    3D-модель необязательна: без неё в окне осмотра — рисунок коляски с кружками (folk_hotspots.json)."""
+    return all(os.path.exists(os.path.join(ASSETS_DIR, f)) for f in (job["client_art"], job["chair_art"]))
 
 
 _FOLK_ON = [j for j in FOLK_JOBS if _folk_ready(j)]
 JOBS += _FOLK_ON
 for _j in _FOLK_ON:
     _k = _j["chair_art"][len("chair_"):-len(".png")]
-    AI_MODELS[_j["chair_art"]] = f"chair_{_k}_ai.json"
+    if os.path.exists(os.path.join(ASSETS_DIR, "models", f"chair_{_k}_ai.json")):
+        AI_MODELS[_j["chair_art"]] = f"chair_{_k}_ai.json"
 try:
     with open(FOLK_HOTSPOTS_PATH, encoding="utf-8") as _f:
         for _model, _spots in json.load(_f).items():
@@ -11175,10 +11177,12 @@ class Game:
         if (self.phase not in ("diagnose", "repair", "test") or self.cur.get("track") == "tech"
                 or self.ride_t0 is not None):
             return None
-        if _np is None or TT_FORCE:                       # браузер: кадры поворота, пока не пришли — рисунок
-            tt = get_turntable(self.cur.get("chair_art"))
+        art = self.cur.get("chair_art")
+        mesh = None if (_np is None or TT_FORCE) else get_ai_chair3d(art, lod=True)
+        if mesh is None:                                  # браузер или коляска без модели: кадры поворота
+            tt = get_turntable(art)
             return tt if tt is not None and tt.update() else None
-        return get_ai_chair3d(self.cur.get("chair_art"), lod=True)
+        return mesh
 
     def _m3d_state(self):
         m = getattr(self, "m3d", None)
@@ -13154,7 +13158,7 @@ def run_selftest():
             assert len(idx) >= 3, f"3D {kind}: вырожденная грань"
     for base in JOBS:
         for job in _resolved(base):
-            if job.get("chair_art") in AI_MODELS:       # у коляски своя детальная модель — проверяется ниже
+            if job.get("chair_art") in AI_MODELS or get_turntable(job.get("chair_art")):   # своя модель/кадры
                 continue
             centers = get_chair3d(job.get("kind")).centers
             missing = [pid for pid in job["parts"] if pid not in centers]
