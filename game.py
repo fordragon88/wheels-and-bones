@@ -611,9 +611,12 @@ def font(size, bold=False):
 # ---- Доступность: что нарисовано в кадре — для управления с клавиатуры и чтения вслух ----
 A11Y = dict(on=False, voices=True, rate=0, contrast=False, instant=False, speech_set=False,
             text=2 if IS_WEB else 0, text_set=False,
-            calm=False, calm_set=False)                 # calm — без анимации (по умолчанию — как в системе)   # text — размер текста (TEXT_K): в браузере окно мельче —
+            calm=False, calm_set=False, scan=0)       # scan — одна кнопка: 0 выкл, 1–3 — скорость (SCAN_SPEEDS)                 # calm — без анимации (по умолчанию — как в системе)   # text — размер текста (TEXT_K): в браузере окно мельче —
                                                          # сразу 125 %; text_set — игрок выбрал размер сам
 TEXT_K = (1.0, 1.12, 1.25)
+SCAN_SPEEDS = (1.0, 1.6, 2.5)          # одна кнопка: секунд на пункт
+SCAN_HOLD = 1.2                        # держать кнопку столько — «назад» (Esc)
+SCAN_SUB = ("Меньше", "Больше", "Готово")   # ползунок в режиме одной кнопки
 CAPTURE = dict(frame=None, texts=[], buttons=[], modal=None, mute=0)
 
 
@@ -8290,7 +8293,7 @@ class Game:
     A11Y_KEYS = [
         ("Стрелки", "выбрать пункт; влево-вправо двигают ползунок"),
         ("Tab, Shift+Tab", "следующая или предыдущая группа"),
-        ("Enter, Пробел", "нажать"),
+        ("Enter, Пробел", "нажать (одна кнопка: нажать — выбрать, держать — назад)"),
         ("Esc", "назад или закрыть окно"),
         ("R", "повторить: где я и что делать"),
         ("T", "прочитать весь экран"),
@@ -8616,6 +8619,113 @@ class Game:
         self._a11y_focus(items[i], items)
         return True
 
+    # ---------- одна кнопка (switch access): пункты выделяются сами, нажатие — выбрать, долгое — назад ----------
+    _SCAN_KEYS = (pygame.K_SPACE, pygame.K_RETURN, pygame.K_KP_ENTER)
+
+    def _scan_iv(self):
+        return SCAN_SPEEDS[max(1, min(len(SCAN_SPEEDS), A11Y.get("scan", 1))) - 1]
+
+    def _scan_event(self, ev):
+        if self.kb["help"] or getattr(self, "_scan_inject", False):
+            return False
+        down = (ev.type == pygame.KEYDOWN and ev.key in self._SCAN_KEYS) or \
+               (ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1)
+        up = (ev.type == pygame.KEYUP and ev.key in self._SCAN_KEYS) or \
+             (ev.type == pygame.MOUSEBUTTONUP and ev.button == 1)
+        if down:
+            if getattr(self, "_scan_down", None) is None:
+                self._scan_down = self.t
+            return True
+        if up and getattr(self, "_scan_down", None) is not None:
+            held = self.t - self._scan_down
+            self._scan_down = None
+            if held >= SCAN_HOLD:
+                self.kb["scan_sub"] = None
+                self.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, mod=0, unicode=""))
+            else:
+                self.scan_select()
+            self._scan_next = self.t + self._scan_iv() * 1.5
+            return True
+        return ev.type == pygame.MOUSEMOTION                # мышь фокус не сбивает
+
+    def scan_select(self):
+        """Нажатие одной кнопки: выбрать выделенный пункт (ползунок — меньше / больше / готово)."""
+        items = self.kb["items"]
+        if not items:
+            return
+        self.kb["active"] = True
+        cur = next((it for it in items if it["key"] == self.kb["key"]), None)
+        sub = self.kb.get("scan_sub")
+        if sub and cur and cur["key"] == sub["key"]:
+            if sub["i"] == 2:
+                self.kb["scan_sub"] = None
+                snd("tick")
+                self.say(tr("Готово"), True)
+            else:
+                cur["adj"](-1 if sub["i"] == 0 else 1)
+                self.kb["say_focus"] = True
+            return
+        self.kb["scan_sub"] = None
+        if cur is None:
+            self._a11y_focus(items[0], items)
+            return
+        if cur["adj"] and not cur["act"]:
+            self.kb["scan_sub"] = dict(key=cur["key"], i=1)
+            snd("tick")
+            self.say(tr("Больше") + ". " + tr("Нажимай, чтобы менять. Меньше, больше, готово — по очереди."), True)
+            return
+        self._a11y_activate(cur)
+
+    def scan_tick(self):
+        """Раз в кадр: следующий пункт, когда пришло время."""
+        if not A11Y.get("scan") or self.kb["help"] or getattr(self, "_scan_down", None) is not None:
+            return
+        items = self.kb["items"]
+        if not items:
+            return
+        iv = self._scan_iv()
+        if getattr(self, "_scan_next", None) is None:
+            self._scan_next = self.t + iv
+        if self.t < self._scan_next:
+            return
+        self._scan_next = self.t + iv
+        self.kb["active"] = True
+        sub = self.kb.get("scan_sub")
+        if sub is not None:
+            if any(it["key"] == sub["key"] for it in items):
+                sub["i"] = (sub["i"] + 1) % len(SCAN_SUB)
+                snd("tick")
+                self.say(tr(SCAN_SUB[sub["i"]]), True)
+                return
+            self.kb["scan_sub"] = None
+        idx = next((i for i, it in enumerate(items) if it["key"] == self.kb["key"]), None)
+        self._a11y_focus(items[0 if idx is None else (idx + 1) % len(items)], items)
+
+    def _draw_scan(self, surf, cur):
+        """Одна кнопка: подсказка внизу и «меньше / больше / готово» у ползунка."""
+        CAPTURE["mute"] += 1
+        try:
+            sub = self.kb.get("scan_sub")
+            if sub and cur and cur["key"] == sub["key"] and cur["rect"] is not None:
+                r = cur["rect"]
+                w, h = 130, 34
+                x0 = max(8, min(WIDTH - 3 * (w + 6) - 8, r.centerx - (3 * (w + 6)) // 2))
+                y0 = r.bottom + 16 if r.bottom + 16 + h < HEIGHT - 30 else r.y - 16 - h
+                for i, lab in enumerate(SCAN_SUB):
+                    b = pygame.Rect(x0 + i * (w + 6), y0, w, h)
+                    on = i == sub["i"]
+                    aa_rect(surf, (52, 44, 20) if on else (20, 18, 26), b, border_radius=8)
+                    aa_rect(surf, AMBER if on else GREY, b, 3 if on else 1, border_radius=8)
+                    draw_text(surf, ("− ", "+ ", "✓ ")[i] + tr(lab), b.center, 16,
+                              AMBER if on else WHITE, bold=on, center=True)
+            hint = tr("Одна кнопка: нажми — выбрать, держи — назад")
+            fw = font(14).size(hint)[0] + 24
+            b = pygame.Rect(WIDTH // 2 - fw // 2, HEIGHT - 26, fw, 22)
+            aa_rect(surf, (12, 10, 18), b, border_radius=6)
+            draw_text(surf, hint, b.center, 14, AMBER, center=True)
+        finally:
+            CAPTURE["mute"] -= 1
+
     def _a11y_focus(self, it, items):
         self.kb["key"] = it["key"]
         n = [x for x in items if x["group"] == it["group"]]
@@ -8636,8 +8746,12 @@ class Game:
             it["act"]()
         elif it["rect"] is not None:                       # обычный клик в центр кнопки
             c = it["rect"].center
-            self.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=c, button=1))
-            self.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=c, button=1))
+            self._scan_inject = True                       # свой клик — не нажатие «одной кнопки»
+            try:
+                self.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=c, button=1))
+                self.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=c, button=1))
+            finally:
+                self._scan_inject = False
         self.kb["say_focus_if_same"] = it["key"]
 
     # ---------- что сказать ----------
@@ -8809,6 +8923,8 @@ class Game:
             aa_rect(surf, (0, 0, 0), r.inflate(10, 10), 3, border_radius=13)
             aa_rect(surf, (255, 255, 255), r, 3, border_radius=10)
             aa_rect(surf, AMBER, r.inflate(6, 6), 3 + int(pulse), border_radius=12)
+        if A11Y.get("scan") and not self.kb["help"]:
+            self._draw_scan(surf, cur)
         q = self.kb["queue"]
         if q:
             SPEECH.say(" ".join(t for t, _ in q), any(i for _, i in q))
@@ -8833,6 +8949,8 @@ class Game:
         draw_text(surf, "Esc или F1 — закрыть", (p.x + 28, p.bottom - 44), 15, GREY)
 
     def handle_event(self, event):
+        if A11Y.get("scan") and self._scan_event(event):
+            return
         if event.type == pygame.MOUSEMOTION:
             self.kb["active"] = False                     # мышь — рамку фокуса прячем
         if event.type == pygame.KEYDOWN and self.a11y_key(event):
@@ -9233,6 +9351,7 @@ class Game:
     def update(self, dt):
         self.t += dt
         self._touch_text()
+        self.scan_tick()
         if self.scene == "credits" and not calm() and self.t - self.scene_t0 > 1.2:
             self.credits_y = min(self.credits_y + 26 * dt, self._credits_max())   # медленно вверх
         if not self.headless:
@@ -9445,11 +9564,19 @@ class Game:
         draw_wrapped(surf, "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и "
                            "доступность останутся.", (p.x + 32, p.y + 356), p.w - 64, 13, GREY)
 
-    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "calm", "text")
+    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "calm", "text", "scan")
 
     def _access_rects(self):
         p = self._sound_panel_rect()
-        return [(k, pygame.Rect(p.x + 330, p.y + 110 + i * 38, 216, 32)) for i, k in enumerate(self.ACCESS_ROWS)]
+        return [(k, pygame.Rect(p.x + 330, p.y + 108 + i * 34, 216, 30)) for i, k in enumerate(self.ACCESS_ROWS)]
+
+    @staticmethod
+    def _scan_text():
+        n = A11Y.get("scan", 0)
+        if not (1 <= n <= len(SCAN_SPEEDS)):
+            return tr("ВЫКЛ")
+        v = f"{SCAN_SPEEDS[n - 1]:g}"
+        return (v.replace(".", ",") if LANG["code"] == "ru" else v) + " " + tr("с")
 
     def _access_label(self, k):
         on = tr("включено") if A11Y.get(k) else tr("выключено")
@@ -9465,6 +9592,9 @@ class Game:
             return f"{tr('Размер текста')}: {self._text_pct()}%"
         if k == "calm":
             return f"{tr('Без анимации')}: {on}"
+        if k == "scan":
+            return (f"{tr('Управление одной кнопкой')}: {self._scan_text()}. "
+                    + tr("Пункты выделяются сами; нажми — выбрать, держи — назад"))
         return f"{tr('Текст сразу, без печати по буквам')}: {on}"
 
     @staticmethod
@@ -9478,6 +9608,11 @@ class Game:
             A11Y["rate"] = min(10, A11Y["rate"] + 2) if A11Y["rate"] < 10 else -4
             SPEECH.set_voice()
             self.say(f"{tr('Скорость')}: {A11Y['rate']}", True)
+        elif k == "scan":
+            A11Y["scan"] = (A11Y.get("scan", 0) + 1) % (len(SCAN_SPEEDS) + 1)
+            self._scan_next = self.t + 1.5
+            self.kb["scan_sub"] = None
+            self.say(self._access_label(k), True)
         elif k == "text":
             A11Y["text"] = (A11Y.get("text", 0) + 1) % len(TEXT_K)
             A11Y["text_set"] = True                   # свой выбор игрока — размер по умолчанию его не перебьёт
@@ -9635,21 +9770,23 @@ class Game:
     def _draw_access_tab(self, surf, p, mouse):
         names = {"on": "Озвучка (F2)", "voices": "Реплики героев вслух", "rate": "Скорость голоса",
                  "contrast": "Контрастный фон", "instant": "Текст сразу", "calm": "Без анимации",
-                 "text": "Размер текста"}
+                 "text": "Размер текста", "scan": "Одна кнопка"}
         for k, r in self._access_rects():
             draw_text(surf, names[k], (p.x + 32, r.centery - font(17).get_height() // 2), 17, WHITE)
             if k == "rate":
                 label = str(A11Y["rate"])
             elif k == "text":
                 label = f"{self._text_pct()}%"
+            elif k == "scan":
+                label = self._scan_text()
             else:
                 label = "ВКЛ" if A11Y[k] else "ВЫКЛ"
             Button(r, label, GOOD if (k in ("rate", "text") or A11Y[k]) else GREY).draw(
                 surf, mouse, active=bool(A11Y.get(k)))
-        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, p.y + 382), 13, GREY)
+        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, p.y + 386), 13, GREY)
         draw_wrapped(surf, "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
-                           "С экранным чтецом (NVDA, JAWS) игра говорит его голосом.",
-                     (p.x + 32, p.y + 400), self._sound_close_rect().x - p.x - 48, 13, GREY)
+                           "Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад.",
+                     (p.x + 32, p.y + 403), self._sound_close_rect().x - p.x - 48, 13, GREY)
 
     def _draw_sound_panel(self, surf):
         _cap_modal()
@@ -13433,6 +13570,26 @@ def run_selftest():
     g.draw(pygame.display.get_surface())
     _esc(g)
     assert g.scene == "title", "Esc из титров — обратно на титул"
+    # одна кнопка: выделение идёт само, короткое нажатие — выбрать, долгое — назад
+    _scan0 = A11Y["scan"]
+    A11Y["scan"] = 1
+    g.scene_t0 = g.t - 5
+    g.kb["key"] = None
+    g._scan_next = g.t                       # пора выделять
+    g.draw(pygame.display.get_surface())
+    g.update(0.01); g.draw(pygame.display.get_surface())
+    assert g.kb["key"] == "start", f"одна кнопка: первым выделяется «начать»: {g.kb['key']}"
+    g.update(1.05); g.draw(pygame.display.get_surface())
+    assert g.kb["key"] == "credits", f"одна кнопка: затем «титры»: {g.kb['key']}"
+    for _t in (pygame.KEYDOWN, pygame.KEYUP):
+        g.handle_event(pygame.event.Event(_t, key=pygame.K_SPACE, mod=0, unicode=" "))
+    assert g.scene == "credits", f"одна кнопка: нажатие выбирает выделенное: {g.scene}"
+    g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE, mod=0, unicode=" "))
+    g.update(SCAN_HOLD + 0.1)
+    g.handle_event(pygame.event.Event(pygame.KEYUP, key=pygame.K_SPACE, mod=0, unicode=" "))
+    assert g.scene == "title", f"одна кнопка: долгое нажатие — назад: {g.scene}"
+    A11Y["scan"] = _scan0
+    g.kb["scan_sub"] = None
     # касание пальцем: клик ровно там, куда коснулись; «мышь», которую браузер делает из касания, — мимо
     g.scene_t0 = g.t - 5
     sw, sh = pygame.display.get_surface().get_size()

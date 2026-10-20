@@ -237,6 +237,7 @@ set SDL_VIDEODRIVER=dummy & set PYTHONIOENCODING=utf-8      # (bash: export ...)
 python game.py --selftest            # SELFTEST OK — данные, задания, мини-игры, Гильдия, экзамен, кабинет посадки, 3D-детали, хотспоты
 py game.py --selftest                # то же на Python 3.14 / pygame-ce
 python art_tests/ui_playthrough.py   # бот проходит всю игру кликами (снимки в art_tests/audit_shots)
+python art_tests/switch_playthrough.py  # то же одной кнопкой (сканирование)
 python art_tests/monkey_test.py      # тысячи случайных действий, «уникальных падений: 0» (долго)
 python art_tests/rs_smoke.py 2       # все сцены при рендере ×2
 python i18n_work/build_lang.py       # перевод полон
@@ -299,6 +300,16 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-10-21 — Claude (Opus 5.5) — **управление одной кнопкой (switch access)**: настройка «Доступность → Одна кнопка»
+  (`A11Y['scan']`: 0 выкл, 1–3 = `SCAN_SPEEDS` 1 / 1,6 / 2,5 с на пункт). Выделение само идёт по тем же пунктам, что
+  у клавиатуры (`kb['items']`, `scan_tick` в update); кнопка — Пробел, Enter, клик или касание (`_scan_event` в начале
+  handle_event): короткое нажатие — выбрать (`scan_select`), удержание ≥ `SCAN_HOLD` 1,2 с — «назад» (Esc). Ползунок:
+  нажать → по очереди «Меньше / Больше / Готово» (`kb['scan_sub']`, плашки у ползунка). Свои клики `_a11y_activate`
+  помечены `_scan_inject` (не считаются нажатием). Время удержания — по игровому времени self.t. Внизу подсказка.
+  Тест: `art_tests/switch_playthrough.py [en]` — тот же бот, что keyboard_playthrough, но с одной кнопкой: вся игра
+  за ~830 нажатий и 15 удержаний; в selftest — выделение, выбор, удержание. Перевод — en9_fixes14.json.
+  (game.py, art_tests/switch_playthrough.py, i18n_work/en9_fixes14.json, assets/lang_en.json)
 
 - 2026-10-21 — Claude (Opus 5.5) — **телефоны и планшеты (браузер)**. `web_setup_touch()` (pointer: coarse): холст
   без прокрутки/зума пальцем (touch-action none), на телефоне в портрете — заставка «Turn your phone sideways»,

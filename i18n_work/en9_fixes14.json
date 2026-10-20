@@ -40,5 +40,17 @@
  "[ тап — посмотреть гараж ]": "[ tap — view the garage ]",
  "прогресс сохраняется автоматически": "progress saves automatically",
  "протяни пальцем — листать": "swipe to scroll",
- "{0}/{1}   [ тап — далее ]": "{0}/{1}   [ tap — next ]"
+ "{0}/{1}   [ тап — далее ]": "{0}/{1}   [ tap — next ]",
+ "Меньше": "Less",
+ "Больше": "More",
+ "Готово": "Done",
+ "с": "s",
+ "ВЫКЛ": "OFF",
+ "Управление одной кнопкой": "One-button control",
+ "Пункты выделяются сами; нажми — выбрать, держи — назад": "Items are highlighted in turn; press to select, hold to go back",
+ "Одна кнопка": "One button",
+ "Одна кнопка: нажми — выбрать, держи — назад": "One button: press to select, hold to go back",
+ "Нажимай, чтобы менять. Меньше, больше, готово — по очереди.": "Press to change it. Less, more and done take turns.",
+ "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад.": "The whole game can be played from the keyboard: arrows, Tab, Enter. F1 lists all keys. One button: items are highlighted in turn, press to select, hold to go back.",
+ "нажать (одна кнопка: нажать — выбрать, держать — назад)": "press (one button: press to select, hold to go back)"
 }
