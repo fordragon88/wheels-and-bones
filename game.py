@@ -415,6 +415,43 @@ class LFont:
 
 FINGER = {"t": -10 ** 9, "id": None, "pos": None}   # последнее касание (палец), логические координаты
 
+
+def m3d_fit_zoom(V, w, h, yaw0, pitch, wide=1.18, tall=1.12):
+    """Зум окна коляски (V — вершины numpy относительно pivot): в исходном ракурсе yaw0 модель целиком в окне w×h,
+    при любом другом может выйти за окно на wide по ширине и tall по высоте (запас окна это позволяет)."""
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    scale = h / 1250.0
+    ox, oy = w / 2, h * 0.54
+    worst = 1e-6
+    for i, a in enumerate([yaw0] + [j * math.pi / 8 for j in range(16)]):
+        X = V[:, 0] * math.cos(a) + V[:, 2] * math.sin(a)
+        Z = -V[:, 0] * math.sin(a) + V[:, 2] * math.cos(a)
+        Y = V[:, 1] * cp - Z * sp
+        k = 2600.0 / (2600.0 - (V[:, 1] * sp + Z * cp)) * scale
+        sx, sy = X * k, -Y * k
+        fw, ft = (1.0, 1.0) if i == 0 else (wide, tall)
+        worst = max(worst, float(abs(sx).max()) / (ox * fw), float(-sy.min()) / (oy * ft),
+                    float(sy.max()) / ((h - oy) * ft))
+    tall_mm = float(V[:, 1].max() - V[:, 1].min())             # высокие коляски (X8 1,39 м) — во всё окно,
+    real = min(1.0, (tall_mm / M3D_TALL_REF) ** 0.3)            # невысокие ручные — чуть меньше (X3 0,76 м — ~85 %)
+    return 0.97 / worst * real
+
+
+M3D_TALL_REF = 1300.0                   # мм: коляски не ниже этого — во всё окно
+
+
+def m3d_fit(V, w, h, yaw0, pitch, wide=1.18, tall=1.12):
+    """Как m3d_fit_zoom, но ещё подбирает высоту центра (сдвиг pivot по вертикали, мм), чтобы место сверху и
+    снизу окна использовалось поровну: у высоких и длинных колясок (X8, Jazzy) низ иначе упирается в край.
+    Возврат: (зум, сдвиг)."""
+    best = (m3d_fit_zoom(V, w, h, yaw0, pitch, wide, tall), 0.0)
+    for dy in range(-400, 401, 20):
+        if dy:
+            z = m3d_fit_zoom(V - [0.0, dy, 0.0], w, h, yaw0, pitch, wide, tall)
+            if z > best[0] + 1e-4:
+                best = (z, float(dy))
+    return best
+
 # ---- геймпад: те же клавиши, что у управления с клавиатуры (стандартная раскладка SDL, как у Xbox) ----
 try:
     from pygame._sdl2 import controller as _pad_ctl
@@ -11887,6 +11924,9 @@ class Game:
         return s["yaw"] - 1.3 * (1 - k), s["pitch"], k < 1.0
 
     M3D_PAD = 40                    # модель может выходить за рамку (не обрезается по краю)
+    M3D_WIDE = 1.18                 # при повороте модель может выйти за окно: по ширине на 18 %, по высоте на 12 %
+    M3D_TALL = 1.12                 # (в исходном ракурсе — целиком в окне). Иначе длинные коляски (X8, Jazzy)
+                                    # уменьшались под худший ракурс сильнее всех
 
     def _m3d_zoom(self):
         """Зум, при котором модель целиком влезает в окно при любом повороте (раз на модель и размер окна)."""
@@ -11897,27 +11937,22 @@ class Game:
         key = ("m3d_fit", id(mesh), rect.size)
         z = _img_cache.get(key)
         if z is None:
+            if not getattr(mesh, "_pivot_fit", False):       # высота центра — раз на модель (как в кадрах поворота)
+                V = _np.asarray(mesh.verts, dtype=_np.float64)[::3] - _np.asarray(mesh.pivot)
+                _, dy = m3d_fit(V, 380.0, 300.0, self.M3D_YAW, self.M3D_PITCH, self.M3D_WIDE, self.M3D_TALL)
+                mesh.pivot = (mesh.pivot[0], mesh.pivot[1] + dy, mesh.pivot[2])
+                mesh._pivot_fit = True
             V = _np.asarray(mesh.verts, dtype=_np.float64)[::3] - _np.asarray(mesh.pivot)
-            cp, sp = math.cos(self.M3D_PITCH), math.sin(self.M3D_PITCH)
-            scale = rect.h / 1250.0
-            ox, oy = rect.w / 2, rect.h * 0.54
-            worst = 1e-6
-            for i in range(16):
-                a = i * math.pi / 8
-                X = V[:, 0] * math.cos(a) + V[:, 2] * math.sin(a)
-                Z = -V[:, 0] * math.sin(a) + V[:, 2] * math.cos(a)
-                Y = V[:, 1] * cp - Z * sp
-                k = 2600.0 / (2600.0 - (V[:, 1] * sp + Z * cp)) * scale
-                sx, sy = X * k, -Y * k
-                worst = max(worst, float(_np.abs(sx).max()) / ox, float(-sy.min()) / oy, float(sy.max()) / (rect.h - oy))
-            z = _img_cache[key] = 0.97 / worst
+            z = _img_cache[key] = m3d_fit_zoom(V, rect.w, rect.h, self.M3D_YAW, self.M3D_PITCH, self.M3D_WIDE,
+                                               self.M3D_TALL)
         return z
 
     def _m3d_frame(self):
         """Прямоугольник проекции с полями и зум под него (кружки и картинка считаются одинаково)."""
         r, pad = self._chair_rect(), self.M3D_PAD
+        ext = math.ceil(r.w / 2 * (self.M3D_WIDE - 1))        # запас по ширине (масштаб считается по высоте)
         zk = self._m3d_state().get("zoom_k", 1.0)
-        return r.inflate(pad * 2, pad * 2), self._m3d_zoom() * zk * r.h / (r.h + pad * 2)
+        return r.inflate(pad * 2 + ext * 2, pad * 2), self._m3d_zoom() * zk * r.h / (r.h + pad * 2)
 
     def _m3d_spots(self):
         """Кружки деталей задания на модели: [(деталь, x, y, r, (точка на детали))].

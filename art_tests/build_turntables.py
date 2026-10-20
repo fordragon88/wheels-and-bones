@@ -33,28 +33,18 @@ os.makedirs(OUT, exist_ok=True)
 for old in glob.glob(os.path.join(OUT, "*.png")):
     os.remove(old)
 REF_H = 600                         # высота окна коляски в пикселях экрана (≈ 400 логических × RS 1.5)
-PAD = 60                            # поля (M3D_PAD × 1.5): модель может выходить за окно
+PAD = 60                            # поля (M3D_PAD × 1.5): модель может выходить за окно (по высоте — на M3D_TALL)
 YAW0, PITCH = game.Game.M3D_YAW, game.Game.M3D_PITCH
 assert game.gl_ok(), "нужен OpenGL (moderngl) — запускать на компьютере с видеокартой"
 
 
 def fit_zoom(mesh):
-    """То же, что Game._m3d_zoom: модель целиком влезает в окно при любом повороте (от размера окна не зависит)."""
+    """То же, что Game._m3d_zoom (game.m3d_fit_zoom): окно 380×300, исходный ракурс — целиком."""
     V = np.asarray(mesh.verts, dtype=np.float64)[::3] - np.asarray(mesh.pivot)
-    cp, sp = math.cos(PITCH), math.sin(PITCH)
-    h = 300.0
-    w = int(h * 380 / 300)
-    scale, ox, oy = h / 1250.0, w / 2, h * 0.54
-    worst = 1e-6
-    for i in range(16):
-        a = i * math.pi / 8
-        X = V[:, 0] * math.cos(a) + V[:, 2] * math.sin(a)
-        Z = -V[:, 0] * math.sin(a) + V[:, 2] * math.cos(a)
-        Y = V[:, 1] * cp - Z * sp
-        k = 2600.0 / (2600.0 - (V[:, 1] * sp + Z * cp)) * scale
-        sx, sy = X * k, -Y * k
-        worst = max(worst, float(np.abs(sx).max()) / ox, float(-sy.min()) / oy, float(sy.max()) / (h - oy))
-    return 0.97 / worst
+    z, dy = game.m3d_fit(V, 380.0, 300.0, YAW0, PITCH, game.Game.M3D_WIDE, game.Game.M3D_TALL)
+    mesh.pivot = (mesh.pivot[0], mesh.pivot[1] + dy, mesh.pivot[2])   # высота центра — как в игре
+    mesh._pivot_fit = True
+    return z
 
 
 index, total = {}, 0
@@ -63,7 +53,8 @@ for art in game.AI_MODELS:
     if mesh is None:
         continue
     z0 = fit_zoom(mesh)
-    W, H = round(REF_H * 380 / 300) + 2 * PAD, REF_H + 2 * PAD
+    PAD_X = PAD + math.ceil(REF_H * 380 / 300 / 2 * (game.Game.M3D_WIDE - 1))   # запас по ширине — как в игре
+    W, H = round(REF_H * 380 / 300) + 2 * PAD_X, REF_H + 2 * PAD
     zoom = z0 * REF_H / H                                   # как _m3d_frame: масштаб = REF_H × z0 / 1250
     s_ref = REF_H * z0 / 1250.0                             # пикселей на единицу
     ax, ay = W / 2, H * 0.54                                # куда проецируется центр (pivot)
