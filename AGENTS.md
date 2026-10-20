@@ -300,6 +300,16 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-20 — Claude (Opus 5.5) — **модели колясок: лучшее из нашей чистки и Gemini**. `art_tests/tripo_merge.py`:
+  геометрия Яги, Ольги, Лешего, Горыныча — из `*_fixed.glb` Gemini (ровнее обивка, нет обрубков и шипов), цвет — kNN из
+  нашей текстуры (`*_clean.glb`), у Ра — наша геометрия → art_tests/tripo/hybrid/<key>_full.npz; затем
+  `tripo_label.py <key> --target 22000 --dir art_tests/tripo/hybrid` и копия models/*.json в art_tests/tripo/models
+  (старые — art_tests/tripo/bak_before_hybrid/). В tripo_label: **спицы Tripo заменяются ровными** (`spokes=N` в SPECS:
+  Яга 36, Ольга 24, Ра 24; make_spokes — палочки ~5 мм от фланцев ступицы к ободу, перекрёст; добавляются после
+  облегчения, иначе рвутся на «чёрточки»), `despike` — мелкие куски и «иглы» с открытым краем вне колёс (на этих
+  моделях почти ничего). Кадры поворота и folk_hotspots пересобраны. Проверки: selftest (python, py), keyboard ru/en,
+  ui_playthrough, check_en_coverage. (art_tests/tripo_merge.py, art_tests/tripo_label.py, assets/*)
+
 - 2026-10-20 — Claude (Opus 5.5) — **проверка моделей, дочищенных Gemini** (art_tests/export/*_fixed.zip →
   art_tests/export/gemini/; через конвейер игры — art_tests/tripo/gemini/, `tripo_label.py --dir`). Итог: в основном
   облегчение 1,9 млн → 330 тыс. треугольников и сглаживание; размеры те же. Лучше: у Лешего ровнее обивка, нет шипов
