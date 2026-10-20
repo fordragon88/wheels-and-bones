@@ -52,5 +52,8 @@
  "Одна кнопка: нажми — выбрать, держи — назад": "One button: press to select, hold to go back",
  "Нажимай, чтобы менять. Меньше, больше, готово — по очереди.": "Press to change it. Less, more and done take turns.",
  "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад.": "The whole game can be played from the keyboard: arrows, Tab, Enter. F1 lists all keys. One button: items are highlighted in turn, press to select, hold to go back.",
- "нажать (одна кнопка: нажать — выбрать, держать — назад)": "press (one button: press to select, hold to go back)"
+ "нажать (одна кнопка: нажать — выбрать, держать — назад)": "press (one button: press to select, hold to go back)",
+ "Лёгкий шрифт": "Easy-read font",
+ "Шрифт для лёгкого чтения (Atkinson Hyperlegible)": "Easy-read font (Atkinson Hyperlegible)",
+ "Только для английского языка": "English only"
 }

@@ -309,8 +309,18 @@ class TF:
         return Surf.adopt(real) if isinstance(s, Surf) else real
 
 
+def easy_font_on():
+    """Шрифт для лёгкого чтения (Atkinson Hyperlegible): включён и язык английский (в нём нет кириллицы)."""
+    return bool(A11Y.get("font")) and LANG["code"] == "en"
+
+
+_ALT_OK = {}                                    # символ -> есть ли он в Atkinson (общий для всех размеров)
+
+
 class LFont:
-    """Шрифт: рендер нужного размера в пикселях экрана, метрики — в логических."""
+    """Шрифт: рендер нужного размера в пикселях экрана, метрики — в логических.
+    С «лёгким шрифтом» буквы — Atkinson Hyperlegible, а значки (✔ ⚑ ▸ →…), которых в нём нет, — DejaVu:
+    строка рисуется кусками, ширина считается так же."""
 
     def __init__(self, size, bold=False):
         px = max(1, round(size * RS * TEXT_K[min(len(TEXT_K) - 1, max(0, A11Y.get("text", 0)))]))
@@ -319,14 +329,64 @@ class LFont:
             self.f = pygame.font.Font(path, px)
         except Exception:
             self.f = pygame.font.SysFont("dejavusans,segoeuisymbol,arial,helvetica", px, bold=bold)
+        self.alt = None
+        if easy_font_on():
+            try:
+                self.alt = pygame.font.Font(os.path.join(
+                    ASSETS_DIR, "fonts", "AtkinsonHyperlegible-Bold.ttf" if bold else "AtkinsonHyperlegible-Regular.ttf"),
+                    max(1, round(px * 1.08)))           # Atkinson уже DejaVu — чуть крупнее, чтобы не мельчил
+                self._notdef = self.alt.metrics("\ue000")[0]
+            except Exception:
+                self.alt = None
         self._cache = {}
+
+    def _has(self, ch):
+        ok = _ALT_OK.get(ch)
+        if ok is None:
+            try:
+                m = self.alt.metrics(ch)[0]
+                ok = ch.isspace() or (m is not None and m != self._notdef)
+            except Exception:
+                ok = False
+            _ALT_OK[ch] = ok
+        return ok
+
+    def _runs(self, text):
+        """Куски строки: (шрифт, текст)."""
+        if self.alt is None:
+            return [(self.f, text)]
+        out = []
+        for ch in text:
+            fnt = self.alt if self._has(ch) else self.f
+            if out and out[-1][0] is fnt:
+                out[-1][1].append(ch)
+            else:
+                out.append((fnt, [ch]))
+        return [(fnt, "".join(cs)) for fnt, cs in out] or [(self.alt, "")]
+
+    def _render_real(self, text, aa, color, bg):
+        runs = self._runs(text)
+        if len(runs) == 1:
+            fnt = runs[0][0]
+            return fnt.render(text, aa, color, bg) if bg is not None else fnt.render(text, aa, color)
+        parts = [fnt.render(t, aa, color) for fnt, t in runs]
+        asc = max(fnt.get_ascent() for fnt, _ in runs)
+        h = max(asc + max(-fnt.get_descent() for fnt, _ in runs), max(p.get_height() for p in parts))
+        out = pygame.Surface((sum(p.get_width() for p in parts), h), pygame.SRCALPHA)
+        if bg is not None:
+            out.fill(bg)
+        x = 0
+        for (fnt, _), part in zip(runs, parts):
+            out.blit(part, (x, asc - fnt.get_ascent()))
+            x += part.get_width()
+        return out
 
     def render(self, text, aa=True, color=(255, 255, 255), bg=None):
         key = (text, aa, tuple(color), None if bg is None else tuple(bg))
         img = self._cache.get(key)
         if img is None:
             try:
-                real = self.f.render(text, aa, color, bg) if bg is not None else self.f.render(text, aa, color)
+                real = self._render_real(text, aa, color, bg)
             except pygame.error:                   # строка из одних невидимых символов (U+200B…): «Text has zero width»
                 real = pygame.Surface((1, max(1, self.f.get_height())), pygame.SRCALPHA)
             img = Surf.adopt(real)
@@ -337,14 +397,16 @@ class LFont:
         return img
 
     def size(self, text):
-        w, h = self.f.size(text)
+        runs = self._runs(text)
+        w = sum(fnt.size(t)[0] for fnt, t in runs)
+        h = max(fnt.size(t)[1] for fnt, t in runs)
         return (math.ceil(w / RS), math.ceil(h / RS))
 
     def get_height(self):
-        return math.ceil(self.f.get_height() / RS)
+        return math.ceil(max(self.f.get_height(), self.alt.get_height() if self.alt else 0) / RS)
 
     def get_linesize(self):
-        return math.ceil(self.f.get_linesize() / RS)
+        return math.ceil(max(self.f.get_linesize(), self.alt.get_linesize() if self.alt else 0) / RS)
 
     def __getattr__(self, name):
         return getattr(self.f, name)
@@ -565,6 +627,8 @@ def set_lang(code):
     if LANG["code"] == "en" and not _TR:
         load_lang()
     _tool_icon_cache.clear()
+    if A11Y.get("font"):                                       # лёгкий шрифт — только в английском: шрифты заново
+        _font_cache.clear()
     try:
         pygame.display.set_caption(tr("Колёса и Кости") if LANG["code"] == "en" else "Колёса и Кости // Wheels & Bones")
     except Exception:
@@ -611,7 +675,7 @@ def font(size, bold=False):
 # ---- Доступность: что нарисовано в кадре — для управления с клавиатуры и чтения вслух ----
 A11Y = dict(on=False, voices=True, rate=0, contrast=False, instant=False, speech_set=False,
             text=2 if IS_WEB else 0, text_set=False,
-            calm=False, calm_set=False, scan=0)       # scan — одна кнопка: 0 выкл, 1–3 — скорость (SCAN_SPEEDS)                 # calm — без анимации (по умолчанию — как в системе)   # text — размер текста (TEXT_K): в браузере окно мельче —
+            calm=False, calm_set=False, scan=0, font=False)       # scan — одна кнопка: 0 выкл, 1–3 — скорость (SCAN_SPEEDS)                 # calm — без анимации (по умолчанию — как в системе)   # text — размер текста (TEXT_K): в браузере окно мельче —
                                                          # сразу 125 %; text_set — игрок выбрал размер сам
 TEXT_K = (1.0, 1.12, 1.25)
 SCAN_SPEEDS = (1.0, 1.6, 2.5)          # одна кнопка: секунд на пункт
@@ -9564,11 +9628,11 @@ class Game:
         draw_wrapped(surf, "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и "
                            "доступность останутся.", (p.x + 32, p.y + 356), p.w - 64, 13, GREY)
 
-    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "calm", "text", "scan")
+    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "calm", "text", "font", "scan")
 
     def _access_rects(self):
         p = self._sound_panel_rect()
-        return [(k, pygame.Rect(p.x + 330, p.y + 108 + i * 34, 216, 30)) for i, k in enumerate(self.ACCESS_ROWS)]
+        return [(k, pygame.Rect(p.x + 330, p.y + 106 + i * 31, 216, 28)) for i, k in enumerate(self.ACCESS_ROWS)]
 
     @staticmethod
     def _scan_text():
@@ -9592,6 +9656,9 @@ class Game:
             return f"{tr('Размер текста')}: {self._text_pct()}%"
         if k == "calm":
             return f"{tr('Без анимации')}: {on}"
+        if k == "font":
+            return (f"{tr('Шрифт для лёгкого чтения (Atkinson Hyperlegible)')}: {on}"
+                    + ("" if LANG["code"] == "en" else ". " + tr("Только для английского языка")))
         if k == "scan":
             return (f"{tr('Управление одной кнопкой')}: {self._scan_text()}. "
                     + tr("Пункты выделяются сами; нажми — выбрать, держи — назад"))
@@ -9608,6 +9675,11 @@ class Game:
             A11Y["rate"] = min(10, A11Y["rate"] + 2) if A11Y["rate"] < 10 else -4
             SPEECH.set_voice()
             self.say(f"{tr('Скорость')}: {A11Y['rate']}", True)
+        elif k == "font":
+            A11Y["font"] = not A11Y.get("font")
+            DISPLAY["frame"] = None                   # шрифты и подписи — заново
+            _update_rs()
+            self.say(self._access_label(k), True)
         elif k == "scan":
             A11Y["scan"] = (A11Y.get("scan", 0) + 1) % (len(SCAN_SPEEDS) + 1)
             self._scan_next = self.t + 1.5
@@ -9770,7 +9842,7 @@ class Game:
     def _draw_access_tab(self, surf, p, mouse):
         names = {"on": "Озвучка (F2)", "voices": "Реплики героев вслух", "rate": "Скорость голоса",
                  "contrast": "Контрастный фон", "instant": "Текст сразу", "calm": "Без анимации",
-                 "text": "Размер текста", "scan": "Одна кнопка"}
+                 "text": "Размер текста", "scan": "Одна кнопка", "font": "Лёгкий шрифт"}
         for k, r in self._access_rects():
             draw_text(surf, names[k], (p.x + 32, r.centery - font(17).get_height() // 2), 17, WHITE)
             if k == "rate":
@@ -9783,10 +9855,10 @@ class Game:
                 label = "ВКЛ" if A11Y[k] else "ВЫКЛ"
             Button(r, label, GOOD if (k in ("rate", "text") or A11Y[k]) else GREY).draw(
                 surf, mouse, active=bool(A11Y.get(k)))
-        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, p.y + 386), 13, GREY)
+        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, p.y + 392), 13, GREY)
         draw_wrapped(surf, "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
                            "Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад.",
-                     (p.x + 32, p.y + 403), self._sound_close_rect().x - p.x - 48, 13, GREY)
+                     (p.x + 32, p.y + 409), self._sound_close_rect().x - p.x - 48, 13, GREY)
 
     def _draw_sound_panel(self, surf):
         _cap_modal()
