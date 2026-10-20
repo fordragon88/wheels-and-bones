@@ -105,6 +105,8 @@ GAME_VERSION = "0.3"
 # Замечания игроков (флажок ⚑, «Я не согласен») уходят в Google-таблицу через веб-приложение Apps Script
 # (docs/feedback/Code.gs, настройка — docs/FEEDBACK_SETUP.md). Пустой адрес — только локальный feedback.json.
 FEEDBACK_URL = "https://script.google.com/macros/s/AKfycbyJxHpELYNd1CBpUmPLwIuT_hre-Nm-AJVJ9rCYDOrNLKKd26crV2G6omRPzTY6umtr/exec"
+if os.environ.get("SDL_VIDEODRIVER") == "dummy" or "--selftest" in sys.argv:
+    FEEDBACK_URL = ""                          # тесты и боты (без экрана) никогда не шлют замечания в таблицу
 FEEDBACK_KEY = "wnb-feedback-1"
 SAVE_PATH = os.path.join(DATA_DIR, "save.json")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
@@ -1256,15 +1258,19 @@ def web_setup_page():
               if (S && S.audioContext && S.audioContext.state !== 'running') S.audioContext.resume(); } catch (e) {}
       }
       ['pointerdown','keydown','touchstart'].forEach(function(t){ window.addEventListener(t, unlockAudio, true); });
-      window.wnbSend = function(url, body){                 // замечание в Google-таблицу; без сети — в очередь
-        function keep(){ try { var q = JSON.parse(localStorage.getItem('wnb:outbox') || '[]'); q.push(body);
-          localStorage.setItem('wnb:outbox', JSON.stringify(q.slice(-20))); } catch (e) {} }
+      function wnbQ(f){ try { var q = JSON.parse(localStorage.getItem('wnb:outbox') || '[]'); q = f(q);
+        localStorage.setItem('wnb:outbox', JSON.stringify(q.slice(-20))); } catch (e) {} }
+      function wnbPost(url, body){                          // убрать из очереди только после ответа сервера
         try { fetch(url, {method: 'POST', mode: 'no-cors', headers: {'Content-Type': 'text/plain'}, body: body})
-                .catch(keep); } catch (e) { keep(); }
+                .then(function(){ wnbQ(function(q){ var i = q.indexOf(body); if (i >= 0) q.splice(i, 1); return q; }); })
+                .catch(function(){}); } catch (e) {}
+      }
+      window.wnbSend = function(url, body){                 // замечание в Google-таблицу: сначала в очередь
+        wnbQ(function(q){ q.push(body); return q; }); wnbPost(url, body);
       };
-      window.wnbFlush = function(url){
-        try { var q = JSON.parse(localStorage.getItem('wnb:outbox') || '[]'); localStorage.removeItem('wnb:outbox');
-              q.forEach(function(b){ wnbSend(url, b); }); } catch (e) {}
+      window.wnbFlush = function(url){                      // при запуске: дослать то, что не ушло
+        try { JSON.parse(localStorage.getItem('wnb:outbox') || '[]').forEach(function(b){ wnbPost(url, b); }); }
+        catch (e) {}
       };
       window.addEventListener('keydown', function(e){
         if (['Tab',' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','F1','F2'].indexOf(e.key) >= 0) e.preventDefault();
@@ -1375,8 +1381,8 @@ def feedback_send(payload, shot=None, local_png=None):
             return False
         if shot is not None:
             payload = _with_shot(payload, shot)
-        web_js(f"window.wnbSend && wnbSend({json.dumps(FEEDBACK_URL)}, {json.dumps(json.dumps(payload))})")
-        return True
+        r = web_js(f"window.wnbSend ? (wnbSend({json.dumps(FEEDBACK_URL)}, {json.dumps(json.dumps(payload))}), 'ok') : 'no'")
+        return str(r) == "ok"                          # мост к странице не работает — «сохранено у тебя»
     import uuid
     payload = dict(payload, uid=payload.get("uid") or uuid.uuid4().hex)
     uid = payload["uid"]
@@ -1673,7 +1679,9 @@ def music_update(theme, now):
     try:
         if not pygame.mixer.get_init():
             return
-        if theme != MUSIC["cur"] and theme != MUSIC["next"]:
+        if theme == MUSIC["cur"] and MUSIC["next"] not in (None, theme):
+            MUSIC["next"], MUSIC["at"] = theme, now     # вернулись до конца перехода: прежняя тема заново
+        elif theme != MUSIC["cur"] and theme != MUSIC["next"]:
             MUSIC["next"] = theme
             MUSIC["at"] = now + (0.8 if MUSIC["cur"] else 0.0)
             pygame.mixer.music.fadeout(700)
@@ -2625,7 +2633,8 @@ def _build_chair3d_manual(frame=(74, 144, 186)):
         m_box(m, 228, 262, 470, 500, bz - 12, bz + 12, "brake", (224, 120, 112))
         m_tube(m, [(250, 490, bz), (290, 610, bz)], 8, "brake", (224, 120, 112), sides=6)
         m_tube(m, [(286, 600, bz), (296, 632, bz)], 16, "brake", (40, 40, 48), sides=8, flags=0, caps=True)
-        m_box(m, 210, 236, 506, 532, bz - 10, bz + 16 * s, "brake", (90, 90, 100))
+        m_box(m, 210, 236, 506, 532, min(bz - 10 * s, bz + 16 * s), max(bz - 10 * s, bz + 16 * s), "brake",
+              (90, 90, 100))
         for bp in ((-12, 318), (-36, 530), (-44, 700), (22, 600), (424, 470)):            # болты
             m_tube(m, [(bp[0], bp[1], zf + 10 * s), (bp[0], bp[1], zf + 22 * s)], 9, "bolts",
                    (214, 178, 92), sides=6, caps=True)
@@ -3001,7 +3010,7 @@ class Turntable:
         self.z0, self.ref, self.offsets = d["z0"], d["ref"], d["offsets"]
         self.pivot = tuple(d["pivot"])
         self.centers = {p: [tuple(c) for c in cs] for p, cs in d["centers"].items()}
-        self.frames, self.scaled, self.asked, self.failed = {}, {}, False, False
+        self.frames, self.scaled, self.asked, self.failed, self.tries = {}, {}, False, False, {}
 
     def index(self, yaw):
         return int(round((yaw - self.yaw0) / (2 * math.pi / self.n))) % self.n
@@ -3032,11 +3041,7 @@ class Turntable:
             return not self.failed
         if not self.asked:
             self.asked = True
-            web_js("(function(L){var T=window.wnbTT=window.wnbTT||{};L.forEach(function(u){if(u in T)return;"
-                   "T[u]=null;fetch(u).then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then(function(b){"
-                   "var a=new Uint8Array(b),s='';for(var i=0;i<a.length;i+=8192)s+=String.fromCharCode.apply(null,"
-                   "a.subarray(i,i+8192));T[u]=btoa(s);}).catch(function(){T[u]='!';});});})("
-                   + json.dumps([self.file(i) for i in range(self.n)]) + ")")
+            self._fetch([self.file(i) for i in range(self.n)])
         now = pygame.time.get_ticks()
         if now - getattr(self, "_poll", -1000) < 40:          # забираем пришедшее не чаще раза за кадр
             return False
@@ -3051,11 +3056,23 @@ class Turntable:
         import base64
         for u, v in got.items():
             i = int(u[-6:-4])
-            if v == "!":
-                self.failed = True                            # нет кадров на сервере — останется рисунок
+            if v == "!":                                      # сбой сети — ещё попытка, после трёх — рисунок
+                self.tries[u] = self.tries.get(u, 0) + 1
+                if self.tries[u] >= 3:
+                    self.failed = True
+                else:
+                    self._fetch([u])
             else:
                 self._decode(i, base64.b64decode(v))
         return len(self.frames) == self.n and not self.failed
+
+    @staticmethod
+    def _fetch(urls):
+        """Браузер: скачать кадры в window.wnbTT (base64; '!' — не скачался)."""
+        web_js("(function(L){var T=window.wnbTT=window.wnbTT||{};L.forEach(function(u){if(u in T)return;"
+               "T[u]=null;fetch(u).then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then(function(b){"
+               "var a=new Uint8Array(b),s='';for(var i=0;i<a.length;i+=8192)s+=String.fromCharCode.apply(null,"
+               "a.subarray(i,i+8192));T[u]=btoa(s);}).catch(function(){T[u]='!';});});})(" + json.dumps(urls) + ")")
 
     def image(self, i, f):
         """Кадр i в пикселях экрана, увеличенный в f раз (кэш на один масштаб)."""
@@ -7651,6 +7668,7 @@ class Game:
         self.manual_page = None
         self.manual_viewed = set()        # «сначала мануал» — заново в каждом задании (и на экзамене)
         self.dispute = None               # замечание к прошлой попытке к новой не относится
+        self.esc_timer = 0                # «Esc ещё раз — выйти» из прошлого задания сюда не переносится
         self.mini_pending = None
         self.exam_mode = False
         self.inspected = set()
@@ -7959,8 +7977,11 @@ class Game:
             return
         stars = max(1, 3 - self.mistakes // 2)
         self.done.add(self.cur["id"])
-        if self.cur["id"] not in [g[0] for g in self.garage]:
+        old = next((i for i, g in enumerate(self.garage) if g[0] == self.cur["id"]), None)
+        if old is None:
             self.garage.append((self.cur["id"], stars))
+        elif stars > self.garage[old][1]:          # переигрывание: в гараже — лучшая оценка
+            self.garage[old] = (self.cur["id"], stars)
         self.cur_stars = stars
         if random.random() < 0.5:                  # то нога отвалится, то Мартин сам себя похвалит/подколет
             self.result_gag = random.choice(LEG_GAGS)
@@ -8775,6 +8796,9 @@ class Game:
 
     def click_title(self, m):
         self.scene = "hub" if (self.done or self.tutorial_skipped) else "intro"
+        if self.scene == "intro":                  # после сброса прогресса вступление — снова с первого слайда
+            self.intro_idx = 0
+            self._typing.pop("intro", None)
 
     def click_intro(self, m):
         if not self.typing_done("intro"):          # первый клик — допечатать текст

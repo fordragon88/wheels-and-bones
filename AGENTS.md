@@ -300,6 +300,17 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-20 — Claude (Opus 5.5) + glm-5.3 (Cline Pass) + Codex gpt-6-luna — **аудит 3, исправления**:
+  веб-очередь замечаний — сначала в localStorage, убирается после ответа (раньше wnbFlush стирал очередь до отправки);
+  feedback_send в браузере честно отвечает, ушло ли (мост wnbSend → 'ok'); кадры поворота в браузере — до 3 попыток
+  на кадр (раньше один сбой сети навсегда выключал 3D); после сброса прогресса вступление — с первого слайда
+  (intro_idx/_typing в click_title); в гараже при переигрывании — лучшая оценка; music_update: вернулись к теме до
+  конца перехода — она и звучит; колодка тормоза процедурной модели одинаковой толщины с обеих сторон; esc_timer
+  сбрасывается в start_job. **Тесты без экрана (SDL_VIDEODRIVER=dummy) и --selftest не шлют замечания**: FEEDBACK_URL
+  пустой (monkey_test/fuzz2 раньше могли отправить в таблицу). Проверки: selftest (python, py), keyboard ru/en,
+  ui_playthrough, check_en_coverage, check_feedback_ui, monkey 24k действий — 0 падений; очередь — в node.
+  Codex CLI: `npm i -g @openai/codex`, `codex exec -m gpt-6-luna -s read-only - < prompt.txt` (промпт — через stdin).
+
 - 2026-10-20 — Claude (Opus 5.5) — **модели колясок: лучшее из нашей чистки и Gemini**. `art_tests/tripo_merge.py`:
   геометрия Яги, Ольги, Лешего, Горыныча — из `*_fixed.glb` Gemini (ровнее обивка, нет обрубков и шипов), цвет — kNN из
   нашей текстуры (`*_clean.glb`), у Ра — наша геометрия → art_tests/tripo/hybrid/<key>_full.npz; затем
