@@ -3694,7 +3694,8 @@ SEAT_CASES = [
          back=(38, 44), angle=(96, 106), tilt=45,
          start=dict(depth=36, leg=27, back_h=33, back_a=90, tilt=15),
          fact="Наклон в пространстве (tilt-in-space) сохраняет углы в тазобедренных и коленных суставах, "
-              "снимая нагрузку с таза и помогая удерживать голову и корпус."),
+              "снимая нагрузку с таза и помогая удерживать голову и корпус. Чтобы ручная коляска при этом не "
+              "опрокинулась, сиденье при наклоне смещается вперёд, а сзади стоят антиопрокидыватели."),
     # --- вид спереди и сверху: перекос и поворот таза (Permobil, «Pelvic Obliquity» / «Pelvic Rotation»;
     #     таблица Lange & Presperin Pedersen «Positioning Chart») ---
     dict(id="seat_dryad", view="front", client="Дриада Ивушка", client_art="client_cross6.png", kind="manual",
@@ -10600,10 +10601,13 @@ class Game:
         seat_h, depth, leg = case["seat_h"], cfg["depth"], cfg["leg"]
         tilt = math.radians(cfg.get("tilt", 0))
         piv = (depth * 0.45, -8.0)
+        # наклон в пространстве (Zippie IRIS и т. п.): сиденье при наклоне уходит по дуге вперёд, чтобы центр
+        # тяжести оставался над колёсами — иначе на рисунке коляска «опрокидывается» назад
+        fwd = 17.0 * math.sin(max(0.0, tilt))
 
         def T(px, py):
             dx, dy = px - piv[0], py - piv[1]
-            rx = piv[0] + dx * math.cos(tilt) - dy * math.sin(tilt)
+            rx = piv[0] + dx * math.cos(tilt) - dy * math.sin(tilt) + fwd
             ry = piv[1] + dx * math.sin(tilt) + dy * math.cos(tilt)
             return (x_r + rx * k, floor_y - (seat_h + ry) * k)
 
@@ -10834,6 +10838,11 @@ class Game:
 
         if case["kind"] != "power":
             R = 30 if seat_h > 45 else 26
+            if case.get("tilt"):                                   # антиопрокидыватели: у колясок с наклоном — всегда
+                a0, a1 = W(-4, 15), W(-R - 6, 6.5)
+                DR.line(surf, FR, a0, a1, max(2, int(2.6 * k)))
+                aa_circle(surf, TIRE, a1, max(3, int(3.2 * k)))
+                aa_circle(surf, MET, a1, max(1, int(1.4 * k)))
             w_surf = Surf(rect.size, pygame.SRCALPHA)
             wc = (int(W(2, R)[0] - rect.x), int(W(2, R)[1] - rect.y))
             for a_sp in range(0, 360, 20):
