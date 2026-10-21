@@ -46,7 +46,8 @@ art_tests/quest_audit.json
 art_tests/_ai3d_bench.py
 art_tests/*.sh
 MUSE_3D_TASK.md
-.claude/
+.claude/*
+!.claude/skills/
 
 *.tmp
 

@@ -87,7 +87,9 @@ def stage():
         else:
             im = im.convert("RGBA")
             _bleed(im).save(fp[:-4] + ".jpg", "JPEG", quality=88, optimize=True)
-            im.split()[3].save(fp[:-4] + ".a.png", "PNG", optimize=True)
+            mask = Image.new("RGBA", im.size, (255, 255, 255, 0))     # белая маска: игра умножает на неё
+            mask.putalpha(im.split()[3])                              # (BLEND_RGBA_MULT — быстро и на телефоне)
+            mask.save(fp[:-4] + ".a.png", "PNG", optimize=True)
         os.remove(fp)
     # значок вкладки
     import pygame

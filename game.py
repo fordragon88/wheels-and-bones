@@ -1191,17 +1191,17 @@ def asset_path(name):
 
 
 def _load_split(jpg, apng):
-    """Цвет из JPEG + прозрачность из серой PNG -> одна картинка RGBA (без numpy: срезы байтов)."""
-    rgb = pygame.image.load(jpg)
-    a = pygame.image.load(apng)
-    w, h = rgb.get_size()
-    if a.get_size() != (w, h):
-        a = pygame.transform.smoothscale(a.convert(24), (w, h))
-    rb = pygame.image.tobytes(rgb.convert(24) if rgb.get_bitsize() != 24 else rgb, "RGB")
-    ab = pygame.image.tobytes(a.convert(24) if a.get_bitsize() != 24 else a, "RGB")
-    out = bytearray(w * h * 4)
-    out[0::4], out[1::4], out[2::4], out[3::4] = rb[0::3], rb[1::3], rb[2::3], ab[0::3]
-    return pygame.image.frombytes(bytes(out), (w, h), "RGBA")
+    """Цвет из JPEG + маска <имя>.a.png (белая, прозрачность — в альфе) -> одна картинка RGBA.
+    Умножение каналов делает сам pygame (BLEND_RGBA_MULT): быстро и без копий байтов в Python (телефоны)."""
+    rgb = pygame.image.load(jpg).convert_alpha()
+    mask = pygame.image.load(apng).convert_alpha()
+    if mask.get_size() != rgb.get_size():
+        mask = pygame.transform.smoothscale(mask, rgb.get_size())
+    rgb.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    return rgb
+
+
+ASSET_MISS = set()                     # картинки, вместо которых нарисована заглушка (проверка web_smoke)
 
 
 def asset_exists(name):
@@ -1232,6 +1232,7 @@ def load_image(name, size=None, color=GHOST):
         except Exception:
             surf = None
     if surf is None:
+        ASSET_MISS.add(name)
         drawer = VECTOR_ART.get(os.path.splitext(name)[0])
         if drawer:
             surf = drawer()
@@ -1883,6 +1884,8 @@ def web_target_res():
     px = DISPLAY.get("web_px") or 1920
     cap = DISPLAY.get("web_cap", len(WEB_LEVELS) - 1)
     top = WEB_RES[WEB_LEVELS[max(0, min(cap, len(WEB_LEVELS) - 1))]][0]
+    if TOUCH["on"]:                                    # телефон/планшет: плотный экран, мало памяти — не шире 1080p
+        top = min(top, WEB_RES["high"][0])
     # холст ровно с окно игры (пиксель в пиксель): браузеру нечего ужимать — кружки и линии не рвутся
     w = int(max(WEB_MIN_W, min(top, round(px / 16) * 16)))
     return (w, w * 9 // 16)
@@ -3356,6 +3359,11 @@ class Turntable:
     def index(self, yaw):
         return int(round((yaw - self.yaw0) / (2 * math.pi / self.n))) % self.n
 
+    def release(self):
+        """Освободить кадры (коляска ушла с экрана); вернётся — подгрузятся снова (из кэша браузера)."""
+        if self.frames or self.scaled:
+            self.frames, self.scaled, self.asked, self.tries = {}, {}, False, {}
+
     def file(self, i):
         return f"{TT_DIR}/{self.name}_{i:02d}.png"
 
@@ -3427,6 +3435,9 @@ class Turntable:
         out = self.scaled.get(i)
         if out is None:
             w, h = img.get_size()
+            if len(self.scaled) > 6:                     # память: копии только последних кадров (вращают —
+                for k in [k for k in self.scaled if k != "f"][:3]:   # соседние пересчитываются быстро)
+                    del self.scaled[k]
             out = self.scaled[i] = pygame.transform.smoothscale(img, (max(1, round(w * f)), max(1, round(h * f))))
         return out
 
@@ -3444,6 +3455,11 @@ def get_turntable(art):
     if art not in _TT_CACHE:
         d = _TT_CACHE["index"].get(art)
         _TT_CACHE[art] = Turntable(art, d) if d else None
+    if _TT_CACHE.get("_cur") != art:                     # память: кадры держит только коляска на экране
+        for k, tt in _TT_CACHE.items():                  # (36 кадров + копии — до 100 МБ; на телефоне кончалась
+            if k not in ("index", "_cur", art) and isinstance(tt, Turntable):   # память — игра вставала)
+                tt.release()
+        _TT_CACHE["_cur"] = art
     return _TT_CACHE[art]
 
 
@@ -8861,6 +8877,16 @@ class Game:
         self._a11y_focus(items[i], items)
         return True
 
+    def debug_state(self):
+        """Где игра сейчас — коротко, для автопроверок браузерной версии (window.wnbState, art_tests/web_smoke.py)."""
+        sc = self.seatc if self.scene == "seating" and self.seatc else {}
+        return dict(scene=self.scene, job=self.cur["id"] if self.cur else None, phase=self.phase,
+                    settings=bool(self.show_sound), dispute=self.dispute_ui is not None, help=bool(self.kb["help"]),
+                    seat_tab=sc.get("tab"), focus=str(self.kb["key"]) if self.kb["key"] is not None else None,
+                    res=list(DISPLAY.get("res") or ()), rs=round(RS, 3), touch=TOUCH["on"], lang=LANG["code"],
+                    missing=sorted(ASSET_MISS)[:30], done=len(self.done), version=GAME_VERSION,
+                    tt_frames=sum(len(t.frames) + len(t.scaled) for t in _TT_CACHE.values() if isinstance(t, Turntable)))
+
     # ---------- геймпад ----------
     def _pad_key(self, k, down=True, mod=0):
         self.handle_event(pygame.event.Event(pygame.KEYDOWN if down else pygame.KEYUP, key=k, mod=mod, unicode=""))
@@ -13869,6 +13895,14 @@ def run_selftest():
     g.draw(pygame.display.get_surface())
     _esc(g)
     assert g.scene == "title", "Esc из титров — обратно на титул"
+    # память: кадры поворота держит только коляска на экране (иначе телефон «вставал» через пару заданий)
+    _a, _b = get_turntable("chair_basic.png"), get_turntable("chair_elf.png")
+    if _a and _b:
+        get_turntable("chair_basic.png").update()
+        assert len(_a.frames) == _a.n, "кадры поворота не загрузились"
+        get_turntable("chair_elf.png").update()
+        assert not _a.frames and len(_b.frames) == _b.n, "кадры прежней коляски должны освободиться"
+        _b.release()
     # браузер, «авто»: холст ровно с окно игры (кратно 16), в пределах WEB_MIN_W…1440p, потолок после замедления
     _d0 = {k: DISPLAY.get(k) for k in ("web_px", "web_cap", "web_quality")}
     DISPLAY["web_quality"] = "auto"; DISPLAY.pop("web_cap", None)
@@ -14564,6 +14598,10 @@ async def main():
             if DISPLAY["_px_t"] > 1 and DISPLAY.get("web_quality", "auto") == "auto":   # окно игры поменялось?
                 DISPLAY["_px_t"] = 0
                 web_auto_resize(web_measure())
+            DISPLAY["_st_t"] = DISPLAY.get("_st_t", 0) + dt
+            if DISPLAY["_st_t"] > 0.5:                # состояние для автопроверки (art_tests/web_smoke.py)
+                DISPLAY["_st_t"] = 0
+                web_js("window.wnbState=" + json.dumps(json.dumps(game.debug_state())))
             DISPLAY["_fps_t"] = DISPLAY.get("_fps_t", 0) + dt
             if DISPLAY["_fps_t"] > 3:                 # окно замера 3 с
                 DISPLAY["_fps_t"] = 0
