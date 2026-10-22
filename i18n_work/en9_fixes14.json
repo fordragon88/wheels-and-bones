@@ -103,5 +103,8 @@
  "Сенеб: «Хм. Мой амулет подсказывает: попробуй другой инструмент.»": "Seneb: “Hmm. My amulet suggests: try another tool.”",
  "Сенеб: «Достойно! Высеку твоё имя на стене гробницы. Мелким шрифтом.»": "Seneb: “Well done! I'll carve your name on the tomb wall. In small print.”",
  "Сенеб: «Превосходно. У меня от восторга бинты дыбом.»": "Seneb: “Excellent. My bandages are standing on end with delight.”",
- "Сенеб: «Мумия садится в коляску. Поехали!»": "Seneb: “The mummy takes a seat. Let's roll!”"
+ "Сенеб: «Мумия садится в коляску. Поехали!»": "Seneb: “The mummy takes a seat. Let's roll!”",
+ "Крупнее нельзя.": "Can't zoom in further.",
+ "Мельче нельзя.": "Can't zoom out further.",
+ "ЛКМ — вращать · колесо или +/− — зум · клик по детали — осмотр · Esc — закрыть": "drag — rotate · scroll or +/− — zoom · click a part — inspect · Esc — close"
 }

@@ -477,6 +477,8 @@ except Exception:
     _pad_ctl = None
 PAD = {"ctrl": {}, "joy": {}, "dir": None, "src": None, "next": 0.0}
 PAD_BTN_DOWN = getattr(pygame, "CONTROLLERBUTTONDOWN", -1)
+ZOOM_IN_KEYS = (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS)     # «+» и «=» (та же клавиша без Shift)
+ZOOM_OUT_KEYS = (pygame.K_MINUS, pygame.K_KP_MINUS)
 PAD_EVENTS = tuple(getattr(pygame, n) for n in (
     "CONTROLLERBUTTONDOWN", "CONTROLLERBUTTONUP", "CONTROLLERAXISMOTION", "CONTROLLERDEVICEADDED",
     "CONTROLLERDEVICEREMOVED", "JOYBUTTONDOWN", "JOYBUTTONUP", "JOYHATMOTION", "JOYAXISMOTION",
@@ -12541,14 +12543,43 @@ class Game:
                 return part
         return None
 
+    M3D_ZOOM = (0.75, 1.65, 1.10)          # мин., макс., шаг масштаба коляски в окне задания
+
+    def _m3d_zoom_rects(self):
+        """«+» и «−» в правом верхнем углу окна коляски."""
+        r = self._chair_rect()
+        return pygame.Rect(r.right - 44, r.y + 4, 40, 36), pygame.Rect(r.right - 44, r.y + 44, 40, 36)
+
+    def m3d_zoom(self, steps):
+        """Крупнее (+1) / мельче (−1) коляску в окне задания."""
+        s = self._m3d_state()
+        lo, hi, k = self.M3D_ZOOM
+        old = s.get("zoom_k", 1.0)
+        s["zoom_k"] = max(lo, min(hi, old * (k ** steps)))
+        snd("tick")
+        if s["zoom_k"] == old:
+            self.flash("Крупнее нельзя." if steps > 0 else "Мельче нельзя.", GHOST, 1.5)
+
+    def _m3d_zoom_on(self):
+        return (self.scene == "job" and self.v3d is None and self.cur.get("track") != "tech"
+                and self.phase in ("diagnose", "repair") and self._m3d_mesh() is not None)
+
     def _m3d_event(self, event):
         """Перетаскивание модели в окне диагностики. True = событие поглощено.
         Клик по кружку детали проходит дальше обычным путём (click_job)."""
         if self._m3d_mesh() is None or self.mini_pending or self.show_manual or self.spec_pending:
             return False
         s = self._m3d_state()
+        if event.type == pygame.KEYDOWN and event.key in ZOOM_IN_KEYS + ZOOM_OUT_KEYS and self._m3d_zoom_on():
+            self.m3d_zoom(1 if event.key in ZOOM_IN_KEYS else -1)
+            return True
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self._m3d_zoom_on():
+            zin, zout = self._m3d_zoom_rects()
+            if zin.collidepoint(event.pos) or zout.collidepoint(event.pos):
+                self.m3d_zoom(1 if zin.collidepoint(event.pos) else -1)
+                return True
         if event.type == pygame.MOUSEWHEEL and self._chair_rect().collidepoint(mouse_pos()):
-            s["zoom_k"] = max(0.75, min(1.65, s.get("zoom_k", 1.0) * (1.10 ** event.y)))
+            s["zoom_k"] = max(self.M3D_ZOOM[0], min(self.M3D_ZOOM[1], s.get("zoom_k", 1.0) * (self.M3D_ZOOM[2] ** event.y)))
             return True
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3 and self._chair_rect().collidepoint(event.pos):
             yw, pt = self._chair_default_view()
@@ -12722,6 +12753,16 @@ class Game:
         return [(pid, pygame.Rect(sr.x + 10, sr.y + 40 + i * 44, sr.w - 20, 38))
                 for i, pid in enumerate(self.cur["parts"])]
 
+    def _v3d_zoom_rects(self):
+        r = self._v3d_reset_rect()
+        return pygame.Rect(r.x - 100, r.y, 44, 40), pygame.Rect(r.x - 50, r.y, 44, 40)
+
+    def _v3d_zoom(self, steps):
+        v = self.v3d
+        v["zoom"] = max(0.7, min(2.2, v["zoom"] * (1.12 ** steps)))
+        v["idle"] = 0.0
+        snd("tick")
+
     def _v3d_ai_rect(self):
         p = self._v3d_panel_rect()
         return pygame.Rect(p.x + 16, p.bottom - 54, 300, 40)
@@ -12775,12 +12816,10 @@ class Game:
             if event.key in (pygame.K_ESCAPE, pygame.K_TAB):
                 self.v3d = None
                 snd("whoosh_out")
-            elif event.key in (pygame.K_PLUS, pygame.K_EQUALS, pygame.K_KP_PLUS):
-                v["zoom"] = min(2.2, v["zoom"] * 1.12)
-                v["idle"] = 0.0
-            elif event.key in (pygame.K_MINUS, pygame.K_KP_MINUS):
-                v["zoom"] = max(0.7, v["zoom"] / 1.12)
-                v["idle"] = 0.0
+            elif event.key in ZOOM_IN_KEYS:
+                self._v3d_zoom(1)
+            elif event.key in ZOOM_OUT_KEYS:
+                self._v3d_zoom(-1)
             elif event.key == pygame.K_r:
                 yw0, pt0 = self._chair_default_view()
                 v.update(target=yw0 + round((v["yaw"] - yw0) / (2 * math.pi)) * 2 * math.pi,
@@ -12805,6 +12844,10 @@ class Game:
             if self._v3d_ai_available() and self._v3d_ai_rect().collidepoint(event.pos):
                 v["ai"] = not v.get("ai")
                 snd("tick")
+                return True
+            zin, zout = self._v3d_zoom_rects()
+            if zin.collidepoint(event.pos) or zout.collidepoint(event.pos):
+                self._v3d_zoom(1 if zin.collidepoint(event.pos) else -1)
                 return True
             if self._v3d_reset_rect().collidepoint(event.pos):
                 yw0, pt0 = self._chair_default_view()
@@ -13013,7 +13056,7 @@ class Game:
             surf.blit(tip, rect)
             aa_rect(surf, AMBER if hover in self.cur["parts"] else WHITE, rect, 1, border_radius=7)
             draw_text(surf, label, rect.center, 15, WHITE, bold=True, center=True)
-        draw_text(surf, "ЛКМ — вращать · колесо — зум · клик по детали — осмотр · Esc — закрыть",
+        draw_text(surf, "ЛКМ — вращать · колесо или +/− — зум · клик по детали — осмотр · Esc — закрыть",
                   (vr.x + 12, vr.bottom - 26), 13, (150, 160, 175))
         # панель справа: детали задания, прогресс, находка
         sr = self._v3d_side_rect().move(0, int(30 * (1 - ok)))
@@ -13054,6 +13097,9 @@ class Game:
             draw_text(surf, "НАХОДКА: " + PARTS.get(pid, pid), (card.x + 12, card.y + 10), 14, CYAN, bold=True)
             draw_wrapped(surf, text, (card.x + 12, card.y + 34), card.w - 24, 14, WHITE,
                          limit=self.typed("v3d_clue", text, cps=90))
+        zin, zout = self._v3d_zoom_rects()
+        Button(zin, "+", CYAN).draw(surf, mouse)
+        Button(zout, "−", CYAN).draw(surf, mouse)
         Button(self._v3d_reset_rect(), "СБРОС ВИДА [R]", CYAN).draw(surf, mouse)
         if self._v3d_ai_available():
             Button(self._v3d_ai_rect(), "МОДЕЛЬ: ДЕТАЛЬНАЯ" if v.get("ai") else "МОДЕЛЬ: ПО ЧЕРТЕЖУ",
@@ -13123,6 +13169,10 @@ class Game:
         if self.ride_t0 is None:
             if self._m3d_mesh() is not None:
                 self._draw_m3d(surf, crect, mouse)
+                if self._m3d_zoom_on():
+                    zin, zout = self._m3d_zoom_rects()
+                    Button(zin, "+", CYAN).draw(surf, mouse)
+                    Button(zout, "−", CYAN).draw(surf, mouse)
             else:
                 surf.blit(load_image(job["chair_art"], tuple(crect.size), AMBER), crect)
         if self.phase in ("diagnose", "repair"):
@@ -14426,6 +14476,16 @@ def run_selftest():
             assert g.mistakes == before and g.mini_pending["value"] >= cfg["lo"] - 6, "стравить — без ошибки"
     finally:
         A11Y.update(saved)
+
+    # масштаб коляски: «+»/«−» в окне задания и клавиши, в пределах M3D_ZOOM
+    g = Game(headless=True)
+    g.start_job("caster")
+    if g._m3d_zoom_on():
+        g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_EQUALS, mod=0, unicode="="))
+        assert g._m3d_state()["zoom_k"] > 1.0, "«+» — крупнее"
+        for _ in range(20):
+            g.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=g._m3d_zoom_rects()[1].center))
+        assert abs(g._m3d_state()["zoom_k"] - g.M3D_ZOOM[0]) < 1e-6, "«−» — до предела, не дальше"
 
     # каждое tech-задание проходится в валидном порядке (включая toe с мини-игрой)
     for job in TECH_JOBS:
