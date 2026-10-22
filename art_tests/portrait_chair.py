@@ -20,9 +20,11 @@ GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]), "chair_edge4.png": 
        "chair_pulse6.png": dict(key="pulse6"), "chair_gorynych.png": dict(key="jazzy"),
        "chair_whillc2.png": dict(key="whill"), "chair_focuscr.png": dict(key="fcr"),
        "chair_leshy.png": dict(key="x8", recolor=[28, 4, 26])}
+# подгонка коляски под персонажа (только для портрета): сдвиг части модели, мм игры (blender_render.move_parts)
+MOVE = {"chair_f5.png": [dict(x=[330, 620], y=[-50, 200], not_wheel=[215, 182, 195, 215], d=[0, 190, 0])]}  # Матильда: подножка выше
 if art in GLB:
     xf = json.load(open(os.path.join(HERE, "gen3d", GLB[art]["key"] + "_xform.json"), encoding="utf-8"))
-    spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"))
+    spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"), move=MOVE.get(art))
 V = spec["verts"]
 hgt = max(v[1] for v in V) - min(v[1] for v in V)
 spec.update(W=1024, H=1024, s=1024 * 0.78 / max(hgt, 1100), pitch=pitch, yaws=yaws)

@@ -26,8 +26,12 @@ JOBS = {   # ключ: (рендер коляски, портрет, описа�
                "a Permobil F5 Corpus front-wheel-drive power wheelchair: black contoured seat and high backrest with a "
                "headrest, black armrests with a joystick controller on the armrest, big black front drive wheels with "
                "three-spoke hubs, small black casters at the back, a dark graphite power base with small yellow "
-               "accents, black footplates",
-               "One paw rests on the joystick, the other holds her little honey pot."),
+               "accents, two black footplates raised high right in front of the seat (adjusted for short legs), a "
+               "small anti-tip wheel low under them",
+               "One paw rests on the joystick, the other holds her little honey pot. Her short legs hang down from the "
+               "front edge of the seat cushion and her feet stand flat directly ON the two raised footplates: the "
+               "footplates are the only thing under her feet - no step, ledge or box under her feet and no second, "
+               "lower pair of footplates. Both big drive wheels are complete and round."),
     "golem": ("portrait_chair_trident/portrait_chair_trident_00_white.png", "client_golem.png",
               "a Drive Trident HD heavy-duty power wheelchair: big black padded captain's seat with a headrest, black "
               "padded armrests, a joystick controller on the right armrest, big front drive wheels with silver rims, "
@@ -59,7 +63,18 @@ JOBS = {   # ключ: (рендер коляски, портрет, описа�
             "together, a headrest, dark navy blue frame, big black rear wheels with black push rims, small black front "
             "casters, raised black footplates",
             "She sits comfortably reclined in the tilted seat, holding her spyglass."),
+    # Матильда заново (поза — не со старого портрета: там ноги на «ступеньке», Qwen дорисовывал вторые подножки)
+    "badger_new": ("portrait_chair_f5/portrait_chair_f5_00_white.png", "client_f5.png",
+                   "a Permobil F5 Corpus front-wheel-drive power wheelchair: black contoured seat and high backrest with "
+                   "a headrest, black armrests with a joystick controller on the armrest, big black front drive wheels "
+                   "with three-spoke hubs, small black casters at the back, a dark graphite power base with small yellow "
+                   "accents, EXACTLY TWO black footplates side by side, raised high just below the front edge of the "
+                   "seat (adjusted for her short legs), a small anti-tip wheel low under them",
+                   "One paw rests on the joystick, the other holds her little honey pot on her lap. Her short legs bend "
+                   "at the front edge of the seat and her two feet stand flat on the two footplates, one foot on each. "
+                   "Only these two footplates, nothing else under her feet. Both big drive wheels are complete and round."),
 }
+FREE_POSE = {"badger_new"}   # от старого портрета — только облик персонажа, поза и коляска — по рендеру
 
 
 def white(path, name):
@@ -79,7 +94,9 @@ key = sys.argv[1]
 seeds = [int(s) for s in sys.argv[2:]] or [11, 22, 33]
 chair, portrait, desc, hands = JOBS[key]
 i1 = upload(os.path.join(ROOT, "tools", "render_out", chair), f"wnb_reseat_chair_{key}.png")
-i2 = upload(white(os.path.join(ROOT, "assets", portrait), f"in_portrait_{key}.png"), f"wnb_reseat_char_{key}.png")
+orig = os.path.join(HERE, "retired", portrait)                    # персонаж — с исходного портрета (до новых колясок)
+i2 = upload(white(orig if os.path.exists(orig) else os.path.join(ROOT, "assets", portrait), f"in_portrait_{key}.png"),
+            f"wnb_reseat_char_{key}.png")
 prompt = ("Redraw the character from <image2> sitting in the wheelchair from <image1>. Keep the character EXACTLY as in "
           "<image2>: the same face, hair, clothes, colours, proportions, expression and sitting pose, and the same clean "
           "cartoon art style with soft cel shading and dark outlines. Replace only the wheelchair: it must be exactly "
@@ -87,6 +104,14 @@ prompt = ("Redraw the character from <image2> sitting in the wheelchair from <im
           "cartoon style as <image2>. It is " + desc + ". " + hands + " The character sits naturally on the seat, back "
           "against the backrest, feet on the footplate. Whole character and wheelchair fully visible, uncropped. "
           "Plain pure white background, no shadow, no text.")
+if key in FREE_POSE:
+    prompt = ("Draw the character from <image2> sitting in the wheelchair from <image1>. Keep the character's look EXACTLY "
+              "as in <image2>: the same face, glasses, hat, scarf, clothes, colours, body proportions and expression, and "
+              "the same clean cartoon art style with soft cel shading and dark outlines. The wheelchair must be exactly "
+              "the wheelchair from <image1> — the same model, design, viewing angle and every part, nothing added or "
+              "doubled — drawn in the same cartoon style. It is " + desc + ". " + hands + " She sits naturally on the "
+              "seat, back against the backrest. Whole character and wheelchair fully visible, uncropped. Plain pure "
+              "white background, no shadow, no text.")
 ids = []
 for seed in seeds:
     g = {"1": node("UNETLoader", unet_name="qwen2.1\\qwen_image_2.1_int8_convrot.safetensors", weight_dtype="default"),
