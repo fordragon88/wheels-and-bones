@@ -13725,7 +13725,11 @@ class Game:
         else:
             hint = ("Выбери инструмент, потом кликни шаг" if tech else
                     "Выбери инструмент, потом кликни деталь на коляске или в списке")
-            draw_wrapped(surf, hint, (info.x + 16, info.y + 12), info.w - 32, 15, GREY)
+            y = draw_wrapped(surf, hint, (info.x + 16, info.y + 12), info.w - 32, 15, GREY)
+            if not tech and MANUAL_NOTES.get(self.cur["id"]):     # где сноски: значок книжки у детали
+                _draw_book_icon(surf, (info.x + 26, y + 16), 10, CYAN)
+                draw_wrapped(surf, "У деталей с книжкой есть сноска из мануала — наведи на деталь.",
+                             (info.x + 44, y + 7), info.w - 60, 14, CYAN)
 
     def _draw_tool_in_hand(self, surf, mouse):
         """Выбранный инструмент следует за курсором; верный шаг — вспышка у курсора."""
