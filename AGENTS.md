@@ -303,6 +303,12 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **Trident HD — модель Meshy** (`meshy_models/drive_trident_hd.glb`, height=1175,
+  ключ `trident`): кадры с оригинального GLB (цвет родной — чёрный с серебряными дисками), SPECS `trident` (передний
+  привод, большие задние касторы, пульт справа, провод под подлокотником). Рисунок chair_trident.png — кадр 0
+  (`art_from_turntable.py freewheel`). Прежняя — art_tests/tripo/bak_before_meshy/. (art_tests/*, assets/models/chair_trident_ai*.json,
+  assets/turntable/chair_trident_*, assets/chair_trident.png, meshy_models/README.md)
+
 - 2026-10-22 — Claude (Opus 5.5) — **F5 Corpus (Матильда) — модель Meshy** (`meshy_models/permobil_f5_corpus.glb`,
   height=1260, ключ `f5m`): кадры с оригинального GLB, бирюзовый → графит (`recolor` с оттенком −1 = в графит — в
   blender_render и в облегчённой копии), SPECS `f5m` (передний привод, задние касторы, пульт справа, автомат сзади).

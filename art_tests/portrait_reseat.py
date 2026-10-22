@@ -22,6 +22,12 @@ JOBS = {   # ключ: (рендер коляски, портрет, описа�
                "backrest with a headrest, black armrests, a joystick controller on the right armrest, a low black power "
                "base with red accents, six small black wheels, a black footplate",
                "His hand rests on the joystick."),
+    "badger": ("portrait_chair_f5/portrait_chair_f5_00_white.png", "client_f5.png",
+               "a Permobil F5 Corpus front-wheel-drive power wheelchair: black contoured seat and high backrest with a "
+               "headrest, black armrests with a joystick controller on the armrest, big black front drive wheels with "
+               "three-spoke hubs, small black casters at the back, a dark graphite power base with small yellow "
+               "accents, black footplates",
+               "One paw rests on the joystick, the other holds her little honey pot."),
 }
 
 
