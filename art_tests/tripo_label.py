@@ -66,6 +66,34 @@ SPECS = {
                ("battery", (-330, 160), (140, 420), (0, 150)),
                ("backrest", (-420, -140), (720, 1400), (0, INF)),
                ("seat", (-160, 320), (600, 730), (0, INF))]),
+    # Бабушка Агата — Ki Mobility Focus CR (ручная, наклон в пространстве). Tripo (Scene (5).glb) — прямое сиденье;
+    # в игре показываем наклон 20° (tilt), чтобы было видно, что кресло с наклоном. Короб за спинкой — лишний.
+    "focuscr": dict(art="chair_focuscr", wheels=[
+        dict(c=(-330, 230), R=230, z=(250, 320), kind="spoked"),
+        dict(c=(305, 100), R=85, z=(230, 320), kind="caster")],
+        drop=[dict(x=(-510, -375), y=(410, 700), az=(0, 95))],
+        boxes=[("tilt_lever", (-510, -370), (930, 1035), (160, 260)),
+               ("tilt_cable", (-430, -310), (720, 820), (170, 260)),
+               ("anti_tip", (-530, -395), (430, 545), (140, 270)),
+               ("brake", (-175, -55), (255, 385), (215, 315)),
+               ("gas_spring", (-210, 50), (235, 345), (0, 130)),
+               ("tilt_lock", (-130, 70), (355, 435), (170, 265)),
+               ("footrest", (420, 620), (40, 150), (0, INF)),
+               ("seat", (-260, 340), (400, 490), (0, 230))],
+        tilt=dict(deg=20, pivot=(-60, 380), base_y=370, front_x=360,
+                  keep=("tire", "rim", "spokes", "axle", "bearing", "rear_wheel", "caster", "brake"))),
+    # Матильда — Permobil F5 Corpus (передний привод). Tripo (Scene (6).glb). Пульт у F5 один — справа:
+    # левый «пульт» и стержни по бокам спинки — лишние.
+    "f5": dict(art="chair_f5", wheels=[
+        dict(c=(105, 200), R=200, z=(190, 300), kind="power")],
+        drop=[dict(x=(0, 150), y=(725, 800), z=(-285, -165)),          # второй (левый) пульт
+              dict(x=(-235, -145), y=(560, 760), az=(268, 330))],      # стержни по бокам спинки
+        boxes=[("controller", (0, 150), (725, 800), (165, 285), "signed"),
+               ("breaker", (-560, -470), (190, 345), (0, 160)),
+               ("freewheel", (-75, 0), (140, 270), (150, 285)),          # рычаг — сзади мотора, у колеса
+               ("motor", (-45, 150), (110, 300), (55, 195)),
+               ("battery", (-370, -50), (55, 335), (0, 185)),
+               ("footrest", (380, 600), (25, 115), (0, INF))]),
     # Змей Горыныч — Pride Jazzy 614 (среднеприводная)
     "raiju": dict(art="chair_gorynych", wheels=[
         dict(c=(20, 160), R=160, z=(215, 310), kind="power"),
@@ -113,9 +141,10 @@ def edit(V, F, C, spec):
     L = C[F][:, :, :3].mean((1, 2))                      # яркость (у C могут быть ещё столбцы — UV и т.п.)
     keep = np.ones(len(F), bool)
     for b in spec.get("drop", []):
-        az = np.abs(P[:, 2])
+        az = P[:, 2] if "z" in b else np.abs(P[:, 2])          # "z" — со знаком (одна сторона), "az" — обе
+        zr = b.get("z", b.get("az"))
         keep &= ~((P[:, 0] >= b["x"][0]) & (P[:, 0] < b["x"][1]) & (P[:, 1] >= b["y"][0]) & (P[:, 1] <= b["y"][1])
-                  & (az >= b["az"][0]) & (az <= b["az"][1]) & (L > b.get("lum", -1)))
+                  & (az >= zr[0]) & (az <= zr[1]) & (L > b.get("lum", -1)))
     for b in spec.get("move", []):
         m = keep & (P[:, 0] >= b["x"][0]) & (P[:, 0] <= b["x"][1]) & (P[:, 1] >= b["y"][0]) & (P[:, 1] <= b["y"][1])             & (P[:, 2] >= b["z"][0]) & (P[:, 2] <= b["z"][1])
         vi = np.unique(F[m])
@@ -214,11 +243,35 @@ def label(V, F, C, spec):
             lab[inband & tire_r] = pid("tire")
             lab[inband & ~tire_r & (r >= 0.18 * R)] = pid("rim")
             lab[inband & (r < 0.18 * R)] = pid("axle")
-    for name, (x0, x1), (y0, y1), (z0, z1) in spec["boxes"]:
-        m = (lab < 0) & (P[:, 0] >= x0) & (P[:, 0] <= x1) & (P[:, 1] >= y0) & (P[:, 1] <= y1) & (az >= z0) & (az <= z1)
+    for name, (x0, x1), (y0, y1), (z0, z1), *opt in spec["boxes"]:
+        zz = P[:, 2] if "signed" in opt else az
+        m = (lab < 0) & (P[:, 0] >= x0) & (P[:, 0] <= x1) & (P[:, 1] >= y0) & (P[:, 1] <= y1) & (zz >= z0) & (zz <= z1)
         lab[m] = pid(name)
     lab[lab < 0] = 0
     return lab, names, wheels
+
+
+def tilt_seat(V, F, C, lab, names, t):
+    """Наклон в пространстве: сиденье со спинкой, подлокотниками и подножками поворачивается назад на t["deg"]
+    вокруг t["pivot"] (x, y); колёса, касторы, тормоза и нижняя рама (центр грани ниже t["base_y"], кроме передних
+    подвесов x > t["front_x"]) остаются. Общие вершины копируются — база не тянется за сиденьем."""
+    keep = {names.index(n) for n in t.get("keep", ()) if n in names}
+    P = V[F].mean(1)
+    rot = ~np.isin(lab, list(keep)) & ((P[:, 1] > t["base_y"]) | (P[:, 0] > t["front_x"]))
+    vi = np.unique(F[rot])
+    new = np.arange(len(V), len(V) + len(vi))
+    remap = np.full(len(V), -1)
+    remap[vi] = new
+    a = math.radians(t["deg"])
+    px, py = t["pivot"]
+    dx, dy = V[vi, 0] - px, V[vi, 1] - py
+    Vn = V[vi].copy()
+    Vn[:, 0] = px + dx * math.cos(a) - dy * math.sin(a)
+    Vn[:, 1] = py + dx * math.sin(a) + dy * math.cos(a)
+    F = F.copy()
+    F[rot] = remap[F[rot]]
+    print(f"  наклон {t['deg']}°: повёрнуто {int(rot.sum())} граней")
+    return np.vstack([V, Vn]), F, np.vstack([C, C[vi]])
 
 
 def add_hubs(V, F, C, lab, names, wheels):
@@ -318,6 +371,8 @@ if __name__ == "__main__":
             k = lum[fi] / 170.0
             C[F[fi]] = np.clip(tgt * k, 0, 255)
     V, F, C, lab, names = add_hubs(V, F, C, lab, names, wheels)
+    if spec.get("tilt"):
+        V, F, C = tilt_seat(V, F, C, lab, names, spec["tilt"])
     SV = np.zeros((0, 3))
     if spec.get("spokes") and "spokes" in names:          # спицы Tripo -> ровные спицы (добавляются после облегчения)
         keep = lab != names.index("spokes")

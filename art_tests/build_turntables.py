@@ -30,8 +30,11 @@ if FOLK:
 else:
     OUT = os.path.join(ROOT, "assets", "turntable")
 os.makedirs(OUT, exist_ok=True)
+ONLY = next((a.split("=", 1)[1].split(",") for a in sys.argv if a.startswith("--only=")), None)   # --only=chair_f5.png,…
+IDX = os.path.join(OUT, "index_folk.json" if FOLK else "index.json")
 for old in glob.glob(os.path.join(OUT, "*.png")):
-    os.remove(old)
+    if ONLY is None or any(os.path.basename(old).startswith(os.path.splitext(a)[0] + "_") for a in ONLY):
+        os.remove(old)
 REF_H = 600                         # высота окна коляски в пикселях экрана (≈ 400 логических × RS 1.5)
 PAD = 60                            # поля (M3D_PAD × 1.5): модель может выходить за окно (по высоте — на M3D_TALL)
 YAW0, PITCH = game.Game.M3D_YAW, game.Game.M3D_PITCH
@@ -48,7 +51,11 @@ def fit_zoom(mesh):
 
 
 index, total = {}, 0
+if ONLY is not None and os.path.exists(IDX):                # остальные коляски — как были
+    index = json.load(open(IDX, encoding="utf-8"))
 for art in game.AI_MODELS:
+    if ONLY is not None and art not in ONLY:
+        continue
     mesh = game.get_ai_chair3d(art, lod=True)
     if mesh is None:
         continue
@@ -75,6 +82,6 @@ for art in game.AI_MODELS:
                       pivot=[round(float(c), 2) for c in mesh.pivot],
                       centers={p: [[round(float(v), 1) for v in c] for c in cs] for p, cs in mesh.centers.items()})
     print(f"{name}: {N} кадров")
-with open(os.path.join(OUT, "index_folk.json" if FOLK else "index.json"), "w", encoding="utf-8") as f:
+with open(IDX, "w", encoding="utf-8") as f:
     json.dump(index, f, separators=(",", ":"))
 print(f"всего {len(index)} колясок, {total / 1e6:.1f} МБ")

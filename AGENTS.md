@@ -303,6 +303,20 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **новые модели Tripo: Focus CR (Агата) и Permobil F5 (Матильда)** вместо старых
+  (старые — art_tests/tripo/bak_before_v3/). Исходники владельца: Downloads/Scene (5).glb — Focus CR,
+  Scene (6).glb — F5. Конвейер: `tripo_convert.py … height=1025 / 1260` → art_tests/tripo/v3/; у Focus CR сначала
+  срезаны два стержня-артефакта по бокам (ломали центровку по ширине на 10 см) и модель отцентрована; затем
+  `tripo_label.py focuscr|f5 --target 22000 --dir art_tests/tripo/v3` → assets/models/chair_*_ai(_lod).json.
+  В tripo_label: SPECS `focuscr` и `f5`; `drop` умеет `z` со знаком (одна сторона), коробки — пятый элемент
+  "signed"; **`tilt`** (`tilt_seat`): у Focus CR сиденье со спинкой, подлокотниками и подножками откинуто на 20°
+  вокруг (−60, 380) — видно, что кресло с наклоном (колёса, касторы, тормоза и низ рамы на месте; общие вершины
+  копируются). Лишнее убрано: у Focus CR — короб за спинкой, у F5 — второй (левый) пульт и стержни у спинки.
+  Кадры поворота — `build_turntables.py --only=chair_focuscr.png,chair_f5.png` (новый ключ: остальные коляски
+  и их записи в index.json не трогаются). Авторство Tripo дописано в README.md, LICENSE-CONTENT,
+  web_deploy/README.md (Ра → мумия Сенеб). (assets/models/*, assets/turntable/*, art_tests/tripo_label.py,
+  art_tests/build_turntables.py, README.md, LICENSE-CONTENT, web_deploy/README.md)
+
 - 2026-10-22 — Claude (Opus 5.5) — по отзывам: **сообщения сверху дольше** — `flash` держит не меньше
   2,5 с + 0,07 с на знак (≈14 знаков/с; итог хода в задании по-прежнему до нажатия); **проезд после ремонта медленнее**
   — `RIDE_SECS` 2,3 → 4,0 с (боты ждут `RIDE_SECS`, не число); **сценка с ногой Мартина — один раз**, не по кругу
