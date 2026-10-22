@@ -28,6 +28,37 @@ JOBS = {   # ключ: (рендер коляски, портрет, описа�
                "three-spoke hubs, small black casters at the back, a dark graphite power base with small yellow "
                "accents, black footplates",
                "One paw rests on the joystick, the other holds her little honey pot."),
+    "golem": ("portrait_chair_trident/portrait_chair_trident_00_white.png", "client_golem.png",
+              "a Drive Trident HD heavy-duty power wheelchair: big black padded captain's seat with a headrest, black "
+              "padded armrests, a joystick controller on the right armrest, big front drive wheels with silver rims, "
+              "black rear casters, yellow suspension springs, a black frame and a black footplate",
+              "One stone hand rests on the joystick."),
+    "lizard": ("portrait_chair_whillc2/portrait_chair_whillc2_00_white.png", "client_whillc2.png",
+               "a WHILL Model C2 power wheelchair: black seat and backrest, black curved armrests with a round joystick "
+               "controller at the front of the right armrest, big black front omni-wheels with many small rollers, "
+               "black solid rear wheels, a matte black base and a black footplate",
+               "She holds her open map book on her lap, one hand near the joystick."),
+    "leshy": ("portrait_chair_leshy/portrait_chair_leshy_00_white.png", "client_leshy.png",
+              "a Magic Mobility Extreme X8 off-road power wheelchair: four big knobby off-road tyres, a glossy red body "
+              "shell, a black seat with a high contoured backrest and headrest, black armrests with a joystick controller "
+              "on the right one, a long black footplate",
+              "One hand rests on the joystick, the other on the armrest."),
+    "gorynych": ("portrait_chair_gorynych/portrait_chair_gorynych_00_white.png", "client_gorynych.png",
+                 "a Pride Jazzy 614 mid-wheel-drive power wheelchair: a big black padded captain's seat with a headrest, "
+                 "black armrests with a joystick on the right one, two big black drive wheels with cross-shaped hubs in "
+                 "the middle, small black casters front and back, a black base, a black footplate",
+                 "One clawed hand rests on the joystick. He has EXACTLY THREE heads, as in <image2>."),
+    "owl_grandson": ("portrait_chair_focuscr/portrait_chair_focuscr_00_white.png", "client_focuscr_grandson.png",
+                     "a Ki Mobility Focus CR tilt-in-space manual wheelchair, TILTED BACK: the seat and backrest are "
+                     "reclined back together, a headrest, dark navy blue frame, big black rear wheels with black "
+                     "push rims, small black front casters, raised black footplates, push handles at the back",
+                     "The tall grandson owl stands behind the wheelchair holding both push handles, exactly as in "
+                     "<image2>; the grandmother owl sits in the tilted seat holding her spyglass."),
+    "owl": ("portrait_chair_focuscr/portrait_chair_focuscr_01_white.png", "client_focuscr.png",
+            "a Ki Mobility Focus CR tilt-in-space manual wheelchair, TILTED BACK: the seat and backrest are reclined back "
+            "together, a headrest, dark navy blue frame, big black rear wheels with black push rims, small black front "
+            "casters, raised black footplates",
+            "She sits comfortably reclined in the tilted seat, holding her spyglass."),
 }
 
 

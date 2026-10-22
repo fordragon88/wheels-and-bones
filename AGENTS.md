@@ -303,6 +303,14 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **портреты клиентов в новых колясках** (Мора, Зикс, Матильда, Голем, Сайра, Леший,
+  Горыныч, Агата с внуком, Агата в Кабинете посадки): `art_tests/portrait_chair.py <chair> <yaw>` — рендер новой
+  коляски (оригинал Meshy в Blender) в ракурсе портрета; `portrait_reseat.py <ключ> [seeds]` — Qwen 2.1 edit: персонаж
+  из старого портрета + коляска из рендера (JOBS — описания колясок и рук); `portrait_install.py <ключ>=<seed>` —
+  BiRefNet + alpha_repair, высота как у старого, старые — art_tests/retired/. Выбраны: sorceress 22, goblin 33,
+  badger 22, golem 33, lizard 11, leshy 22, gorynych 22, owl_grandson 33, owl 22. Лист «было/стало» —
+  art_tests/portraits_before_after.png. (assets/client_*.png, art_tests/portrait_*.py)
+
 - 2026-10-22 — Claude (Opus 5.5) — **X8 (Леший) — модель Meshy** (`meshy_models/magic_mobility_x8.glb`, ключ `x8`, height=1300):
   кадры с оригинала, корпус оранжевый → красный (`recolor` 28→4; пятнистый — Meshy смешал красное и жёлтое фото,
   владелец решил оставить). Модель фольклорной коляски — art_tests/tripo/models/chair_leshy_ai*.json (в игру — кадры),
