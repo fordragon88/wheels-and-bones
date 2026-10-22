@@ -303,6 +303,11 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **X8 (Леший) — модель Meshy** (`meshy_models/magic_mobility_x8.glb`, ключ `x8`, height=1300):
+  кадры с оригинала, корпус оранжевый → красный (`recolor` 28→4; пятнистый — Meshy смешал красное и жёлтое фото,
+  владелец решил оставить). Модель фольклорной коляски — art_tests/tripo/models/chair_leshy_ai*.json (в игру — кадры),
+  прежняя (Tripo) — art_tests/tripo/bak_before_meshy/chair_leshy_ai_tripo*. Рисунок chair_leshy.png — кадр 0.
+
 - 2026-10-22 — Claude (Opus 5.5) — **Focus CR (Агата) — модель Meshy** (`meshy_models/ki_mobility_focus_cr.glb`, ключ `fcr`,
   height=1025): Meshy сделал кресло уже в наклоне (tilt-in-space) — так и оставлено, искусственный изгиб tilt_model не
   нужен. Модель стояла с наклоном базы 2,8° (касторы над полом) — `tripo_convert.py/glb_xform.py --pitch=2.78` (новая

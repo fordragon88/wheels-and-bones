@@ -13,6 +13,7 @@
 | `pride_jazzy_614.glb` | Pride Jazzy (EVO) 614 | Змей Горыныч (`gorynych_jazzy`), `chair_gorynych.png` | 2026-10-22 |
 | `whill_model_c2.glb` | WHILL Model C2/Ci | «Код ошибки» (`whill_code`), `chair_whillc2.png` | 2026-10-22 |
 | `ki_mobility_focus_cr.glb` | Ki Mobility Focus CR | бабушка Агата (`focuscr_cable`), `chair_focuscr.png`; в игре наклон 20° | 2026-10-22 |
+| `magic_mobility_x8.glb` | Magic Mobility Extreme X8 | Леший (`leshy_x8`), `chair_leshy.png` (корпус перекрашен в красный) | 2026-10-22 |
 
 Как модель попадает в игру:
 1. `art_tests/tripo_convert.py meshy_models/<файл>.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002`

@@ -205,6 +205,16 @@ SPECS = {
                ("tilt_lock", (-300, 60), (250, 420), (140, 240)),
                ("footrest", (380, 720), (480, 640), (0, INF)),
                ("seat", (-280, 300), (470, 680), (0, 230))]),
+    # Леший — Magic Mobility Extreme X8, Meshy (meshy_models/magic_mobility_x8.glb), height=1300; 4×4, пульт справа,
+    # рычаги свободного хода — сзади; корпус в кадрах перекрашен оранжевый -> красный
+    "x8": dict(art="chair_leshy", wheels=[
+        dict(c=(-385, 215), R=215, z=(235, 360), kind="power", hub=None),
+        dict(c=(215, 215), R=215, z=(235, 360), kind="power")],
+        boxes=[("joystick", (160, 400), (760, 910), (150, 360), "signed"),
+               ("freewheel", (-690, -560), (150, 460), (0, 240)),
+               ("motor", (-480, 300), (120, 310), (150, 235)),
+               ("footrest", (380, 700), (150, 260), (0, INF)),
+               ("seat", (-320, 230), (560, 760), (0, 300))]),
     # Змей Горыныч — Pride Jazzy 614 (среднеприводная)
     "raiju": dict(art="chair_gorynych", wheels=[
         dict(c=(20, 160), R=160, z=(215, 310), kind="power"),

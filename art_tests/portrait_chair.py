@@ -18,7 +18,8 @@ sys.path.insert(0, HERE)
 GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]), "chair_edge4.png": dict(key="edge4", recolor=[228, 2, 32]),
        "chair_f5.png": dict(key="f5m", recolor=[175, -1, 30]), "chair_trident.png": dict(key="trident"),
        "chair_pulse6.png": dict(key="pulse6"), "chair_gorynych.png": dict(key="jazzy"),
-       "chair_whillc2.png": dict(key="whill"), "chair_focuscr.png": dict(key="fcr")}
+       "chair_whillc2.png": dict(key="whill"), "chair_focuscr.png": dict(key="fcr"),
+       "chair_leshy.png": dict(key="x8", recolor=[28, 4, 26])}
 if art in GLB:
     xf = json.load(open(os.path.join(HERE, "gen3d", GLB[art]["key"] + "_xform.json"), encoding="utf-8"))
     spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"))
