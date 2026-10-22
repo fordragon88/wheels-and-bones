@@ -1335,11 +1335,13 @@ def draw_leg(surf, center, ang=0.0, scale=1.0):
 
 
 def draw_leg_gag(surf, kind, t, rect):
-    """Сценка с ногой в полосе rect; t — время сценки (петля ~4.6 с)."""
+    """Сценка с ногой в полосе rect; t — время сценки (~4.6 с, один раз — по просьбе игроков, не по кругу)."""
     if calm():
         return
     P = 4.6
-    u = t % P
+    if t < 0 or t >= P:
+        return
+    u = t
     floor = rect.bottom - 30
     cx = rect.centerx
     if kind == "drop":                       # нога отваливается, скачет, уползает
@@ -7669,7 +7671,7 @@ class Game:
         """Сообщение сверху. sticky — итог хода (улика, шаг, ошибка): в задании держится, пока игрок что-нибудь не нажмёт."""
         self.toast = text
         self.toast_color = color
-        self.toast_timer = secs
+        self.toast_timer = max(secs, 2.5 + 0.07 * len(tr(text)))   # успеть прочесть: ~14 знаков в секунду + запас
         self.toast_sticky = sticky
         self.say(text, True)
 
@@ -8507,7 +8509,7 @@ class Game:
             self._set_step_ghost()
             self.react_good()
 
-    RIDE_SECS = 2.3
+    RIDE_SECS = 4.0                       # проезд после ремонта: успеть разглядеть клиента (было 2,3 с — «слишком быстро»)
 
     def start_ride(self):
         self.ride_t0 = self.t - (self.RIDE_SECS if calm() else 0)   # без анимации — проверка сразу, без проезда

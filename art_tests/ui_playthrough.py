@@ -139,7 +139,7 @@ def play_base_job(jid):
     click(g._test_btn_rect().center)
     tick(12)
     shot("ride")
-    tick(80)
+    tick(int(g.RIDE_SECS * 30) + 10)
     assert g.scene == "result", f"{jid}: после тест-драйва не открылся результат ({g.scene})"
     shot("result")
     log.append((jid, g.mistakes))
@@ -175,7 +175,7 @@ def play_tech_job(jid):
         tick(30)
     assert g.phase == "test", f"{jid}: tech не дошло до теста"
     click(g._test_btn_rect().center)
-    tick(100)
+    tick(int(g.RIDE_SECS * 30) + 20)
     assert g.scene in ("result", "exam_result"), g.scene
     shot("tech_result" if g.scene == "result" else "exam_result")
     click(g._result_btn_rect().center)
@@ -249,7 +249,7 @@ try:
         click(rect_of(g._op_rects(), st["id"]).center)
         tick(30)
     click(g._test_btn_rect().center)
-    tick(100)
+    tick(int(g.RIDE_SECS * 30) + 20)
     shot("exam_result")
     click(g._result_btn_rect().center)
     click(g._guild_back_rect().center)

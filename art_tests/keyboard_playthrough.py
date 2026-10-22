@@ -109,7 +109,7 @@ def play_base(jid):
         assert g.step_idx > n0 or g.phase != "repair", f"{jid}: шаг {n0} не выполнен"
     assert g.phase == "test"
     enter_on(lambda it: it["key"][0] == "btn", "прокатить")
-    frame(3.0)
+    frame(game.Game.RIDE_SECS + 0.7)
     assert g.scene == "result", (jid, g.scene)
     enter_on(lambda it: it["key"][0] == "btn", "дальше")
 
@@ -134,7 +134,7 @@ def play_tech(jid):
         assert nxt["id"] in g.done_steps, f"{jid}: {nxt['id']}"
         done.add(nxt["id"])
     enter_on(lambda it: it["key"][0] == "btn", "проверить")
-    frame(3.0)
+    frame(game.Game.RIDE_SECS + 0.7)
     assert g.scene in ("result", "exam_result"), (jid, g.scene)
     key(pygame.K_ESCAPE)
 
