@@ -103,6 +103,7 @@ WEB_RES = {"standard": (1280, 720), "high": (1920, 1080), "ultra": (2560, 1440)}
 WEB_LEVELS = ("standard", "high", "ultra")
 WEB_MIN_W = 768                                # «авто» в браузере: холст не меньше (масштаб рендера 0,6)     # «авто» выбирает по размеру окна игры на экране (и скорости ПК)
 GAME_VERSION = "0.3"
+SUPPORT_URL = "https://www.openassistivetech.org/contribute/"   # пожертвования GOAT (Zeffy — поменять здесь)
 # Замечания игроков (флажок ⚑, «Я не согласен») уходят в Google-таблицу через веб-приложение Apps Script
 # (docs/feedback/Code.gs, настройка — docs/FEEDBACK_SETUP.md). Пустой адрес — только локальный feedback.json.
 FEEDBACK_URL = "https://script.google.com/macros/s/AKfycbyJxHpELYNd1CBpUmPLwIuT_hre-Nm-AJVJ9rCYDOrNLKKd26crV2G6omRPzTY6umtr/exec"
@@ -416,6 +417,23 @@ class LFont:
 FINGER = {"t": -10 ** 9, "id": None, "pos": None}   # последнее касание (палец), логические координаты
 
 
+def _rot_scale(img, anchor, ang_bone, ang_out, s_along, s_across):
+    """Картинку с костью под углом ang_bone (градусы, против часовой): кость горизонтально, вдоль × s_along,
+    поперёк × s_across, затем под угол ang_out. Возврат: (картинка, где теперь точка anchor)."""
+    def turn(im, a_xy, deg):
+        c = (im.get_width() / 2, im.get_height() / 2)
+        out = pygame.transform.rotate(im, deg)
+        t = math.radians(deg)
+        vx, vy = a_xy[0] - c[0], a_xy[1] - c[1]
+        return out, (out.get_width() / 2 + vx * math.cos(t) + vy * math.sin(t),
+                     out.get_height() / 2 - vx * math.sin(t) + vy * math.cos(t))
+    im, a = turn(img, anchor, -ang_bone)
+    w, h = max(1, round(im.get_width() * s_along)), max(1, round(im.get_height() * s_across))
+    a = (a[0] * w / im.get_width(), a[1] * h / im.get_height())
+    im = pygame.transform.smoothscale(im, (w, h))
+    return turn(im, a, ang_out)
+
+
 def m3d_fit_zoom(V, w, h, yaw0, pitch, wide=1.18, tall=1.12):
     """Зум окна коляски (V — вершины numpy относительно pivot): в исходном ракурсе yaw0 модель целиком в окне w×h,
     при любом другом может выйти за окно на wide по ширине и tall по высоте (запас окна это позволяет)."""
@@ -458,6 +476,7 @@ try:
 except Exception:
     _pad_ctl = None
 PAD = {"ctrl": {}, "joy": {}, "dir": None, "src": None, "next": 0.0}
+PAD_BTN_DOWN = getattr(pygame, "CONTROLLERBUTTONDOWN", -1)
 PAD_EVENTS = tuple(getattr(pygame, n) for n in (
     "CONTROLLERBUTTONDOWN", "CONTROLLERBUTTONUP", "CONTROLLERAXISMOTION", "CONTROLLERDEVICEADDED",
     "CONTROLLERDEVICEREMOVED", "JOYBUTTONDOWN", "JOYBUTTONUP", "JOYHATMOTION", "JOYAXISMOTION",
@@ -822,9 +841,27 @@ def font(size, bold=False):
 # ---- Доступность: что нарисовано в кадре — для управления с клавиатуры и чтения вслух ----
 A11Y = dict(on=False, voices=True, rate=0, contrast=False, instant=False, speech_set=False,
             text=2 if IS_WEB else 0, text_set=False,
-            calm=False, calm_set=False, scan=0, font=False)       # scan — одна кнопка: 0 выкл, 1–3 — скорость (SCAN_SPEEDS)                 # calm — без анимации (по умолчанию — как в системе)   # text — размер текста (TEXT_K): в браузере окно мельче —
+            calm=False, calm_set=False, scan=0, font=False,
+            barty=True, quiet=False, quiet_set=False)       # scan — одна кнопка: 0 выкл, 1–3 — скорость (SCAN_SPEEDS)                 # calm — без анимации (по умолчанию — как в системе)   # text — размер текста (TEXT_K): в браузере окно мельче —
                                                          # сразу 125 %; text_set — игрок выбрал размер сам
 TEXT_K = (1.0, 1.12, 1.25)
+# Кабинет посадки, «Рентген»: тело клиента сбоку поверх скелета (по позе, см). bulk — телосложение,
+# top/legs/shoes — одежда, head — голова (радиус, см), extras — приметы. Голову можно заменить картинкой
+# assets/seat_head_<id>.png (профиль, смотрит вправо, по центру — центр головы) — тогда рисуется она.
+SEAT_BODY = {
+    "client_troll.png": dict(bulk=1.35, belly=1.5, head=12.5, top=(132, 96, 62), legs=(86, 84, 104),
+                             shoes=(70, 52, 40), extras=("big_nose", "small_ears", "brow")),
+    "client_elf.png": dict(bulk=0.82, head=9.5, top=(70, 140, 92), legs=(96, 80, 60), shoes=(110, 80, 50),
+                           hair=(236, 206, 120), extras=("elf_ear", "long_hair")),
+    "client_fairy.png": dict(bulk=0.78, head=9.0, top=(240, 168, 200), legs=None, shoes=(230, 150, 190),
+                             hair=(240, 140, 180), extras=("wings", "bob_hair", "flower")),
+    "client_golem.png": dict(bulk=1.45, head=12.0, top=None, legs=None, shoes=None, blocky=True,
+                             extras=("cracks", "glow_eye")),
+    "client_aeroz.png": dict(bulk=0.9, head=9.5, top=(236, 236, 244), legs=(200, 60, 70), shoes=(60, 50, 50),
+                             extras=("fox_ears", "fox_tail", "snout_s")),
+    "client_iris.png": dict(bulk=0.9, head=10.0, top=None, legs=None, shoes=None, belly=1.15,
+                            extras=("snout_d", "horns", "dragon_tail", "belly_scales")),
+}
 SCAN_SPEEDS = (1.0, 1.6, 2.5)          # одна кнопка: секунд на пункт
 SCAN_HOLD = 1.2                        # держать кнопку столько — «назад» (Esc)
 SCAN_SUB = ("Меньше", "Больше", "Готово")   # ползунок в режиме одной кнопки
@@ -954,6 +991,16 @@ def clamp01(x):
 def calm():
     """«Без анимации» (Доступность): появления сразу на месте, ничего не качается, не мерцает и не летит."""
     return A11Y.get("calm", False)
+
+
+def barty_on():
+    """Призрак Барти в мастерской (портрет, пузырь с шутками) — можно убрать в «Доступности»."""
+    return A11Y.get("barty", True)
+
+
+def quiet_talk():
+    """Клиент говорит одну фразу при входе, без болтовни и реакций; по умолчанию — вместе с «Без анимации»."""
+    return A11Y.get("quiet", False) if A11Y.get("quiet_set") else calm()
 
 
 def wsin(x):
@@ -1987,7 +2034,7 @@ def window_to_logical(pos):
     return (int((pos[0] - v.x) * WIDTH / v.w), int((pos[1] - v.y) * HEIGHT / v.h))
 
 
-VOL = {"master": 0.8, "music": 0.55, "sfx": 0.9, "amb": 0.45, "on": True}   # сохраняется в settings.json
+VOL = {"master": 0.8, "music": 0.45, "sfx": 0.9, "amb": 0.45, "on": True}   # сохраняется в settings.json
 MUSIC_DIR = os.path.join(ASSETS_DIR, "music")
 MUSIC = {"cur": None, "next": None, "at": 0.0}       # фоновая музыка: текущая тема и отложенный старт
 
@@ -1996,8 +2043,29 @@ def _amb_level():
     return VOL["master"] * VOL["amb"] if VOL["on"] else 0.0
 
 
+# Музыка не надоедает (отзыв тестировщиков): на титуле, вступлении, вечеринке и в титрах — полностью; в мастерской,
+# заданиях, Гильдии, гараже и Кабинете посадки мелодия звучит первые MUSIC_FULL с сцены, потом за MUSIC_FADE уходит
+# в тихий фон (MUSIC_BED от громкости), где слышна атмосфера сцены; при смене сцены — снова громче.
+MUSIC_FULL, MUSIC_FADE, MUSIC_BED = 45.0, 12.0, 0.18
+MUSIC_LOUD_SCENES = ("title", "intro", "ending", "credits")
+
+
 def _music_level():
-    return VOL["master"] * VOL["music"] if VOL["on"] else 0.0
+    return (VOL["master"] * VOL["music"] * MUSIC.get("duck", 1.0)) if VOL["on"] else 0.0
+
+
+def music_duck(scene, since, dt):
+    """Плавно приглушить мелодию в рабочих сценах (since — секунд с начала сцены)."""
+    want = 1.0 if scene in MUSIC_LOUD_SCENES or since < MUSIC_FULL else         max(MUSIC_BED, 1.0 - (since - MUSIC_FULL) / MUSIC_FADE * (1.0 - MUSIC_BED))
+    cur = MUSIC.get("duck", 1.0)
+    new = min(want, cur + dt / 2.5) if want > cur else want     # вверх — за 2,5 с, вниз — по кривой
+    if abs(new - cur) > 1e-3:
+        MUSIC["duck"] = new
+        try:
+            if pygame.mixer.get_init():
+                pygame.mixer.music.set_volume(_music_level())
+        except Exception:
+            pass
 
 
 def apply_volume():
@@ -3193,7 +3261,7 @@ for _k, _v in {"chair_aeroz": "chair_basic", "chair_cross6": "chair_basic", "cha
                # третья волна (фольклорные клиенты)
                "chair_yaga": "chair_basic", "chair_rusalka": "chair_basic", "chair_ra": "chair_basic",
                "chair_leshy": "chair_power", "chair_gorynych": "chair_power",
-               "client_yaga": "client_sorceress", "client_rusalka": "client_elf", "client_ra": "client_dwarf",
+               "client_yaga": "client_sorceress", "client_rusalka": "client_elf", "client_mummy": "client_dwarf",
                "client_leshy": "client_troll", "client_gorynych": "client_golem"}.items():
     VECTOR_ART.setdefault(_k, VECTOR_ART[_v])
 # точки клика реальных колясок — по их арту (art_tests/hotspots_<модель>.json)
@@ -3225,6 +3293,11 @@ AI_MODELS = {f"chair_{k}.png": f"chair_{k}_ai.json"
                        "aeroz", "cross6", "iris", "focuscr", "whillc2", "f5", "pulse6", "q6edge")}
 
 
+# Кружок детали — в выбранной точке, а не по граням модели: у Edge 4 «батарея» — короб с боковинами у самых
+# колёс, кружок садился на шину и при повороте прыгал с одной стороны на другую; ставим на заднюю стенку короба.
+PART_CENTER_FIX = {"chair_edge4.png": {"battery": [(-200.0, 230.0, 0.0)]}}
+
+
 def get_ai_chair3d(chair_art, lod=False):
     """Детальная модель коляски (assets/models/*.json) или None; lod=True — облегчённая копия."""
     fn = AI_MODELS.get(chair_art)
@@ -3252,6 +3325,7 @@ def get_ai_chair3d(chair_art, lod=False):
             fl = (0 if d.get("cull") else M_DOUBLE) | (M_METAL if is_metal else 0)
             m.face((a, b, c), part if part in PARTS else None, (r, g, bl), fl)
         _finish_mesh(m)
+        m.centers.update(PART_CENTER_FIX.get(chair_art, {}))
         _CHAIR3D_CACHE[key] = m
     return _CHAIR3D_CACHE[key]
 
@@ -3354,6 +3428,7 @@ class Turntable:
         self.z0, self.ref, self.offsets = d["z0"], d["ref"], d["offsets"]
         self.pivot = tuple(d["pivot"])
         self.centers = {p: [tuple(c) for c in cs] for p, cs in d["centers"].items()}
+        self.centers.update(PART_CENTER_FIX.get(art, {}))
         self.frames, self.scaled, self.asked, self.failed, self.tries = {}, {}, False, False, {}
 
     def index(self, yaw):
@@ -5600,9 +5675,10 @@ JOBS += [
                              "Время не поможет: в холоде батареи заряжаются не полностью."),
                         ])),
             # source: F5_UM p34: freewheel — level ground, turn off, levers down; p20: attendant present
-            S("На ровном полу, с помощником, включи свободный ход: рычаги вниз (коляска выключена).",
+            S("На ровном полу, с помощником, включи свободный ход: у F5 — оба рычага вниз (коляска выключена).",
               "hands", "freewheel",
-              "В свободном ходе тормоза отключены — только на ровном и с тем, кто держит коляску."),
+              "В свободном ходе тормоза отключены — только на ровном и с тем, кто держит коляску. У других "
+              "колясок рычаг бывает один, вверх или поворотный — смотри мануал своей модели."),
             S("Откати коляску в сухую тёплую мастерскую, держась сбоку.", "hands", "frame",
               "Коляска весит 189 кг: катим медленно и вдвоём.",
               # source: F5_UM p6: Wheelchair with batteries 189 kg
@@ -5652,7 +5728,7 @@ JOBS += [
 #  безопасности (safety=True у пропущенного предшественника) проваливает задание.
 # ----------------------------------------------------------------------------- #
 # ----------------------------------------------------------------------------- #
-#  Третья волна: фольклорные клиенты (Баба Яга, русалка Ольга, Леший, Ра, Змей Горыныч).
+#  Третья волна: фольклорные клиенты (Баба Яга, русалка Ольга, Леший, мумия Сенеб, Змей Горыныч).
 #  Задания попадают в игру, только когда на месте их картинки и 3D-модели (assets/client_*, chair_*,
 #  models/chair_*_ai.json): см. _folk_ready ниже и art_tests/new_chars_refs/README.md.
 # ----------------------------------------------------------------------------- #
@@ -5901,7 +5977,7 @@ FOLK_JOBS = [
         thanks="Леший: «Ох, спасибо, мастер! Теперь по лесу хожу... то есть езжу, только не в болото.»",
     ),
 
-    # === Ра, Quickie Nitrum + колёса Alber e-motion M25: зарядка обрывается на солнцепёке ===
+    # === Мумия Сенеб (была Ра), Quickie Nitrum + колёса Alber e-motion M25: зарядка обрывается на солнцепёке ===
     # source: power-assist/alber_e-motion_m25_user_manual_en.pdf (англ. часть с p41)
     #   p49  — у e-motion нет своих тормозов: обязательно стояночные тормоза коляски
     #   p53  — при перегреве/возгорании батареи — НЕ вода: песок или огнетушитель класса D
@@ -5912,12 +5988,12 @@ FOLK_JOBS = [
     #   p61  — 5.5: все LED мигают белым, 4 сигнала — температура зарядки вне 0…40 °C, зарядка прервана
     #   p66  — не оставлять колёса под постоянным солнцем
     dict(
-        id="ra_emotion", kind="manual", client="Ра, бог солнца", client_art="client_ra.png",
+        id="ra_emotion", kind="manual", client="Мумия Сенеб", client_art="client_mummy.png",
         chair_art="chair_ra.png",
         chair_model="nitrum_em", chair_name="Quickie Nitrum + колёса с мотором Alber e-motion",
         title="Зарядка обрывается на солнце",
-        symptom="Ра ставит колёса с моторами на зарядку прямо под полуденным солнцем у пирамиды. Через минуту "
-                "огоньки мигают белым, колесо пищит четыре раза — и зарядка обрывается.",
+        symptom="Мумия Сенеб ставит колёса с моторами на зарядку прямо под полуденным солнцем у пирамиды. "
+                "Через минуту огоньки мигают белым, колесо пищит четыре раза — и зарядка обрывается.",
         parts=["motor", "brake", "rear_wheel", "tire", "axle", "caster"],
         inspect={
             "motor": "Ступица колеса горячая. Все пять огоньков мигают белым, колесо пищит четыре раза. "
@@ -5956,7 +6032,7 @@ FOLK_JOBS = [
             # source: p55, p56, p66
             S("Откати коляску в тень, в прохладное место.", "hands", "rear_wheel",
               "Заряжают только при 0…40 °C и не держат колёса на солнце или у источников тепла.",
-              "Барти: «Он же бог солнца — пусть просто посветит потише!»", ghost_wrong=True,
+              "Барти: «Да укутай колёса бинтами Сенеба — вот тебе и тень!»", ghost_wrong=True,
               wrongmsg="Коляску откатывают в тень руками."),
             # source: p56, p49
             S("Зажми стояночные тормоза коляски.", "hands", "brake",
@@ -5970,11 +6046,11 @@ FOLK_JOBS = [
             S("Проверь: огоньки зарядки мигают зелёным, колесо коротко пискнуло.", "eyes", "motor",
               "Зарядка идёт. Полная — до 6 часов, перезарядить нельзя: она остановится сама."),
         ],
-        test="В тени колонн огоньки заряда бегут зелёным. Наутро Ра объезжает пирамиду — колёса легко помогают толкать.",
+        test="В тени колонн огоньки заряда бегут зелёным. Наутро Сенеб объезжает пирамиду — колёса легко помогают толкать.",
         fact="Колёса Alber e-motion заряжают только при 0…40 °C, иначе зарядка прерывается сама: все огоньки мигают "
              "белым, 4 сигнала. Своих тормозов у колёс нет — нужны стояночные тормоза коляски. Если батарея "
              "загорелась — не вода, а песок или огнетушитель класса D.",
-        thanks="Ра: «Даже солнцу нужна тень. Благодарю, смертный мастер!»",
+        thanks="Сенеб: «Три тысячи лет в пирамиде — и только теперь узнал, что технике нужна тень. Спасибо, мастер!»",
     ),
 
     # === Змей Горыныч, Pride Jazzy 614: в горку выбивает главный автомат ===
@@ -7395,20 +7471,20 @@ FOLK_TALK = {
         test=["Леший: «Ну, тропа, держись. Прямо поедем, не кругами.»"],
     ),
     "ra_emotion": dict(
-        intro=["Ра: «Приветствую, смертный мастер. Я — солнце. И мне отказали в зарядке... из-за солнца.»",
-               "Ра: «Огоньки мигают белым, колесо пищит четыре раза. Это неуважение к богу.»"],
-        worry=["Ра: «Мне к закату нужно в барку и плыть по небу. Колёса должны быть готовы.»",
-               "Ра: «Пирамиды строили двадцать лет. Надеюсь, ты быстрее.»",
-               "Ра: «Если я сяду в тень, мир погрузится во тьму? Проверим осторожно.»",
-               "Барти: «Мартин, не смотри ему прямо в диск. Я так однажды... ну, я и так призрак.»"],
-        learn=["Ра: «Колёса e-motion заряжают при 0…40 °C. Даже мне нельзя быть жарче.»",
-               "Ра: «У этих колёс нет своих тормозов. На стоянке — тормоза коляски.»",
-               "Ра: «Если батарея загорится — не вода, а песок. Песка у меня в пустыне много.»"],
-        mistake=["Ра: «Не то, смертный. Но даже боги иногда путают восход с закатом.»",
-                 "Ра: «Хм. Мой анкх подсказывает: попробуй другой инструмент.»"],
-        good=["Ра: «Достойно! Высеку твоё имя на стене храма. Мелким шрифтом.»",
-              "Ра: «Превосходно. Ты светишь почти как я. Почти.»"],
-        test=["Ра: «Солнце садится в коляску. Поехали!»"],
+        intro=["Сенеб: «Не пугайся, мастер. Я мумия, но вполне бодрая. А вот мои колёса — нет.»",
+               "Сенеб: «Огоньки мигают белым, колесо пищит четыре раза. Даже мой саркофаг так не скрипел.»"],
+        worry=["Сенеб: «К закату у меня экскурсия по пирамиде. Колёса должны быть готовы.»",
+               "Сенеб: «Пирамиды строили двадцать лет. Надеюсь, ты быстрее.»",
+               "Сенеб: «Я ждал три тысячи лет — подожду и ещё. Но лучше не надо.»",
+               "Барти: «Мартин, не тяни его за бинтик. Я так однажды распустил целого фараона.»"],
+        learn=["Сенеб: «Колёса e-motion заряжают при 0…40 °C. Мне-то жара нипочём, а им — нет.»",
+               "Сенеб: «У этих колёс нет своих тормозов. На стоянке — тормоза коляски.»",
+               "Сенеб: «Если батарея загорится — не вода, а песок. Песка у меня в пустыне много.»"],
+        mistake=["Сенеб: «Не то, мастер. Но и я однажды перепутал саркофаг с сундуком.»",
+                 "Сенеб: «Хм. Мой амулет подсказывает: попробуй другой инструмент.»"],
+        good=["Сенеб: «Достойно! Высеку твоё имя на стене гробницы. Мелким шрифтом.»",
+              "Сенеб: «Превосходно. У меня от восторга бинты дыбом.»"],
+        test=["Сенеб: «Мумия садится в коляску. Поехали!»"],
     ),
     "gorynych_jazzy": dict(
         intro=["Го: «Привет-привет! Мы Горыныч. Я Го, это Ры, а это Ныч. Он спит.»",
@@ -7586,17 +7662,28 @@ class Game:
             self.load_settings()
 
     # ---------- утилиты ----------
-    def flash(self, text, color=WHITE, secs=3.0):
+    def flash(self, text, color=WHITE, secs=3.0, sticky=False):
+        """Сообщение сверху. sticky — итог хода (улика, шаг, ошибка): в задании держится, пока игрок что-нибудь не нажмёт."""
         self.toast = text
         self.toast_color = color
         self.toast_timer = secs
+        self.toast_sticky = sticky
         self.say(text, True)
+
+    def _toast_input(self, event):
+        """Игрок что-то нажал — итог прошлого хода уходит (новое сообщение, если будет, появится следом)."""
+        if not getattr(self, "toast_sticky", False):
+            return
+        if event.type in (pygame.KEYDOWN, pygame.FINGERDOWN, pygame.JOYBUTTONDOWN, PAD_BTN_DOWN) or (
+                event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 1) in (1, 2, 3)):
+            self.toast_sticky = False
+            self.toast_timer = min(self.toast_timer, 0.3)
 
     def miss(self, msg, secs=4.0):
         """Ошибка игрока: тост + счётчик; на экзамене следит за лимитом."""
         self.mistakes += 1
         snd("bad")
-        self.flash(msg, BAD, secs)
+        self.flash(msg, BAD, secs, sticky=True)
         if not (self.dispute and self.dispute.get("t") == self.t):
             self.note_dispute("mistake", "", "", msg)
         self.react_mistake()
@@ -7625,6 +7712,32 @@ class Game:
 
     def _feedback_rect(self):
         return pygame.Rect(WIDTH - 154, 8, 38, 38)
+
+    BACK_SCENES = ("intro", "hub", "job", "guild", "garage", "seating", "result", "exam_result", "failed", "ending")
+
+    def _top_back_rect(self):
+        """Кнопка «◂ Назад» в левом верхнем углу = Esc (на iPad и телефоне клавиши нет)."""
+        return pygame.Rect(8, 8, 38, 38) if self.scene in self.BACK_SCENES else None
+
+    def press_back(self):
+        snd("tick")
+        self.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, mod=0, unicode=""))
+
+    def _draw_back_btn(self, surf):
+        r = self._top_back_rect()
+        if r is None:
+            return
+        hov = r.collidepoint(mouse_pos())
+        h = _hover_amt(("backbtn",), 1.0 if hov else 0.0)
+        aa_rect(surf, (30, 28, 40, int(170 + 80 * h)), r, border_radius=10)
+        col = tuple(int(a + (b - a) * h) for a, b in zip(GHOST, AMBER))
+        draw_text(surf, "◂", (r.centerx - 1, r.centery), 24, col, center=True, bold=True)
+        if hov:
+            tip = "Назад (Esc)"
+            w = font(13).size(tr(tip))[0] + 16
+            tr_ = pygame.Rect(r.x, r.bottom + 6, w, 24)
+            aa_rect(surf, (18, 16, 24, 240), tr_, border_radius=6)
+            draw_text(surf, tip, tr_.center, 13, WHITE, center=True)
 
     def open_feedback(self):
         """Флажок ⚑ на верхней панели: замечание о любой неточности, со снимком экрана."""
@@ -8093,6 +8206,8 @@ class Game:
             return
         self.client_next = self.t + random.uniform(*self.CLIENT_IDLE)
         self._last_talk_t = self.t
+        if not barty_on() and line.startswith(("Барти", "Бартоломью")):
+            return
         mentor = line.startswith(("Барти", "Бартоломью", "Бренна"))
         if self.cur.get("track") == "tech" or mentor:   # наставник (и клиент в Гильдии) — в пузыре наставника
             self.ghost_quip, self.ghost_quip_until = line, self.t + 7.0
@@ -8109,7 +8224,7 @@ class Game:
 
     def barty_quip(self, kind, chance=1.0, secs=6.5):
         """Короткая шутка Барти поверх подсказки; потом подсказка шага возвращается."""
-        if self.exam_mode or random.random() > chance:
+        if self.exam_mode or not barty_on() or quiet_talk() or random.random() > chance:
             return
         line = self._pick_line(("b", kind), BARTY_TALK.get(kind, []))
         if line:
@@ -8117,7 +8232,7 @@ class Game:
             self._last_talk_t = self.t
 
     def react_mistake(self):
-        if not self.cur or self.exam_mode:
+        if not self.cur or self.exam_mode or quiet_talk():
             return
         self.client_queue = []
         # реакция — не сразу: сначала игрок читает, что не так (сообщение сверху)
@@ -8127,7 +8242,7 @@ class Game:
             self._talk_later = (self.t + 1.2, "client", "mistake")
 
     def react_good(self):
-        if not self.cur or self.exam_mode:
+        if not self.cur or self.exam_mode or quiet_talk():
             return
         r = random.random()                       # реже и с паузой: сверху и так «Шаг выполнен» и новая подсказка
         if r < 0.3:
@@ -8142,6 +8257,12 @@ class Game:
         if self.phase not in ("diagnose", "repair", "test") or self.mini_pending or self.v3d is not None                 or self.dispute_ui is not None or getattr(self, "show_manual", False):
             return
         quiet = self.t - getattr(self, "_last_talk_t", -99.0) < self.TALK_GAP or self.toast_timer > 0
+        if quiet_talk():                          # одна фраза при входе — и всё: ни болтовни, ни реакций
+            self._talk_later = None
+            if self.client_queue and self.t >= self.client_next and not quiet and not self.exam_mode:
+                self._show_client(self.client_queue[0])
+                self.client_queue = []
+            return
         later = getattr(self, "_talk_later", None)
         if later and self.t >= later[0]:          # отложенная реакция на ход игрока
             if quiet:                             # не перебиваем реплику и сообщение сверху; устарела — молчим
@@ -8192,7 +8313,7 @@ class Game:
             self.inspected.add(part_id)
         snd("inspect")
         clue = self.cur["inspect"].get(part_id, "Тут вроде всё в порядке.")
-        self.flash(clue, CYAN, 4)
+        self.flash(clue, CYAN, 4, sticky=True)
 
     def choose_diagnosis(self, idx):
         if len(self.inspected) < INSPECT_REQ:
@@ -8312,11 +8433,67 @@ class Game:
                     snd("ping")
         draw_tool_action(surf, a["tool"], a["pos"], u, a["ok"], zap=a.get("zap", False))
 
+    # ---------- шаги ремонта: посмотреть прошлый / пропустить текущий ----------
+    def _step_prev_rect(self):
+        return pygame.Rect(836, 58, 40, 30)
+
+    def _step_skip_rect(self):
+        return pygame.Rect(882, 58, 88, 30)
+
+    def step_back(self):
+        """«◂»: напомнить прошлый шаг (что сделали и зачем) — ремонт назад не откатывается."""
+        snd("tick")
+        if self.step_idx <= 0:
+            self.flash("Это первый шаг.", GHOST, 2.5)
+            return
+        prev = self.cur["steps"][self.step_idx - 1]
+        tool, part = TOOLS[prev["tool"]][0], PARTS.get(prev["part"], prev["part"])
+        self.flash(f"{tr('Прошлый шаг')}: {tr(prev['instr'])} ({tr(tool)} → {tr(part)})"
+                   + (f" ✔ {tr(prev['note'])}" if prev.get("note") else ""), CYAN, 7, sticky=True)
+
+    def step_skip(self):
+        """«Шаг ▸»: пропустить текущий шаг — игра показывает правильный инструмент и деталь и делает шаг сама.
+        Пропуск = две ошибки (минус звезда): три звезды пропусками не получить."""
+        if self.phase != "repair":
+            return
+        if self.cur.get("track") == "tech":
+            self._tech_skip()
+            return
+        step = self.cur["steps"][self.step_idx]
+        self.mini_pending = None
+        self.mistakes += 2
+        tool, part = TOOLS[step["tool"]][0], PARTS.get(step["part"], step["part"])
+        self.complete_base_step(step)
+        self.flash(f"{tr('Шаг пропущен — правильно')}: {tr(tool)} → {tr(part)}."
+                   + (f" {tr(step['note'])}" if step.get("note") else ""), AMBER, 6, sticky=True)
+
+    def _tech_skip_rect(self):
+        return pygame.Rect(WIDTH - 384, 60, 170, 26)
+
+    def _tech_skip(self):
+        """Гильдия: пропустить одну операцию — ту, что можно делать сейчас (порядок и безопасность соблюдены).
+        На экзамене пропускать нельзя."""
+        if self.exam_mode:
+            self.flash("На экзамене шаги не пропускаются.", AMBER, 3)
+            return
+        step = next((st for st in self.cur["steps"] if st["id"] not in self.done_steps
+                     and all(a in self.done_steps for a in st["after"])), None)
+        if step is None:
+            return
+        self.mini_pending = None
+        self.mistakes += 2
+        tool, part = TOOLS[step["tool"]][0], PARTS.get(step["part"], step["part"])
+        ans = next((o[0] for o in step["spec"]["options"] if o[1]), "") if step.get("spec") else ""
+        self.complete_tech_step(step)
+        self.flash(f"{tr('Шаг пропущен — правильно')}: {tr(step['instr'])} ({tr(tool)})."
+                   + (f" {tr(ans)}." if ans else "") + (f" {tr(step['note'])}" if step.get("note") else ""),
+                   AMBER, 7, sticky=True)
+
     def complete_base_step(self, step):
         self._start_action(step["tool"], True, part=step["part"])
         self.last_note = step.get("note", "")
         snd("ok")
-        self.flash("Шаг выполнен. " + (self.last_note or ""), GOOD, 4)
+        self.flash("Шаг выполнен. " + (self.last_note or ""), GOOD, 4, sticky=True)
         self.step_idx += 1
         self.sel_tool = None
         if self.step_idx >= len(self.cur["steps"]):
@@ -8364,7 +8541,7 @@ class Game:
             self.garage[old] = (self.cur["id"], stars)
         self.cur_stars = stars
         if random.random() < 0.5:                  # то нога отвалится, то Мартин сам себя похвалит/подколет
-            self.result_gag = random.choice(LEG_GAGS)
+            self.result_gag = random.choice([g_ for g_ in LEG_GAGS if barty_on() or not g_.startswith("Бартоломью")])
         else:
             self.result_gag = random.choice(MARTIN_TALK["good" if self.mistakes == 0 else "mistake"])
         self.save_progress()
@@ -8412,7 +8589,7 @@ class Game:
         self.sel_tool = None
         self.spec_pending = None
         snd("ok")
-        self.flash("Шаг выполнен. " + (step.get("note") or ""), GOOD, 4)
+        self.flash("Шаг выполнен. " + (step.get("note") or ""), GOOD, 4, sticky=True)
         if step.get("ghost") and not self.exam_mode:
             self.ghost_line = step["ghost"]
         if len(self.done_steps) >= len(self.cur["steps"]):
@@ -8490,6 +8667,17 @@ class Game:
             snd_pitch(m["value"] / cfg["mx"])
             zone = cfg["lo"] <= m["value"] <= cfg["hi"]
             self.say(f"{m['value']} {tr(cfg['unit'])}" + (", " + tr("зелёная зона") if zone else ""), True)
+
+    def mini_release(self):
+        """Перекачал — стравить немного через ниппель (без ошибки; ошибка — только если сдать с перекачкой)."""
+        m = self.mini_pending
+        if m["value"] <= 0:
+            return
+        m["value"] = max(0, m["value"] - random.randint(3, 6))
+        snd("hiss")
+        cfg = m["cfg"]
+        zone = cfg["lo"] <= m["value"] <= cfg["hi"]
+        self.say(f"{m['value']} {tr(cfg['unit'])}" + (", " + tr("зелёная зона") if zone else ""), True)
 
     def mini_pump_done(self):
         m = self.mini_pending
@@ -8598,8 +8786,12 @@ class Game:
             add("Меню", tr("Продолжить игру" if self.done else "Начать игру"), act=lambda: self.click_title((0, 0)),
                 key="start")
             add("Меню", tr("Титры"), self._credits_btn_rect(), act=self.open_credits, key="credits")
+            add("Меню", tr("Поддержать GOAT (откроется сайт)"), self._support_btn_rect(), act=self.open_support,
+                key="support")
         elif self.scene == "credits":
             add("Меню", tr("Назад"), self._credits_back_rect(), act=self.close_credits, key="cback")
+            add("Меню", tr("Поддержать GOAT (откроется сайт)"), self._support_btn_rect(), act=self.open_support,
+                key="support")
         elif self.scene == "intro":
             add("Меню", tr("Далее"), act=self._a11y_intro_next, key="next")
         elif self.scene == "hub":
@@ -8617,6 +8809,8 @@ class Game:
         elif self.scene == "ending":
             add("Меню", tr("Посмотреть гараж"), act=lambda: self.click_ending((0, 0)), key="garage")
             add("Меню", tr("Титры"), self._credits_btn_rect(), act=self.open_credits, key="credits")
+            add("Меню", tr("Поддержать GOAT (откроется сайт)"), self._support_btn_rect(), act=self.open_support,
+                key="support")
         elif self.scene == "seating" and self.seatc:
             sc = self.seatc
             if sc["tab"] == "fit" and not sc["solved"]:
@@ -8721,6 +8915,12 @@ class Game:
             if not tech:
                 for pid, r in self._part_rects():
                     add("Детали", tr(PARTS[pid]), r, act=lambda pid=pid: self._a11y_apply(pid=pid), key=("part", pid))
+                add("Шаги", tr("Напомнить прошлый шаг"), self._step_prev_rect(), act=self.step_back, key="stepprev")
+                add("Шаги", tr("Пропустить шаг (минус звезда)"), self._step_skip_rect(), act=self.step_skip,
+                    key="stepskip")
+            elif not self.exam_mode:
+                add("Шаги", tr("Пропустить шаг (минус звезда)"), self._tech_skip_rect(), act=self.step_skip,
+                    key="stepskip")
 
     def _a11y_apply(self, pid=None, sid=None):
         if self.sel_tool is None:
@@ -8885,6 +9085,7 @@ class Game:
                     seat_tab=sc.get("tab"), focus=str(self.kb["key"]) if self.kb["key"] is not None else None,
                     res=list(DISPLAY.get("res") or ()), rs=round(RS, 3), touch=TOUCH["on"], lang=LANG["code"],
                     missing=sorted(ASSET_MISS)[:30], done=len(self.done), version=GAME_VERSION,
+                    last_click=str(getattr(self, "_last_click", None)),
                     tt_frames=sum(len(t.frames) + len(t.scaled) for t in _TT_CACHE.values() if isinstance(t, Turntable)))
 
     # ---------- геймпад ----------
@@ -9130,7 +9331,7 @@ class Game:
             if m["kind"] == "pump":
                 out += f" {tr('Сейчас')}: {m['value']} {tr(cfg['unit'])}. " + tr(
                     "Нужно попасть в зелёную зону") + f": {cfg['lo']}–{cfg['hi']} {tr(cfg['unit'])}. " + tr(
-                    "Enter на «Качать» — подкачать, потом «Готово».")
+                    "Enter на «Качать» — подкачать, «Стравить» — выпустить лишнее, потом «Готово».")
             elif m["kind"] == "gap":
                 out += f" {tr('Допуск')}: {cfg['lo']}–{cfg['hi']} {tr(cfg['unit'])}. " + tr(
                     "Стрелки влево-вправо — значение, потом «Проверить».")
@@ -9262,6 +9463,9 @@ class Game:
         draw_text(surf, "Esc или F1 — закрыть", (p.x + 28, p.bottom - 44), 15, GREY)
 
     def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            self._last_click = (tuple(int(v) for v in event.pos), self.scene, round(self.st, 2))
+        self._toast_input(event)
         if event.type in PAD_EVENTS:
             for act, down in pad_actions(event) or ():
                 self.pad_action(act, down)
@@ -9307,6 +9511,10 @@ class Game:
                 and self.scene in ("title", "hub", "guild", "garage") and not IS_WEB
                 and self._lang_rect().collidepoint(event.pos)):
             self.toggle_lang()
+            return
+        if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self._top_back_rect() is not None
+                and self._tap(self._top_back_rect(), event.pos)):
+            self.press_back()
             return
         if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
                 and self._tap(self._speaker_rect(), event.pos)):
@@ -9363,10 +9571,32 @@ class Game:
 
     def _credits_btn_rect(self):
         if self.scene == "title":
-            return pygame.Rect(WIDTH // 2 - 80, 520, 160, 40)
+            return pygame.Rect(WIDTH // 2 - 215, 520, 200, 40)
         if self.scene == "ending":
-            return pygame.Rect(WIDTH // 2 - 80, 560, 160, 40)
+            return pygame.Rect(WIDTH // 2 - 215, 560, 200, 40)
         return None
+
+    def _support_btn_rect(self):
+        """«Поддержать GOAT» — рядом с «Титрами» и в самих титрах."""
+        if self.scene in ("title", "ending"):
+            r = self._credits_btn_rect()
+            return pygame.Rect(r.right + 30, r.y, 200, 40)
+        if self.scene == "credits":
+            return pygame.Rect(30, HEIGHT - 70, 230, 46)
+        return None
+
+    def open_support(self):
+        """Страница пожертвований GOAT — в новой вкладке (браузер) или в браузере компьютера."""
+        snd("tick")
+        if IS_WEB:
+            web_js(f"window.open({json.dumps(SUPPORT_URL)}, '_blank', 'noopener')")
+        elif not self.headless:
+            try:
+                import webbrowser
+                webbrowser.open(SUPPORT_URL)
+            except Exception:
+                pass
+        self.flash("Спасибо! Страница GOAT открывается в браузере.", GOOD, 3)
 
     def _credits_back_rect(self):
         return pygame.Rect(WIDTH - 200, HEIGHT - 70, 170, 46)
@@ -9395,6 +9625,8 @@ class Game:
     def click_credits(self, m):
         if self._credits_back_rect().collidepoint(m):
             self.close_credits()
+        elif self._support_btn_rect().collidepoint(m):
+            self.open_support()
 
     def close_credits(self):
         self.scene = getattr(self, "credits_from", "title") or "title"
@@ -9444,6 +9676,7 @@ class Game:
         surf.blit(shade, (0, 0))
         self._wave_title(surf, "ТИТРЫ", (WIDTH // 2, 70), 44, AMBER, self.st)
         Button(self._credits_back_rect(), "НАЗАД", GOOD).draw(surf, mouse_pos())
+        Button(self._support_btn_rect(), "ПОДДЕРЖАТЬ GOAT ♥", AMBER).draw(surf, mouse_pos())
         draw_text(surf, "протяни пальцем — листать" if TOUCH["on"] else "колесо мыши / ↑ ↓ — листать · Esc — назад",
                   (WIDTH // 2, HEIGHT - 47), 15, GREY, center=True)
 
@@ -9451,6 +9684,10 @@ class Game:
         cb = self._credits_btn_rect()
         if cb is not None and cb.collidepoint(m) and self.st > 1.6:
             self.open_credits()
+            return
+        sb = self._support_btn_rect()
+        if sb is not None and sb.collidepoint(m) and self.st > 1.6:
+            self.open_support()
             return
         self.scene = "hub" if (self.done or self.tutorial_skipped) else "intro"
         if self.scene == "intro":                  # после сброса прогресса вступление — снова с первого слайда
@@ -9512,6 +9749,13 @@ class Game:
         if self.mini_pending:
             self._click_mini(m)
             return
+        if self.phase == "repair":
+            if self._step_prev_rect().collidepoint(m):
+                self.step_back()
+                return
+            if self._step_skip_rect().collidepoint(m):
+                self.step_skip()
+                return
         if self.phase == "diagnose":
             for pid, rect in self._part_rects():
                 if rect.collidepoint(m):
@@ -9555,6 +9799,9 @@ class Game:
         cb = self._credits_btn_rect()
         if cb is not None and cb.collidepoint(m):
             self.open_credits()
+            return
+        if self._support_btn_rect().collidepoint(m):
+            self.open_support()
             return
         self.scene, self.garage_open = "garage", None
 
@@ -9613,6 +9860,9 @@ class Game:
         if self.phase == "repair":
             if self._manual_btn_rect().collidepoint(m):
                 self.open_manual()
+                return
+            if not self.exam_mode and self._tech_skip_rect().collidepoint(m):
+                self.step_skip()
                 return
             for tid, rect in self._tool_rects():
                 if rect.collidepoint(m):
@@ -9674,7 +9924,8 @@ class Game:
             self.credits_y = min(self.credits_y + 26 * dt, self._credits_max())   # медленно вверх
         if not self.headless:
             music_update(self.music_theme(), self.t)
-        if self.toast_timer > 0:
+            music_duck(self.scene, self.t - getattr(self, "scene_t0", 0.0), dt)
+        if self.toast_timer > 0 and not (getattr(self, "toast_sticky", False) and self.scene == "job"):
             self.toast_timer -= dt
         self.talk_tick()
         if self.esc_timer > 0:
@@ -9741,6 +9992,7 @@ class Game:
             self._draw_dispute_btn(surf, mouse_pos())
         if self.scene not in ("title", "intro", "ending"):
             self._draw_feedback_flag(surf)
+        self._draw_back_btn(surf)
         sk = self._skip_tut_rect()                      # «Пропустить обучение» — последним: с клавиатуры не первым пунктом
         if sk is not None and self.dispute_ui is None and not self.show_sound:
             Button(sk, "ПРОПУСТИТЬ ОБУЧЕНИЕ ▸", CYAN).draw(surf, mouse_pos())
@@ -9882,11 +10134,15 @@ class Game:
         draw_wrapped(surf, "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и "
                            "доступность останутся.", (p.x + 32, p.y + 356), p.w - 64, 13, GREY)
 
-    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "calm", "text", "font", "scan")
+    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "calm", "quiet", "barty", "text", "font", "scan")
 
     def _access_rects(self):
         p = self._sound_panel_rect()
-        return [(k, pygame.Rect(p.x + 330, p.y + 106 + i * 31, 216, 28)) for i, k in enumerate(self.ACCESS_ROWS)]
+        return [(k, pygame.Rect(p.x + 330, p.y + 102 + i * 27, 216, 24)) for i, k in enumerate(self.ACCESS_ROWS)]
+
+    @staticmethod
+    def _access_val(k):
+        return quiet_talk() if k == "quiet" else (barty_on() if k == "barty" else A11Y.get(k))
 
     @staticmethod
     def _scan_text():
@@ -9897,7 +10153,7 @@ class Game:
         return (v.replace(".", ",") if LANG["code"] == "ru" else v) + " " + tr("с")
 
     def _access_label(self, k):
-        on = tr("включено") if A11Y.get(k) else tr("выключено")
+        on = tr("включено") if self._access_val(k) else tr("выключено")
         if k == "on":
             return f"{tr('Озвучка')}: {tr('включена') if A11Y['on'] else tr('выключена')}. F2"
         if k == "voices":
@@ -9910,6 +10166,10 @@ class Game:
             return f"{tr('Размер текста')}: {self._text_pct()}%"
         if k == "calm":
             return f"{tr('Без анимации')}: {on}"
+        if k == "quiet":
+            return f"{tr('Клиент говорит только одну фразу при входе')}: {on}"
+        if k == "barty":
+            return f"{tr('Призрак Барти и его шутки в мастерской')}: {on}"
         if k == "font":
             return (f"{tr('Шрифт для лёгкого чтения (Atkinson Hyperlegible)')}: {on}"
                     + ("" if LANG["code"] == "en" else ". " + tr("Только для английского языка")))
@@ -9945,8 +10205,15 @@ class Game:
             DISPLAY["frame"] = None                   # шрифты и подписи — заново в новом размере
             _update_rs()
             self.say(self._access_label(k), True)
+        elif k == "quiet":
+            A11Y["quiet"], A11Y["quiet_set"] = not quiet_talk(), True
+            if A11Y["quiet"]:
+                self.client_queue = self.client_queue[:1]
+            self.say(self._access_label(k), True)
         else:
             A11Y[k] = not A11Y[k]
+            if k == "barty" and not A11Y[k]:
+                self.ghost_quip = ""
             if k == "calm":
                 A11Y["calm_set"] = True               # свой выбор — системная настройка его не перебьёт
             self.say(self._access_label(k), True)
@@ -10096,9 +10363,10 @@ class Game:
     def _draw_access_tab(self, surf, p, mouse):
         names = {"on": "Озвучка (F2)", "voices": "Реплики героев вслух", "rate": "Скорость голоса",
                  "contrast": "Контрастный фон", "instant": "Текст сразу", "calm": "Без анимации",
+                 "quiet": "Клиент: одна фраза", "barty": "Призрак Барти",
                  "text": "Размер текста", "scan": "Одна кнопка", "font": "Лёгкий шрифт"}
         for k, r in self._access_rects():
-            draw_text(surf, names[k], (p.x + 32, r.centery - font(17).get_height() // 2), 17, WHITE)
+            draw_text(surf, names[k], (p.x + 32, r.centery - font(16).get_height() // 2), 16, WHITE)
             if k == "rate":
                 label = str(A11Y["rate"])
             elif k == "text":
@@ -10106,13 +10374,14 @@ class Game:
             elif k == "scan":
                 label = self._scan_text()
             else:
-                label = "ВКЛ" if A11Y[k] else "ВЫКЛ"
-            Button(r, label, GOOD if (k in ("rate", "text") or A11Y[k]) else GREY).draw(
-                surf, mouse, active=bool(A11Y.get(k)))
-        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, p.y + 392), 13, GREY)
+                label = "ВКЛ" if self._access_val(k) else "ВЫКЛ"
+            on = k in ("rate", "text") or bool(self._access_val(k))
+            Button(r, label, GOOD if on else GREY).draw(surf, mouse, active=on and k not in ("rate", "text"))
+        y0 = self._access_rects()[-1][1].bottom + 6
+        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, y0), 13, GREY)
         draw_wrapped(surf, "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
                            "Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад.",
-                     (p.x + 32, p.y + 409), self._sound_close_rect().x - p.x - 48, 13, GREY)
+                     (p.x + 32, y0 + 17), self._sound_close_rect().x - p.x - 48, 13, GREY)
 
     def _draw_sound_panel(self, surf):
         _cap_modal()
@@ -10136,6 +10405,7 @@ class Game:
             self._draw_game_tab(surf, p, mouse)
         elif tab == "sound":
             draw_text(surf, "M — быстро выключить / включить звук", (p.x + 32, p.y + 374), 13, GREY)
+            draw_text(surf, "За работой мелодия через минуту стихает до фона", (p.x + 32, p.y + 392), 13, GREY)
             names = {"master": "Общая громкость", "music": "Музыка", "sfx": "Эффекты", "amb": "Атмосфера сцен"}
             for key, track in self._vol_slider_rects():
                 muted = not VOL["on"]
@@ -10226,7 +10496,7 @@ class Game:
             draw_text(surf, ln, (rect.centerx, y), 16, self.toast_color, center=True)
             y += lh
 
-    def _topbar(self, surf, title):
+    def _topbar(self, surf, title, sub=None):
         DR.rect(surf, (16, 14, 22), (0, 0, WIDTH, 54))
         DR.line(surf, AMBER, (0, 54), (WIDTH, 54), 1)
         right = WIDTH - 170
@@ -10238,7 +10508,12 @@ class Game:
         else:
             draw_text(surf, "КОЛЁСА И КОСТИ", (right, 16), 18, GHOST, bold=True, right=True)
             right -= font(18, True).size(tr("КОЛЁСА И КОСТИ"))[0] + 16
-        fit_text(surf, title, (24, 15), right - 24, 22, AMBER, bold=True)
+        x0 = 56 if self._top_back_rect() else 24                     # место под «◂ Назад»
+        if sub:                                                  # вторая строка — какая коляска (модель)
+            fit_text(surf, title, (x0, 5), right - x0, 20, AMBER, bold=True)
+            fit_text(surf, sub, (x0, 31), right - x0, 14, GHOST)
+        else:
+            fit_text(surf, title, (x0, 15), right - x0, 22, AMBER, bold=True)
 
     # ----- титул -----
     def _wave_title(self, surf, text, center, size, color, st, delay=0.0, max_w=None):
@@ -10287,6 +10562,7 @@ class Game:
                       alpha=150 + 105 * pulse)
         if st > 1.6:
             Button(self._credits_btn_rect(), "ТИТРЫ", GHOST).draw(surf, mouse_pos())
+            Button(self._support_btn_rect(), "ПОДДЕРЖАТЬ GOAT ♥", AMBER).draw(surf, mouse_pos())
         if TOUCH["on"]:                                     # телефон/планшет: клавиш нет
             draw_text(surf, "прогресс сохраняется автоматически", (WIDTH // 2, HEIGHT - 36), 15, GREY, center=True)
         else:
@@ -10435,8 +10711,9 @@ class Game:
             for k in range(pages):
                 aa_circle(surf, AMBER if k == page else DIM, (cx + (k - (pages - 1) / 2) * 22, 657), 6)
         # призрак-наставник в углу
-        blit_idle(surf, load_image("ghost.png", (150, 200), CYAN), (WIDTH - 220, 120), self.t,
-                  "float", k=ease_back((self.st - 0.3) / 0.5))
+        if barty_on():
+            blit_idle(surf, load_image("ghost.png", (150, 200), CYAN), (WIDTH - 220, 120), self.t,
+                      "float", k=ease_back((self.st - 0.3) / 0.5))
         seat_ok = self.tutorial_ok()
         Button(self._hub_seat_rect(), "КАБИНЕТ ПОСАДКИ", GOOD,
                sub=((f"примерки {len(self.seat_done)}/{len(SEAT_CASES)}" + (" · зачёт ✔" if self.seat_quiz_ok else ""))
@@ -10916,6 +11193,220 @@ class Game:
         for i, (tx, ty, col_t, is_act) in enumerate(targets):
             self._draw_necro_thread(surf, (staff_x, staff_y), (tx, ty), col=col_t, active=is_act, phase=i * 1.3)
 
+    _SEAT_RIGS = None
+    SEAT_BODY_ON = False                # тела клиентов в «Рентгене» (в работе: кукла из рисунков) — пока выкл
+    SEAT_XRAY = False                   # тело — голубоватый «рентгеновский» силуэт вместо цветного рисунка
+    SEAT_SLIM = 0.65                    # тело клиента поперёк костей и голова — на 35 % меньше рисунка
+
+    def _draw_seat_puppet(self, surf, case, T, J):
+        """Тело клиента — «вырезная кукла» из рисунка сбоку (art_tests/seat_bodies.py): каждая часть
+        поворачивается и масштабируется по своей кости скелета. False — у клиента нет такого рисунка."""
+        if Game._SEAT_RIGS is None:
+            try:
+                with open(os.path.join(ASSETS_DIR, "seat_bodies.json"), encoding="utf-8") as f:
+                    Game._SEAT_RIGS = json.load(f)
+            except Exception:
+                Game._SEAT_RIGS = {}
+        rig = Game._SEAT_RIGS.get(case["id"])
+        if not rig:
+            return False
+        J = dict(J, neck=(J["sh"][0] + (J["head"][0] - J["sh"][0]) * 0.35,
+                          J["sh"][1] + (J["head"][1] - J["sh"][1]) * 0.35))
+        rs = _rs(surf)
+        parts = sorted(rig["parts"].values(), key=lambda q: q["order"])
+        imgs, ratios = [], []
+        for q in parts:
+            key = ("seatpart", q["file"])
+            img = _img_cache.get(key)
+            if img is None:
+                path = asset_path(q["file"])
+                if not path:
+                    return False
+                img = _img_cache[key] = pygame.image.load(path).convert_alpha()
+            ta, tb = T(*J[q["a"]]), T(*J[q["b"]])
+            ls = math.hypot(q["pb"][0] - q["pa"][0], q["pb"][1] - q["pa"][1]) or 1.0
+            lt = math.hypot(tb[0] - ta[0], tb[1] - ta[1]) * rs
+            imgs.append((q, img, ta, tb))
+            ratios.append(lt / ls)
+        tsc = next((r for (q, *_), r in zip(imgs, ratios) if q["a"] == "hip" and q["b"] == "sh"), None)
+        layer = pygame.Surface(surf.get_size(), pygame.SRCALPHA) if self.SEAT_XRAY else None
+        self._seat_head_img = None
+        trot = None                                         # поворот торса: голова за ним, кивает на треть
+        for (q, img, ta, tb), sc in zip(imgs, ratios):     # масштаб части — по её кости: суставы совпадают
+            if q["a"] == "neck" and tsc:
+                sc = tsc                                    # голова — в размер торса (мультяшная, крупнее черепа)
+            ang_s = math.atan2(-(q["pb"][1] - q["pa"][1]), q["pb"][0] - q["pa"][0])
+            ang_t = math.atan2(-(tb[1] - ta[1]), tb[0] - ta[0])
+            rot = math.degrees(ang_t - ang_s)
+            if q["a"] == "hip" and q["b"] == "sh":
+                trot = rot
+            elif q["a"] == "neck" and trot is not None:
+                rot = trot + (rot - trot) * 0.35
+            # вдоль кости — точно по суставам, поперёк (толщина) и голова — уже: SEAT_SLIM
+            along = sc * (self.SEAT_SLIM if q["a"] == "neck" else 1.0)
+            out, (ax_, ay_) = _rot_scale(img, q["pa"], math.degrees(ang_s), rot + math.degrees(ang_s),
+                                         along, sc * self.SEAT_SLIM)
+            pos = (round(ta[0] * rs - ax_), round(ta[1] * rs - ay_))
+            if layer is not None:
+                pygame.Surface.blit(layer, out, pos)
+                continue
+            pygame.Surface.blit(surf, out, pos)
+            if q["a"] == "neck":
+                self._seat_head_img = (out, pos)            # лицо — ещё раз поверх черепа, полупрозрачно
+        if layer is not None:                               # рентген: силуэт одним цветом + свечение по краю
+            g_ = layer.copy()
+            g_.fill((150, 220, 255, 0), special_flags=pygame.BLEND_RGBA_MAX)
+            g_.fill((150, 220, 255, 255), special_flags=pygame.BLEND_RGB_MIN)
+            sm = pygame.transform.smoothscale(g_, (max(1, g_.get_width() // 6), max(1, g_.get_height() // 6)))
+            glow = pygame.transform.smoothscale(sm, g_.get_size())
+            glow.fill((255, 255, 255, 120), special_flags=pygame.BLEND_RGBA_MULT)
+            pygame.Surface.blit(surf, glow, (0, 0))
+            body = layer.copy()
+            body.fill((95, 170, 220, 255), special_flags=pygame.BLEND_RGB_MULT)   # тонировать — детали видны слабо
+            body.fill((90, 160, 210, 0), special_flags=pygame.BLEND_RGBA_ADD)
+            body.fill((255, 255, 255, 110), special_flags=pygame.BLEND_RGBA_MULT)
+            pygame.Surface.blit(surf, body, (0, 0))
+            self._seat_head_img = None
+        return True
+
+    def _draw_seat_flesh(self, surf, rect, case, T, k, J):
+        """«Рентген»: тело клиента сбоку по суставам скелета J (см) — полупрозрачное, кости видны внутри.
+        Одежда, телосложение и приметы — SEAT_BODY по рисунку клиента."""
+        st = SEAT_BODY.get(case.get("client_art"), {})
+        skin = tuple(case.get("skin", (200, 190, 170)))
+        bulk = st.get("bulk", 1.0)
+        lay = Surf(rect.size, pygame.SRCALPHA)
+        ox, oy = rect.x, rect.y
+
+        def P(c):                                           # см -> пиксели слоя
+            q = T(*c)
+            return (q[0] - ox, q[1] - oy)
+
+        def add(a, b2):
+            return (a[0] + b2[0], a[1] + b2[1])
+
+        def fwd(a, b2, d):                                  # точка на d см «вперёд» от отрезка a→b (к коленям)
+            dx, dy = b2[0] - a[0], b2[1] - a[1]
+            ln = math.hypot(dx, dy) or 1.0
+            return (dy / ln * d, -dx / ln * d)
+
+        shapes = []                                         # (цвет, функция рисования(слой, расширение px))
+
+        def capsule(a, b2, r0, r1, col):
+            def draw(sf, grow):
+                pa, pb = P(a), P(b2)
+                ra, rb = max(2, r0 * k + grow), max(2, r1 * k + grow)
+                dx, dy = pb[0] - pa[0], pb[1] - pa[1]
+                ln = math.hypot(dx, dy) or 1.0
+                nx, ny = -dy / ln, dx / ln
+                DR.polygon(sf, col, [(pa[0] + nx * ra, pa[1] + ny * ra), (pb[0] + nx * rb, pb[1] + ny * rb),
+                                     (pb[0] - nx * rb, pb[1] - ny * rb), (pa[0] - nx * ra, pa[1] - ny * ra)])
+                aa_circle(sf, col, pa, int(ra))
+                aa_circle(sf, col, pb, int(rb))
+            shapes.append((col, draw))
+
+        def poly(pts_cm, col):
+            def draw(sf, grow):
+                pts = [P(c) for c in pts_cm]
+                DR.polygon(sf, col, pts)
+                if grow:
+                    DR.lines(sf, col, True, pts, max(1, int(grow * 2)))
+            shapes.append((col, draw))
+
+        def disc(c, r, col):
+            shapes.append((col, lambda sf, grow: aa_circle(sf, col, P(c), int(max(2, r * k + grow)))))
+
+        ex = st.get("extras", ())
+        top = st.get("top") or skin
+        legs = st.get("legs") or skin
+        shoes = st.get("shoes") or _shade(skin, 0.8)
+        hip, knee, ankle, toe = J["hip"], J["knee"], J["ankle"], J["toe"]
+        mid, sh, head = J["mid"], J["sh"], J["head"]
+        elbow = (sh[0] + 5.0, sh[1] - 24.0)
+        hand = (elbow[0] + 21.0, elbow[1] + 1.5)
+        hr = st.get("head", 10.5)
+        # что сзади: хвост, крылья (рисуются первыми — под телом)
+        if "fox_tail" in ex:
+            capsule(hip, add(hip, (-16, 10)), 5, 9, skin)
+            capsule(add(hip, (-16, 10)), add(hip, (-24, 26)), 9, 6, skin)
+            disc(add(hip, (-24, 28)), 6, (246, 242, 236))
+        if "dragon_tail" in ex:
+            capsule(hip, add(hip, (-18, -2)), 6, 4, skin)
+            capsule(add(hip, (-18, -2)), add(hip, (-32, -10)), 4, 1.5, skin)
+        if "wings" in ex:
+            for d, h2 in ((-3, 30), (-9, 22)):
+                poly([add(sh, (-2, -4)), add(sh, (d - 14, h2)), add(sh, (d - 22, h2 - 14)),
+                      add(sh, (-6, -14))], (206, 226, 255))
+        # ноги: бедро, голень, стопа
+        th_r = 7.0 * bulk
+        capsule(hip, knee, th_r, 5.4 * bulk, legs)
+        capsule(knee, ankle, 4.6 * bulk, 3.3 * bulk, legs if st.get("legs") else skin)
+        capsule(ankle, toe, 3.0 * bulk, 2.4 * bulk, shoes)
+        # торс: таз и живот, грудь — смещены вперёд от позвоночника
+        belly = st.get("belly", 1.0)
+        c1 = add(hip, fwd(hip, mid, 5.0 * bulk))
+        c2 = add(mid, fwd(hip, mid, 6.5 * bulk * belly))
+        c3 = add(sh, fwd(mid, sh, 4.5 * bulk))
+        if st.get("blocky"):
+            f1, f2 = fwd(hip, sh, 11 * bulk), fwd(hip, sh, -3)
+            poly([add(hip, f2), add(hip, f1), add(sh, (f1[0] * 0.9, f1[1] * 0.9)), add(sh, f2)], skin)
+        else:
+            capsule(c1, c2, 9.0 * bulk, 9.5 * bulk * belly, top)
+            capsule(c2, c3, 9.5 * bulk * belly, 8.5 * bulk, top)
+        if "belly_scales" in ex:
+            capsule(add(c2, fwd(hip, mid, 5 * bulk)), add(c3, fwd(mid, sh, 4 * bulk)), 3.5, 3, (244, 196, 130))
+        # шея и голова
+        capsule(sh, head, 3.6 * bulk, 3.2 * bulk, skin)
+        if "long_hair" in ex:
+            capsule(add(head, (-4, 6)), add(sh, (-6, -6)), 6, 4, st.get("hair", skin))
+        if "bob_hair" in ex:
+            disc(add(head, (-2.5, 2.5)), hr * 1.05, st.get("hair", skin))
+        img = load_image(f"seat_head_{case['id']}.png", (int(hr * 2.6 * k), int(hr * 2.6 * k)), skin) \
+            if asset_exists(f"seat_head_{case['id']}.png") else None
+        if img is None:
+            if st.get("blocky"):
+                poly([add(head, (-hr, -hr)), add(head, (hr, -hr)), add(head, (hr, hr)), add(head, (-hr, hr))], skin)
+            else:
+                disc(head, hr, skin)
+            if "big_nose" in ex:
+                disc(add(head, (hr * 0.95, -1.5)), hr * 0.32, _shade(skin, 0.92))
+            if "snout_s" in ex:
+                capsule(add(head, (hr * 0.4, -2)), add(head, (hr * 1.35, -3.5)), 4.2, 2.0, skin)
+            if "snout_d" in ex:
+                capsule(add(head, (hr * 0.3, -2.5)), add(head, (hr * 1.45, -3)), 5.5, 3.2, skin)
+            if "fox_ears" in ex:
+                for d in (-3.5, 2.0):
+                    poly([add(head, (d - 3, hr * 0.7)), add(head, (d + 1, hr * 1.7)), add(head, (d + 3.5, hr * 0.6))], skin)
+            if "horns" in ex:
+                for d in (-5, -1):
+                    poly([add(head, (d - 1.5, hr * 0.75)), add(head, (d - 6, hr * 1.5)), add(head, (d + 1.5, hr * 0.8))],
+                         (236, 214, 160))
+            if "elf_ear" in ex:
+                poly([add(head, (-3.5, 1)), add(head, (-hr * 1.25, hr * 0.95)), add(head, (-1.5, 4))], skin)
+            if "small_ears" in ex:
+                disc(add(head, (-3, 2)), hr * 0.3, _shade(skin, 0.9))
+        # рука (ближняя): плечо, предплечье, кисть
+        sleeve = top if (st.get("top") and not st.get("blocky")) else skin
+        capsule(sh, elbow, 3.8 * bulk, 3.2 * bulk, sleeve)
+        capsule(elbow, hand, 3.0 * bulk, 2.6 * bulk, skin)
+        disc(add(hand, (3, 0)), 2.8 * bulk, skin)
+        # контур (тёмный, шире), затем заливка — внутренние стыки не видны
+        out = _shade(skin, 0.45)
+        for col, draw in shapes:
+            draw(lay, 1.6)
+        lay.fill((*out, 255), special_flags=pygame.BLEND_RGBA_MIN)        # контур — одним цветом
+        for col, draw in shapes:
+            draw(lay, 0)
+        lay.set_alpha(150)                                  # полупрозрачное: кости видны внутри
+        surf.blit(lay, rect.topleft)
+        if img is not None:
+            hc = T(*head)
+            im = img.copy()
+            im.set_alpha(190)
+            surf.blit(im, (hc[0] - im.get_width() / 2, hc[1] - im.get_height() / 2))
+        if "glow_eye" in ex:
+            add_glow(surf, T(*add(head, (hr * 0.45, 1))), int(6 * k), (120, 220, 255), 0.8)
+
     # ---------- примерка: вид спереди (перекос таза) и вид сверху (поворот таза) ----------
     def _seat_grid(self, surf, rect):
         for gx in range(rect.x + 20, rect.right - 10, 36):
@@ -11305,20 +11796,10 @@ class Game:
         a3 = a2 - pt * 2.0
         head = (sh[0] - math.sin(a3) * 12.5 + 3.0, sh[1] + math.cos(a3) * 12.5)
 
-        if show_body:
-            skin = case.get("skin", (200, 190, 170))
-            ghost_s = Surf(rect.size, pygame.SRCALPHA)
-            ox_s, oy_s = rect.x, rect.y
-            def TS(px, py):
-                q = T(px, py)
-                return (q[0] - ox_s, q[1] - oy_s)
-            wd_b = max(6, int(11.5 * k))
-            DR.line(ghost_s, (*skin, 55), TS(*hip), TS(*knee), wd_b)
-            DR.line(ghost_s, (*skin, 55), TS(*knee), TS(*ankle), max(5, int(8.5 * k)))
-            DR.line(ghost_s, (*skin, 60), TS(*hip), TS(*mid), int(wd_b * 1.35))
-            DR.line(ghost_s, (*skin, 60), TS(*mid), TS(*sh), int(wd_b * 1.35))
-            aa_circle(ghost_s, (*skin, 55), TS(*head), int(10.5 * k))
-            surf.blit(ghost_s, rect.topleft)
+        if show_body and self.SEAT_BODY_ON:
+            J_ = dict(hip=hip, knee=knee, ankle=ankle, toe=toe, mid=mid, sh=sh, head=head)
+            if not self._draw_seat_puppet(surf, case, T, J_):
+                self._draw_seat_flesh(surf, rect, case, T, k, J_)
 
         sacrum_base = (hip[0] - 5.5 * math.cos(pt) - 2.0, hip[1] - 4.0 * math.sin(pt) - 3.5)
         spine_pts = []
@@ -11425,6 +11906,12 @@ class Game:
         self._draw_bone_seg(surf, T(*elbow), T(*hand), max(2.2, 2.4 * k), max(1.8, 2.0 * k), BONE, BONE_OUT)
         aa_circle(surf, BONE, (int(T(*hand)[0] + 3 * k), int(T(*hand)[1])), max(2, int(2.4 * k)))
         aa_circle(surf, BONE_OUT, (int(T(*hand)[0] + 3 * k), int(T(*hand)[1])), max(2, int(2.4 * k)), 1)
+        hi = getattr(self, "_seat_head_img", None) if show_body else None
+        if hi:                                              # лицо клиента поверх черепа — череп просвечивает
+            im_ = hi[0].copy()
+            im_.set_alpha(170)
+            pygame.Surface.blit(surf, im_, hi[1])
+            self._seat_head_img = None
 
         if case["kind"] != "power":
             R = 30 if seat_h > 45 else 26
@@ -11758,7 +12245,8 @@ class Game:
                 vname = {"front": "ВИД: СПЕРЕДИ  ⇄", "top": "ВИД: СВЕРХУ  ⇄", "side": "ВИД: СБОКУ  ⇄"}[view]
                 Button(tbtn, vname, CYAN).draw(surf, mouse, active=view != "side")
             else:
-                Button(tbtn, "РЕНТГЕН: ВКЛ" if xray else "РЕНТГЕН: СКЕЛЕТ",
+                Button(tbtn, ("ТЕЛО: ВИДНО" if xray else "ТЕЛО: СКРЫТО") if self.SEAT_BODY_ON else
+                       ("РЕНТГЕН: ВКЛ" if xray else "РЕНТГЕН: СКЕЛЕТ"),
                        PURPLE if xray else CYAN).draw(surf, mouse, active=xray)
             for i, r in self._seat_list_rects():
                 done = SEAT_CASES[i]["id"] in self.seat_done
@@ -11912,10 +12400,21 @@ class Game:
         return out
 
     def _hotspot_at(self, m):
+        """Деталь под курсором/пальцем: ближайший кружок; зона попадания шире кружка (на сенсоре — заметно)."""
+        pad = 16 if TOUCH["on"] else 4
+        best, bd = None, None
         for pid, x, y, r in self._chair_hotspots():
-            if (m[0] - x) ** 2 + (m[1] - y) ** 2 <= r * r:
-                return pid
-        return None
+            d = math.hypot(m[0] - x, m[1] - y)
+            if d <= r + pad and (bd is None or d - r < bd):
+                best, bd = pid, d - r
+        return best
+
+    def _part_num(self, pid):
+        """Номер детали: один и тот же в кружке на коляске и в списке справа."""
+        try:
+            return self.cur["parts"].index(pid) + 1
+        except (ValueError, KeyError, TypeError):
+            return 0
 
     # ---------- 3D прямо в окне диагностики (вместо картинки) ----------
     M3D_YAW, M3D_PITCH = -0.75, 0.26          # спереди-слева в три четверти — как нарисован арт колясок
@@ -12572,7 +13071,7 @@ class Game:
                 surf.blit(disc, (x - r - 1, y - r - 1))
         for i, (pid, x, y, r) in enumerate(self._chair_hotspots()):
             done = self.phase == "diagnose" and pid in self.inspected
-            if self.phase == "diagnose" and not done and not calm():   # неосмотренное зовёт пульсом
+            if self.phase == "diagnose" and not done and not calm() and DISPLAY["glow"]:   # зовёт пульсом
                 ph = (self.t * 0.8 + i * 0.17) % 1.0
                 rr = int(r + 10 * ease_out(ph))
                 ring = Surf((rr * 2 + 4, rr * 2 + 4), pygame.SRCALPHA)
@@ -12580,6 +13079,11 @@ class Game:
                 surf.blit(ring, (x - rr - 2, y - rr - 2))
             aa_circle(surf, (14, 12, 20), (x, y), r + 2, 5)          # тёмная подложка: кольцо видно и на белом арте
             aa_circle(surf, GOOD if done else AMBER, (x, y), r, 2)
+            n = self._part_num(pid)
+            if n:                                                    # номер — как в списке деталей справа
+                aa_circle(surf, (14, 12, 20, 200), (x, y), max(6, r - 3))
+                draw_text(surf, str(n), (x, y), 13 if r >= 12 else 11, GOOD if done else AMBER, bold=True,
+                          center=True)
             if (mouse[0] - x) ** 2 + (mouse[1] - y) ** 2 <= r * r:
                 hover = (pid, x, y, r)
         if hover:
@@ -12604,7 +13108,7 @@ class Game:
             return
         self._bg(surf, "bg_workshop.png", WOOD)
         job = self.cur
-        self._topbar(surf, job["title"])
+        self._topbar(surf, job["title"], job.get("chair_name"))
         mouse = mouse_pos()
 
         # клиент слева
@@ -12654,14 +13158,11 @@ class Game:
             n = len(job["steps"])
             hdr = draw_text(surf, f"РЕМОНТ — шаг {self.step_idx + 1}/{n}", (360, 70), 20, AMBER, bold=True)
             # прогресс-точки — в строке заголовка (раньше лежали под заметкой и пересекались с ней)
-            self._draw_step_dots(surf, n, (hdr.right + 22, hdr.centery))
+            self._draw_step_dots(surf, n, (hdr.right + 22, hdr.centery), right=self._step_prev_rect().x - 18)
+            Button(self._step_prev_rect(), "◂", CYAN).draw(surf, mouse, enabled=self.step_idx > 0)
+            Button(self._step_skip_rect(), "ШАГ ▸", AMBER).draw(surf, mouse)
             step = job["steps"][self.step_idx]
-            y = draw_wrapped(surf, step["instr"], (360, 100), 560, 19, WHITE)
-            if self.last_note:                         # итог прошлого шага — сколько влезет до коляски (y=222)
-                lh = font(14).get_height() + 2
-                room = (222 - (y + 4)) // lh
-                if room >= 1:
-                    draw_wrapped(surf, "✔ " + self.last_note, (360, y + 4), 560, 14, GOOD, max_lines=min(2, room))
+            draw_wrapped(surf, step["instr"], (360, 100), 560, 19, WHITE)   # итог прошлого шага — сверху и в «◂»
             self._draw_parts(surf, mouse, "ДЕТАЛЬ")
             self._draw_tools(surf, mouse)
         elif self.phase == "test":
@@ -12712,10 +13213,10 @@ class Game:
         DR.polygon(surf, (44, 36, 28), [(70, 289), (63, r.y + 4), (89, r.y + 4)])
         surf.blit(box, r)
 
-    def _draw_step_dots(self, surf, n, at=(360, 205)):
+    def _draw_step_dots(self, surf, n, at=(360, 205), right=960):
         x, y = at
-        if x + (n - 1) * 22 > 960:                    # длинное задание — точки плотнее, в пределах центра
-            step = max(12, (960 - x) // max(1, n - 1))
+        if x + (n - 1) * 22 > right:                  # длинное задание — точки плотнее, в пределах центра
+            step = max(12, (right - x) // max(1, n - 1))
         else:
             step = 22
         r = 7 if step >= 22 else max(4, step // 3)
@@ -12735,7 +13236,11 @@ class Game:
             rect = rect.move(int(160 * (1 - appear(self.st, 0.05 * i, 0.35))), 0)
             aa_rect(surf, PANEL2 if hov else PANEL, rect, border_radius=6)
             aa_rect(surf, AMBER if hov else DIM, rect, 2, border_radius=6)
-            fit_text(surf, PARTS[pid], (rect.x + 12, rect.centery - font(16).get_height() // 2), rect.w - 34, 16, WHITE)
+            nc = (rect.x + 17, rect.centery)                         # номер детали — как в кружке на коляске
+            aa_circle(surf, (14, 12, 20), nc, 11)
+            aa_circle(surf, GOOD if (self.phase == "diagnose" and pid in self.inspected) else AMBER, nc, 11, 2)
+            draw_text(surf, str(i + 1), nc, 13, WHITE, bold=True, center=True)
+            fit_text(surf, PARTS[pid], (rect.x + 34, rect.centery - font(16).get_height() // 2), rect.w - 56, 16, WHITE)
             if self.phase == "diagnose" and pid in self.inspected:
                 draw_text(surf, "✔", (rect.right - 10, rect.centery - 9), 15, GOOD, right=True)
 
@@ -12824,7 +13329,7 @@ class Game:
 
     def _draw_ghost_bubble(self, surf, y=300, col=None):
         line = self.ghost_text()
-        if not line:
+        if not line or (not barty_on() and self._speaker_img(line) == "ghost.png"):
             return
         if line != getattr(self, "_ghost_seen", None):
             self._ghost_seen = line
@@ -12875,7 +13380,7 @@ class Game:
     def draw_job_tech(self, surf):
         self._bg(surf, "bg_guild.png", CYAN)
         job = self.cur
-        self._topbar(surf, ("ЭКЗАМЕН: " if self.exam_mode else "Гильдия: ") + job["title"])
+        self._topbar(surf, ("ЭКЗАМЕН: " if self.exam_mode else "Гильдия: ") + job["title"], job.get("chair_name"))
         mouse = mouse_pos()
         blit_idle(surf, load_image(job["client_art"], (150, 190), GHOST), (24, 70), self.t)
         draw_wrapped(surf, job["client"], (24, 266), 168, 15, WHITE, max_lines=2)   # не заходит под карточки шагов
@@ -12886,6 +13391,8 @@ class Game:
             draw_text(surf, head, (200, 62), 17, CYAN, bold=True)
             draw_wrapped(surf, job["symptom"], (200, 88), 850, 14, WHITE)
             Button(self._manual_btn_rect(), "МАНУАЛ", PURPLE).draw(surf, mouse)
+            if not self.exam_mode:
+                Button(self._tech_skip_rect(), "ПРОПУСТИТЬ ▸", AMBER).draw(surf, mouse)
             for sid, rect in self._op_rects():
                 st = self.step_by_id(sid)
                 done = sid in self.done_steps
@@ -13044,8 +13551,12 @@ class Game:
 
     def _mini_pump_rects(self):
         p = self._mini_panel_rect()
-        return (pygame.Rect(p.x + 80, p.bottom - 130, 250, 56),
-                pygame.Rect(p.right - 330, p.bottom - 130, 250, 56))
+        return (pygame.Rect(p.x + 40, p.bottom - 130, 200, 56),
+                pygame.Rect(p.right - 280, p.bottom - 130, 240, 56))
+
+    def _mini_release_rect(self):
+        p = self._mini_panel_rect()
+        return pygame.Rect(p.x + 256, p.bottom - 130, 168, 56)
 
     def _mini_gap_track(self):
         p = self._mini_panel_rect()
@@ -13081,6 +13592,8 @@ class Game:
             b_pump, b_done = self._mini_pump_rects()
             if b_pump.collidepoint(m):
                 self.mini_pump()
+            elif self._mini_release_rect().collidepoint(m):
+                self.mini_release()
             elif b_done.collidepoint(m):
                 self.mini_pump_done()
         elif k == "gap":
@@ -13144,6 +13657,7 @@ class Game:
                   WHITE, bold=True, center=True)
         b_pump, b_done = self._mini_pump_rects()
         Button(b_pump, "КАЧАТЬ", AMBER).draw(surf, mouse)
+        Button(self._mini_release_rect(), "СТРАВИТЬ", CYAN).draw(surf, mouse, enabled=m["value"] > 0)
         Button(b_done, "ГОТОВО, ПРОВЕРЯЮ", GOOD).draw(surf, mouse)
 
     def _draw_mini_gap(self, surf, mouse, p, m, cfg):
@@ -13358,8 +13872,9 @@ class Game:
         cimg = load_image(job["client_art"], (210, 250), GHOST)
         hop = int(18 * abs(wsin(st * 6)) * max(0.0, 1 - st / 1.6))
         blit_idle(surf, cimg, (24, 300 - hop), self.t)
-        blit_idle(surf, load_image("ghost.png", (150, 200), CYAN), (WIDTH - 200, 290), self.t, "float",
-                  k=ease_back((st - 0.5) / 0.5))
+        if barty_on():
+            blit_idle(surf, load_image("ghost.png", (150, 200), CYAN), (WIDTH - 200, 290), self.t, "float",
+                      k=ease_back((st - 0.5) / 0.5))
         gk = ease_back(st / 0.5)
         if gk > 0.01:
             img = TF.rotozoom(font(44, True).render(tr("ГОТОВО!"), True, GOOD), 0, gk)
@@ -13544,6 +14059,7 @@ class Game:
                   (WIDTH // 2, 510), 20, AMBER, center=True,
                   alpha=150 + 105 * (0.5 + 0.5 * wsin(self.t * 3.2)))
         Button(self._credits_btn_rect(), "ТИТРЫ", GHOST).draw(surf, mouse_pos())
+        Button(self._support_btn_rect(), "ПОДДЕРЖАТЬ GOAT ♥", AMBER).draw(surf, mouse_pos())
 
 
 # ----------------------------------------------------------------------------- #
@@ -13840,6 +14356,76 @@ def run_selftest():
             _solve_mini(g)
     assert pump_checked and g.phase == "test"
 
+    # кнопки шагов: «◂» напоминает прошлый шаг, «Шаг ▸» пропускает (минус звезда), Гильдия — тоже, экзамен — нет
+    g = Game(headless=True)
+    g.start_job("flat")
+    for pid in g.cur["parts"][:INSPECT_REQ]:
+        g.inspect_part(pid)
+    g.choose_diagnosis(next(i for i, d_ in enumerate(g.cur["diagnosis"]) if d_["correct"]))
+    g.step_back()
+    assert g.step_idx == 0
+    while g.phase == "repair":
+        g.click_job(g._step_skip_rect().center)
+    assert g.phase == "test" and g.mistakes == 2 * len(g.cur["steps"]), "пропуск шага = 2 ошибки"
+    g = Game(headless=True)
+    g.start_job(TECH_JOBS[0]["id"])
+    n = 0
+    while g.phase == "repair" and n < 40:
+        g.click_job_tech(g._tech_skip_rect().center)
+        n += 1
+    assert g.phase == "test" and g.mistakes == 2 * len(g.cur["steps"]), "Гильдия: пропуск по порядку"
+    g = Game(headless=True)
+    g.start_exam()
+    g.step_skip()
+    assert not g.done_steps and g.mistakes == 0, "на экзамене пропуск запрещён"
+
+    # итог хода держится до следующего нажатия; «тихий» клиент — одна фраза; Барти можно убрать; насос стравливает
+    saved = {k: A11Y[k] for k in ("barty", "quiet", "quiet_set", "calm")}
+    try:
+        g = Game(headless=True)
+        g.start_job("flat")
+        g.inspect_part(g.cur["parts"][0])
+        for _ in range(300):
+            g.update(1 / 30)
+        assert g.toast_timer > 0, "улика не должна исчезать сама"
+        g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_LSHIFT, mod=0, unicode=""))
+        for _ in range(30):
+            g.update(1 / 30)
+        assert g.toast_timer <= 0, "после нажатия улика уходит"
+        A11Y.update(quiet=True, quiet_set=True, barty=False)
+        g = Game(headless=True)
+        g.start_job("caster")
+        said = set()
+        for _ in range(30 * 120):
+            g.update(1 / 30)
+            if g.client_line:
+                said.add(g.client_line)
+        assert len(said) == 1, f"тихий режим: одна фраза клиента, а было {len(said)}"
+        g.barty_quip("idle")
+        assert not g.ghost_quip, "Барти выключен — без шуток"
+        A11Y.update(quiet=False, quiet_set=False, calm=True)
+        assert quiet_talk(), "без анимации — клиент по умолчанию тоже тихий"
+        g = Game(headless=True)
+        g.start_job("flat")
+        for pid in g.cur["parts"][:INSPECT_REQ]:
+            g.inspect_part(pid)
+        g.choose_diagnosis(next(i for i, d_ in enumerate(g.cur["diagnosis"]) if d_["correct"]))
+        while g.phase == "repair" and not (g.mini_pending and g.mini_pending["kind"] == "pump"):
+            st = g.cur["steps"][g.step_idx]
+            if g.do_action(st["tool"], st["part"]) == "mini":
+                if g.mini_pending["kind"] == "pump":
+                    break
+                _solve_mini(g)
+        if g.mini_pending:
+            cfg = g.mini_pending["cfg"]
+            g.mini_pending["value"] = cfg["hi"] + 5
+            before = g.mistakes
+            while g.mini_pending["value"] > cfg["hi"]:
+                g.mini_release()
+            assert g.mistakes == before and g.mini_pending["value"] >= cfg["lo"] - 6, "стравить — без ошибки"
+    finally:
+        A11Y.update(saved)
+
     # каждое tech-задание проходится в валидном порядке (включая toe с мини-игрой)
     for job in TECH_JOBS:
         g = Game(headless=True)
@@ -13916,6 +14502,16 @@ def run_selftest():
             DISPLAY.pop(_k, None)
         else:
             DISPLAY[_k] = _v
+    # музыка: в рабочих сценах через MUSIC_FULL стихает до фона, на титуле и при смене сцены — снова громче
+    MUSIC["duck"] = 1.0
+    for _ in range(80):
+        music_duck("job", MUSIC_FULL + 30, 0.5)
+    assert abs(MUSIC["duck"] - MUSIC_BED) < 1e-6, f"музыка за работой — фон: {MUSIC['duck']}"
+    for _ in range(10):
+        music_duck("title", 100, 0.5)
+    assert MUSIC["duck"] == 1.0, "на титуле — мелодия полностью"
+    music_duck("job", 5, 0.5)
+    assert MUSIC["duck"] == 1.0, "новая сцена — мелодия полностью"
     # геймпад: Start — настройки, B — закрыть; стик держат — стрелка повторяется; простой джойстик — тоже
     E_ = pygame.event.Event
     g.scene = "hub"; g.show_sound = False; g.draw(pygame.display.get_surface())

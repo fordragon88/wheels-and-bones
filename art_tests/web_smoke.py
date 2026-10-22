@@ -13,7 +13,7 @@ from playwright.async_api import async_playwright
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 SHOTS = os.path.join(ROOT, "art_tests", "web_shots")
-URL = "http://localhost:8000/"
+URL = os.environ.get("WNB_URL", "http://localhost:8000/")      # WNB_URL — проверить выложенный сайт (с --no-build)
 APK = os.path.join(ROOT, "web_build", "wheels_and_bones", "build", "web", "wheels_and_bones.apk")
 ASSETS = set(os.listdir(os.path.join(ROOT, "assets")))
 fails, notes = [], []
@@ -33,6 +33,7 @@ def serve():
     for _ in range(600):
         try:
             if os.path.getmtime(APK) > t0 and urllib.request.urlopen(URL, timeout=2).status == 200:
+                time.sleep(8)                         # пакет мог ещё дописываться — первый сценарий получал пустую страницу
                 return proc
         except Exception:
             pass
@@ -53,7 +54,7 @@ class Page:
             self.errors.append(t[:300])
 
     async def state(self):
-        s = await self.pg.evaluate("window.wnbState || ''")
+        s = await asyncio.wait_for(self.pg.evaluate("window.wnbState || ''"), 15)   # страница зависла — FAIL, не вечное ожидание
         return json.loads(s) if s else {}
 
     async def wait(self, pred, what, timeout=20):
@@ -88,7 +89,10 @@ class Page:
         await self.pg.wait_for_timeout(wait)
 
     async def shot(self, tag):
-        await self.pg.screenshot(path=os.path.join(SHOTS, f"{self.name}_{tag}.png"))
+        try:                                          # снимок в headless иногда виснет — не роняем весь прогон
+            await self.pg.screenshot(path=os.path.join(SHOTS, f"{self.name}_{tag}.png"), timeout=20000)
+        except Exception as e:
+            print(f"  ..   {self.name}: снимок {tag} не снят ({type(e).__name__})", flush=True)
 
     async def boot(self, touch=False):
         await self.pg.route("**/script.google.com/**", lambda r: r.abort())
@@ -129,7 +133,7 @@ async def desktop(b, name, w, h, dpr):
     await p.boot()
     await p.check_canvas()
     await p.shot("1_title")
-    await p.click(640, 540)                                      # «ТИТРЫ»
+    await p.click(525, 540)                                      # «ТИТРЫ» (рядом — «Поддержать GOAT»)
     await p.wait(lambda s: s["scene"] == "credits", "титры открылись")
     await p.pg.wait_for_timeout(1200)
     await p.shot("2_credits")
@@ -259,7 +263,7 @@ async def main():
             print(f"— {fn.__name__} {args[0] if args else ''}", flush=True)
             b = await pw.chromium.launch(args=["--autoplay-policy=no-user-gesture-required"])   # свой браузер на
             try:                                                                                # сценарий
-                await fn(b, *args)
+                await asyncio.wait_for(fn(b, *args), 480)
             except Exception as e:
                 check(False, f"{fn.__name__} {args[:1]}: {e!r}"[:300])
             finally:
