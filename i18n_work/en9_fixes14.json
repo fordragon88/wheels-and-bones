@@ -108,5 +108,6 @@
  "Мельче нельзя.": "Can't zoom out further.",
  "ЛКМ — вращать · колесо или +/− — зум · клик по детали — осмотр · Esc — закрыть": "drag — rotate · scroll or +/− — zoom · click a part — inspect · Esc — close",
  "Спасибо! Страница пожертвований GOAT (PayPal) открывается в браузере.": "Thank you! GOAT's donation page (PayPal) is opening in your browser.",
- "Поддержать GOAT (откроется PayPal)": "Support GOAT (opens PayPal)"
+ "Поддержать GOAT (откроется PayPal)": "Support GOAT (opens PayPal)",
+ "загрузка…": "loading…"
 }

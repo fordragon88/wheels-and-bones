@@ -3435,6 +3435,7 @@ class Turntable:
         self.z0, self.ref, self.offsets = d["z0"], d["ref"], d["offsets"]
         self.pivot = tuple(d["pivot"])
         self.fmt = d.get("fmt", "png")
+        self.art_matched = d.get("art_matched", False)     # рисунок коляски = кадр исходного ракурса (art_from_turntable)
         self.centers = {p: [tuple(c) for c in cs] for p, cs in d["centers"].items()}
         self.centers.update(PART_CENTER_FIX.get(art, {}))
         self.frames, self.scaled, self.asked, self.failed, self.tries = {}, {}, False, False, {}
@@ -12488,8 +12489,21 @@ class Game:
         mesh = None if (_np is None or TT_FORCE) else get_ai_chair3d(art, lod=True)
         if mesh is None:                                  # браузер или коляска без модели: кадры поворота
             tt = get_turntable(art)
-            return tt if tt is not None and tt.update() else None
+            if tt is None:
+                return None
+            done = tt.update()                            # показываем с первого пришедшего кадра — не ждём все 36
+            if not (done or (tt.frames and not tt.failed)):
+                if not tt.art_matched:                    # (и если кадры не скачались — рисунок с кружками модели)
+                    return None
+                self._m3d_state()["t0"] = -1e9            # кадров ещё нет: рисунок на месте модели, без доворота
+                return tt
+            if getattr(self, "_tt_seen", None) != (art, id(self.cur)):     # кадры пришли, когда уже был виден
+                self._tt_seen = (art, id(self.cur))                         # рисунок (тот же ракурс) — без вводного
+                if self.t - getattr(self, "scene_t0", self.t) > 0.15:       # доворота: модель встаёт на место рисунка
+                    self._m3d_state()["t0"] = -1e9
+            return tt
         return mesh
+
 
     def _m3d_state(self):
         m = getattr(self, "m3d", None)
@@ -12741,6 +12755,8 @@ class Game:
         """Коляска из заранее снятых кадров: ближайший к ракурсу кадр, масштаб и тень — как у живой модели."""
         s = self._m3d_state()
         i = tt.index(yaw)
+        if i not in tt.frames and tt.frames:                       # кадры ещё идут: ближайший пришедший
+            i = min(tt.frames, key=lambda k: min(abs(k - i), tt.n - abs(k - i)))
         scale = fr.h / 1250.0 * zoom                              # логических пикселей на единицу модели
         ax, ay = fr.x + fr.w / 2, fr.y + fr.h * 0.54
         key = ("tt", i, tuple(fr), round(zoom, 4))
@@ -12754,6 +12770,9 @@ class Game:
             DR.polygon(sh, (0, 0, 0, 110), [(x / 10, y / 10) for x, y in foot])
             s["sh"], s["sh_key"] = TF.smoothscale(sh, fr.size), key
         surf.blit(s["sh"], fr)
+        if not tt.frames:                                          # кадры ещё идут: рисунок — тот же кадр, то же место
+            surf.blit(load_image(self.cur["chair_art"], tuple(self._chair_rect().size), AMBER), self._chair_rect())
+            return
         img = tt.image(i, scale * RS / tt.ref)
         if img is not None:
             ox, oy = tt.offsets[i]
