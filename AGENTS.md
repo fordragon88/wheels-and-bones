@@ -303,6 +303,13 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **Jazzy 614 (Горыныч) — модель Meshy** (`meshy_models/pride_jazzy_614.glb`, height=1150,
+  ключ `jazzy`, SPECS `jazzy`): фольклорная коляска — модель в art_tests/tripo/models/chair_gorynych_ai*.json (в игру идут
+  только кадры, index_folk.json), прежняя (Tripo) — art_tests/tripo/bak_before_meshy/chair_gorynych_ai_tripo*. Кадры с
+  оригинального GLB (тёмно-серая, бордового корпуса у этой модели нет). Рисунок chair_gorynych.png — кадр 0.
+  Референсы для Meshy: `art_tests/meshy_permobil.py` (галереи permobil.com — там и Progeo, и Panthera), Etac Cross 6
+  (etac.com), Aero Z и WHILL Ci (магазин) — см. meshy_prep. (art_tests/*, assets/turntable/*, assets/chair_gorynych.png)
+
 - 2026-10-22 — Claude (Opus 5.5) — **Pulse 6 — модель Meshy** (`meshy_models/quickie_pulse_6.glb`, height=1170, ключ `pulse6`,
   задание Гильдии `t_pulse6`): кадры с оригинального GLB (родные цвета), SPECS `pulse6` (средний привод, пульт VR2 справа,
   детали прежней модели: mag_brake, brushes, freewheel, fuse…). Рисунок chair_pulse6.png — кадр 0, вписан в прежний

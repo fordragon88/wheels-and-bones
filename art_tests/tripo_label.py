@@ -165,6 +165,18 @@ SPECS = {
                ("fuse", (-330, -240), (150, 290), (0, 90)),
                ("battery", (-300, 200), (100, 300), (0, 110)),
                ("footrest", (350, 570), (30, 170), (0, INF))]),
+    # Змей Горыныч — Pride Jazzy (EVO) 614, Meshy (meshy_models/pride_jazzy_614.glb), height=1150; пульт справа
+    "jazzy": dict(art="chair_gorynych", wheels=[
+        dict(c=(-30, 140), R=140, z=(215, 320), kind="power"),
+        dict(c=(310, 62), R=62, z=(200, 300), kind="caster"),
+        dict(c=(-400, 64), R=64, z=(200, 300), kind="caster")],
+        boxes=[("joystick", (-10, 70), (740, 810), (140, 260), "signed"),
+               ("controller", (-40, 130), (690, 760), (130, 310), "signed"),
+               ("backrest", (-430, -150), (560, 1010), (0, INF)),
+               ("breaker", (-340, -250), (240, 340), (0, 120)),
+               ("footrest", (250, 470), (60, 210), (0, INF)),
+               ("battery", (-300, 160), (100, 330), (0, 175)),
+               ("seat", (-260, 310), (390, 570), (0, INF))]),
     # Змей Горыныч — Pride Jazzy 614 (среднеприводная)
     "raiju": dict(art="chair_gorynych", wheels=[
         dict(c=(20, 160), R=160, z=(215, 310), kind="power"),
