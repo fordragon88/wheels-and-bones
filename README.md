@@ -255,7 +255,7 @@ the right parts. The 3D models are procedural (built in code, real millimetres).
 PNG with the same name into `assets/`; `python game.py --assets` prints the full list.
 
 **Credits — Tripo AI.** The 3D models of the folk characters' wheelchairs (Baba Yaga, Olga, Leshy, Seneb the Mummy,
-Zmey Gorynych) and of Granny Agatha (Ki Mobility Focus CR) and Matilda (Permobil F5 Corpus) were generated with [Tripo AI](https://www.tripo3d.ai/) on the free plan and are used under
+Zmey Gorynych) were generated with [Tripo AI](https://www.tripo3d.ai/) on the free plan and are used under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); so are the turntable frames and wheelchair
 illustrations made from them. All other wheelchairs are our own.
 
@@ -605,7 +605,7 @@ python build_web.py --serve     # собрать и запустить лока�
 `python game.py --assets` печатает полный список файлов.
 
 **Авторство — Tripo AI.** 3D-модели колясок фольклорных персонажей (Баба Яга, Ольга, Леший, мумия Сенеб,
-Змей Горыныч), а также бабушки Агаты (Ki Mobility Focus CR) и Матильды (Permobil F5 Corpus) сгенерированы в [Tripo AI](https://www.tripo3d.ai/) на бесплатном тарифе и используются по
+Змей Горыныч) сгенерированы в [Tripo AI](https://www.tripo3d.ai/) на бесплатном тарифе и используются по
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); так же — кадры поворота и рисунки колясок,
 сделанные по ним. Остальные коляски — наши.
 

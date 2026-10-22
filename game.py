@@ -103,7 +103,7 @@ WEB_RES = {"standard": (1280, 720), "high": (1920, 1080), "ultra": (2560, 1440)}
 WEB_LEVELS = ("standard", "high", "ultra")
 WEB_MIN_W = 768                                # «авто» в браузере: холст не меньше (масштаб рендера 0,6)     # «авто» выбирает по размеру окна игры на экране (и скорости ПК)
 GAME_VERSION = "0.3"
-SUPPORT_URL = "https://www.openassistivetech.org/contribute/"   # пожертвования GOAT (Zeffy — поменять здесь)
+SUPPORT_URL = "https://www.paypal.com/donate/?hosted_button_id=LFKGMSGCNHYHC"   # PayPal GOAT (кнопка «Donate!» на openassistivetech.org/contribute)
 # Замечания игроков (флажок ⚑, «Я не согласен») уходят в Google-таблицу через веб-приложение Apps Script
 # (docs/feedback/Code.gs, настройка — docs/FEEDBACK_SETUP.md). Пустой адрес — только локальный feedback.json.
 FEEDBACK_URL = "https://script.google.com/macros/s/AKfycbyJxHpELYNd1CBpUmPLwIuT_hre-Nm-AJVJ9rCYDOrNLKKd26crV2G6omRPzTY6umtr/exec"
@@ -7673,6 +7673,7 @@ class Game:
         self.toast_color = color
         self.toast_timer = max(secs, 2.5 + 0.07 * len(tr(text)))   # успеть прочесть: ~14 знаков в секунду + запас
         self.toast_sticky = sticky
+        self.toast_t0 = self.t
         self.say(text, True)
 
     def _toast_input(self, event):
@@ -8261,7 +8262,10 @@ class Game:
             return
         if self.phase not in ("diagnose", "repair", "test") or self.mini_pending or self.v3d is not None                 or self.dispute_ui is not None or getattr(self, "show_manual", False):
             return
-        quiet = self.t - getattr(self, "_last_talk_t", -99.0) < self.TALK_GAP or self.toast_timer > 0
+        # не перебиваем свежее сообщение сверху; «висящий» итог хода (sticky) реплики не глушит дольше 3 с
+        toast_fresh = self.toast_timer > 0 and (not getattr(self, "toast_sticky", False)
+                                                or self.t - getattr(self, "toast_t0", -99.0) < 3.0)
+        quiet = self.t - getattr(self, "_last_talk_t", -99.0) < self.TALK_GAP or toast_fresh
         if quiet_talk():                          # одна фраза при входе — и всё: ни болтовни, ни реакций
             self._talk_later = None
             if self.client_queue and self.t >= self.client_next and not quiet and not self.exam_mode:
@@ -8271,7 +8275,7 @@ class Game:
         later = getattr(self, "_talk_later", None)
         if later and self.t >= later[0]:          # отложенная реакция на ход игрока
             if quiet:                             # не перебиваем реплику и сообщение сверху; устарела — молчим
-                if self.t - later[0] > 4.0:
+                if self.t - later[0] > 8.0:              # (итог хода висит до нажатия — реакция ждёт дольше)
                     self._talk_later = None
                 return
             self._talk_later = None
@@ -8515,11 +8519,19 @@ class Game:
         self.ride_t0 = self.t - (self.RIDE_SECS if calm() else 0)   # без анимации — проверка сразу, без проезда
         snd("whoosh")
 
+    RIDE_FLIP = {"client_iris.png", "client_iris_mom.png", "client_f5.png"}   # портреты, где коляска смотрит влево
+
     def _draw_ride(self, surf):
-        """Тест-драйв: клиент в своей коляске проезжает через мастерскую."""
+        """Тест-драйв: клиент в своей коляске проезжает через мастерскую (слева направо — лицом вперёд)."""
         k = (self.t - self.ride_t0) / self.RIDE_SECS
         e = k * k * (3 - 2 * k)
-        img = load_image(self.cur["client_art"], (230, 250), GHOST)
+        art = self.cur["client_art"]
+        img = load_image(art, (230, 250), GHOST)
+        if art in self.RIDE_FLIP:
+            key = ("ride_flip", art, RS)
+            if key not in _img_cache:
+                _img_cache[key] = Surf.adopt(pygame.transform.flip(img, True, False), img.get_size())
+            img = _img_cache[key]
         x = -260 + (WIDTH + 520) * e
         y = 290 - int(4 * abs(wsin(self.t * 18)))
         for i in range(6):                                  # линии скорости
@@ -8791,11 +8803,11 @@ class Game:
             add("Меню", tr("Продолжить игру" if self.done else "Начать игру"), act=lambda: self.click_title((0, 0)),
                 key="start")
             add("Меню", tr("Титры"), self._credits_btn_rect(), act=self.open_credits, key="credits")
-            add("Меню", tr("Поддержать GOAT (откроется сайт)"), self._support_btn_rect(), act=self.open_support,
+            add("Меню", tr("Поддержать GOAT (откроется PayPal)"), self._support_btn_rect(), act=self.open_support,
                 key="support")
         elif self.scene == "credits":
             add("Меню", tr("Назад"), self._credits_back_rect(), act=self.close_credits, key="cback")
-            add("Меню", tr("Поддержать GOAT (откроется сайт)"), self._support_btn_rect(), act=self.open_support,
+            add("Меню", tr("Поддержать GOAT (откроется PayPal)"), self._support_btn_rect(), act=self.open_support,
                 key="support")
         elif self.scene == "intro":
             add("Меню", tr("Далее"), act=self._a11y_intro_next, key="next")
@@ -8814,7 +8826,7 @@ class Game:
         elif self.scene == "ending":
             add("Меню", tr("Посмотреть гараж"), act=lambda: self.click_ending((0, 0)), key="garage")
             add("Меню", tr("Титры"), self._credits_btn_rect(), act=self.open_credits, key="credits")
-            add("Меню", tr("Поддержать GOAT (откроется сайт)"), self._support_btn_rect(), act=self.open_support,
+            add("Меню", tr("Поддержать GOAT (откроется PayPal)"), self._support_btn_rect(), act=self.open_support,
                 key="support")
         elif self.scene == "seating" and self.seatc:
             sc = self.seatc
@@ -9454,15 +9466,22 @@ class Game:
         dim = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
         dim.fill((6, 6, 10, 215))
         surf.blit(dim, (0, 0))
-        p = pygame.Rect(WIDTH // 2 - 360, 70, 720, 580)
+        p = pygame.Rect(WIDTH // 2 - 380, 50, 760, 620)
         aa_rect(surf, (24, 22, 32), p, border_radius=12)
         aa_rect(surf, AMBER, p, 2, border_radius=12)
         draw_text(surf, "УПРАВЛЕНИЕ С КЛАВИАТУРЫ", (p.x + 28, p.y + 20), 24, AMBER, bold=True)
         y = p.y + 66
+        room = p.bottom - 84 - y                          # строки — над «Озвучкой» и «Esc — закрыть»
+        for sz in (17, 16, 15, 14, 13):                   # крупный шрифт — мельче, но всё в рамке
+            step = font(sz).get_height() + 6
+            if step * len(self.A11Y_KEYS) <= room:
+                break
+        step = min(33, max(step, room // len(self.A11Y_KEYS)))
+        kw = 210
         for k, v in self.A11Y_KEYS:
-            draw_text(surf, k, (p.x + 28, y), 17, CYAN, bold=True)
-            draw_text(surf, v, (p.x + 230, y), 17, WHITE)
-            y += 33
+            fit_text(surf, k, (p.x + 28, y), kw - 12, sz, CYAN, bold=True)
+            fit_text(surf, v, (p.x + 28 + kw, y), p.right - 24 - (p.x + 28 + kw), sz, WHITE)
+            y += step
         st = f"Озвучка: {'включена' if A11Y['on'] else 'выключена'} ({SPEECH.label()})"
         draw_text(surf, st, (p.x + 28, p.bottom - 74), 15, GOOD if A11Y["on"] else GREY)
         draw_text(surf, "Esc или F1 — закрыть", (p.x + 28, p.bottom - 44), 15, GREY)
@@ -9601,7 +9620,7 @@ class Game:
                 webbrowser.open(SUPPORT_URL)
             except Exception:
                 pass
-        self.flash("Спасибо! Страница GOAT открывается в браузере.", GOOD, 3)
+        self.flash("Спасибо! Страница пожертвований GOAT (PayPal) открывается в браузере.", GOOD, 3)
 
     def _credits_back_rect(self):
         return pygame.Rect(WIDTH - 200, HEIGHT - 70, 170, 46)
@@ -10383,10 +10402,16 @@ class Game:
             on = k in ("rate", "text") or bool(self._access_val(k))
             Button(r, label, GOOD if on else GREY).draw(surf, mouse, active=on and k not in ("rate", "text"))
         y0 = self._access_rects()[-1][1].bottom + 6
-        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, y0), 13, GREY)
-        draw_wrapped(surf, "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
-                           "Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад.",
-                     (p.x + 32, y0 + 17), self._sound_close_rect().x - p.x - 48, 13, GREY)
+        tw = self._sound_close_rect().x - p.x - 48
+        note = ("Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
+                "Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад.")
+        for sz in (13, 12, 11, 10):                   # крупный шрифт — мельче, но внутри панели
+            lh = font(sz).get_height()
+            if y0 + lh + 2 + len(wrap_lines(note, tw, sz)) * (lh + 2) <= p.bottom - 8:
+                break
+        draw_text(surf, f"Озвучка: {SPEECH.label()}", (p.x + 32, y0), sz, GREY)
+        draw_wrapped(surf, note, (p.x + 32, y0 + font(sz).get_height() + 2), tw, sz, GREY,
+                     max_lines=max(1, (p.bottom - 8 - y0) // (font(sz).get_height() + 2) - 1))
 
     def _draw_sound_panel(self, surf):
         _cap_modal()
@@ -10486,16 +10511,17 @@ class Game:
         sk = self._skip_tut_rect()
         if sk is not None and sk.y < 60:              # первое задание: сообщение не уходит под «Пропустить обучение»
             reserve = WIDTH - sk.x + 6
-        w = WIDTH - 16 - reserve
+        left = 54 if self._top_back_rect() else 8               # не под кнопкой «◂ Назад»
+        w = WIDTH - left - 8 - reserve
         lines = wrap_lines(self.toast, w - 40, 16)
-        h = 12 + len(lines) * (font(16).get_height() + 2)
+        lh = font(16).get_height() + 2
+        h = 20 + len(lines) * lh                                # поля сверху/снизу — крупный шрифт не прилипает к рамке
         k = ease_back((self.t - self._typing.setdefault(("toast", self.toast), (self.toast, self.t))[1]) / 0.3)
-        rect = pygame.Rect(8, 4 - int(50 * (1 - k)), w, max(46, h))
+        rect = pygame.Rect(left, 5 - int(50 * (1 - k)), w, max(46, h))
         s = Surf(rect.size, pygame.SRCALPHA)
         s.fill((20, 18, 26, 250))
         surf.blit(s, rect)
         aa_rect(surf, self.toast_color, rect, 2, border_radius=6)
-        lh = font(16).get_height() + 2
         y = rect.y + (rect.h - len(lines) * lh) // 2 + lh // 2
         for ln in lines:
             draw_text(surf, ln, (rect.centerx, y), 16, self.toast_color, center=True)
@@ -10694,12 +10720,15 @@ class Game:
             aa_circle(surf, (20, 18, 26), ring.center, 31)
             aa_circle(surf, GOOD if done else AMBER, ring.center, 31, 2)
             surf.blit(load_image(job["client_art"], (52, 52), GHOST), (ring.x + 3, ring.y + 3))
-            nsz = 15                                  # имя — до 2 строк; очень длинное — чуть мельче, но целиком
-            while nsz > 12 and len(wrap_lines(job["client"], r.w - 24, nsz)) > 2:
-                nsz -= 1
-            nl = min(2, len(wrap_lines(job["client"], r.w - 24, nsz)))
+            # имя (до 2 строк) и поломка (хотя бы строка) — над подписью «РУЧНАЯ/ЭЛЕКТРО»; крупный шрифт — мельче
+            avail = r.bottom - 26 - (r.y + 162)
+            for nsz in (15, 14, 13, 12, 11):
+                nl = len(wrap_lines(job["client"], r.w - 24, nsz))
+                tl = (avail - nl * font(nsz).get_height() - 2) // font(12).get_height()
+                if nl <= 2 and tl >= 1:
+                    break
             ny = draw_wrapped(surf, job["client"], (r.x + 12, r.y + 162), r.w - 24, nsz, WHITE, max_lines=2, line_gap=0)
-            draw_wrapped(surf, job["title"], (r.x + 12, ny + 2), r.w - 24, 12, GREY, max_lines=3 - nl)
+            draw_wrapped(surf, job["title"], (r.x + 12, ny + 2), r.w - 24, 12, GREY, max_lines=max(1, min(3 - min(nl, 2), tl)))
             power = job.get("kind") == "power"
             draw_text(surf, "ЭЛЕКТРО" if power else "РУЧНАЯ",
                       (r.x + 12, r.bottom - 22), 12, CYAN if power else AMBER, bold=True)
@@ -12497,6 +12526,7 @@ class Game:
             return s["spots"]
         fr, zoom = self._m3d_frame()
         r = max(10, min(14, int(rect.h * 0.035)))
+        r = int(max(9, min(24, r * s.get("zoom_k", 1.0))))     # крупнее коляска («+») — крупнее кружки и цифры
         pts = []
         for pid in self.cur["parts"]:
             cs = mesh.centers.get(pid)
@@ -13131,8 +13161,8 @@ class Game:
             n = self._part_num(pid)
             if n:                                                    # номер — как в списке деталей справа
                 aa_circle(surf, (14, 12, 20, 200), (x, y), max(6, r - 3))
-                draw_text(surf, str(n), (x, y), 13 if r >= 12 else 11, GOOD if done else AMBER, bold=True,
-                          center=True)
+                draw_text(surf, str(n), (x, y), max(11, min(21, round(r * 0.95))), GOOD if done else AMBER,
+                          bold=True, center=True)
             if (mouse[0] - x) ** 2 + (mouse[1] - y) ** 2 <= r * r:
                 hover = (pid, x, y, r)
         if hover:
@@ -13680,10 +13710,16 @@ class Game:
         aa_rect(surf, AMBER, p, 2, border_radius=10)
         m = self.mini_pending
         cfg = m["cfg"]
-        y_end = draw_wrapped(surf, m["step"]["instr"], (p.x + 24, p.y + 16), p.w - 48, 19, WHITE, max_lines=3)
         tip = cfg.get("hint") or cfg.get("prompt")
+        # шапка (инструкция + подсказка) — выше табло/шкалы (y ≈ p.y + 90): крупный шрифт — мельче, но целиком
+        for isz, tsz in ((19, 14), (18, 13), (17, 13), (16, 12), (15, 12), (14, 11)):
+            ih = len(wrap_lines(m["step"]["instr"], p.w - 48, isz)) * (font(isz).get_height() + 2)
+            th = len(wrap_lines(tip, p.w - 48, tsz)) * (font(tsz).get_height() + 2) if tip else 0
+            if 16 + ih + 2 + th <= 90:
+                break
+        y_end = draw_wrapped(surf, m["step"]["instr"], (p.x + 24, p.y + 16), p.w - 48, isz, WHITE, max_lines=3)
         if tip:                                        # подсказка — под инструкцией, сколько бы строк та ни заняла
-            draw_wrapped(surf, tip, (p.x + 24, max(p.y + 64, y_end + 2)), p.w - 48, 14, AMBER, max_lines=2)
+            draw_wrapped(surf, tip, (p.x + 24, y_end + 2), p.w - 48, tsz, AMBER, max_lines=2)
         k = m["kind"]
         if k == "pump":
             self._draw_mini_pump(surf, mouse, p, m, cfg)
@@ -13876,14 +13912,18 @@ class Game:
         else:
             rank = ["Ученик Гильдии", "Младший подмастерье", "Подмастерье",
                     "Подмастерье — допуск к экзамену"][min(n, 3)]
-        draw_text(surf, f"Мартин — {rank}", (60, 74), 20,
+        draw_text(surf, f"Мартин — {rank}", (60, 68), 20,
                   GOOD if self.exam_passed else CYAN, bold=True)
+        dy = 68 + font(20, True).get_height() + 8        # под заголовком, сколько бы тот ни занял (крупный шрифт)
         if self.exam_passed:
-            draw_text(surf, "✔ ДИПЛОМ ГИЛЬДИИ ПОЛУЧЕН", (60, 106), 15, AMBER, bold=True)
+            draw_text(surf, "✔ ДИПЛОМ ГИЛЬДИИ ПОЛУЧЕН", (60, dy), 15, AMBER, bold=True)
         else:
-            draw_wrapped(surf, "Здесь ремонт по-взрослому: порядок шагов выбираешь сам, значения — "
-                               "только из мануала, а нарушение техники безопасности проваливает задание.",
-                         (60, 104), 680, 14, GREY, plate=True)
+            note = ("Здесь ремонт по-взрослому: порядок шагов выбираешь сам, значения — "
+                    "только из мануала, а нарушение техники безопасности проваливает задание.")
+            nsz = 14
+            while nsz > 11 and dy + len(wrap_lines(note, 680, nsz)) * (font(nsz).get_height() + 2) > 152:
+                nsz -= 1
+            draw_wrapped(surf, note, (60, dy), 680, nsz, GREY, plate=True)
         for i, (jid, rect) in enumerate(self._guild_job_rects()):
             job = self.job_by_id(jid)
             done = jid in self.done
@@ -14092,24 +14132,26 @@ class Game:
         blit_idle(surf, load_image("ghost.png", (170, 220), CYAN), (WIDTH - 230, HEIGHT - 300), self.t,
                   "float", rock=8 * wsin(self.t * 2.1), k=ease_back((st - 0.6) / 0.6))
         draw_confetti(surf, self.t)
-        panel = pygame.Rect(WIDTH // 2 - 440, 205, 880, 270)
+        story = ("Мартин докатил до друзей на отремонтированной коляске. Левая нога снова "
+                 "отвалилась у самого входа — но коляска едет идеально, а это главное.")
+        barty = ("Бартоломью: «Ты научился чинить лучше, чем я когда-либо видел. "
+                 "Горжусь, парень. Теперь — танцуй.»")
+        # блоки идут друг за другом: крупный шрифт (125 %, Atkinson) не наезжает строками на соседей
+        y1 = 230
+        y2 = max(330, y1 + len(wrap_lines(story, 800, 20)) * (font(20).get_height() + 2) + 14)
+        y3 = max(430, y2 + len(wrap_lines(barty, 800, 19)) * (font(19).get_height() + 2) + 16)
+        panel = pygame.Rect(WIDTH // 2 - 440, 205, 880, max(270, y3 + font(18).get_height() + 22 - 205))
         pk = appear(st, 0.5, 0.5)
         ps = Surf(panel.size, pygame.SRCALPHA)
         aa_rect(ps, (18, 16, 30, int(200 * pk)), ps.get_rect(), border_radius=14)
         surf.blit(ps, panel)
         self._wave_title(surf, "ВЕЧЕРИНКА!", (WIDTH // 2, 140), 60, AMBER, st)
-        draw_wrapped(surf,
-                     "Мартин докатил до друзей на отремонтированной коляске. Левая нога снова "
-                     "отвалилась у самого входа — но коляска едет идеально, а это главное.",
-                     (WIDTH // 2, 230), 800, 20, WHITE, center=True)
-        draw_wrapped(surf,
-                     "Бартоломью: «Ты научился чинить лучше, чем я когда-либо видел. "
-                     "Горжусь, парень. Теперь — танцуй.»",
-                     (WIDTH // 2, 330), 800, 19, GHOST, center=True)
+        draw_wrapped(surf, story, (WIDTH // 2, y1), 800, 20, WHITE, center=True)
+        draw_wrapped(surf, barty, (WIDTH // 2, y2), 800, 19, GHOST, center=True)
         draw_text(surf, f"Коллекция: {len(self.garage)} колясок починено и спасено.",
-                  (WIDTH // 2, 430), 18, PURPLE, center=True)
+                  (WIDTH // 2, y3), 18, PURPLE, center=True)
         draw_text(surf, "[ тап — посмотреть гараж ]" if TOUCH["on"] else "[ клик — посмотреть гараж ]",
-                  (WIDTH // 2, 510), 20, AMBER, center=True,
+                  (WIDTH // 2, max(510, panel.bottom + 20)), 20, AMBER, center=True,
                   alpha=150 + 105 * (0.5 + 0.5 * wsin(self.t * 3.2)))
         Button(self._credits_btn_rect(), "ТИТРЫ", GHOST).draw(surf, mouse_pos())
         Button(self._support_btn_rect(), "ПОДДЕРЖАТЬ GOAT ♥", AMBER).draw(surf, mouse_pos())
@@ -14869,7 +14911,7 @@ def run_selftest():
     for _ in range(40):                                   # реакция ждёт конца сообщения сверху и паузы TALK_GAP
         gt.update(0.25)
         if gt.client_line in CLIENT_TALK["caster"]["mistake"] or gt.ghost_quip in BARTY_TALK["mistake"]:
-            toast_seen.append(gt.toast_timer > 0.3)
+            toast_seen.append(gt.toast_timer > 0.3 and gt.t - gt.toast_t0 < 2.9)   # итог хода висит — но не свежий
             break
     if toast_seen and toast_seen[0]:
         failures.append("реакция на ошибку прозвучала, пока висит сообщение сверху")
