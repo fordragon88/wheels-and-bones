@@ -314,7 +314,9 @@ python i18n_work/build_lang.py       # перевод полон
   `portrait_chair.py` MOVE — у F5 подножка поднята на 190 мм под короткие ноги; рендер ракурса портрета;
   `portrait_reseat.py badger_new` — FREE_POSE: от старого портрета только облик (поза старого — ноги на «ступеньке» —
   и давала лишние подножки), персонаж берётся из art_tests/retired/. Выбран seed 22: ровно две подножки, по ноге на
-  каждой, колёса целые. (assets/client_f5.png, art_tests/blender_render.py, portrait_chair.py, portrait_reseat.py)
+  каждой, колёса целые. Маленькое колёсико (антиопрокидыватель) под подножками убрано по просьбе владельца — срез по
+  нижней кромке кронштейна между шинами (прозрачность). (assets/client_f5.png, art_tests/blender_render.py,
+  portrait_chair.py, portrait_reseat.py)
 
 - 2026-10-22 — Claude (Opus 5.5) — **портреты клиентов в новых колясках** (Мора, Зикс, Матильда, Голем, Сайра, Леший,
   Горыныч, Агата с внуком, Агата в Кабинете посадки): `art_tests/portrait_chair.py <chair> <yaw>` — рендер новой
