@@ -8,7 +8,7 @@
            (публичный репозиторий только со сборкой; клон — в web_deploy/).
 --off — скрыть всё: выключить GitHub Pages и сделать репозиторий приватным.
 --on  — открыть: репозиторий публичный + GitHub Pages включены (сайт оживает через ~1 мин)."""
-import os, sys, shutil, subprocess
+import re, os, sys, shutil, subprocess
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.join(ROOT, "web_build", "wheels_and_bones")
@@ -116,6 +116,39 @@ GH_REPO = "fordragon88/wheels-and-bones-web"
 REPO = "https://github.com/fordragon88/wheels-and-bones-web.git"
 
 
+def stamp_archives(index):
+    """Метка версии в ссылке на архив игры (?v=хэш содержимого): после выкладки браузер (Firefox) не берёт старую копию."""
+    import hashlib
+    web = os.path.dirname(index)
+    html = open(index, encoding="utf-8").read()
+    for name in ("wheels_and_bones.tar.gz", "wheels_and_bones.apk"):
+        path = os.path.join(web, name)
+        if not os.path.exists(path):
+            continue
+        h = hashlib.sha1(open(path, "rb").read()).hexdigest()[:10]
+        html = re.sub(r'platform\.fopen\("' + re.escape(name) + r'(\?v=[0-9a-f]+)?"', f'platform.fopen("{name}?v={h}"', html)
+    open(index, "w", encoding="utf-8").write(html)
+
+
+def wait_pages(timeout=900):
+    """Ждать, пока GitHub Pages соберёт ИМЕННО выложенный коммит (latest build может быть ещё прежним)."""
+    import time
+    head = subprocess.run(["git", "-C", DEPLOY, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        r = subprocess.run(["gh", "api", f"repos/{GH_REPO}/pages/builds/latest", "--jq", '.status+" "+.commit'],
+                           capture_output=True, text=True).stdout.strip()
+        if r == f"built {head}":
+            print("pages: built", head[:8])
+            return True
+        if r.startswith("errored") and r.endswith(head):
+            print("pages: ОШИБКА сборки", r)
+            return False
+        time.sleep(15)
+    print("pages: не дождался сборки", head[:8])
+    return False
+
+
 def deploy():
     web = os.path.join(APP, "build", "web")
     if not os.path.isdir(os.path.join(DEPLOY, ".git")):
@@ -126,6 +159,7 @@ def deploy():
             shutil.copytree(os.path.join(web, n), os.path.join(DEPLOY, n))
         else:
             shutil.copy2(os.path.join(web, n), DEPLOY)
+    stamp_archives(os.path.join(DEPLOY, "index.html"))
     git = ["git", "-C", DEPLOY, "-c", "user.name=fordragon88",
            "-c", "user.email=98241749+fordragon88@users.noreply.github.com"]
     subprocess.run(git + ["add", "-A"], check=True)
@@ -136,6 +170,8 @@ def deploy():
                                 capture_output=True, text=True).stdout.strip() == "public"
         print("выложено: https://fordragon88.github.io/wheels-and-bones-web/ (обновится через ~1 мин)" if public
               else "сборка обновлена в скрытом репозитории (сайт выключен; открыть: python build_web.py --on)")
+        if public:
+            wait_pages()
     else:
         print("сборка не изменилась — выкладывать нечего")
 
