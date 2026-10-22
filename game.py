@@ -6753,6 +6753,7 @@ def _min_btn_sz():
 # Титры (экран «ТИТРЫ» с титула и с вечеринки). Текст владельца — docs/credits_draft_en.txt; английский — в словаре.
 CREDITS = [
     ("КОЛЁСА И КОСТИ", ["Бесплатная игра о том, как держать колёса на ходу.", "Автор игры — Андрей.",
+                        "Тестирование: Ольга, Лиз и Яна.",
                         "Сделано GOAT — Grassroots Open Assistive Tech", "openassistivetech.org"]),
     ("ЗНАНИЯ ПО РЕМОНТУ", ["Шаги и факты — из настоящих сервисных мануалов и руководств пользователя,",
                            "собранных BARC — Bay Area Repair Coalition, программой GOAT:",
@@ -6761,13 +6762,13 @@ CREDITS = [
     ("УРОКИ ПОСАДКИ", ["По руководству Permobil «Seating & Positioning Guide»."]),
     ("АРТ, МОДЕЛИ И МУЗЫКА", ["Сделаны с помощью ИИ-инструментов и доработаны нашей командой.",
                               "Рисунки: ComfyUI и Qwen-Image. Музыка: YuE.",
-                              "3D-модели колясок фольклорных клиентов: Tripo AI (CC BY 4.0)."]),
+                              "3D-модели колясок Бабы Яги, Ольги и Сенеба: Tripo AI (CC BY 4.0)."]),
     ("КОД", ["Написан при небольшой помощи Claude (Anthropic).", "Мартин и Барти передают привет."]),
     ("ШРИФТЫ И ЛИЦЕНЗИИ", ["Шрифты: DejaVu Sans и Atkinson Hyperlegible (Braille Institute).",
                            "Код: MIT. Содержимое игры: CC BY-SA 4.0 — делитесь и переделывайте, указывая GOAT."]),
     ("БЕЗОПАСНОСТЬ", ["Учись здесь, а настоящую коляску чини с её мануалом в руках",
                       "или доверь квалифицированному технику. Названия брендов принадлежат их владельцам."]),
-    ("СПАСИБО", ["Тестирование: Ольга, Лиз и Яна.", "Нашим тестировщикам, каждому волонтёру с гаечным ключом",
+    ("СПАСИБО", ["Нашим тестировщикам, каждому волонтёру с гаечным ключом",
                  "и всем, кто помогает коляскам катиться."]),
 ]
 
@@ -9981,6 +9982,7 @@ class Game:
         self._touch_text()
         self.scan_tick()
         self.pad_tick()
+        self._settings_help_say()
         if self.scene == "credits" and not calm() and self.t - self.scene_t0 > 1.2:
             self.credits_y = min(self.credits_y + 26 * dt, self._credits_max())   # медленно вверх
         if not self.headless:
@@ -10450,6 +10452,100 @@ class Game:
         draw_wrapped(surf, note, (p.x + 32, y0 + font(sz).get_height() + 2), tw, sz, GREY,
                      max_lines=max(1, (p.bottom - 8 - y0) // (font(sz).get_height() + 2) - 1))
 
+    SETTING_HELP = {   # что делает каждая настройка — карточка при наведении/фокусе (и озвучка после паузы на пункте)
+        "vol_master": "Общая громкость всех звуков игры: музыки, эффектов и атмосферы.",
+        "vol_music": "Громкость фоновой мелодии. За работой она через минуту сама стихает до тихого фона.",
+        "vol_sfx": "Звуки действий: щелчки кнопок, инструменты, верный и неверный шаг.",
+        "vol_amb": "Фоновые звуки места: мастерская, дорога, Гильдия, вечеринка.",
+        "mute": "Выключает или включает весь звук сразу. То же делает клавиша M.",
+        "mode": "Игра в окне или на весь экран. Переключить можно и клавишей F11 или Alt+Enter.",
+        "res": "Размер, в котором игра рисует картинку. Меньше — быстрее на слабом компьютере, больше — чётче. "
+               "«Авто» подбирает его по экрану.",
+        "glow": "Свечение, искры, пыль и другие частицы для красоты. Выключи, если мешают или игра тормозит.",
+        "gpu": "Рисовать 3D-коляски видеокартой: вращение плавнее. Выключи, если коляска отображается с ошибками.",
+        "web_quality": "Чёткость картинки в браузере. «Авто» — по размеру окна; 720p — быстрее на слабом телефоне "
+                       "или ноутбуке.",
+        "web_fs": "Развернуть игру на весь экран браузера и обратно (F11).",
+        "acc_on": "Игра читает вслух всё на экране: пункты, шаги, подсказки — для незрячих и слабовидящих. Говорит "
+                  "через экранный диктор или голос системы. F2 — включить или выключить.",
+        "acc_voices": "Озвучка читает и реплики персонажей, а не только меню и шаги.",
+        "acc_rate": "Скорость голоса озвучки. Каждое нажатие — быстрее; после 10 снова медленно.",
+        "acc_contrast": "Затемняет картинку фона, чтобы текст и кнопки были контрастнее.",
+        "acc_instant": "Текст появляется сразу целиком, без печати по буквам.",
+        "acc_calm": "Убирает движение: покачивание, проезд коляски после ремонта, сценки с ногой, мигание кружков.",
+        "acc_quiet": "Клиент говорит одну фразу при входе и дальше молчит — меньше текста на экране.",
+        "acc_barty": "Призрак Барти в мастерской и его шутки. Выключи, если отвлекает. В Гильдии подсказывает Бренна.",
+        "acc_text": "Крупнее текст на всех экранах. Каждое нажатие — следующий размер.",
+        "acc_font": "Шрифт Atkinson Hyperlegible для слабого зрения: буквы и цифры легко различить. Только для "
+                    "английского языка.",
+        "acc_scan": "Управление одной кнопкой: пункты сами подсвечиваются по очереди, нажми — выбрать, держи — назад. "
+                    "Число — сколько секунд на пункт.",
+        "reset": "Стирает починенные коляски, гараж, Гильдию и Кабинет посадки — игра начнётся заново. Звук, графика, "
+                 "язык и доступность останутся.",
+    }
+
+    def _settings_help_zones(self):
+        """(ключ подсказки, строка настройки целиком — подпись и переключатель) на открытой вкладке."""
+        p = self._sound_panel_rect()
+        row = lambda *rs: pygame.Rect(p.x + 24, min(r.y for r in rs) - 4, p.w - 48,
+                                      max(r.bottom for r in rs) - min(r.y for r in rs) + 8)
+        tab = getattr(self, "settings_tab", "sound")
+        if tab == "sound":
+            return ([("vol_" + k, pygame.Rect(p.x + 24, t.y - 20, p.w - 48, 40)) for k, t in self._vol_slider_rects()]
+                    + [("mute", self._sound_mute_rect())])
+        if tab == "access":
+            return [("acc_" + k, pygame.Rect(p.x + 24, r.y - 1, r.right - p.x - 24, r.h + 2))
+                    for k, r in self._access_rects()]
+        if tab == "game":
+            return [("reset", row(self._reset_btn_rect()))]
+        if IS_WEB:
+            return [("web_quality", row(*[r for _, r in self._webq_rects()])), ("web_fs", row(self._web_fs_rect())),
+                    ("glow", row(self._glow_btn_rect()))]
+        return [("mode", row(*[r for _, r in self._mode_rects()])), ("res", row(*[r for _, r in self._res_rects()])),
+                ("glow", row(self._glow_btn_rect())), ("gpu", row(self._gpu_btn_rect()))]
+
+    def _settings_help_at(self, mouse):
+        """Какую настройку объяснить: в фокусе клавиатуры/кнопки — её, иначе — под мышью (на касаниях — последнюю)."""
+        zones = self._settings_help_zones()
+        if self.kb.get("active") and self.kb.get("key"):
+            it = next((x for x in self.kb.get("items", ()) if x.get("key") == self.kb["key"]), None)
+            if it and it.get("rect"):
+                c = pygame.Rect(it["rect"]).center
+                return next(((k, z) for k, z in zones if z.collidepoint(c)), None)
+        return next(((k, z) for k, z in zones if z.collidepoint(mouse)), None)
+
+    def _draw_setting_help(self, surf, mouse):
+        hit = self._settings_help_at(mouse)
+        if not hit:
+            return
+        key, zone = hit
+        text = self.SETTING_HELP[key]
+        p = self._sound_panel_rect()
+        x, w = p.right + 10, WIDTH - p.right - 18                  # справа от панели — не закрывает настройки
+        for sz in (15, 14, 13, 12):
+            lh = font(sz).get_height() + 2
+            h = len(wrap_lines(text, w - 24, sz)) * lh + 18
+            if h <= HEIGHT - 16:
+                break
+        y = max(8, min(zone.centery - h // 2, HEIGHT - 8 - h))
+        box = pygame.Rect(x, y, w, h)
+        aa_rect(surf, (24, 26, 36, 250), box, border_radius=10)
+        aa_rect(surf, CYAN, box, 2, border_radius=10)
+        DR.line(surf, CYAN, (p.right - 2, zone.centery), (x, max(y + 12, min(zone.centery, y + h - 12))), 2)
+        draw_wrapped(surf, text, (x + 12, y + 9), w - 24, sz, WHITE)
+
+    def _settings_help_say(self):
+        """Озвучка: фокус задержался на настройке — прочитать, что она делает (один раз на пункт)."""
+        if not (self.show_sound and self.kb.get("active") and A11Y["on"]):
+            return
+        hit = self._settings_help_at((-1, -1))
+        key = hit[0] if hit else None
+        if key != getattr(self, "_help_key", None):
+            self._help_key, self._help_t, self._help_said = key, self.t, False
+        elif key and not self._help_said and self.t - self._help_t > 1.2:
+            self._help_said = True
+            self.say(self.SETTING_HELP[key], False)
+
     def _draw_sound_panel(self, surf):
         _cap_modal()
         dim = _img_cache.get(("v3d_dim", 168, RS))
@@ -10523,6 +10619,7 @@ class Game:
             Button(self._gpu_btn_rect(), gpu_label, CYAN if (not GL["off"] and _mgl is not None) else GREY).draw(
                 surf, mouse, enabled=_mgl is not None, active=not GL["off"] and _mgl is not None)
         Button(self._sound_close_rect(), "ГОТОВО", AMBER).draw(surf, mouse)
+        self._draw_setting_help(surf, mouse)
 
     def _bg(self, surf, name, color):
         key = ("bg_dimmed", name, RS, A11Y["contrast"])        # фон + затемнение — один раз, дальше одна копия на кадр
@@ -14594,6 +14691,13 @@ def run_selftest():
         for _ in range(20):
             g.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=g._m3d_zoom_rects()[1].center))
         assert abs(g._m3d_state()["zoom_k"] - g.M3D_ZOOM[0]) < 1e-6, "«−» — до предела, не дальше"
+
+    # у каждой настройки на каждой вкладке есть объяснение (карточка при наведении/фокусе)
+    g = Game(headless=True)
+    for tab in ("sound", "graphics", "access", "game"):
+        g.settings_tab = tab
+        for k, _z in g._settings_help_zones():
+            assert k in Game.SETTING_HELP and tr(Game.SETTING_HELP[k]), f"настройки «{tab}»: нет объяснения {k}"
 
     # другие верные ответы из отзывов игроков (alt — детали, alt_tools — инструменты) засчитываются
     for jid, n, tool, part in (("yaga_d100", 1, "hands", "axle"), ("yaga_d100", 8, "hands", "brake"),
