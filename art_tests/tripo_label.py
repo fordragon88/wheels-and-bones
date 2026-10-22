@@ -210,7 +210,7 @@ SPECS = {
     "x8": dict(art="chair_leshy", wheels=[
         dict(c=(-385, 215), R=215, z=(235, 360), kind="power", hub=None),
         dict(c=(215, 215), R=215, z=(235, 360), kind="power")],
-        boxes=[("joystick", (160, 400), (760, 910), (150, 360), "signed"),
+        boxes=[("controller", (160, 400), (760, 910), (150, 360), "signed"),
                ("freewheel", (-690, -560), (150, 460), (0, 240)),
                ("motor", (-480, 300), (120, 310), (150, 235)),
                ("footrest", (380, 700), (150, 260), (0, INF)),
