@@ -3434,6 +3434,7 @@ class Turntable:
         self.n, self.yaw0, self.pitch = d["n"], d["yaw0"], d["pitch"]
         self.z0, self.ref, self.offsets = d["z0"], d["ref"], d["offsets"]
         self.pivot = tuple(d["pivot"])
+        self.fmt = d.get("fmt", "png")
         self.centers = {p: [tuple(c) for c in cs] for p, cs in d["centers"].items()}
         self.centers.update(PART_CENTER_FIX.get(art, {}))
         self.frames, self.scaled, self.asked, self.failed, self.tries = {}, {}, False, False, {}
@@ -3447,16 +3448,24 @@ class Turntable:
             self.frames, self.scaled, self.asked, self.tries = {}, {}, False, {}
 
     def file(self, i):
-        return f"{TT_DIR}/{self.name}_{i:02d}.png"
+        return f"{TT_DIR}/{self.name}_{i:02d}.{self.fmt}"
+
+    def files(self, i):
+        """Файлы кадра: PNG — один; JPEG (кадры из Blender) — цвет + белая маска <кадр>.a.png."""
+        f = self.file(i)
+        return [f, f[:-4] + ".a.png"] if self.fmt == "jpg" else [f]
 
     def _decode(self, i, data=None):
         try:
-            src = os.path.join(ASSETS_DIR, self.file(i))
+            names = self.files(i)
+            srcs = [os.path.join(ASSETS_DIR, n) for n in names]
             if data is not None:                              # браузер: pygame не читает картинку из памяти — через файл
-                src = os.path.join(tempfile.gettempdir(), "wnb_tt.png")
-                with open(src, "wb") as f:
-                    f.write(data)
-            self.frames[i] = pygame.image.load(src).convert_alpha()
+                srcs = []
+                for n, blob in zip(names, data):
+                    srcs.append(os.path.join(tempfile.gettempdir(), "wnb_tt" + n[-6:]))
+                    with open(srcs[-1], "wb") as f:
+                        f.write(blob)
+            self.frames[i] = (_load_split(*srcs) if self.fmt == "jpg" else pygame.image.load(srcs[0])).convert_alpha()
         except Exception as e:                                # кадр не прочитался — останется рисунок коляски
             print(f"[wnb] turntable {self.name} {i}: {e!r}", flush=True)
             self.failed = True
@@ -3472,29 +3481,33 @@ class Turntable:
             return not self.failed
         if not self.asked:
             self.asked = True
-            self._fetch([self.file(i) for i in range(self.n)])
+            self._got = {}
+            self._fetch([u for i in range(self.n) for u in self.files(i)])
         now = pygame.time.get_ticks()
         if now - getattr(self, "_poll", -1000) < 40:          # забираем пришедшее не чаще раза за кадр
             return False
         self._poll = now
         got = web_js("(function(L){var T=window.wnbTT||{},o={},k=0;for(var j=0;j<L.length&&k<6;j++){var v=T[L[j]];"
                      "if(v){o[L[j]]=v;delete T[L[j]];k++;}}return JSON.stringify(o);})("
-                     + json.dumps([self.file(i) for i in range(self.n) if i not in self.frames]) + ")")
+                     + json.dumps([u for i in range(self.n) if i not in self.frames for u in self.files(i)
+                                   if u not in self._got]) + ")")
         try:
             got = json.loads(str(got)) if got else {}
         except Exception:
             got = {}
         import base64
         for u, v in got.items():
-            i = int(u[-6:-4])
             if v == "!":                                      # сбой сети — ещё попытка, после трёх — рисунок
                 self.tries[u] = self.tries.get(u, 0) + 1
                 if self.tries[u] >= 3:
                     self.failed = True
                 else:
                     self._fetch([u])
-            else:
-                self._decode(i, base64.b64decode(v))
+                continue
+            self._got[u] = base64.b64decode(v)
+            i = int(u.rsplit("_", 1)[1][:2])                  # …_NN.png / _NN.jpg / _NN.a.png
+            if i not in self.frames and all(f in self._got for f in self.files(i)):
+                self._decode(i, [self._got.pop(f) for f in self.files(i)])
         return len(self.frames) == self.n and not self.failed
 
     @staticmethod

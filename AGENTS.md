@@ -303,6 +303,22 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **кадры поворота электроколясок — из Blender** (владелец: «гранёные, упрощённые»;
+  упор — на электрические). Blender 4.2.23 LTS portable — `tools/blender-4.2.23-windows-x64` (вне git, `tools/` в
+  .gitignore; папка `4.2/config` — настройки не на диске C). Конвейер: `python art_tests/blender_frames.py <арты>` →
+  `blender_export.py` (модель игры полная + центр/масштаб/центры деталей как у build_turntables; фольклорные —
+  из art_tests/tripo/models) → `blender_render.py` в Blender (камера = project_point: перспектива 2600 мм,
+  VERTICAL fit, lens = 36·2600·s/H, **shift_y = 0,04** — при VERTICAL в долях высоты; плавный цвет по вершинам
+  внутри детали, сглаживание 35°, Eevee Next, мягкий свет; `WB_BEVEL` — фаска, почти не помогает) → кадры
+  `<коляска>_NN.jpg` + маска `_NN.a.png`, в index `fmt: "jpg"`. Игра: `Turntable.files()` — JPEG + маска
+  (`_load_split`), в браузере качает оба файла; build_web копирует и .jpg. Сделано: F5, Edge 4, Trident, M3,
+  WHILL C2, Pulse 6, Q6 Edge, Леший, Горыныч (≈1,5 МБ на коляску; старые PNG-кадры — tools/tt_backup).
+  Ручные коляски — пока прежние PNG (владелец ими доволен). F5: `brighten` 1,45 → 1,1 (при новом свете
+  стала белой; на референсе — графит). **Сверять с референсами** (assets/chair_*.png, art_tests/focus_ref/)
+  до выкладки. Форма Edge 4/Trident/M3/Pulse 6/Q6 Edge — «коробки» против референсов: нужна новая геометрия
+  (Tripo/TRELLIS по focus_ref → model_patch/tripo_label). (game.py, build_web.py, art_tests/blender_*.py,
+  art_tests/model_patch.py, assets/turntable/*, assets/models/chair_f5_ai*.json, .gitignore)
+
 - 2026-10-22 — Claude (Opus 5.5) — **новые сканы Tripo Агаты и Матильды доработаны** (просьба владельца) — снова в
   игре. `art_tests/model_patch.py <ключ>` (правила PATCHES): убрать лишнее коробкой/деталью, добавить куски прежней
   модели (масштаб/сдвиг), `brighten`. **F5**: скан + задние колёсики и подножка прежней модели (у скана корпус

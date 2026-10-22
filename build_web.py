@@ -107,7 +107,7 @@ def build(serve=False):
     os.makedirs(os.path.dirname(tt), exist_ok=True)
     shutil.rmtree(tt, ignore_errors=True)
     shutil.copytree(os.path.join(ROOT, "assets", "turntable"), tt,
-                    ignore=lambda d, names: [n for n in names if not n.endswith(".png")])
+                    ignore=lambda d, names: [n for n in names if not n.endswith((".png", ".jpg"))])
     subprocess.run(cmd, check=True, cwd=ROOT)
 
 

@@ -13,7 +13,7 @@ PATCHES = {
     "f5": dict(
         base="art_tests/tripo/v3/models/chair_f5_ai.json",
         donor="art_tests/tripo/bak_before_v3/chair_f5_ai.json",
-        out="assets/models/chair_f5_ai.json", brighten=1.45,
+        out="assets/models/chair_f5_ai.json", brighten=1.1,
         drop=[dict(box=((330, INF), (-INF, 200), (-INF, INF))),                  # подножка скана
               dict(box=((-30, 240), (742, 850), (-INF, -150)))],                 # ручка левого «пульта» (у F5 пульт один, справа)
         add=[dict(box=((-INF, -280), (-INF, 180), (-INF, INF)), s=(1, 1, 0.82), d=(0, 0, 0)),   # задние колёсики
