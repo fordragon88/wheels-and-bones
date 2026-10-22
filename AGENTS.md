@@ -305,6 +305,13 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **ТЗ для ChatGPT: тело Бомма вектором** (Кабинет посадки, кукла по скелету):
+  art_tests/seat_bodies/chatgpt_brief/ — 1_rig_neutral.png (скелет в сетке 1000×1000, суставы с координатами,
+  зоны частей), 2_poses_to_survive.png (позы: сползание, колени вверх, ноги висят), 3_bomm_look.png, PROMPT_svg.txt,
+  joints_neutral.json, make_brief.py. Ждём от владельца bomm_puppet.svg: 5 групп shin/thigh/pelvis/chest/head по
+  суставам + скруглённые «шапки» на суставах. Дальше: растр групп через Playwright (cairosvg нет), торс делится на
+  pelvis (hip→mid) и chest (mid→sh) — правка `_draw_seat_puppet`/seat_bodies.json, SEAT_SLIM → 1.0.
+
 - 2026-10-22 — Claude (Opus 5.5) — **объяснения настроек** (просьба владельца): `Game.SETTING_HELP` — что делает каждая
   настройка; `_settings_help_zones` (строка настройки целиком на открытой вкладке), `_settings_help_at` (в фокусе
   клавиатуры/кнопки/геймпада — она, иначе под мышью; на касаниях — последняя тронутая), `_draw_setting_help` —
