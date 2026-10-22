@@ -3257,7 +3257,8 @@ for _k, _v in {"chair_aeroz": "chair_basic", "chair_cross6": "chair_basic", "cha
                "chair_focuscr": "chair_basic", "chair_whillc2": "chair_power", "chair_f5": "chair_power",
                "chair_pulse6": "chair_power", "chair_q6edge": "chair_power",
                "client_aeroz": "client_elf", "client_cross6": "client_dwarf", "client_iris": "client_fairy",
-               "client_focuscr": "client_sorceress", "client_whillc2": "client_goblin", "client_f5": "client_troll",
+               "client_focuscr": "client_sorceress", "client_iris_mom": "client_fairy", "client_focuscr_grandson": "client_sorceress",
+               "client_whillc2": "client_goblin", "client_f5": "client_troll",
                # третья волна (фольклорные клиенты)
                "chair_yaga": "chair_basic", "chair_rusalka": "chair_basic", "chair_ra": "chair_basic",
                "chair_leshy": "chair_power", "chair_gorynych": "chair_power",
@@ -5241,7 +5242,7 @@ JOBS += [
     #          плунжер-штифт должен полностью выдвигаться/убираться и входить в рокер; затянуть гайку;
     #          НЕ смазывать компоненты механизма
     dict(
-        id="iris_tilt", kind="manual", client="Дракончик Искра", client_art="client_iris.png",
+        id="iris_tilt", kind="manual", client="Дракончик Искра", client_art="client_iris_mom.png",   # с мамой за спиной
         chair_art="chair_iris.png",
         chair_model="iris", chair_name="Zippie Iris (детская, наклон в пространстве)",
         title="Наклон «клацает», коляску качает назад",
@@ -5331,7 +5332,7 @@ JOBS += [
     #   p26  — еженедельно: тест троса наклона и осмотр прокладки, изгибов, заломов; протирать направляющие
     #          поворотной рамы; антиопрокидыватели ровные и рабочие; ежемесячно крепёж 40 in-lb (4,51 Н·м)
     dict(
-        id="focuscr_cable", kind="manual", client="Бабушка Агата", client_art="client_focuscr.png",
+        id="focuscr_cable", kind="manual", client="Бабушка Агата", client_art="client_focuscr_grandson.png",   # с внуком
         chair_art="chair_focuscr.png",
         chair_model="focuscr", chair_name="Ki Mobility Focus CR (наклон в пространстве)",
         title="Наклон «ползёт» и заедает",
