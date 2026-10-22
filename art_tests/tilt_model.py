@@ -43,6 +43,33 @@ for f in F:
 comp_faces = {}
 for fi, f in enumerate(F):
     comp_faces.setdefault(find(f[0]), []).append(fi)
+if len(comp_faces) < 30:
+    # цельный скан (Tripo — одна «оболочка»): не резать на куски, а плавно изогнуть — вершины выше base_y
+    # (или впереди front_x) повёрнуты полностью, ниже base_y − 80 — нет, между — частично; детали «на базе» — 0
+    fixed = {i for f in F if names[f[3]] in keep for i in f[:3]}
+    low0 = {i for f in F if sum(V[j][1] for j in f[:3]) / 3 < 160 for i in f[:3]}
+    for i, v in enumerate(V):
+        if i in fixed:
+            continue
+        w = max(0.0, min(1.0, (v[1] - (base_y - 80)) / 80.0))
+        if v[0] > front_x:
+            w = max(w, min(1.0, (v[0] - front_x) / 60.0))
+        if w <= 0:
+            continue
+        aw = a * w
+        dx, dy = v[0] - px, v[1] - py
+        v[0], v[1] = round(px + dx * math.cos(aw) - dy * math.sin(aw), 1), round(py + dx * math.sin(aw) + dy * math.cos(aw), 1)
+    for li in [k for k, n in enumerate(names) if n in level_names]:
+        vs = sorted({i for f in F if f[3] == li for i in f[:3]} & low0)
+        if vs:
+            cx = sum(V[i][0] for i in vs) / len(vs)
+            cy = sum(V[i][1] for i in vs) / len(vs)
+            for i in vs:
+                dx, dy = V[i][0] - cx, V[i][1] - cy
+                V[i][0], V[i][1] = round(cx + dx * ca + dy * sa, 1), round(cy - dx * sa + dy * ca, 1)
+    json.dump(d, open(dst, "w", encoding="utf-8"), separators=(",", ":"))
+    print(f"{dst}: цельная модель ({len(comp_faces)} кусков) — плавный изгиб")
+    sys.exit()
 low = [sum(V[i][1] for i in f[:3]) / 3 < 160 for f in F]      # низ (площадки подножек) — до поворота
 rot = [False] * len(F)
 for faces in comp_faces.values():

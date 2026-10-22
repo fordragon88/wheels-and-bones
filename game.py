@@ -1575,6 +1575,8 @@ def web_setup_touch():
     повернуть экран, полный экран по первому касанию (Android — ещё и альбомная ориентация), кнопка ⛶,
     поле для экранной клавиатуры (отзыв). Возврат: True — сенсорный экран."""
     r = web_js("""(function(){
+      document.documentElement.style.overflow = 'hidden';   // служебные полосы pygbag/xterm (50000 px) давали прокрутку
+      document.body.style.overflow = 'hidden';               // в окне игры на сайте (Firefox)
       var touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
       if (!touch || document.getElementById('wnb-rotate')) return touch ? 'y' : 'n';
       var c = document.getElementById('canvas');
@@ -10513,18 +10515,21 @@ class Game:
             reserve = WIDTH - sk.x + 6
         left = 54 if self._top_back_rect() else 8               # не под кнопкой «◂ Назад»
         w = WIDTH - left - 8 - reserve
-        lines = wrap_lines(self.toast, w - 40, 16)
-        lh = font(16).get_height() + 2
-        h = 20 + len(lines) * lh                                # поля сверху/снизу — крупный шрифт не прилипает к рамке
+        for tsz in (16, 15, 14, 13, 12):                       # сообщение — в полосе заголовка (до 52 px), не на задании
+            lines = wrap_lines(self.toast, w - 40, tsz)
+            lh = font(tsz).get_height() + 1
+            if 8 + len(lines) * lh <= 50:
+                break
+        h = 8 + len(lines) * lh
         k = ease_back((self.t - self._typing.setdefault(("toast", self.toast), (self.toast, self.t))[1]) / 0.3)
-        rect = pygame.Rect(left, 5 - int(50 * (1 - k)), w, max(46, h))
+        rect = pygame.Rect(left, 2 - int(50 * (1 - k)), w, max(46, h))
         s = Surf(rect.size, pygame.SRCALPHA)
         s.fill((20, 18, 26, 250))
         surf.blit(s, rect)
         aa_rect(surf, self.toast_color, rect, 2, border_radius=6)
         y = rect.y + (rect.h - len(lines) * lh) // 2 + lh // 2
         for ln in lines:
-            draw_text(surf, ln, (rect.centerx, y), 16, self.toast_color, center=True)
+            draw_text(surf, ln, (rect.centerx, y), tsz, self.toast_color, center=True)
             y += lh
 
     def _topbar(self, surf, title, sub=None):
@@ -10541,8 +10546,13 @@ class Game:
             right -= font(18, True).size(tr("КОЛЁСА И КОСТИ"))[0] + 16
         x0 = 56 if self._top_back_rect() else 24                     # место под «◂ Назад»
         if sub:                                                  # вторая строка — какая коляска (модель)
-            fit_text(surf, title, (x0, 5), right - x0, 20, AMBER, bold=True)
-            fit_text(surf, sub, (x0, 31), right - x0, 14, GHOST)
+            for ts, ss in ((20, 14), (18, 13), (17, 12), (16, 11), (15, 10)):   # крупный шрифт — обе строки в полосе
+                th, sh = font(ts, True).get_height(), font(ss).get_height()
+                if th + sh + 1 <= 50:
+                    break
+            y = max(1, (54 - th - sh - 1) // 2)
+            fit_text(surf, title, (x0, y), right - x0, ts, AMBER, bold=True)
+            fit_text(surf, sub, (x0, y + th + 1), right - x0, ss, GHOST)
         else:
             fit_text(surf, title, (x0, 15), right - x0, 22, AMBER, bold=True)
 
@@ -13299,18 +13309,19 @@ class Game:
     def _draw_step_dots(self, surf, n, at=(360, 205), right=960):
         x, y = at
         if x + (n - 1) * 22 > right:                  # длинное задание — точки плотнее, в пределах центра
-            step = max(12, (right - x) // max(1, n - 1))
+            step = max(6.0, (right - x - 8) / max(1, n - 1))   # (крупный шрифт: заголовок шире — точки ещё плотнее)
         else:
             step = 22
-        r = 7 if step >= 22 else max(4, step // 3)
-        aa_rect(surf, (14, 12, 20, 190), (x - r - 7, y - r - 6, (n - 1) * step + 2 * r + 14, 2 * r + 12), border_radius=r + 6)
+        r = 7 if step >= 22 else max(3, int(step // 3))
+        aa_rect(surf, (14, 12, 20, 190), (x - r - 7, y - r - 6, round((n - 1) * step) + 2 * r + 14, 2 * r + 12), border_radius=r + 6)
         for i in range(n):
             c = GOOD if i < self.step_idx else (AMBER if i == self.step_idx else DIM)
-            aa_circle(surf, c, (x + i * step, y), r)
+            cx = round(x + i * step)
+            aa_circle(surf, c, (cx, y), r)
             if i > self.step_idx:                     # впереди: светлая обводка — видно на любом фоне
-                aa_circle(surf, (150, 150, 170), (x + i * step, y), r, 1)
+                aa_circle(surf, (150, 150, 170), (cx, y), r, 1)
             if i == self.step_idx:
-                aa_circle(surf, AMBER, (x + i * step, y), r + 3, 2)
+                aa_circle(surf, AMBER, (cx, y), r + 3, 2)
 
     def _draw_parts(self, surf, mouse, header):
         draw_text(surf, header, (980, 70), 16, AMBER, bold=True)

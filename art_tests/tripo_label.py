@@ -79,9 +79,9 @@ SPECS = {
                ("gas_spring", (-210, 50), (235, 345), (0, 130)),
                ("tilt_lock", (-130, 70), (355, 435), (170, 265)),
                ("footrest", (420, 620), (40, 150), (0, INF)),
-               ("seat", (-260, 340), (400, 490), (0, 230))],
-        tilt=dict(deg=20, pivot=(-60, 380), base_y=370, front_x=360,
-                  keep=("tire", "rim", "spokes", "axle", "bearing", "rear_wheel", "caster", "brake"))),
+               ("seat", (-260, 340), (400, 490), (0, 230))]),
+        # наклон 20° — после доработки: art_tests/model_patch.py focuscr → art_tests/tilt_model.py (целыми деталями;
+        # tilt=dict(...) здесь рвёт трубы на границе по граням)
     # Матильда — Permobil F5 Corpus (передний привод). Tripo (Scene (6).glb). Пульт у F5 один — справа:
     # левый «пульт» и стержни по бокам спинки — лишние.
     "f5": dict(art="chair_f5", wheels=[
