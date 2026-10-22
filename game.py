@@ -583,6 +583,15 @@ def _pad_stick(v, neg, pos):
     return []
 
 
+def _draw_book_icon(surf, center, r, col):
+    """Маленькая открытая книжка (сноска из мануала): две страницы и корешок."""
+    cx, cy = center
+    for d in (-1, 1):
+        DR.polygon(surf, col, [(cx, cy - r * 0.55), (cx + d * r, cy - r * 0.8), (cx + d * r, cy + r * 0.6),
+                               (cx, cy + r * 0.85)], 2)
+    DR.line(surf, col, (cx, cy - r * 0.55), (cx, cy + r * 0.85), 2)
+
+
 def mouse_pos():
     """Мышь в логических координатах 1280x720 (на сенсорном экране — где последнее касание)."""
     if FINGER["pos"] is not None and pygame.time.get_ticks() - FINGER["t"] < 60000:
@@ -6625,6 +6634,119 @@ for _job in JOBS:
 
 ALL_JOBS = JOBS + TECH_JOBS
 
+# Сноски из мануалов (карточка внизу справа при наведении на деталь в ремонте): задание -> {деталь: (мануал,
+# страница или None, текст)}. Только то, что помогает в ремонте и чего нет в общем шаге: особенности этой модели,
+# размеры, усилия, давление, где кнопка. Источник каждой — в «# source:» над заданием.
+MANUAL_NOTES = {
+    "aeroz_lock": {
+        "brake": ("TiLite Aero Z", "70–72", "Хомут замка: ослабить (не выкручивать) два винта ключом 3/16\", сдвинуть, "
+                  "затянуть. Регулируют только на накачанной шине; зажатый упор вдавливается в шину минимум на 3/16\" (≈5 мм)."),
+        "tire": ("TiLite Aero Z", "15, 22", "Давление проверять каждую неделю, норма напечатана на боковине шины. "
+                 "На мягкой шине замки проскальзывают."),
+        "bolts": ("TiLite Aero Z", "26", "После любой регулировки весь крепёж затягивают до поездки."),
+    },
+    "cross6_back": {
+        "backrest": ("Etac Cross 6", "31", "Угол спинки — гайка 13 мм с внутренней стороны крепления заднего колеса. "
+                     "Ослабить у одной стойки, выставить, затянуть, потом вторую; сверить расстояние стойка ↔ пластина "
+                     "подлокотника с обеих сторон."),
+        "anti_tip": ("Etac Cross 6", "13", "После любой регулировки проверить антиопрокидыватели: работают и защёлкнуты."),
+        "brake": ("Etac Cross 6", "32", "В отпущенном виде штифт тормоза — в 15–20 мм от шины, винт — около 5 Н·м. "
+                  "Работа тормоза зависит от давления в шине."),
+    },
+    "iris_tilt": {
+        "anti_tip": ("Quickie Zippie IRIS", "13, 16", "Антиопрокидыватели — 38–51 мм (1½–2\") от пола, оба строго на "
+                     "одной высоте, переставляются кнопкой. Выше 51 мм могут не удержать, ниже 38 мм — цепляются."),
+        "tilt_cable": ("Quickie Zippie IRIS", "27", "Ослабить контргайку, вращать регулятор, пока не уйдёт провис: "
+                       "штифт-плунжер должен полностью убираться и входить в рокер. Потом затянуть гайку."),
+        "tilt_lever": ("Quickie Zippie IRIS", "12, 20", "Оба курка вместе отпускают наклон, отпустил — рокеры заперты. "
+                       "Не наклонять дальше, чем спинка параллельна полу."),
+        "tire": ("Quickie Zippie IRIS", "13", "Давление по таблице: шина 22\" — 65 psi (448 кПа)."),
+    },
+    "focuscr_cable": {
+        "tilt_cable": ("Ki Mobility Focus CR", "19–20", "Контргайку отпускают ключами 10 мм и 3/8\". Регулятор — до "
+                       "исчезновения провиса, но зуб фиксатора полностью в зубьях. Трос с заломом или такой, что не "
+                       "регулируется, меняют."),
+        "tilt_lock": ("Ki Mobility Focus CR", "19", "Зуб чиркает или у курка люфт — регулятор выкрутить; зуб вышел из "
+                      "зацепления — вкрутить. Затягивают только гайку."),
+        "tilt_lever": ("Ki Mobility Focus CR", "19", "Нельзя оставлять человека в кресле с курками, зафиксированными "
+                       "открытыми. Курок блокируют штифтом на шнурке."),
+    },
+    "whill_code": {
+        "controller": ("WHILL Model C2", "105", "Код на пульте, звук — и коляска выключается. Коды: 01 подлокотник, "
+                       "02 джойстик не в центре при включении, 03 тормоза, 04 зарядка, 05 батарея ≤20 %, 10 связь по "
+                       "кабелю сиденья."),
+        "joystick": ("WHILL Model C2", "107", "Джойстику хватает усилия около 1 Н — питание включают, не касаясь его."),
+        "freewheel": ("WHILL Model C2", "36", "Перед поездкой рычаги разблокировки тормозов должны быть подняты — "
+                      "тормоза заперты."),
+        "armrest": ("WHILL Model C2", "106", "Рычаг подлокотника ходит туго — в основании пыль: вычистить щёткой или "
+                    "продуть."),
+    },
+    "f5_charge": {
+        "freewheel": ("Permobil F5 Corpus", "34", "Свободный ход — только на ровном месте, пульт выключен, рядом "
+                      "помощник. У F5 оба рычага ВНИЗ — свободный ход, ВВЕРХ — езда."),
+        "breaker": ("Permobil F5 Corpus", "39–40", "Сначала выключить пульт, потом главный автомат. Включают автомат "
+                    "один раз; выбивает снова — в сервис."),
+        "battery": ("Permobil F5 Corpus", "39–40", "Хранить в сухом месте не холоднее +5 °C, иначе батареи не "
+                    "зарядятся полностью. Перед долгим хранением — зарядить и выключить главный автомат."),
+        "controller": ("Permobil F5 Corpus", "33", "Гнездо зарядки — на пульте. Зарядку подключают сначала к коляске, "
+                       "потом к розетке."),
+        "tire": ("Permobil F5 Corpus", "64", "Ведущие шины — 250 кПа; проверять раз в неделю и после смены температуры."),
+    },
+    "lift": {
+        "controller": ("Q-Logic 3", "8", "Кнопка key 2 сразу открывает экран сиденья. Индикатор блокировки: "
+                       "зелёный — без ограничений, жёлтый — лифт ограничил скорость, красный — блокировка."),
+        "seat_lift": ("Quantum Edge 4", "9", "iLevel работает, только если наклон и откидывание сиденья не больше 20°. "
+                      "Поднимать — на ровном полу в помещении, зону вокруг ножниц держать свободной."),
+        "actuator": ("Quantum Edge 4", "19, 26", "Все разъёмы — плотные, закреплённые, без коррозии. Треснувший "
+                     "разъём или перетёртый жгут — к дилеру Quantum."),
+        "battery": ("Quantum Edge 4", "7", "Главный автомат — на батарейном лотке под задней крышкой; крышка "
+                    "снимается без инструментов."),
+    },
+    "cushion": {
+        "cushion": ("ROHO: как настроить подушку", None, "Настраивают, когда человек сидит: ладонь под самую низкую "
+                    "кость таза, стравливать воздух, пока пальцы не начнут чуть двигаться — под тазом 1,5–2,5 см "
+                    "воздуха (примерно палец)."),
+    },
+    "yaga_d100": {
+        "axle": ("Vermeiren D100", "16", "Высота сиденья — перестановкой колёс: 470 мм — ось в отверстиях 1+2, вилки "
+                 "в A; 500 мм — 2+3 и B; 530 мм — 3+4 и C. Верхнее отверстие пластины — для барабанного тормоза."),
+        "brake": ("Vermeiren D100", "8, 17", "Регулировка: отпустить тормоз, ослабить болты, сдвинуть по направляющей к "
+                  "колесу, затянуть, проверить толчком. Тормоза стояночные — не для торможения на ходу."),
+        "rear_wheel": ("Vermeiren D100", "12", "Колесо снимают при отпущенных тормозах: кнопка в центре ступицы."),
+        "caster_stem": ("Vermeiren D100", "16", "После перестановки вилка должна стоять отвесно к полу."),
+    },
+    "olga_x3": {
+        "brake": ("Panthera X3", "15", "Тормоз сдвигают по рейке ключом 12 мм. В зажатом положении упор вдавлен в шину "
+                  "примерно на 4 мм — одинаково с двух сторон."),
+        "caster": ("Panthera X3", "21", "Два шестигранника 4 мм; почистить проставки, протереть подшипники, по капле "
+                   "масла. На резьбе должен остаться клей-фиксатор, иначе — новый болт или мягкий фиксатор."),
+        "axle": ("Panthera X3", "20", "После песка, соли или дождя быстросъёмную ось смазывают каплей масла."),
+        "tire": ("Panthera X3", "7, 23", "Давление — 8 бар (800 кПа). На мягкой шине тормоз не держит."),
+    },
+    "leshy_x8": {
+        "motor": ("Magic Mobility Extreme X8", "16–17", "Застрял — не держи джойстик дольше нескольких секунд: моторы "
+                  "перегреваются. В воду и болота не въезжать."),
+        "tire": ("Magic Mobility Extreme X8", "14, 36–38", "Разное давление тянет коляску вбок. На бездорожье — до "
+                 "8 psi, максимум 24 psi; проверять раз в неделю."),
+        "rim": ("Magic Mobility Extreme X8", "38", "Гайки колёс X8 затягивают с усилием 47–50 Н·м."),
+    },
+    "ra_emotion": {
+        "motor": ("Alber e-motion M25", "56, 61", "Все огоньки мигают белым и 4 сигнала — температура зарядки вне "
+                  "0…40 °C, зарядка прервана. Заряжать при 0…40 °C, оба колеса выключены."),
+        "brake": ("Alber e-motion M25", "49, 56", "У колёс e-motion нет своих тормозов: при зарядке и на стоянке "
+                  "зажимают тормоза коляски."),
+        "rear_wheel": ("Alber e-motion M25", "55, 57", "Гнездо зарядки — магнитное, на кнопке ступицы; чистить сухой "
+                       "тряпкой, без металла. Пока идёт зарядка, на обручи не давить."),
+    },
+    "gorynych_jazzy": {
+        "breaker": ("Pride Jazzy 614", "19", "Автомат выбивает при перегрузке: подождать около минуты, нажать кнопку, "
+                    "включить пульт. Выбивает снова и снова — в сервис Pride."),
+        "frame": ("Pride Jazzy 614", "10, 38", "Предел веса — вместе со всем, что на коляске: Jazzy 614 — 136 кг "
+                  "(300 lb), 614 HD — 204 кг."),
+        "battery": ("Pride Jazzy 614", "37", "Нет питания — проверить разъёмы жгутов, автомат и клеммы батарей."),
+    },
+}
+
 
 # ----------------------------------------------------------------------------- #
 #  UI-объекты
@@ -9983,6 +10105,7 @@ class Game:
         self.scan_tick()
         self.pad_tick()
         self._settings_help_say()
+        self._manual_note_say()
         if self.scene == "credits" and not calm() and self.t - self.scene_t0 > 1.2:
             self.credits_y = min(self.credits_y + 26 * dt, self._credits_max())   # медленно вверх
         if not self.headless:
@@ -11388,6 +11511,8 @@ class Game:
             return False
         J = dict(J, neck=(J["sh"][0] + (J["head"][0] - J["sh"][0]) * 0.35,
                           J["sh"][1] + (J["head"][1] - J["sh"][1]) * 0.35))
+        J["elbow"] = (J["sh"][0] + 5.0, J["sh"][1] - 24.0)        # рука — как у скелета (_draw_seat_flesh)
+        J["hand"] = (J["elbow"][0] + 21.0, J["elbow"][1] + 1.5)
         rs = _rs(surf)
         parts = sorted(rig["parts"].values(), key=lambda q: q["order"])
         imgs, ratios = [], []
@@ -11404,7 +11529,9 @@ class Game:
             lt = math.hypot(tb[0] - ta[0], tb[1] - ta[1]) * rs
             imgs.append((q, img, ta, tb))
             ratios.append(lt / ls)
-        tsc = next((r for (q, *_), r in zip(imgs, ratios) if q["a"] == "hip" and q["b"] == "sh"), None)
+        # масштаб торса (по нему — голова): цельный торс hip→sh или грудь mid→sh у куклы из SVG (таз отдельно)
+        tsc = next((r for (q, *_), r in zip(imgs, ratios) if q["b"] == "sh"), None)
+        slim = rig.get("slim", self.SEAT_SLIM)
         layer = pygame.Surface(surf.get_size(), pygame.SRCALPHA) if self.SEAT_XRAY else None
         self._seat_head_img = None
         trot = None                                         # поворот торса: голова за ним, кивает на треть
@@ -11414,14 +11541,14 @@ class Game:
             ang_s = math.atan2(-(q["pb"][1] - q["pa"][1]), q["pb"][0] - q["pa"][0])
             ang_t = math.atan2(-(tb[1] - ta[1]), tb[0] - ta[0])
             rot = math.degrees(ang_t - ang_s)
-            if q["a"] == "hip" and q["b"] == "sh":
+            if q["b"] == "sh":
                 trot = rot
             elif q["a"] == "neck" and trot is not None:
                 rot = trot + (rot - trot) * 0.35
             # вдоль кости — точно по суставам, поперёк (толщина) и голова — уже: SEAT_SLIM
-            along = sc * (self.SEAT_SLIM if q["a"] == "neck" else 1.0)
+            along = sc * (slim if q["a"] == "neck" else 1.0)
             out, (ax_, ay_) = _rot_scale(img, q["pa"], math.degrees(ang_s), rot + math.degrees(ang_s),
-                                         along, sc * self.SEAT_SLIM)
+                                         along, sc * slim)
             pos = (round(ta[0] * rs - ax_), round(ta[1] * rs - ay_))
             if layer is not None:
                 pygame.Surface.blit(layer, out, pos)
@@ -13487,6 +13614,59 @@ class Game:
             fit_text(surf, PARTS[pid], (rect.x + 34, rect.centery - font(16).get_height() // 2), rect.w - 56, 16, WHITE)
             if self.phase == "diagnose" and pid in self.inspected:
                 draw_text(surf, "✔", (rect.right - 10, rect.centery - 9), 15, GOOD, right=True)
+            elif self.phase == "repair" and self._part_note(pid):
+                _draw_book_icon(surf, (rect.right - 16, rect.centery), 9, CYAN if hov else GHOST)
+
+    def _part_note(self, pid):
+        """Сноска из мануала к детали текущего задания: (мануал, страница|None, текст) или None."""
+        return MANUAL_NOTES.get(self.cur["id"], {}).get(pid) if self.cur else None
+
+    def _note_part_at(self, mouse):
+        """Деталь со сноской в фокусе клавиатуры/кнопки или под мышью (строка списка, кружок на коляске)."""
+        if self.phase != "repair" or not self.cur or self.cur.get("track") == "tech" or self.mini_pending:
+            return None
+        key = self.kb.get("key") if self.kb.get("active") else None
+        if isinstance(key, tuple) and key[0] == "part":
+            return key[1] if self._part_note(key[1]) else None
+        for pid, r in self._part_rects():
+            if r.collidepoint(mouse):
+                return pid if self._part_note(pid) else None
+        for pid, x, y, r in self._chair_hotspots():
+            if (mouse[0] - x) ** 2 + (mouse[1] - y) ** 2 <= (r + 6) ** 2:
+                return pid if self._part_note(pid) else None
+        return None
+
+    @staticmethod
+    def _note_head(note):
+        manual, page, _ = note
+        return "Из мануала: {0}, с. {1}".format(tr(manual), page) if page else "Из мануала: {0}".format(tr(manual))
+
+    def _draw_manual_note(self, surf, info, pid):
+        """Карточка внизу справа: сноска из мануала к наведённой детали."""
+        note = self._part_note(pid)
+        _draw_book_icon(surf, (info.x + 26, info.y + 22), 13, CYAN)
+        head, text = self._note_head(note), note[2]
+        w = info.w - 62
+        for hs, ts in ((15, 15), (14, 14), (13, 13), (12, 12), (12, 11)):
+            hh = len(wrap_lines(head, w, hs)) * (font(hs).get_height() + 2)
+            th = len(wrap_lines(text, w, ts)) * (font(ts).get_height() + 2)
+            if 8 + hh + 4 + th <= info.h - 6:
+                break
+        y = draw_wrapped(surf, head, (info.x + 46, info.y + 8), w, hs, CYAN)
+        draw_wrapped(surf, text, (info.x + 46, y + 4), w, ts, WHITE,
+                     max_lines=max(1, (info.bottom - 6 - y - 4) // (font(ts).get_height() + 2)))
+
+    def _manual_note_say(self):
+        """Озвучка: фокус задержался на детали со сноской — прочитать сноску один раз."""
+        if not (self.scene == "job" and self.kb.get("active") and A11Y["on"]):
+            return
+        pid = self._note_part_at((-1, -1))
+        if pid != getattr(self, "_note_key", None):
+            self._note_key, self._note_t, self._note_said = pid, self.t, False
+        elif pid and not self._note_said and self.t - self._note_t > 1.2:
+            self._note_said = True
+            note = self._part_note(pid)
+            self.say(tr(self._note_head(note)) + ". " + tr(note[2]), False)
 
     def _draw_tools(self, surf, mouse):
         """Минималистичная панель: иконки без текста, описание — в карточке справа."""
@@ -13529,7 +13709,10 @@ class Game:
         aa_rect(card, (22, 20, 30, 215), card.get_rect(), border_radius=12)
         surf.blit(card, info)
         tid = hover_tid or self.sel_tool
-        if tid:
+        note_pid = None if (hover_tid or tech) else self._note_part_at(mouse)
+        if note_pid:
+            self._draw_manual_note(surf, info, note_pid)
+        elif tid:
             in_hand = tid == self.sel_tool
             low = info.h < 80                         # в Гильдии карточка в один ряд
             isz = 38 if low else 44
@@ -14691,6 +14874,15 @@ def run_selftest():
         for _ in range(20):
             g.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=g._m3d_zoom_rects()[1].center))
         assert abs(g._m3d_state()["zoom_k"] - g.M3D_ZOOM[0]) < 1e-6, "«−» — до предела, не дальше"
+
+    # сноски из мануалов — к деталям, которые есть в задании (иначе значок книжки не появится)
+    for _jid, _notes in MANUAL_NOTES.items():
+        _job = next((j for j in ALL_JOBS if j["id"] == _jid), None)
+        assert _job, f"MANUAL_NOTES: нет задания {_jid}"
+        _parts = set(_job.get("parts") or []).union(*[set(v.get("parts") or []) for v in _job.get("variants", [])])
+        for _pid, (_m, _pg, _t) in _notes.items():
+            assert _pid in _parts, f"MANUAL_NOTES {_jid}: деталь {_pid} не в задании"
+            assert tr(_t) != _t or LANG["code"] == "ru", f"MANUAL_NOTES {_jid}/{_pid}: нет перевода"
 
     # у каждой настройки на каждой вкладке есть объяснение (карточка при наведении/фокусе)
     g = Game(headless=True)

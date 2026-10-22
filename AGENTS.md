@@ -305,6 +305,22 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **сноски из мануалов** (отзыв «открыть мануал коляски»; владелец: «только то, что
+  действительно полезно»): `MANUAL_NOTES` (после ALL_JOBS) — задание → {деталь: (мануал, страница|None, текст)}, 44 сноски
+  в 14 заданиях, только из «# source:» над заданием (особенности модели: куда рычаги свободного хода, размеры ключей,
+  усилия, давление, где автомат). В ремонте у детали со сноской — значок книжки (`_draw_book_icon`), при наведении
+  на строку/кружок или фокусе — сноска в карточке инструментов (`_note_part_at`, `_draw_manual_note`), озвучка —
+  после паузы 1,2 с (`_manual_note_say`). Без сносок: первые задания (нет страниц мануала) и freewheel/Грунд
+  (источники — мануал Pulse 6, а коляска Trident). Selftest: деталь есть в задании, перевод есть.
+  **Кукла тела из SVG** (Кабинет посадки): `art_tests/seat_bodies_svg.py <svg> [out=]` — группы shin/thigh/pelvis/
+  chest/upper_arm/forearm/head рендерятся Playwright'ом по отдельности, суставы — из <g id="joints">;
+  `art_tests/seat_bodies_preview.py <папка> <png>` — 5 поз в сцене Кабинета. `_draw_seat_puppet`: торс может быть
+  из двух частей (масштаб и поворот головы — по части *→sh), рука по суставам скелета (elbow/hand как в
+  `_draw_seat_flesh`), `slim` берётся из seat_bodies.json (у куклы из SVG 1.0). SVG Бомма — Codex (gpt-6-luna, модель
+  из config.toml gpt-5.6-sol на ChatGPT-аккаунте не работает; `codex exec ... < /dev/null`, иначе ждёт stdin):
+  art_tests/seat_bodies/codex_svg/bomm_puppet.svg (v3). В игру ещё не вставлено (SEAT_BODY_ON = False) — ждёт владельца.
+  (game.py, assets/lang_en.json, i18n_work/en9_fixes99_feedback.json, art_tests/seat_bodies_svg.py, art_tests/seat_bodies_preview.py)
+
 - 2026-10-22 — Claude (Opus 5.5) — **ТЗ для ChatGPT: тело Бомма вектором** (Кабинет посадки, кукла по скелету):
   art_tests/seat_bodies/chatgpt_brief/ — 1_rig_neutral.png (скелет в сетке 1000×1000, суставы с координатами,
   зоны частей), 2_poses_to_survive.png (позы: сползание, колени вверх, ноги висят), 3_bomm_look.png, PROMPT_svg.txt,
