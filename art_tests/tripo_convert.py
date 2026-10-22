@@ -138,6 +138,19 @@ def orient(V, axis_mm, flip_z=False, yaw=0):
     return V
 
 
+def level(V):
+    """--pitch=ГРАД: модель стоит с наклоном (касторы над полом) — повернуть вокруг оси z (+ — опустить перед), снова на пол."""
+    deg = next((float(x.split("=", 1)[1]) for x in sys.argv if x.startswith("--pitch=")), 0.0)
+    if not deg:
+        return V
+    a = math.radians(deg)
+    x, y = V[:, 0], V[:, 1]
+    V = np.c_[x * math.cos(a) + y * math.sin(a), -x * math.sin(a) + y * math.cos(a), V[:, 2]]
+    V[:, 1] -= V[:, 1].min()
+    V[:, 0] -= (V[:, 0].max() + V[:, 0].min()) / 2
+    return V
+
+
 def decimate(V, F, C, target):
     ratio = 1.0 - target / len(F)
     Vs, Fs = fast_simplification.simplify(V.astype(np.float32), F.astype(np.int32), target_reduction=ratio, agg=6)
@@ -201,6 +214,7 @@ if __name__ == "__main__":
     V, F, keep, dropped, ncomp, nkept = keep_attached(V, F, cell=12.0)
     C = C[keep]
     V = orient(V, (name, float(mm)), "--flip-z" in sys.argv, 0)     # габарит — уже без мусора
+    V = level(V)
     print(f"кластеров {ncomp}, выброшено вершин {dropped}")
     V, F, C = decimate(V, F, C, 40000)
     V[:, 1] -= V[:, 1].min()

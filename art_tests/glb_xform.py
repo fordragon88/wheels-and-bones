@@ -23,6 +23,7 @@ G = tc.orient(raw, (axis, float(mm)), "--flip-z" in sys.argv, yaw)
 G, F2, keep, *_ = tc.keep_attached(G, F, cell=12.0)
 raw = raw[keep]
 G = tc.orient(G, (axis, float(mm)), "--flip-z" in sys.argv, 0)
+G = tc.level(G)
 X = np.c_[raw, np.ones(len(raw))]
 A, *_ = np.linalg.lstsq(X, G, rcond=None)                               # (4, 3): G = X · A
 err = np.abs(X @ A - G).max()

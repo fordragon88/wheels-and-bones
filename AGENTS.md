@@ -303,6 +303,14 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **Focus CR (Агата) — модель Meshy** (`meshy_models/ki_mobility_focus_cr.glb`, ключ `fcr`,
+  height=1025): Meshy сделал кресло уже в наклоне (tilt-in-space) — так и оставлено, искусственный изгиб tilt_model не
+  нужен. Модель стояла с наклоном базы 2,8° (касторы над полом) — `tripo_convert.py/glb_xform.py --pitch=2.78` (новая
+  функция `level`: поворот вокруг z и снова на пол). SPECS `fcr`: курки наклона — на ручках толкания (у Meshy ближе к
+  центру), трос, фиксатор и газовая пружина под сиденьем, антиопрокидыватели, тормоз. Цвета Meshy (тёмно-синяя рама).
+  Рисунок chair_focuscr.png — кадр 0. Прежняя (наша модель с изгибом 20°) — art_tests/tripo/bak_before_meshy/chair_focuscr_ai_tilted*.
+  (art_tests/*, assets/models/chair_focuscr_ai*.json, assets/turntable/chair_focuscr_*, assets/chair_focuscr.png)
+
 - 2026-10-22 — Claude (Opus 5.5) — **WHILL C2 — модель Meshy** (`meshy_models/whill_model_c2.glb`, по фото Model Ci —
   почти та же коляска; height=910, ключ `whill`): кадры с оригинала, SPECS `whill` (омни-колёса спереди — коробкой
   `omni_wheel`, задние литые шины, пульт справа, батарея под сиденьем, `seat_cable` — у стойки сиденья: его требует

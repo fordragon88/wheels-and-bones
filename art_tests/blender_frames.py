@@ -24,7 +24,8 @@ GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]),            # кра
        "chair_edge4.png": dict(key="edge4", recolor=[228, 2, 32]),       # синий -> красный
        "chair_f5.png": dict(key="f5m", recolor=[175, -1, 30]),           # бирюзовый -> графит
        "chair_trident.png": dict(key="trident"), "chair_pulse6.png": dict(key="pulse6"),
-       "chair_gorynych.png": dict(key="jazzy"), "chair_whillc2.png": dict(key="whill")}
+       "chair_gorynych.png": dict(key="jazzy"), "chair_whillc2.png": dict(key="whill"),
+       "chair_focuscr.png": dict(key="fcr")}                               # цвета Meshy (тёмно-синяя рама, как на фото)
 total = 0
 for art in arts:
     name = os.path.splitext(art)[0]
