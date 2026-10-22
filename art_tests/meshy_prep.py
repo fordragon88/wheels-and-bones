@@ -23,15 +23,32 @@ SETS = {
     "3_Quantum_Edge_4": ("edge4", [("00_Quantum-Edge-4.jpg", "1_front_3-4"), ("03_Quantum-Edge-left-view.jpg", "2_side"),
                                    ("04_Quantum-Edge-right-view.jpg", "3_other_side")],   # вида сзади у новой Edge 4 нет нигде
                          False, (228, 2, 30)),                         # синий -> красный, как в игре
-    "4_Quantum_Q6_Edge": ("q6edge", [("00_dscn1449_orig.jpg", "1_front_3-4"), ("01_dscn1450_orig.jpg", "2_side"),
-                                     ("03_dscn1452_orig.jpg", "3_back"), ("05_dscn1454_orig.jpg", "4_other_side")],
-                          True, None),
+    "4_Quantum_Q6_Edge": ("q6edge2", [("01_PWR01076Front.jpg", "1_front"), ("02_PWR01076RightSide.jpg", "2_side"),
+                                      ("05_PWR01076Back.jpg", "3_back"), ("06_PWR01076LeftSide.jpg", "4_other_side")],
+                          False, None),                         # студийные фото магазина (Q6 Edge 2.0), белый фон
     "5_Drive_Trident_HD": ("trident", [("00_trident_hd_power_wheelchair.jpg", "1_front_3-4"),
                                        ("01_side_trident_hd_power_wheelchair.jpg", "2_side"),
                                        ("03_back_trident_hd_power_wheelchair.jpg", "3_back"),
                                        ("02_front_trident_hd_power_wheelchair.jpg", "4_front")], False, None),
-    "6_Quickie_Pulse_6": ("pulse6", [("00_s-l1600.jpg", "1_front"), ("03_s-l1600.jpg", "2_side"),
-                                     ("01_s-l1600.jpg", "3_back"), ("02_s-l1600.jpg", "4_other_side")], True, None),
+    "6_Quickie_Pulse_6": ("pulse6b", [("00_PWR00807Overview_0b1331c4-4699-452f-a0bf-88329d5f13f8.jpg", "1_front_3-4"),
+                                      ("02_PWR00807RightSide_7c6fb164-c9e0-4dba-8604-abdbb2e39bfc.jpg", "2_side"),
+                                      ("03_PWR00807Back_0fa992fc-732c-4c26-83ed-54667b911628.jpg", "3_back"),
+                                      ("04_PWR00807LeftSide_d59645f7-4fa6-4d5d-8bad-8162c900d1c7.jpg", "4_other_side"),
+                                      ("01_PWR00807Front_958e5491-e7f8-463d-be89-5ddb709c1c69.jpg", "5_front")], False, None),
+    "8_Ki_Mobility_Focus_CR": ("focuscr", [("00_PhotoAug012023_12249PM.jpg", "1_front_3-4"),
+                                           ("02_PhotoAug012023_12247PM.jpg", "2_side"),
+                                           ("01_PhotoAug012023_12246PM.jpg", "3_back"),
+                                           ("04_PhotoAug012023_12250PM.jpg", "4_other_side"),
+                                           ("06_PhotoAug012023_12252PM.jpg", "5_front")], False, None),   # прямо; наклон — в игре
+    "9_Zippie_Iris": ("iris2", [("00_image_b21f2a94-7f9d-49b6-aa74-f", "1_front_3-4"),
+                                ("04_image_8cea1d28-3d39-48a6-b01b-b", "2_side"),
+                                ("05_image_15e6e694-d74c-4bc9-977f-3", "3_back"),
+                                ("03_image_e727272c-6a41-49d3-b0ef-f", "4_front")], False, None),
+    "7_Pride_Jazzy_614": ("jazzy614b", [("00_PhotoRoom_000_20230222_094737.jpg", "1_front_3-4"),
+                                        ("03_PhotoRoom_003_20230222_094737.jpg", "2_side"),
+                                        ("05_PhotoRoom_005_20230222_094737.jpg", "3_back"),
+                                        ("04_PhotoRoom_004_20230222_094737.jpg", "4_other_side"),
+                                        ("01_PhotoRoom_001_20230222_094737.jpg", "5_front")], False, None),
 }
 
 
@@ -96,11 +113,13 @@ for key in only:
     os.makedirs(dst)
     for fn, view in files:
         src = os.path.join(RAW, folder, fn)
+        if not os.path.exists(src):                     # имя дано началом
+            src = os.path.join(RAW, folder, next(f for f in sorted(os.listdir(os.path.join(RAW, folder))) if f.startswith(fn)))
         im = cut_bg(src, f"{folder}_{view}") if need_cut else Image.open(src).convert("RGBA")
         if rule:
             im = recolor(im, rule)
         frame(im).save(os.path.join(dst, f"{view}.png"))
-    sheet = Image.new("RGB", (len(files) * 256, 256), "white")
+    sheet = Image.new("RGB", (5 * 256, 256), "white")
     for i, (_, view) in enumerate(files):
         sheet.paste(Image.open(os.path.join(dst, f"{view}.png")).resize((256, 256)), (i * 256, 0))
     sheet.save(os.path.join(dst, "_all4.png"))

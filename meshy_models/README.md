@@ -9,6 +9,7 @@
 | `quantum_edge_4.glb` | Quantum Edge 4 | «Лифт сиденья» (гоблин Зикс), `chair_edge4.png` | 2026-10-22 |
 | `permobil_f5_corpus.glb` | Permobil F5 Corpus | «Зарядка в холоде» (барсучиха Матильда), `chair_f5.png` | 2026-10-22 |
 | `drive_trident_hd.glb` | Drive Trident HD | «Свободный ход» (`freewheel`), `chair_trident.png` | 2026-10-22 |
+| `quickie_pulse_6.glb` | Quickie Pulse 6 | Гильдия, «Pulse 6» (`t_pulse6`), `chair_pulse6.png` | 2026-10-22 |
 
 Как модель попадает в игру:
 1. `art_tests/tripo_convert.py meshy_models/<файл>.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002`

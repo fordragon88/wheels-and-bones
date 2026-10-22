@@ -303,6 +303,15 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **Pulse 6 — модель Meshy** (`meshy_models/quickie_pulse_6.glb`, height=1170, ключ `pulse6`,
+  задание Гильдии `t_pulse6`): кадры с оригинального GLB (родные цвета), SPECS `pulse6` (средний привод, пульт VR2 справа,
+  детали прежней модели: mag_brake, brushes, freewheel, fuse…). Рисунок chair_pulse6.png — кадр 0, вписан в прежний
+  холст 760×600 (у заданий Гильдии нет окна коляски — art_from_turntable не подходит), старый — art_tests/retired/.
+  **Референсы для Meshy**: `art_tests/meshy_shop.py <ключ> <url товара Shopify>` — все студийные фото товара
+  (магазин mobilityequipmentforless.com снимает коляски на белом фоне со всех сторон, 2048 px); наборы в meshy_prep:
+  Q6 Edge (2.0), Pulse 6, Jazzy 614 (Горыныч), Focus CR (Агата, прямо — наклон делаем сами), Zippie Iris (Искра).
+  (art_tests/*, assets/models/chair_pulse6_ai*.json, assets/turntable/chair_pulse6_*, assets/chair_pulse6.png)
+
 - 2026-10-22 — Claude (Opus 5.5) — **Trident HD — модель Meshy** (`meshy_models/drive_trident_hd.glb`, height=1175,
   ключ `trident`): кадры с оригинального GLB (цвет родной — чёрный с серебряными дисками), SPECS `trident` (передний
   привод, большие задние касторы, пульт справа, провод под подлокотником). Рисунок chair_trident.png — кадр 0
