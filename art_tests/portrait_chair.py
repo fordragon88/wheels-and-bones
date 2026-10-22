@@ -21,7 +21,9 @@ GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]), "chair_edge4.png": 
        "chair_whillc2.png": dict(key="whill"), "chair_focuscr.png": dict(key="fcr"),
        "chair_leshy.png": dict(key="x8", recolor=[28, 4, 26])}
 # подгонка коляски под персонажа (только для портрета): сдвиг части модели, мм игры (blender_render.move_parts)
-MOVE = {"chair_f5.png": [dict(x=[330, 620], y=[-50, 200], not_wheel=[215, 182, 195, 215], d=[0, 190, 0])]}  # Матильда: подножка выше
+MOVE = {"chair_f5.png": [   # Матильда: без передних антиопрокидывателей, подножка выше под короткие ноги
+    dict(x=[385, 520], y=[-20, 140], az=[235, 300], not_wheel=[215, 182, 188, 215], delete=True),
+    dict(x=[330, 620], y=[-50, 200], not_wheel=[215, 182, 195, 215], d=[0, 190, 0])]}
 if art in GLB:
     xf = json.load(open(os.path.join(HERE, "gen3d", GLB[art]["key"] + "_xform.json"), encoding="utf-8"))
     spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"), move=MOVE.get(art))

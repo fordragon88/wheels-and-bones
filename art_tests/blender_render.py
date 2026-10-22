@@ -69,28 +69,40 @@ def import_glb(path, M, recolor=None):
 
 
 def move_parts(moves):
-    """Сдвиг части оригинальной модели (напр. подножка выше под короткие ноги): вершины с x, y (мм игры) в зоне,
-    кроме тех, что в круге колеса (not_wheel = cx, cy, R, |z| от), едут на d (мм игры)."""
+    """Сдвиг части оригинальной модели (напр. подножка выше под короткие ноги): вершины с x, y (мм игры) в зоне
+    (и |z| в az, если задано), кроме тех, что в круге колеса (not_wheel = cx, cy, R, |z| от), едут на d (мм игры);
+    delete=True — вершины зоны удаляются (напр. антиопрокидыватель). Порядок — как в списке."""
+    import bmesh
     for o in [o for o in sc.objects if o.type == "MESH"]:
         mw = o.matrix_world
-        n = len(o.data.vertices)
-        co = np.empty(n * 3)
-        o.data.vertices.foreach_get("co", co)
-        loc = np.c_[co.reshape(-1, 3), np.ones(n)]
-        w = loc @ np.asarray(mw).T
-        x, y, z = w[:, 0] * 1000, w[:, 2] * 1000, -w[:, 1] * 1000
         for mv in moves:
+            n = len(o.data.vertices)
+            co = np.empty(n * 3)
+            o.data.vertices.foreach_get("co", co)
+            w = np.c_[co.reshape(-1, 3), np.ones(n)] @ np.asarray(mw).T
+            x, y, z = w[:, 0] * 1000, w[:, 2] * 1000, -w[:, 1] * 1000
             sel = (x >= mv["x"][0]) & (x <= mv["x"][1]) & (y >= mv["y"][0]) & (y <= mv["y"][1])
+            if mv.get("az"):
+                sel &= (np.abs(z) >= mv["az"][0]) & (np.abs(z) <= mv["az"][1])
             if mv.get("not_wheel"):
                 cx, cy, R, zw = mv["not_wheel"]
                 sel &= ~((np.hypot(x - cx, y - cy) < R) & (np.abs(z) > zw))
+            if mv.get("delete"):
+                bm = bmesh.new()
+                bm.from_mesh(o.data)
+                bm.verts.ensure_lookup_table()
+                bmesh.ops.delete(bm, geom=[bm.verts[i] for i in np.nonzero(sel)[0]], context="VERTS")
+                bm.to_mesh(o.data)
+                bm.free()
+                print("удалено вершин:", int(sel.sum()), o.name)
+                continue
             dx, dy, dz = mv["d"]
             w[sel, 0] += dx / 1000
             w[sel, 1] -= dz / 1000
             w[sel, 2] += dy / 1000
             print("сдвинуто вершин:", int(sel.sum()), o.name)
-        new = w @ np.asarray(mw.inverted()).T
-        o.data.vertices.foreach_set("co", new[:, :3].ravel())
+            new = w @ np.asarray(mw.inverted()).T
+            o.data.vertices.foreach_set("co", new[:, :3].ravel())
         o.data.update()
 
 

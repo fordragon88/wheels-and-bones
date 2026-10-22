@@ -66,13 +66,15 @@ JOBS = {   # ключ: (рендер коляски, портрет, описа�
     # Матильда заново (поза — не со старого портрета: там ноги на «ступеньке», Qwen дорисовывал вторые подножки)
     "badger_new": ("portrait_chair_f5/portrait_chair_f5_00_white.png", "client_f5.png",
                    "a Permobil F5 Corpus front-wheel-drive power wheelchair: black contoured seat and high backrest with "
-                   "a headrest, black armrests with a joystick controller on the armrest, big black front drive wheels "
+                   "a headrest, black armrests; on the front end of the left armrest ONE joystick controller box with "
+                   "ONE small straight upright black joystick knob, exactly as in <image1>; big black front drive wheels "
                    "with three-spoke hubs, small black casters at the back, a dark graphite power base with small yellow "
                    "accents, EXACTLY TWO black footplates side by side, raised high just below the front edge of the "
-                   "seat (adjusted for her short legs), a small anti-tip wheel low under them",
-                   "One paw rests on the joystick, the other holds her little honey pot on her lap. Her short legs bend "
-                   "at the front edge of the seat and her two feet stand flat on the two footplates, one foot on each. "
-                   "Only these two footplates, nothing else under her feet. Both big drive wheels are complete and round."),
+                   "seat (adjusted for her short legs); no small wheels at the front",
+                   "Her left paw rests on the armrest just behind the joystick controller, not covering it; the other paw "
+                   "holds her little honey pot on her lap. Her short legs bend at the front edge of the seat and her two "
+                   "feet stand flat on the two footplates, one foot on each. Only these two footplates, nothing else "
+                   "under her feet. Both big drive wheels are complete and round."),
 }
 FREE_POSE = {"badger_new"}   # от старого портрета — только облик персонажа, поза и коляска — по рендеру
 
