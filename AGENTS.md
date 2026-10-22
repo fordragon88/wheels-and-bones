@@ -303,6 +303,12 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **WHILL C2 — модель Meshy** (`meshy_models/whill_model_c2.glb`, по фото Model Ci —
+  почти та же коляска; height=910, ключ `whill`): кадры с оригинала, SPECS `whill` (омни-колёса спереди — коробкой
+  `omni_wheel`, задние литые шины, пульт справа, батарея под сиденьем). Рисунок chair_whillc2.png — кадр 0.
+  Прежняя — art_tests/tripo/bak_before_meshy/. Референсы Meshy — для всех 21 коляски (art_tests/meshy_ref/, не в git).
+  (art_tests/*, assets/models/chair_whillc2_ai*.json, assets/turntable/chair_whillc2_*, assets/chair_whillc2.png)
+
 - 2026-10-22 — Claude (Opus 5.5) — **Jazzy 614 (Горыныч) — модель Meshy** (`meshy_models/pride_jazzy_614.glb`, height=1150,
   ключ `jazzy`, SPECS `jazzy`): фольклорная коляска — модель в art_tests/tripo/models/chair_gorynych_ai*.json (в игру идут
   только кадры, index_folk.json), прежняя (Tripo) — art_tests/tripo/bak_before_meshy/chair_gorynych_ai_tripo*. Кадры с

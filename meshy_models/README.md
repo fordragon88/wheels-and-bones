@@ -11,6 +11,7 @@
 | `drive_trident_hd.glb` | Drive Trident HD | «Свободный ход» (`freewheel`), `chair_trident.png` | 2026-10-22 |
 | `quickie_pulse_6.glb` | Quickie Pulse 6 | Гильдия, «Pulse 6» (`t_pulse6`), `chair_pulse6.png` | 2026-10-22 |
 | `pride_jazzy_614.glb` | Pride Jazzy (EVO) 614 | Змей Горыныч (`gorynych_jazzy`), `chair_gorynych.png` | 2026-10-22 |
+| `whill_model_c2.glb` | WHILL Model C2/Ci | «Код ошибки» (`whill_code`), `chair_whillc2.png` | 2026-10-22 |
 
 Как модель попадает в игру:
 1. `art_tests/tripo_convert.py meshy_models/<файл>.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002`
