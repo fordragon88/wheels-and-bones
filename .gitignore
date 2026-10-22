@@ -53,3 +53,5 @@ MUSE_3D_TASK.md
 
 *.tmp
 tools/
+art_tests/meshy_ref/
+meshy_models/*.glb

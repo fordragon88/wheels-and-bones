@@ -19,6 +19,8 @@ idx_files = {n: json.load(open(os.path.join(TT, n), encoding="utf-8")) for n in 
              if os.path.exists(os.path.join(TT, n))}
 arts = sys.argv[1].split(",") if len(sys.argv) > 1 else [a for d in idx_files.values() for a in d]
 subprocess.run([sys.executable, os.path.join(HERE, "blender_export.py"), ",".join(arts)], check=True, cwd=ROOT)
+# коляски с оригинальной моделью (Meshy и т.п.): кадры — с исходного GLB (art_tests/gen3d/<ключ>_xform.json)
+GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28])}
 total = 0
 for art in arts:
     name = os.path.splitext(art)[0]
@@ -26,6 +28,11 @@ for art in arts:
     if not os.path.exists(src):
         print("нет модели:", art)
         continue
+    if art in GLB:
+        spec = json.load(open(src, encoding="utf-8"))
+        xf = json.load(open(os.path.join(HERE, "gen3d", GLB[art]["key"] + "_xform.json"), encoding="utf-8"))
+        spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"))
+        json.dump(spec, open(src, "w"), separators=(",", ":"))
     out = os.path.join(ROUT, name)
     for f in glob.glob(os.path.join(out, "*.png")):
         os.remove(f)

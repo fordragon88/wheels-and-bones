@@ -94,6 +94,21 @@ SPECS = {
                ("motor", (-45, 150), (110, 300), (55, 195)),
                ("battery", (-370, -50), (55, 335), (0, 185)),
                ("footrest", (380, 600), (25, 115), (0, INF))]),
+    # Permobil M3 Corpus — Meshy (multi-image по art_tests/meshy_ref, Downloads/m3.glb), красный -> фиолетовый;
+    # --dir art_tests/gen3d. Пульт — справа (+z): ручка, чехол, корпус; провод вниз по стойке подлокотника
+    "m3": dict(art="chair_m3", wheels=[
+        dict(c=(-60, 165), R=165, z=(190, 285), kind="power"),
+        dict(c=(255, 75), R=75, z=(205, 290), kind="caster"),
+        dict(c=(-385, 75), R=80, z=(175, 240), kind="caster")],
+        boxes=[("joystick", (195, 275), (648, 720), (220, 310), "signed"),
+               ("boot", (195, 275), (628, 648), (220, 310), "signed"),
+               ("controller", (150, 380), (595, 700), (210, 335), "signed"),
+               ("wiring", (95, 185), (430, 600), (250, 325), "signed"),
+               ("freewheel", (-200, -110), (230, 340), (165, 235)),
+               ("motor", (-150, 60), (95, 235), (140, 215)),
+               ("fuse", (-440, -320), (190, 290), (0, 70)),
+               ("battery", (-200, 110), (120, 280), (0, 150)),
+               ("footrest", (380, 560), (40, 120), (0, INF))]),
     # Змей Горыныч — Pride Jazzy 614 (среднеприводная)
     "raiju": dict(art="chair_gorynych", wheels=[
         dict(c=(20, 160), R=160, z=(215, 310), kind="power"),

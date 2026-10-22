@@ -61,6 +61,9 @@ def read_glb(path, full=False):
     V = acc(A["POSITION"]).astype(np.float64)
     V = (np.c_[V, np.ones(len(V))] @ world[ni].T)[:, :3]
     F = acc(pr["indices"]).reshape(-1, 3).astype(np.int64)
+    if "TEXCOORD_0" not in A:                            # только форма (Hunyuan3D без текстуры): серый цвет
+        C = np.full((len(V), 3), 150.0, np.float32)
+        return (V, F, C, None, None, None) if full else (V, F, C)
     UV = acc(A["TEXCOORD_0"]).astype(np.float64)
     mat = js["materials"][pr["material"]]
     tex_i = js["textures"][mat["pbrMetallicRoughness"]["baseColorTexture"]["index"]]["source"]
@@ -101,6 +104,9 @@ def keep_attached(V, F, cell):
     weight = np.bincount(lab[inv], minlength=k)           # вершин в кластере
     main = int(np.argmax(weight))
     keepv = lab[inv] == main
+    big = float(next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--keep-big=")), 0))
+    if big:                                               # Meshy: подножки и т.п. — отдельные крупные куски, не мусор
+        keepv = weight[lab[inv]] >= big * weight[main]
     dropped = int((~keepv).sum())
     fk = keepv[F].all(1)
     remap = -np.ones(len(V), np.int64)

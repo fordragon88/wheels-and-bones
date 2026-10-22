@@ -303,6 +303,20 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **M3 Corpus — модель Meshy владельца** (Multi-image to 3D по
+  art_tests/meshy_ref, платно через fal.ai). Оригиналы моделей Meshy — **`meshy_models/`** (README там; .glb не в git).
+  Кадры поворота снимаются в Blender **с оригинального GLB** (полная сетка 312 тыс. вершин, родная текстура, normal map):
+  `art_tests/glb_xform.py` — матрица «GLB → оси/мм игры» (те же шаги, что tripo_convert, без облегчения; ошибка 0 мм),
+  `blender_render.py` — режим `glb` (import_scene.gltf, перенос осей, перекраска оттенка текстуры `recolor`
+  красный → фиолетовый, как в игре), `blender_frames.py` — словарь `GLB` (коляска → ключ/перекраска). Облегчённая
+  копия (`tripo_convert … --keep-big=0.002` — не выбрасывать отдельные крупные куски вроде подножек; облегчение до 40k
+  рвало спинку — поэтому кадры только с оригинала) — `tripo_label.py m3 --dir art_tests/gen3d` → assets/models/chair_m3_ai*.json
+  (детали и кружки). Рисунок chair_m3.png — кадр 0 (`art_from_turntable.py joystick`). Прежняя M3 — art_tests/tripo/bak_before_meshy/.
+  Референсы для Meshy — `art_tests/meshy_prep.py` (6 колясок, фото производителей/дилеров, не в git), `meshy_fetch.py`.
+  Также пробовали локально Pixal3D / TRELLIS.2 (G:\models	rellis2, MIT) и Hunyuan3D 2.1 — Meshy по 4 фото лучше
+  (art_tests/gen3d/*_preview.png, gen3d_preview.py / gen3d_colorize.py / gen3d_edit.py).
+  (art_tests/*, assets/models/chair_m3_ai*.json, assets/turntable/chair_m3_*, assets/chair_m3.png, meshy_models/README.md)
+
 - 2026-10-22 — Claude (Opus 5.5) — **рисунок коляски = кадр модели** (владелец: у Агаты в браузере сначала старый вид,
   потом новый — пока кадры поворота докачиваются, игра показывает рисунок chair_*.png). `art_tests/art_from_turntable.py
   <job_id>`: рисунок = кадр исходного ракурса, ровно в месте и масштабе модели (старый — art_tests/retired/), в index —

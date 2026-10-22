@@ -18,7 +18,52 @@ name = os.path.splitext(os.path.basename(src))[0]
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene
 
+def import_glb(path, M, recolor=None):
+    """Оригинальная модель (Meshy/Tripo GLB, полная сетка и текстура) в осях игры: M — мм игры из мировых glTF."""
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=path)
+    B2G = Matrix(((1, 0, 0, 0), (0, 0, 1, 0), (0, -1, 0, 0), (0, 0, 0, 1)))           # Blender -> glTF
+    G2B = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1))) @ Matrix.Scale(0.001, 4)
+    T = G2B @ Matrix(M) @ B2G
+    for o in set(bpy.data.objects) - before:
+        if o.parent is None:
+            o.matrix_world = T @ o.matrix_world
+    if recolor:                                          # оттенок текстуры как у коляски в игре (красный -> фиолетовый)
+        h0, h1, tol = recolor
+        for img in bpy.data.images:
+            if img.size[0] == 0 or "normal" in img.name.lower():
+                continue
+            px = np.empty(img.size[0] * img.size[1] * 4, np.float32)
+            img.pixels.foreach_get(px)
+            p = px.reshape(-1, 4)
+            rgb = p[:, :3]
+            mx, mn = rgb.max(1), rgb.min(1)
+            dlt = mx - mn
+            sat = dlt / np.maximum(mx, 1e-6)
+            h = np.zeros_like(mx)
+            m = dlt > 1e-6
+            r, g, b = rgb[:, 0], rgb[:, 1], rgb[:, 2]
+            hr = m & (mx == r); hg = m & (mx == g) & ~hr; hb = m & ~hr & ~hg
+            h[hr] = ((g - b)[hr] / dlt[hr]) % 6
+            h[hg] = (b - r)[hg] / dlt[hg] + 2
+            h[hb] = (r - g)[hb] / dlt[hb] + 4
+            h *= 60
+            sel = (sat > 0.35) & (np.abs(((h - h0) + 180) % 360 - 180) < tol) & (mx > 0.08)
+            hh = h1 / 60.0                               # тот же цвет с новым оттенком (яркость и насыщенность — прежние)
+            c = mx * sat
+            x = c * (1 - abs(hh % 2 - 1))
+            base = mx - c
+            rr, gg, bb = {0: (c, x, 0 * c), 1: (x, c, 0 * c), 2: (0 * c, c, x), 3: (0 * c, x, c), 4: (x, 0 * c, c),
+                          5: (c, 0 * c, x)}[int(hh) % 6]
+            rgb[sel, 0], rgb[sel, 1], rgb[sel, 2] = (rr + base)[sel], (gg + base)[sel], (bb + base)[sel]
+            img.pixels.foreach_set(p.ravel())
+            img.update()
+            print("перекрашено пикселей:", int(sel.sum()), img.name)
+
+
 # ---------- модель ----------
+if d.get("glb"):
+    import_glb(d["glb"], d["glb_matrix"], d.get("recolor"))
 V = np.asarray(d["verts"], dtype=np.float64)
 VB = np.c_[V[:, 0], -V[:, 2], V[:, 1]] / 1000.0          # мм -> м, оси Blender
 tris, fcol, fmet, fpart = [], [], [], []
@@ -49,10 +94,12 @@ attr = me.color_attributes.new("col", "BYTE_COLOR", "CORNER")
 rgba = np.c_[corner_col.reshape(-1, 3), np.ones(len(T) * 3)]
 attr.data.foreach_set("color_srgb", rgba.ravel().astype(np.float32))
 ob = bpy.data.objects.new(name, me)
-sc.collection.objects.link(ob)
-bpy.context.view_layer.objects.active = ob
-ob.select_set(True)
-BEVEL = float(os.environ.get("WB_BEVEL", "0"))            # мм: скруглить рёбра «коробок» (наши электроколяски)
+if not d.get("glb"):
+    sc.collection.objects.link(ob)
+if not d.get("glb"):
+    bpy.context.view_layer.objects.active = ob
+    ob.select_set(True)
+BEVEL = 0 if d.get("glb") else float(os.environ.get("WB_BEVEL", "0"))            # мм: скруглить рёбра «коробок» (наши электроколяски)
 if BEVEL > 0:
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
@@ -65,7 +112,8 @@ if BEVEL > 0:
     bv.angle_limit = math.radians(50)
     bv.harden_normals = False
     bv.profile = 0.6
-bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35))
+if not d.get("glb"):
+    bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35))
 
 
 def material(nm, metal):

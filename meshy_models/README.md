@@ -1,0 +1,17 @@
+# Meshy 3D модели
+
+Оригинальные модели колясок, сделанные владельцем в Meshy (Multi-image to 3D, через fal.ai) по референсам
+из `art_tests/meshy_ref/`. Это исходники: их не правим и не облегчаем.
+
+| Файл | Коляска | Задание в игре | Дата |
+|---|---|---|---|
+| `permobil_m3_corpus.glb` | Permobil M3 Corpus | «Джойстик» (чародейка Мора), `chair_m3.png` | 2026-10-22 |
+
+Как модель попадает в игру:
+1. `art_tests/tripo_convert.py meshy_models/<файл>.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002`
+   — облегчённая копия (только для деталей и кружков задания), затем `art_tests/tripo_label.py <ключ> --dir art_tests/gen3d`.
+2. `art_tests/glb_xform.py meshy_models/<файл>.glb <ключ> height=<мм> --keep-big=0.002` — матрица «модель → оси игры».
+3. `art_tests/blender_frames.py chair_<…>.png` — кадры поворота в Blender снимаются с ЭТОГО файла (полная сетка,
+   родная текстура; цвет подгоняется под игру), затем `art_tests/art_from_turntable.py <job_id>`.
+
+Файлы `.glb` не в git (крупные) — храните копию.
