@@ -303,6 +303,12 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **Edge 4 — модель Meshy** (`meshy_models/quantum_edge_4.glb`, сиденье поднято,
+  height=1430): тем же путём, что M3 (glb_xform → кадры с оригинала, перекраска синий → красный; SPECS `edge4` —
+  лифт-«ножницы», актуатор, провод сзади, пульт справа). Рисунок chair_edge4.png — кадр 0 (`art_from_turntable.py lift`).
+  Прежняя Edge 4 — art_tests/tripo/bak_before_meshy/. (art_tests/*, assets/models/chair_edge4_ai*.json,
+  assets/turntable/chair_edge4_*, assets/chair_edge4.png, meshy_models/README.md)
+
 - 2026-10-22 — Claude (Opus 5.5) — **M3 Corpus — модель Meshy владельца** (Multi-image to 3D по
   art_tests/meshy_ref, платно через fal.ai). Оригиналы моделей Meshy — **`meshy_models/`** (README там; .glb не в git).
   Кадры поворота снимаются в Blender **с оригинального GLB** (полная сетка 312 тыс. вершин, родная текстура, normal map):

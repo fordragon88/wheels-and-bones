@@ -6,6 +6,7 @@
 | Файл | Коляска | Задание в игре | Дата |
 |---|---|---|---|
 | `permobil_m3_corpus.glb` | Permobil M3 Corpus | «Джойстик» (чародейка Мора), `chair_m3.png` | 2026-10-22 |
+| `quantum_edge_4.glb` | Quantum Edge 4 | «Лифт сиденья» (гоблин Зикс), `chair_edge4.png` | 2026-10-22 |
 
 Как модель попадает в игру:
 1. `art_tests/tripo_convert.py meshy_models/<файл>.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002`
