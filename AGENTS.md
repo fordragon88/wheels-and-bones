@@ -303,6 +303,14 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-22 — Claude (Opus 5.5) — **F5 Corpus (Матильда) — модель Meshy** (`meshy_models/permobil_f5_corpus.glb`,
+  height=1260, ключ `f5m`): кадры с оригинального GLB, бирюзовый → графит (`recolor` с оттенком −1 = в графит — в
+  blender_render и в облегчённой копии), SPECS `f5m` (передний привод, задние касторы, пульт справа, автомат сзади).
+  Рисунок chair_f5.png — кадр 0. Прежняя (доработанный скан Tripo) — art_tests/tripo/bak_before_meshy/chair_f5_ai_patched*.
+  `art_tests/portrait_chair.py` / `portrait_reseat.py` — перерисовка портретов клиентов в новых колясках (рендер в ракурсе
+  портрета + Qwen 2.1 edit): варианты для Моры и Зикса ждут выбора владельца. (art_tests/*, assets/models/chair_f5_ai*.json,
+  assets/turntable/chair_f5_*, assets/chair_f5.png, meshy_models/README.md)
+
 - 2026-10-22 — Claude (Opus 5.5) — **Edge 4 — модель Meshy** (`meshy_models/quantum_edge_4.glb`, сиденье поднято,
   height=1430): тем же путём, что M3 (glb_xform → кадры с оригинала, перекраска синий → красный; SPECS `edge4` —
   лифт-«ножницы», актуатор, провод сзади, пульт справа). Рисунок chair_edge4.png — кадр 0 (`art_from_turntable.py lift`).

@@ -49,6 +49,13 @@ def import_glb(path, M, recolor=None):
             h[hb] = (r - g)[hb] / dlt[hb] + 4
             h *= 60
             sel = (sat > 0.35) & (np.abs(((h - h0) + 180) % 360 - 180) < tol) & (mx > 0.08)
+            if h1 < 0:                                   # в графит: без цвета, темнее
+                g = mx * 0.42 + 0.05
+                rgb[sel, 0], rgb[sel, 1], rgb[sel, 2] = g[sel], g[sel], g[sel] * 1.04
+                img.pixels.foreach_set(p.ravel())
+                img.update()
+                print("в графит пикселей:", int(sel.sum()), img.name)
+                continue
             hh = h1 / 60.0                               # тот же цвет с новым оттенком (яркость и насыщенность — прежние)
             c = mx * sat
             x = c * (1 - abs(hh % 2 - 1))

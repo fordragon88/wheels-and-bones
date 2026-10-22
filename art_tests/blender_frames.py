@@ -21,7 +21,8 @@ arts = sys.argv[1].split(",") if len(sys.argv) > 1 else [a for d in idx_files.va
 subprocess.run([sys.executable, os.path.join(HERE, "blender_export.py"), ",".join(arts)], check=True, cwd=ROOT)
 # коляски с оригинальной моделью (Meshy и т.п.): кадры — с исходного GLB (art_tests/gen3d/<ключ>_xform.json)
 GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]),            # красный -> фиолетовый
-       "chair_edge4.png": dict(key="edge4", recolor=[228, 2, 32])}       # синий -> красный
+       "chair_edge4.png": dict(key="edge4", recolor=[228, 2, 32]),       # синий -> красный
+       "chair_f5.png": dict(key="f5m", recolor=[175, -1, 30])}           # бирюзовый -> графит
 total = 0
 for art in arts:
     name = os.path.splitext(art)[0]
