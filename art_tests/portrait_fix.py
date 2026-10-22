@@ -22,6 +22,16 @@ FIX = {   # ключ: (портрет, что поправить, зона вс�
                "exactly where they are, resting on the front of the seat platform. Where the removed footplates were, "
                "show the white background.",
                (0.0, 0.62, 0.6, 1.0)),
+    "badger_up": ("client_f5.png",
+                  "The two footplates are adjusted up for her short legs: move the two footplates up so they sit directly "
+                  "under her feet, right in front of the seat, and her feet rest flat on them. Remove the ledge her feet "
+                  "stood on. Nothing hangs low below the front of the wheelchair any more; show the white background "
+                  "there.",
+                  (0.0, 0.5, 0.6, 1.0)),
+    "badger_down": ("client_f5.png",
+                    "Her legs reach down and both her feet stand flat on the two footplates at the front of the "
+                    "wheelchair. Remove the ledge her feet stood on before. Keep the two footplates where they are.",
+                    (0.0, 0.5, 0.6, 1.0)),
     "lizard": ("client_whillc2.png",
                "Remove the big lower footplate with the grid pattern at the very bottom front, between the two front "
                "wheels. Keep the small footplate her feet rest on. Where the removed plate was, show the dark base of "
