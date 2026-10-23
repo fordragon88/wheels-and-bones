@@ -468,7 +468,8 @@ python i18n_work/build_lang.py       # перевод полон
   Новое: `art_tests/asset_check.py` (портрет, арт, модель, 36 кадров + маски, хотспоты по каждому заданию).
   AGENTS: §3 (новые папки), §5 (все 20 заданий, у кого Meshy), §8 + **§8б конвейер Meshy → игра → портрет**,
   §9 (extract_new), **§10а чек-лист полной проверки**, §10б, §12. Проверки (до правок, сайт): selftest ×3, ui,
-  клавиатура ru/en, одна кнопка, геймпад, monkey (0 падений), rs ×2, перевод, web_smoke живого сайта 20/0 — всё ок.
+  клавиатура ru/en, одна кнопка, геймпад, monkey (0 падений), rs ×2, перевод, web_smoke живого сайта 20/0 — всё ок;
+  после правок — тот же набор + asset_check снова зелёный, выложено (`build_web.py --deploy`), web_smoke сайта 20/0.
   (game.py, art_tests/ui_playthrough.py, art_tests/keyboard_playthrough.py, art_tests/asset_check.py,
   i18n_work/extract_new.py, i18n_work/en9_fixes99_feedback.json, i18n_work/GUIDE.md, assets/lang_en.json, README.md,
   docs/FEEDBACK_STATUS.md, docs/QUESTS*.md, .gitignore, AGENTS.md)
