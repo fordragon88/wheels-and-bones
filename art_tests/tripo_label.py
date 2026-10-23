@@ -280,6 +280,34 @@ SPECS = {
                ("footrest", (390, 545), (160, 280), (0, 200)),
                ("backrest", (-310, -140), (450, 770), (0, 200)),
                ("seat", (-200, 260), (420, 565), (0, 190))]),
+    # Кицунэ Юки — TiLite Aero Z, Meshy (meshy_models/tilite_aero_z.glb), height=880: жёсткая рама, задние колёса со
+    # спицами; тормоз-замок — колодка у переднего верха шины; болты — зажим рамы перед колесом; ниппель — участок обода;
+    # антиопрокидывателей в модели нет — добавлены (antitips, те же — в кадрах blender_frames)
+    "aeroz": dict(art="chair_aeroz", spokes=24, wheels=[
+        dict(c=(-205, 299), R=297, z=(228, 295), kind="spoked", sectors=[("valve", 300, 312, -62, -28)]),
+        dict(c=(262, 52), R=52, z=(200, 262), kind="caster")],
+        antitips=[dict(p0=(-235, 245, s * 172), p1=(-470, 58, s * 172), r=10, wheel=(24, 18)) for s in (1, -1)],
+        boxes=[("caster_stem", (255, 410), (100, 250), (150, 262)),
+               ("brake", (52, 118), (322, 458), (148, 252)),
+               ("bolts", (-82, -12), (360, 448), (145, 228)),
+               ("footrest", (330, 490), (10, 150), (0, 250)),
+               ("backrest", (-420, -205), (450, 870), (0, 222)),
+               ("seat", (-218, 180), (395, 560), (0, 222))]),
+    # Дриада Ивушка — Etac Cross 6, Meshy (meshy_models/etac_cross_6.glb), height=940: складная, X-крестовина; гайка
+    # 13 мм угла спинки — кольцо у оси на внутренней стороне осевой пластины; тормоз — штифт перед колесом;
+    # антиопрокидыватели — в модели; подушка — верх сиденья
+    "cross6": dict(art="chair_cross6", spokes=24, wheels=[
+        dict(c=(-147, 322), R=305, z=(255, 335), kind="spoked"),
+        dict(c=(244, 58), R=50, z=(225, 290), kind="caster")],
+        boxes=[("bolts", (-190, -120), (292, 362), (165, 255)),
+               ("brake", (-68, 18), (282, 428), (185, 268)),
+               ("anti_tip", (-528, -340), (38, 165), (190, 335)),
+               ("caster_stem", (155, 305), (100, 300), (195, 290)),
+               ("footrest", (395, 530), (60, 140), (0, 245)),
+               ("backrest", (-495, -150), (455, 945), (0, 248)),
+               ("armrest", (-135, 50), (655, 735), (215, 265)),
+               ("cushion", (-205, 270), (478, 565), (0, 222)),
+               ("seat", (-205, 270), (420, 478), (0, 222))]),
     # Змей Горыныч — Pride Jazzy 614 (среднеприводная)
     "raiju": dict(art="chair_gorynych", wheels=[
         dict(c=(20, 160), R=160, z=(215, 310), kind="power"),
@@ -463,6 +491,39 @@ def tilt_seat(V, F, C, lab, names, t):
     return np.vstack([V, Vn]), F, np.vstack([C, C[vi]])
 
 
+def add_antitips(V, F, C, lab, names, ats):
+    """Антиопрокидыватели, которых нет в модели (Meshy): трубка p0→p1 и колёсико у p1, деталь anti_tip. Те же
+    параметры — в blender_frames GLB[...]["antitips"] (там они рисуются в кадрах; здесь — для кружка детали)."""
+    if not ats:
+        return V, F, C, lab, names
+    if "anti_tip" not in names:
+        names.append("anti_tip")
+    p = names.index("anti_tip")
+    for a in ats:
+        p0, p1 = np.array(a["p0"], float), np.array(a["p1"], float)
+        ax = (p1 - p0) / np.linalg.norm(p1 - p0)
+        u = np.cross(ax, [0, 0, 1.0]); u /= np.linalg.norm(u)
+        v = np.cross(ax, u)
+        n, r = 10, a.get("r", 9)
+        wr, ww = a.get("wheel", (24, 18))
+        pts, fs = [], []
+        for q in (p0, p1):
+            pts += [q + r * (math.cos(2 * math.pi * j / n) * u + math.sin(2 * math.pi * j / n) * v) for j in range(n)]
+        fs += [(j, (j + 1) % n, n + (j + 1) % n) for j in range(n)] + [(j, n + (j + 1) % n, n + j) for j in range(n)]
+        b = len(pts)
+        for zz in (p1[2] - ww / 2, p1[2] + ww / 2):          # колёсико: ось вдоль z
+            pts += [(p1[0] + wr * math.cos(2 * math.pi * j / 16), p1[1] + wr * math.sin(2 * math.pi * j / 16), zz)
+                    for j in range(16)]
+        fs += [(b + j, b + (j + 1) % 16, b + 16 + (j + 1) % 16) for j in range(16)]
+        fs += [(b + j, b + 16 + (j + 1) % 16, b + 16 + j) for j in range(16)]
+        base = len(V)
+        V = np.vstack([V, np.array(pts)])
+        F = np.vstack([F, np.array(fs) + base])
+        C = np.vstack([C, np.tile([[28, 28, 32]], (len(pts), 1)).astype(np.float32)])
+        lab = np.r_[lab, np.full(len(fs), p)]
+    return V, F, C, lab, names
+
+
 def add_hubs(V, F, C, lab, names, wheels):
     """Ступица с мотором и батареей (как у e-motion): толстый диск на каждом заднем колесе."""
     for cx, cy, R, w in wheels:
@@ -560,6 +621,9 @@ if __name__ == "__main__":
             k = lum[fi] / 170.0
             C[F[fi]] = np.clip(tgt * k, 0, 255)
     V, F, C, lab, names = add_hubs(V, F, C, lab, names, wheels)
+    # антиопрокидыватели, которых нет в модели, — после облегчения (как спицы): мелкую деталь облегчение «съедает»
+    AV, AF, AC, AL, names = add_antitips(np.zeros((0, 3)), np.zeros((0, 3), np.int64), np.zeros((0, 3), np.float32),
+                                         np.zeros(0, int), names, spec.get("antitips"))
     if spec.get("tilt"):
         V, F, C = tilt_seat(V, F, C, lab, names, spec["tilt"])
     SV = np.zeros((0, 3))
@@ -576,6 +640,8 @@ if __name__ == "__main__":
     os.makedirs(f"{D}/models", exist_ok=True)
     out = f"{D}/models/{spec['art']}_ai.json"   # в assets/ — только официальные файлы с подписки Tripo
     def with_spokes(V, F, C, lab):
+        if len(AV):
+            V, F, C, lab = np.vstack([V, AV]), np.vstack([F, AF + len(V)]), np.vstack([C, AC]), np.r_[lab, AL]
         if not len(SV):
             return V, F, C, lab
         return (np.vstack([V, SV]), np.vstack([F, SF + len(V)]), np.vstack([C, SC]),

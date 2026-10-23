@@ -29,11 +29,16 @@ GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]),            # кра
        "chair_ra.png": dict(key="nitrum", spokes=[dict(side=1, c=(-106.7, 328.4), hc=(-106.7, 328.4), zp=252, fl=10, cut_r=(118, 264), cut_z=(240, 263), rh=100, rr=268, n=24, cross=0.05, col=(0.62, 0.62, 0.66)), dict(side=-1, c=(-108.1, 328.6), hc=(-108.1, 328.6), zp=252, fl=10, cut_r=(118, 264), cut_z=(240, 263), rh=100, rr=268, n=24, cross=0.05, col=(0.62, 0.62, 0.66))], hubs=[dict(c=(-106.7, 328.4, 257.5), r=115, w=60), dict(c=(-108.1, 328.6, -257.5), r=115, w=60)]),   # ступицы Alber e-motion
        "chair_basic.png": dict(key="inv9000"), "chair_troll.png": dict(key="inv9000xdt"),
        "chair_fairy.png": dict(key="exelle", recolor=[72, 330, 30, 0.5],   # салатовый -> пастельный розовый
+           move=[dict(x=[-428, -392], y=[18, 52], az=[17, 50], delete=True),         # поперечина колёсика
+                 dict(x=[-470, -362], y=[-8, 96], az=[50, 115], d=[0, 0, -47])],   # колесо — вплотную к трубе
            # антиопрокидыватель — родной Meshy, один по центру (решение владельца 23.10; у настоящей Exelle Junior их
            # бывает и пара). Пара по бокам: move=[dict(x=[-180, 30], y=[100, 262], az=[0, 45], delete=True),
            #   dict(x=[-230, -125], y=[235, 310], az=[0, 45], delete=True)], clones=[dict(x=[-460, -185], y=[0, 245],
            #   az=[0, 100], copies=[dict(d=(78, 0, 128)), dict(mirror=True, d=(78, 0, -128))])]
            spokes=[dict(side=1, c=(-92.7, 294.0), hc=(-98.1, 292.0), zp=197, fl=9, cut_r=(40, 232), cut_z=(183, 213), rh=26, rr=235, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-93.2, 295.0), hc=(-97.4, 292.9), zp=197, fl=9, cut_r=(40, 232), cut_z=(183, 213), rh=26, rr=235, n=24, col=(0.72, 0.72, 0.75))]),
+       "chair_aeroz.png": dict(key="aeroz", antitips=[dict(p0=(-235, 245, s * 172), p1=(-470, 58, s * 172), r=10, wheel=(24, 18)) for s in (1, -1)],   # в модели Meshy их нет
+           spokes=[dict(side=1, c=(-205.9, 295.9), hc=(-204.9, 294.6), zp=235, fl=12, cut_r=(40, 228), cut_z=(212, 262), rh=28, rr=232, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-204.6, 302.1), hc=(-204.5, 298.9), zp=235, fl=12, cut_r=(40, 228), cut_z=(212, 262), rh=28, rr=232, n=24, col=(0.72, 0.72, 0.75))]),
+       "chair_cross6.png": dict(key="cross6", spokes=[dict(side=1, c=(-146.5, 322.2), hc=(-154.0, 324.4), zp=290, fl=12, cut_r=(40, 255), cut_z=(262, 318), rh=30, rr=258, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-147.1, 322.9), hc=(-152.5, 323.9), zp=290, fl=12, cut_r=(40, 255), cut_z=(262, 318), rh=30, rr=258, n=24, col=(0.72, 0.72, 0.75))]),
        "chair_focuscr.png": dict(key="fcr"),
        "chair_leshy.png": dict(key="x8", recolor=[28, 4, 26])}           # оранжевый -> красный                               # цвета Meshy (тёмно-синяя рама, как на фото)
 total = 0

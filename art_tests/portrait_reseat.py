@@ -113,6 +113,7 @@ JOBS = {   # ключ: (рендер коляски, портрет, описа�
                    "<image1>. Exactly one foot in the picture."),
     # Тилли — нарисована Codex (art_tests/codex_tilly), здесь только для portrait_install
     "fairy": ("portrait_chair_fairy/portrait_chair_fairy_00_white.png", "client_fairy.png", "", ""),
+    "yuki": ("portrait_chair_aeroz/portrait_chair_aeroz_00_white.png", "client_aeroz.png", "", ""),   # Codex (codex_yuki)
     "troll": ("portrait_chair_troll/portrait_chair_troll_00_white.png", "client_troll.png",
               "an Invacare 9000 standard manual wheelchair: black steel frame, black nylon sling seat and backrest with a small blue Invacare badge on the side, black padded armrests, swing-away footrests with black footplates, big black mag rear wheels with straight composite spokes and thin silver pushrims, small black front casters",
               "His big hands rest on his round belly, as in <image2>; his big feet rest on the footplates."),

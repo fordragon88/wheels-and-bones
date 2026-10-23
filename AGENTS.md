@@ -311,10 +311,10 @@ python i18n_work/build_lang.py       # перевод полон
 - Тела клиентов в Кабинете посадки: векторный Бомм от Codex (3 версии, art_tests/seat_bodies/codex_svg) владельцу
   не понравился («кривой»); SEAT_BODY_ON = False. Возможный путь — растровые части от ChatGPT по ТЗ chatgpt_brief.
 - Сноски из мануалов для первых заданий (Мартин, Аэлин, Дургин, Тилли, Гра, Мора) — нужны страницы мануалов BARC.
-- Модели Meshy для 9 колясок, которые ещё строятся кодом (выглядят проще): Invacare 9000 (Мартин; та же модель
-  крупнее — Бомму, 9000 XDT), Progeo Ego (Аэлин), Tekna Advance (Дургин — его портрет владелец просил не трогать),
-  Exelle Junior (Тилли), Noir 2 (Гра), TiLite Aero Z (Юки), Etac Cross 6 (Ивушка), Zippie Iris (Искра), Q6 Edge
-  (Гильдия, окна коляски нет — позже). Референсы — art_tests/meshy_ref/<N>_<модель>/ (по 4; у Ego/Tekna рамы на фото
+- Модели Meshy для колясок, которые ещё строятся кодом: **Progeo Noir 2.0** (Гра), **Progeo Ego** (Аэлин); по желанию —
+  Tekna Advance (Дургин — его портрет владелец просил не трогать; фото только с одного ракурса), Q6 Edge (Гильдия).
+  Сделаны 23.10: Invacare 9000 (Мартин, Бомм), Exelle Junior (Тилли), Aero Z (Юки), Cross 6 (Ивушка). **Zippie Iris
+  (Искра) — остаётся нашей моделью с наклоном** (решение владельца: нравится наклон, референсов с наклоном нет). Референсы — art_tests/meshy_ref/<N>_<модель>/ (по 4; у Ego/Tekna рамы на фото
   разного цвета). Лист сравнения — art_tests/_review/chairs_to_replace.jpg. После замены — перерисовать портреты.
   Новая модель: tripo_convert/glb_xform/tripo_views → SPECS в tripo_label → кадры blender_frames (спицы — fix_spokes)
   → art_from_turntable → portrait_chair/reseat/install.
@@ -332,6 +332,18 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-10-23 — Claude (Opus 5.5) — **Юки — TiLite Aero Z Meshy** (`meshy_models/tilite_aero_z.glb`, height=880, ключ
+  `aeroz`): спицы — fix_spokes; антиопрокидывателей в модели нет, а в задании `aeroz_lock` это деталь — добавлены:
+  в кадрах `GLB[...]["antitips"]` (blender_render.add_antitip), в размеченной модели — `SPECS["aeroz"]["antitips"]`
+  (tripo_label.add_antitips; добавляются ПОСЛЕ облегчения, как спицы — иначе мелкая деталь пропадала из LOD и selftest
+  писал «нет кружков у anti_tip»). Ниппель — участок обода (sectors). Портрет Юки — Codex (`art_tests/codex_yuki/`,
+  вариант 2); фон вырезан новым `art_tests/cut_white.py` (заливка белого от краёв — BiRefNet делал белые кончики
+  хвостов серыми; для картинок Codex с тёмным контуром). **Exelle Junior**: колёсико антиопрокидывателя Meshy висело
+  на поперечине сбоку от стойки (отзыв владельца) — поперечина удалена, колесо сдвинуто вплотную к концу трубы
+  (`GLB["chair_fairy.png"]["move"]`; рамку колеса пришлось расширить — недвинутые точки давали «шипы»).
+  (assets/client_aeroz.png, assets/chair_aeroz.png, assets/models/chair_aeroz_ai*.json, assets/turntable/*,
+  assets/chair_fairy.png, art_tests/tripo_label.py, blender_frames.py, portrait_chair.py, portrait_reseat.py, cut_white.py)
 
 - 2026-10-23 — Claude (Opus 5.5) — **Тилли — Progeo Exelle Junior Meshy** (`meshy_models/progeo_exelle_junior.glb`,
   height=760, ключ `exelle`, art chair_fairy): рама в кадрах салатовый → пастельный розовый (`recolor=[72, 330, 30, 0.5]`
