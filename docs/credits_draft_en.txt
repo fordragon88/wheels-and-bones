@@ -17,7 +17,6 @@ Based on the Permobil "Seating & Positioning Guide".
 ART, MODELS & MUSIC
 Made with AI tools, edited by our human team.
 Images: ComfyUI with Qwen-Image. Music: YuE.
-3D models of the folk-tale clients' wheelchairs: Tripo AI (CC BY 4.0).
 
 CODE
 Built with a little help from Claude (Anthropic).

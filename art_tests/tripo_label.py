@@ -236,6 +236,40 @@ SPECS = {
                ("footrest", (305, 460), (60, 250), (0, 200)),
                ("backrest", (-400, -200), (430, 800), (0, 240)),
                ("seat", (-230, 280), (415, 525), (0, 215))]),
+    # Мумия Сенеб — Quickie Nitrum, Meshy (meshy_models/quickie_nitrum.glb), height=850: чистая коляска, ступицы-моторы
+    # Alber e-motion дорисовываем (hub; в кадрах — blender_render.add_hub с тем же центром), тормоз — рычаг у шины спереди
+    "nitrum": dict(art="chair_ra", spokes=24, wheels=[
+        dict(c=(-115, 328), R=310, z=(245, 300), kind="spoked", hub=dict(r=115, w=60, part="motor")),
+        dict(c=(282, 58), R=50, z=(160, 245), kind="caster")],
+        boxes=[("caster_stem", (280, 380), (100, 255), (150, 245)),
+               ("brake", (185, 270), (395, 480), (150, 255)),
+               ("footrest", (295, 450), (25, 130), (0, 205)),
+               ("backrest", (-345, -175), (450, 850), (0, 230)),
+               ("seat", (-200, 280), (425, 565), (0, 220))]),
+    # Мартин — Invacare 9000, Meshy (meshy_models/invacare_9000.glb), height=920: литые колёса (спицы — литые лучи),
+    # камера — низ шины, ниппель — участок обода внизу спереди; тормоз — колодка у переднего верха шины
+    "inv9000": dict(art="chair_basic", spokes=0, wheels=[
+        dict(c=(-252, 305), R=300, z=(265, 330), kind="spoked",
+             sectors=[("tube", 240, 300, -32, 0), ("valve", 302, 312, -62, -28)]),
+        dict(c=(137, 98), R=85, z=(210, 280), kind="caster")],
+        boxes=[("caster_stem", (110, 205), (170, 325), (205, 280)),
+               ("brake", (10, 115), (385, 485), (200, 290)),
+               ("footrest", (370, 560), (55, 150), (0, INF)),
+               ("armrest", (-310, 0), (640, 720), (150, 290)),
+               ("backrest", (-440, -240), (500, 915), (0, 255)),
+               ("seat", (-215, 160), (430, 500), (0, 235))]),
+    # Тролль Бомм — та же модель Invacare 9000, крупнее (height=985, ×1.07 — 9000 XDT шире и выше); подушка ROHO —
+    # верх сиденья, её ниппель — передний угол сиденья, «seat» — спинка
+    "inv9000xdt": dict(art="chair_troll", spokes=0, wheels=[
+        dict(c=(-270, 327), R=321, z=(284, 353), kind="spoked"),       # «ниппель» Бомма — у подушки, не у колеса
+        dict(c=(147, 105), R=91, z=(225, 300), kind="caster")],
+        boxes=[("caster_stem", (118, 219), (182, 348), (219, 300)),
+               ("brake", (11, 123), (412, 519), (214, 310)),
+               ("footrest", (396, 600), (59, 161), (0, INF)),
+               ("armrest", (-332, 0), (685, 771), (161, 310)),
+               ("valve", (118, 173), (460, 541), (161, 252)),
+               ("cushion", (-230, 173), (460, 541), (0, 252)),
+               ("seat", (-471, -257), (535, 980), (0, 273))]),
     # Змей Горыныч — Pride Jazzy 614 (среднеприводная)
     "raiju": dict(art="chair_gorynych", wheels=[
         dict(c=(20, 160), R=160, z=(215, 310), kind="power"),
@@ -385,6 +419,9 @@ def label(V, F, C, spec):
             lab[inband & tire_r] = pid("tire")
             lab[inband & ~tire_r & (r >= 0.18 * R)] = pid("rim")
             lab[inband & (r < 0.18 * R)] = pid("axle")
+        ang = np.degrees(np.arctan2(P[:, 1] - cy, P[:, 0] - cx)) % 360
+        for part, a0, a1, d0, d1 in w.get("sectors", ()):  # участок колеса — своя деталь (камера внизу шины, ниппель)
+            lab[inband & (ang >= a0) & (ang <= a1) & (r >= R + d0) & (r <= R + d1)] = pid(part)
     for name, (x0, x1), (y0, y1), (z0, z1), *opt in spec["boxes"]:
         zz = P[:, 2] if "signed" in opt else az
         m = (lab < 0) & (P[:, 0] >= x0) & (P[:, 0] <= x1) & (P[:, 1] >= y0) & (P[:, 1] <= y1) & (zz >= z0) & (zz <= z1)

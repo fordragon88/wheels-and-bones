@@ -17,9 +17,10 @@ spec = json.load(open(src, encoding="utf-8"))
 sys.path.insert(0, HERE)
 GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]), "chair_edge4.png": dict(key="edge4", recolor=[228, 2, 32]),
        "chair_f5.png": dict(key="f5m", recolor=[175, -1, 30]), "chair_trident.png": dict(key="trident"),
-       "chair_pulse6.png": dict(key="pulse6"), "chair_gorynych.png": dict(key="jazzy"), "chair_yaga.png": dict(key="d100"),
-       "chair_rusalka.png": dict(key="x3"),
-       "chair_whillc2.png": dict(key="whill"), "chair_focuscr.png": dict(key="fcr"),
+       "chair_pulse6.png": dict(key="pulse6"), "chair_gorynych.png": dict(key="jazzy"), "chair_yaga.png": dict(key="d100", spokes=[dict(side=1, c=(-214.4, 305.3), hc=(-219.7, 303.5), zp=305, fl=10, cut_r=(42, 244), cut_z=(292, 332), rh=30, rr=247, n=36, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-213.2, 308.6), hc=(-218.7, 304.4), zp=305, fl=10, cut_r=(42, 244), cut_z=(292, 332), rh=30, rr=247, n=36, col=(0.72, 0.72, 0.75))]),
+       "chair_rusalka.png": dict(key="x3", spokes=[dict(side=1, c=(-121.3, 323.3), hc=(-116.9, 317.4), zp=255, fl=14, cut_r=(62, 264), cut_z=(240, 270), rh=32, rr=268, n=24, col=(0.12, 0.12, 0.13)), dict(side=-1, c=(-121.1, 323.3), hc=(-117.1, 320.1), zp=255, fl=14, cut_r=(62, 264), cut_z=(240, 270), rh=32, rr=268, n=24, col=(0.12, 0.12, 0.13))]), "chair_ra.png": dict(key="nitrum", spokes=[dict(side=1, c=(-106.7, 328.4), hc=(-106.7, 328.4), zp=252, fl=10, cut_r=(118, 264), cut_z=(240, 263), rh=100, rr=268, n=24, cross=0.05, col=(0.62, 0.62, 0.66)), dict(side=-1, c=(-108.1, 328.6), hc=(-108.1, 328.6), zp=252, fl=10, cut_r=(118, 264), cut_z=(240, 263), rh=100, rr=268, n=24, cross=0.05, col=(0.62, 0.62, 0.66))], hubs=[dict(c=(-106.7, 328.4, 257.5), r=115, w=60), dict(c=(-108.1, 328.6, -257.5), r=115, w=60)]),
+       "chair_whillc2.png": dict(key="whill"), "chair_basic.png": dict(key="inv9000"), "chair_troll.png": dict(key="inv9000xdt"),
+       "chair_focuscr.png": dict(key="fcr"),
        "chair_leshy.png": dict(key="x8", recolor=[28, 4, 26])}
 # подгонка коляски под персонажа (только для портрета): сдвиг части модели, мм игры (blender_render.move_parts)
 MOVE = {"chair_f5.png": [   # Матильда: без передних антиопрокидывателей, подножка выше под короткие ноги
@@ -27,7 +28,8 @@ MOVE = {"chair_f5.png": [   # Матильда: без передних анти
     dict(x=[330, 620], y=[-50, 200], not_wheel=[215, 182, 195, 215], d=[0, 190, 0])]}
 if art in GLB:
     xf = json.load(open(os.path.join(HERE, "gen3d", GLB[art]["key"] + "_xform.json"), encoding="utf-8"))
-    spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"), move=MOVE.get(art))
+    spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"), move=MOVE.get(art),
+                hubs=GLB[art].get("hubs"), spokes=GLB[art].get("spokes"))
 V = spec["verts"]
 hgt = max(v[1] for v in V) - min(v[1] for v in V)
 spec.update(W=1024, H=1024, s=1024 * 0.78 / max(hgt, 1100), pitch=pitch, yaws=yaws)

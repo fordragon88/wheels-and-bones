@@ -125,13 +125,85 @@ def add_hub(h):
         bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35))
 
 
+def fix_spokes(ws):
+    """Спицы Meshy рвутся на куски: вырезаем их внутри колеса и ставим ровные (перекрёстная спицовка, оба колеса).
+    w: c — центр колеса (x, y, мм игры), zp — |z| плоскости спиц у обода, cut_r/cut_z — зона вырезки (радиус от центра,
+    |z|), rh/rr — радиус фланца ступицы и обода, fl — полуширина ступицы, n — спиц на колесо, cross — сдвиг по ободу
+    (рад), col — цвет; side (+1/−1) — только это колесо, hc — центр втулки (у Meshy она сдвинута от центра обода)."""
+    import bmesh
+    for w in ws:
+        cx, cy = w["c"]
+        for o in [o for o in sc.objects if o.type == "MESH"]:
+            n = len(o.data.vertices)
+            co = np.empty(n * 3)
+            o.data.vertices.foreach_get("co", co)
+            g = np.c_[co.reshape(-1, 3), np.ones(n)] @ np.asarray(o.matrix_world).T
+            x, y, z = g[:, 0] * 1000, g[:, 2] * 1000, -g[:, 1] * 1000
+            r = np.hypot(x - cx, y - cy)
+            sel = (r > w["cut_r"][0]) & (r < w["cut_r"][1]) & (np.abs(z) >= w["cut_z"][0]) & (np.abs(z) <= w["cut_z"][1])
+            if "side" in w:
+                sel &= z * w["side"] > 0
+            if sel.any():
+                bm = bmesh.new()
+                bm.from_mesh(o.data)
+                bm.verts.ensure_lookup_table()
+                bmesh.ops.delete(bm, geom=[bm.verts[i] for i in np.nonzero(sel)[0]], context="VERTS")
+                bm.to_mesh(o.data)
+                bm.free()
+                o.data.update()
+                print("спицы Meshy: удалено вершин", int(sel.sum()), o.name)
+        verts, faces, k, t = [], [], 6, w.get("t", 1.4)
+        cross = w.get("cross", 0.2)                          # сдвиг спицы по ободу, рад (почти касательная к ступице)
+        hx, hy = w.get("hc", w["c"])
+        for side in ((w["side"],) if "side" in w else (-1, 1)):
+            for i in range(w["n"]):
+                a = 2 * math.pi * i / w["n"]
+                zf = side * (w["zp"] + (w["fl"] if i % 2 else -w["fl"]))
+                ar = a + (cross if (i // 2) % 2 else -cross)
+                p0 = np.array([hx + w["rh"] * math.cos(a), hy + w["rh"] * math.sin(a), zf])
+                p1 = np.array([cx + w["rr"] * math.cos(ar), cy + w["rr"] * math.sin(ar), side * w["zp"]])
+                ax = (p1 - p0) / np.linalg.norm(p1 - p0)
+                u = np.cross(ax, [0, 0, 1.0])
+                u = u / np.linalg.norm(u) if np.linalg.norm(u) > 1e-6 else np.array([1.0, 0, 0])
+                v = np.cross(ax, u)
+                base = len(verts)
+                for p in (p0, p1):
+                    for j in range(k):
+                        q = p + t * (math.cos(2 * math.pi * j / k) * u + math.sin(2 * math.pi * j / k) * v)
+                        verts.append((q[0] / 1000, -q[2] / 1000, q[1] / 1000))
+                for j in range(k):
+                    jj = (j + 1) % k
+                    faces.append((base + j, base + jj, base + k + jj, base + k + j))
+        me_ = bpy.data.meshes.new("spokes")
+        me_.from_pydata(verts, [], faces)
+        me_.update()
+        ob_ = bpy.data.objects.new("spokes", me_)
+        sc.collection.objects.link(ob_)
+        m = bpy.data.materials.new("spoke")
+        m.use_nodes = True
+        b = m.node_tree.nodes["Principled BSDF"]
+        b.inputs["Base Color"].default_value = (*w.get("col", (0.7, 0.7, 0.72)), 1)
+        b.inputs["Metallic"].default_value = 0.9
+        b.inputs["Roughness"].default_value = 0.3
+        me_.materials.append(m)
+
+
 # ---------- модель ----------
 if d.get("glb"):
     import_glb(d["glb"], d["glb_matrix"], d.get("recolor"))
     if d.get("move"):
         move_parts(d["move"])
+    if d.get("spokes"):
+        fix_spokes(d["spokes"])
     for h in d.get("hubs") or []:
         add_hub(h)
+    if os.environ.get("WB_EXPORT"):                    # исправленная копия модели (glb_fixed.py): без рендера
+        bpy.ops.object.select_all(action="DESELECT")
+        for o in sc.objects:
+            o.select_set(o.type == "MESH")
+        bpy.ops.export_scene.gltf(filepath=os.environ["WB_EXPORT"], export_format="GLB", use_selection=True)
+        print("exported", os.environ["WB_EXPORT"], flush=True)
+        sys.exit(0)
 V = np.asarray(d["verts"], dtype=np.float64)
 VB = np.c_[V[:, 0], -V[:, 2], V[:, 1]] / 1000.0          # мм -> м, оси Blender
 tris, fcol, fmet, fpart = [], [], [], []

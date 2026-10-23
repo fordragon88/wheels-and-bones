@@ -75,6 +75,25 @@ JOBS = {   # ключ: (рендер коляски, портрет, описа�
                    "holds her little honey pot on her lap. Her short legs bend at the front edge of the seat and her two "
                    "feet stand flat on the two footplates, one foot on each. Only these two footplates, nothing else "
                    "under her feet. Both big drive wheels are complete and round."),
+    # фольклорные клиенты в моделях Meshy (вместо колясок Tripo), 2026-10-23
+    "yaga": ("portrait_chair_yaga/portrait_chair_yaga_01_white.png", "client_yaga.png",
+             "a Vermeiren D100 folding steel wheelchair: brushed silver steel frame with an X cross brace under the seat, "
+             "black sling backrest and seat, black padded armrests on silver side frames, push handles with black grips, "
+             "swing-away footrests with black footplates, large spoked rear wheels with grey tyres and silver pushrims, "
+             "grey solid front casters on silver forks",
+             "She holds a BIG, long witch's twig broom (a besom) in both hands across her lap: a long wooden handle and a "
+             "large bushy bundle of twigs, clearly much bigger than the little broom in <image2>. Her feet in felt boots "
+             "rest on the footplates."),
+    "rusalka": ("portrait_chair_rusalka/portrait_chair_rusalka_01_white.png", "client_rusalka.png",
+                "a Panthera X3 ultralight rigid wheelchair: matte black carbon-fibre frame, low black backrest, black seat "
+                "cushion, no push handles, black spoked rear wheels with silver-grey pushrims, small black front casters, "
+                "a light grey tubular loop footplate",
+                "Her hands rest on her lap; her mermaid tail lies on the footplate, as in <image2>."),
+    "mummy": ("portrait_chair_ra/portrait_chair_ra_01_white.png", "client_mummy.png",
+              "a Quickie Nitrum rigid active wheelchair: glossy red tubular frame, black padded backrest and black seat "
+              "cushion, black spoked rear wheels with black pushrims and large dark grey round power-assist motor hubs "
+              "(Alber e-motion) with light grey caps in the wheel centres, small black front casters, a black footplate",
+              "The mummy's bandaged hands rest on the knees, as in <image2>."),
 }
 FREE_POSE = {"badger_new"}   # от старого портрета — только облик персонажа, поза и коляска — по рендеру
 

@@ -311,16 +311,49 @@ python i18n_work/build_lang.py       # перевод полон
 - Тела клиентов в Кабинете посадки: векторный Бомм от Codex (3 версии, art_tests/seat_bodies/codex_svg) владельцу
   не понравился («кривой»); SEAT_BODY_ON = False. Возможный путь — растровые части от ChatGPT по ТЗ chatgpt_brief.
 - Сноски из мануалов для первых заданий (Мартин, Аэлин, Дургин, Тилли, Гра, Мора) — нужны страницы мануалов BARC.
-- Модели Meshy для колясок Яги (Vermeiren D100), Ольги (Panthera X3), Сенеба (Quickie Nitrum) — последние модели
-  Tripo; после замены убрать Tripo из титров, README и LICENSE-CONTENT. Референсы в art_tests/meshy_ref: X3 — 4 ракурса,
-  Nitrum — 3 (нет вида сзади), D100 — 2 (¾ и сбоку; ещё фото в _raw/d100). Q6 Edge и Zippie Iris — наши модели
-  (не Tripo), заменить по желанию ради качества; референсы у обеих — 4 ракурса.
+- Модели Meshy для 9 колясок, которые ещё строятся кодом (выглядят проще): Invacare 9000 (Мартин; та же модель
+  крупнее — Бомму, 9000 XDT), Progeo Ego (Аэлин), Tekna Advance (Дургин — его портрет владелец просил не трогать),
+  Exelle Junior (Тилли), Noir 2 (Гра), TiLite Aero Z (Юки), Etac Cross 6 (Ивушка), Zippie Iris (Искра), Q6 Edge
+  (Гильдия, окна коляски нет — позже). Референсы — art_tests/meshy_ref/<N>_<модель>/ (по 4; у Ego/Tekna рамы на фото
+  разного цвета). Лист сравнения — art_tests/_review/chairs_to_replace.jpg. После замены — перерисовать портреты.
+  Новая модель: tripo_convert/glb_xform/tripo_views → SPECS в tripo_label → кадры blender_frames (спицы — fix_spokes)
+  → art_from_turntable → portrait_chair/reseat/install.
 - Гнома Дургина (коренастый) пока не трогать — решение владельца.
 
 ---
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-10-23 — Claude (Opus 5.5) — **Мартин и Бомм — Invacare 9000 Meshy** (`meshy_models/invacare_9000.glb`; Мартин —
+  ключ `inv9000`, height=920, art chair_basic; Бомм — та же модель ×1.07, ключ `inv9000xdt`, height=985, art chair_troll).
+  `tripo_label`: у колеса `sectors=[(деталь, угол0, угол1, dR0, dR1)]` — участок колеса своей деталью (камера — низ
+  шины, ниппель — участок обода), т.к. у Мартина в задании tube/valve; у Бомма «ниппель» — передний угол сиденья
+  (подушка ROHO), «cushion» — сиденье, «seat» — спинка. Модели — assets/models/chair_{basic,troll}_ai*.json (прежние
+  процедурные — art_tests/tripo/bak_before_meshy/*_procedural*). Литые колёса Meshy целые — fix_spokes не нужен.
+  Портреты Мартина/Бомма — ещё с синей коляской (ждём решения владельца). **Исправленные копии GLB**:
+  `art_tests/glb_fixed.py` (blender_render с WB_EXPORT — без рендера, экспорт сцены после fix_spokes/add_hub) →
+  meshy_models/*_fixed.glb (в осях игры, метры). **Референсы Meshy**: владелец заметил «один и тот же ракурс» у Ego/Tekna;
+  проверены все наборы — у Noir 2 и Exelle Junior тоже всё с одной стороны. Новые фото — архив rehateamprogeo.com через
+  Wayback (`web.archive.org/web/2023id_/…/images/<МОДЕЛЬ>/…`; CDX-список: `cdx/search/cdx?url=rehateamprogeo.com/images*`):
+  Noir 2 (4 стороны, один цвет), Exelle Junior (4 стороны), Ego (¾ спереди + сзади справа, оранжевый → салатовый).
+  Tekna Advance — других ракурсов нет нигде (каталоги Progeo 2013–14 в _raw/progeo_catalog — только свёрнутая и детали).
+  (assets/chair_{basic,troll}.png, assets/models/*, assets/turntable/*, art_tests/tripo_label.py, blender_*.py,
+  glb_fixed.py, meshy_prep.py, meshy_models/README.md)
+
+- 2026-10-23 — Claude (Opus 5.5) — **Tripo убран из игры полностью.** Сенеб — Quickie Nitrum Meshy
+  (`meshy_models/quickie_nitrum.glb`, height=850, ключ `nitrum`): ступицы Alber e-motion дорисованы — метка `motor`
+  (hub r=115, w=60 в SPECS) и в кадрах `blender_render.add_hub` с тем же центром (−108, 327, ±257.5). Портреты Яги
+  (большая метла в руках — просьба владельца), Ольги, Сенеба перерисованы с новых колясок (`portrait_reseat.py`
+  yaga/rusalka/mummy, выбраны 44/44/33; прежние — art_tests/retired/). **Спицы Meshy рвутся на куски** (замечание
+  владельца): `blender_render.fix_spokes` вырезает их внутри колеса (зона r/|z| — по гистограммам граней, рама
+  внутри колеса не задета) и ставит ровные трубки-спицы (D100 — 36 серебристых, X3 — 24 чёрных, Nitrum — 24 от края
+  ступицы, почти радиально); параметры — `GLB[...]["spokes"]` в blender_frames/portrait_chair. Обручи у D100/X3 —
+  с блёстками текстуры Meshy (мелко, оставлено). Строка Tripo убрана из титров, README, LICENSE-CONTENT,
+  web_deploy/README, docs/credits_draft_en.txt. Референсы Meshy для оставшихся 9 колясок (в коде): Ego и Tekna
+  дополнены фото John Preston (_raw/ego_jp, tekna_jp → 30_/31_), Exelle Junior — 4-й вид; см. «Идеи и открытые вопросы».
+  (game.py, assets/client_{yaga,rusalka,mummy}.png, assets/chair_*.png, assets/turntable/*, art_tests/blender_render.py,
+  blender_frames.py, portrait_chair.py, portrait_reseat.py, tripo_label.py, meshy_prep.py, README.md, LICENSE-CONTENT)
 
 - 2026-10-23 — Claude (Opus 5.5) — **Баба Яга (Vermeiren D100) и Ольга (Panthera X3) — модели Meshy** владельца вместо
   Tripo (`meshy_models/vermeiren_d100.glb`, height=940, ключ `d100`; `meshy_models/panthera_x3.glb`, height=800, ключ

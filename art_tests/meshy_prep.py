@@ -53,16 +53,19 @@ SETS = {
                         False, None),
     "13_Panthera_X3": ("x3", [("00_", "1_view_a"), ("01_", "2_view_b"), ("02_", "3_view_c"), ("03_", "4_view_d")],
                        True, None),
-    "14_Progeo_Noir_2": ("noir", [("01_", "1_view_a"), ("02_", "2_view_b"), ("03_", "3_view_c"), ("04_", "4_view_d")],
-                         True, None),
+    "14_Progeo_Noir_2": ("noir_arch", [("01_", "1_front"), ("02_", "2_front_3-4"), ("03_", "3_side"),
+                                       ("04_", "4_back_3-4_other_side")], True, None),   # архив rehateamprogeo.com
     "15_Vermeiren_D100": ("d100", [("00_", "1_front_3-4"), ("01_", "2_side")], False, None),
     "16_Invacare_9000": ("inv9000", [("00_", "1_front_3-4"), ("01_", "2_other_3-4"), ("02_", "3_side"),
                                      ("04_", "4_front_folded")], False, None),
     "17_Magic_Mobility_X8": ("x8", [("00_", "1_side"), ("11_", "2_other_side"), ("05_", "3_front_3-4")], True, None),
     "18_Quickie_Nitrum": ("nitrum", [("03_", "1_front_3-4"), ("04_", "2_other_3-4"), ("01_", "3_side")], True, None),
-    "19_Progeo_Ego": ("ego", [("01_", "1_view_a"), ("13_", "2_view_b")], True, None),
-    "20_Progeo_Tekna_Advance": ("tekna", [("01_", "1_view_a"), ("13_", "2_view_b")], True, None),
-    "21_Progeo_Exelle_Junior": ("exelle", [("00_", "1_view_a"), ("01_", "2_view_b"), ("18_", "3_view_c")], True, None),
+    "19_Progeo_Ego": ("ego", [("13_", "1_front_3-4"), ("40_", "2_back_3-4_other_side")],
+                      True, (28, 72, 22)),   # 40_ — архив rehateamprogeo.com EG0005: оранжевая рама -> салатовая, как 13_
+    "20_Progeo_Tekna_Advance": ("tekna", [("01_", "1_view_a"), ("13_", "2_view_b"), ("30_", "3_view_c"),
+                                          ("31_", "4_view_d")], True, None),   # 30_, 31_ — johnpreston.ie
+    "21_Progeo_Exelle_Junior": ("exelle_arch", [("03_", "1_front_3-4"), ("10_", "2_side"), ("02_", "3_back_3-4"),
+                                              ("01_", "4_other_side")], True, None),   # архив rehateamprogeo.com
     "7_Pride_Jazzy_614": ("jazzy614b", [("00_PhotoRoom_000_20230222_094737.jpg", "1_front_3-4"),
                                         ("03_PhotoRoom_003_20230222_094737.jpg", "2_side"),
                                         ("05_PhotoRoom_005_20230222_094737.jpg", "3_back"),

@@ -16,6 +16,7 @@
 | `magic_mobility_x8.glb` | Magic Mobility Extreme X8 | Леший (`leshy_x8`), `chair_leshy.png` (корпус перекрашен в красный) | 2026-10-22 |
 | `vermeiren_d100.glb` | Vermeiren D100 | Баба Яга (`yaga_d100`), `chair_yaga.png` | 2026-10-23 |
 | `panthera_x3.glb` | Panthera X3 | русалка Ольга (`olga_x3`), `chair_rusalka.png` | 2026-10-23 |
+| `quickie_nitrum.glb` | Quickie Nitrum (без e-motion — ступицы дорисовываем) | мумия Сенеб (`ra_emotion`), `chair_ra.png` | 2026-10-23 |
 
 Как модель попадает в игру:
 1. `art_tests/tripo_convert.py meshy_models/<файл>.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002`
@@ -23,5 +24,11 @@
 2. `art_tests/glb_xform.py meshy_models/<файл>.glb <ключ> height=<мм> --keep-big=0.002` — матрица «модель → оси игры».
 3. `art_tests/blender_frames.py chair_<…>.png` — кадры поворота в Blender снимаются с ЭТОГО файла (полная сетка,
    родная текстура; цвет подгоняется под игру), затем `art_tests/art_from_turntable.py <job_id>`.
+
+**Исправленные копии `*_fixed.glb`** (`python art_tests/glb_fixed.py`): у моделей Meshy тонкие спицы рвутся на куски —
+в копии они вырезаны и поставлены ровные (`blender_render.fix_spokes`), у Nitrum добавлены ступицы Alber e-motion
+(`add_hub`). Копия уже в осях игры: метры, пол на 0, вперёд +X, правая сторона +Z (исходник не меняется). Есть для
+`vermeiren_d100`, `panthera_x3`, `quickie_nitrum` — для других появятся, когда им зададут `spokes`/`hubs` в
+`art_tests/blender_frames.py` (словарь `GLB`).
 
 Файлы `.glb` не в git (крупные) — храните копию.

@@ -251,12 +251,9 @@ The main art in `assets/` (backgrounds, Martin, the ghosts, Mortimer, clients in
 tool icons) was generated locally in ComfyUI with **Qwen Image** in one clean cartoon style — the pipeline and
 prompts are described in **[PROMPTS.md](PROMPTS.md)**, sources and scripts are in `art_tests/`. The wheelchairs
 are **drawn from blueprints** in real proportions and only restyled by the model, so the click hotspots land on
-the right parts. The 3D models are procedural (built in code, real millimetres). To replace a picture, drop a
+the right parts. The 3D models are either procedural (built in code, real millimetres) or made by our team in Meshy
+(`meshy_models/`). To replace a picture, drop a
 PNG with the same name into `assets/`; `python game.py --assets` prints the full list.
-
-**Credits — Tripo AI.** The 3D models of three folk characters' wheelchairs (Baba Yaga, Olga and Seneb the Mummy) were generated with [Tripo AI](https://www.tripo3d.ai/) on the free plan and are used under
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); so are the turntable frames and wheelchair
-illustrations made from them. All other wheelchairs are our own.
 
 ### Checks
 
@@ -596,16 +593,13 @@ python build_web.py --serve     # собрать и запустить лока�
 
 **Без `assets/` игра тоже работает**: всё рисуется векторным кодом (`VECTOR_ART`),
 и векторные схемы колясок построены по тому же чертежу — механика и хотспоты
-совпадают с PNG. **3D-модели** колясок процедурные: строятся кодом в реальных мм
-(`assets/models/`, сборка — `art_tests/build_9_chairs.py`, `art_tests/build_new_chairs.py`).
+совпадают с PNG. **3D-модели** колясок — либо процедурные (строятся кодом в реальных мм, `assets/models/`,
+сборка — `art_tests/build_9_chairs.py`, `art_tests/build_new_chairs.py`), либо сделаны нашей командой в Meshy
+(`meshy_models/`).
 
 Заменить картинку — положить PNG с тем же именем в `assets/` (кода не трогать).
 Персонажи — с прозрачным фоном, вписываются без искажения пропорций.
 `python game.py --assets` печатает полный список файлов.
-
-**Авторство — Tripo AI.** 3D-модели колясок трёх фольклорных персонажей (Баба Яга, Ольга и мумия Сенеб) сгенерированы в [Tripo AI](https://www.tripo3d.ai/) на бесплатном тарифе и используются по
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); так же — кадры поворота и рисунки колясок,
-сделанные по ним. Остальные коляски — наши.
 
 Иконки инструментов — `assets/tool_<id>.png`: панель инструментов на экране
 ремонта — минималистичные плитки-иконки с анимацией, описание инструмента — в карточке
