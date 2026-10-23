@@ -103,11 +103,42 @@ def _seed_piece(o, P, sel, seed):
     return out
 
 
+def _small_pieces(o, P, sel, nmax):
+    """Из вершин зоны sel — только те, чей связный кусок ВСЕЙ сетки (вершины сварены по 0,01 мм) не больше nmax
+    вершин: мусор Meshy (обрывки, «паучки» текстуры), лежащий вплотную к большой детали, которую трогать нельзя."""
+    w = np.unique(np.round(P, 2), axis=0, return_inverse=True)[1].ravel()
+    nf = len(o.data.polygons)
+    if nf == 0 or not sel.any():
+        return sel
+    loops = np.empty(len(o.data.loops), dtype=np.int64)
+    o.data.loops.foreach_get("vertex_index", loops)
+    starts = np.empty(nf, dtype=np.int64)
+    o.data.polygons.foreach_get("loop_start", starts)
+    par = np.arange(w.max() + 1)
+
+    def find(a):
+        while par[a] != a:
+            par[a] = par[par[a]]
+            a = par[a]
+        return a
+    ends = np.r_[starts[1:], len(loops)]
+    for s0, s1 in zip(starts, ends):
+        vs = loops[s0:s1]
+        r = find(w[vs[0]])
+        for v in vs[1:]:
+            par[find(w[v])] = r
+    roots = np.array([find(i) for i in range(len(par))])
+    size = np.bincount(roots[w])                      # вершин сетки в каждом куске
+    out = sel & (size[roots[w]] <= nmax)
+    return out
+
+
 def move_parts(moves):
     """Сдвиг части оригинальной модели (напр. подножка выше под короткие ноги): вершины с x, y (мм игры) в зоне
     (и |z| в az, если задано), кроме тех, что в круге колеса (not_wheel = cx, cy, R, |z| от), едут на d (мм игры);
     delete=True — вершины зоны удаляются (напр. антиопрокидыватель); rot=(yaw°, pitch°[, roll°]) с pivot (+ сдвиг d) — поворот части
-    (кривой джойстик Meshy); seed=(x, y, z) — из зоны только связный кусок у этой точки (провод, приросший к кожуху).
+    (кривой джойстик Meshy); seed=(x, y, z) — из зоны только связный кусок у этой точки (провод, приросший к кожуху);
+    small=N — из зоны только куски не больше N вершин (обрывки текстуры на подголовнике Pulse 6).
     Порядок — как в списке."""
     import bmesh
     for o in [o for o in sc.objects if o.type == "MESH"]:
@@ -128,6 +159,8 @@ def move_parts(moves):
                 sel &= ~((np.hypot(x - cx, y - cy) < R) & (np.abs(z) > zw))
             if mv.get("seed") is not None:                   # только связный кусок зоны, где лежит точка seed (мм игры):
                 sel = _seed_piece(o, np.c_[x, y, z], sel, mv["seed"])   # провод у кожуха, а не сам кожух
+            if mv.get("small"):                              # только мелкие куски (≤ small вершин): мусор на большой детали
+                sel = _small_pieces(o, np.c_[x, y, z], sel, int(mv["small"]))
             if mv.get("rot"):                                # поворот части: rot=(yaw°, pitch°), pivot=(x, y, z) мм игры
                 yaw, pitch, roll = [math.radians(v) for v in (list(mv["rot"]) + [0])[:3]]
                 px, py, pz = mv["pivot"]
@@ -293,6 +326,39 @@ def clone_parts(cl):
         print("скопировано граней:", len(src), "x", len(cl["copies"]), o.name)
 
 
+def paint_parts(paints):
+    """Закраска куска текстуры: грани, все вершины которых в коробке x/y/z (мм игры), получают свой матовый материал
+    цвета col — мусор, который Meshy нарисовал в самой текстуре (розовый «паучок» на подголовнике Pulse 6)."""
+    for o in [o for o in sc.objects if o.type == "MESH"]:
+        mw = o.matrix_world
+        n = len(o.data.vertices)
+        co = np.empty(n * 3)
+        o.data.vertices.foreach_get("co", co)
+        w = np.c_[co.reshape(-1, 3), np.ones(n)] @ np.asarray(mw).T
+        x, y, z = w[:, 0] * 1000, w[:, 2] * 1000, -w[:, 1] * 1000
+        loops = np.empty(len(o.data.loops), dtype=np.int64)
+        o.data.loops.foreach_get("vertex_index", loops)
+        nf = len(o.data.polygons)
+        starts = np.empty(nf, dtype=np.int64); o.data.polygons.foreach_get("loop_start", starts)
+        totals = np.empty(nf, dtype=np.int64); o.data.polygons.foreach_get("loop_total", totals)
+        mi = np.empty(nf, dtype=np.int32); o.data.polygons.foreach_get("material_index", mi)
+        for pt in paints:
+            sel = (x >= pt["x"][0]) & (x <= pt["x"][1]) & (y >= pt["y"][0]) & (y <= pt["y"][1])                   & (z >= pt["z"][0]) & (z <= pt["z"][1])
+            fsel = np.array([sel[loops[s:s + t]].all() for s, t in zip(starts, totals)])
+            if not fsel.any():
+                continue
+            m = bpy.data.materials.new("paint")
+            m.use_nodes = True
+            bb = m.node_tree.nodes["Principled BSDF"]
+            bb.inputs["Base Color"].default_value = (*pt.get("col", (0.03, 0.03, 0.035)), 1)
+            bb.inputs["Roughness"].default_value = pt.get("rough", 0.85)
+            o.data.materials.append(m)
+            mi[fsel] = len(o.data.materials) - 1
+            print("закрашено граней:", int(fsel.sum()), o.name)
+        o.data.polygons.foreach_set("material_index", mi)
+        o.data.update()
+
+
 def add_tube(t):
     """Трубка, которой нет в модели (крепление пульта и т.п.): p0→p1 (мм игры), r — радиус, col — цвет."""
     p0, p1 = np.array(t["p0"], float), np.array(t["p1"], float)
@@ -373,6 +439,8 @@ if d.get("glb"):
     if os.environ.get("WB_CULL"):                      # проверка: с отсечением задних граней видны дыры/вывернутые нормали
         for m_ in bpy.data.materials:
             m_.use_backface_culling = True
+    if d.get("paint"):
+        paint_parts(d["paint"])
     if d.get("spokes"):
         fix_spokes(d["spokes"])
     for cl in d.get("clones") or []:

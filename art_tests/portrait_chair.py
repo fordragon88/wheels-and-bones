@@ -56,7 +56,7 @@ if art in GLB:
     spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"),
                 move=(GLB[art].get("move") or []) + (MOVE.get(art) or []) or None,
                 hubs=GLB[art].get("hubs"), spokes=GLB[art].get("spokes"), antitips=GLB[art].get("antitips"), clones=GLB[art].get("clones"),
-                    tubes=GLB[art].get("tubes"))
+                    tubes=GLB[art].get("tubes"), paint=GLB[art].get("paint"))
 V = spec["verts"]
 hgt = max(v[1] for v in V) - min(v[1] for v in V)
 spec.update(W=1024, H=1024, s=1024 * 0.78 / max(hgt, 1100), pitch=pitch, yaws=yaws)

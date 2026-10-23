@@ -18,7 +18,7 @@ for art in arts:
     xf = json.load(open(os.path.join(HERE, "gen3d", g["key"] + "_xform.json"), encoding="utf-8"))
     spec = json.load(open(os.path.join(tmp, os.path.splitext(art)[0] + ".json"), encoding="utf-8"))
     spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=None, spokes=g.get("spokes"), hubs=g.get("hubs"),
-                move=g.get("move"), antitips=g.get("antitips"), clones=g.get("clones"), tubes=g.get("tubes"))
+                move=g.get("move"), antitips=g.get("antitips"), clones=g.get("clones"), tubes=g.get("tubes"), paint=g.get("paint"))
     sp = os.path.join(tmp, "_fixed_" + os.path.splitext(art)[0] + ".json")
     json.dump(spec, open(sp, "w"), separators=(",", ":"))
     out = os.path.splitext(os.path.join(ROOT, xf["src"]) if not os.path.isabs(xf["src"]) else xf["src"])[0] + "_fixed.glb"

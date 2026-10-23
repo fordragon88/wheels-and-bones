@@ -9,7 +9,7 @@
 | `quantum_edge_4.glb` | Quantum Edge 4 | «Лифт сиденья» (гоблин Зикс), `chair_edge4.png` | 2026-10-22 |
 | `permobil_f5_corpus.glb` | Permobil F5 Corpus | «Зарядка в холоде» (барсучиха Матильда), `chair_f5.png` | 2026-10-22 |
 | `drive_trident_hd.glb` | Drive Trident HD | «Свободный ход» (`freewheel`), `chair_trident.png` | 2026-10-22 |
-| `quickie_pulse_6.glb` | Quickie Pulse 6 | Гильдия, «Pulse 6» (`t_pulse6`), `chair_pulse6.png` | 2026-10-22 |
+| `quickie_pulse_6.glb` | Quickie Pulse 6 (розовый «паучок» в текстуре подголовника закрашен — `paint`) | Гильдия, «Pulse 6» (`t_pulse6`), `chair_pulse6.png` | 2026-10-22 |
 | `pride_jazzy_614.glb` | Pride Jazzy (EVO) 614 | Змей Горыныч (`gorynych_jazzy`), `chair_gorynych.png` | 2026-10-22 |
 | `whill_model_c2.glb` | WHILL Model C2/Ci | «Код ошибки» (`whill_code`), `chair_whillc2.png` | 2026-10-22 |
 | `ki_mobility_focus_cr.glb` | Ki Mobility Focus CR | бабушка Агата (`focuscr_cable`), `chair_focuscr.png`; в игре наклон 20° | 2026-10-22 |
@@ -37,7 +37,7 @@
 **Исправленные копии `*_fixed.glb`** (`python art_tests/glb_fixed.py`): у моделей Meshy тонкие спицы рвутся на куски —
 в копии они вырезаны и поставлены ровные (`blender_render.fix_spokes`), у Nitrum добавлены ступицы Alber e-motion
 (`add_hub`), у Q6 Edge убраны висящие провода и ремешок. Копия уже в осях игры: метры, пол на 0, вперёд +X, правая сторона +Z (исходник не меняется). Есть для
-`vermeiren_d100`, `panthera_x3`, `quickie_nitrum`, `progeo_exelle_junior`, `tilite_aero_z`, `quantum_q6_edge_classic` — для других появятся, когда им зададут `spokes`/`hubs` в
+`vermeiren_d100`, `panthera_x3`, `quickie_nitrum`, `progeo_exelle_junior`, `tilite_aero_z`, `quantum_q6_edge_classic`, `quickie_pulse_6` — для других появятся, когда им зададут `spokes`/`hubs` в
 `art_tests/blender_frames.py` (словарь `GLB`).
 
 Файлы `.glb` не в git (крупные) — храните копию.

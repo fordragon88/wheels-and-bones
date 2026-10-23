@@ -23,7 +23,8 @@ subprocess.run([sys.executable, os.path.join(HERE, "blender_export.py"), ",".joi
 GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]),            # красный -> фиолетовый
        "chair_edge4.png": dict(key="edge4", recolor=[228, 2, 32]),       # синий -> красный
        "chair_f5.png": dict(key="f5m", recolor=[175, -1, 30]),           # бирюзовый -> графит
-       "chair_trident.png": dict(key="trident"), "chair_pulse6.png": dict(key="pulse6"),
+       "chair_trident.png": dict(key="trident"), "chair_pulse6.png": dict(key="pulse6",   # розовый «паучок» на затылке подголовника — нарисован в ТЕКСТУРЕ Meshy
+           paint=[dict(x=[-285, -230], y=[1092, 1165], z=[-58, 30], col=(0.04, 0.04, 0.045), rough=1.0)]),   # (сетка там чистая) — закрасить
        "chair_gorynych.png": dict(key="jazzy"), "chair_whillc2.png": dict(key="whill"),
        "chair_yaga.png": dict(key="d100", spokes=[dict(side=1, c=(-214.4, 305.3), hc=(-219.7, 303.5), zp=305, fl=10, cut_r=(42, 244), cut_z=(292, 332), rh=30, rr=247, n=36, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-213.2, 308.6), hc=(-218.7, 304.4), zp=305, fl=10, cut_r=(42, 244), cut_z=(292, 332), rh=30, rr=247, n=36, col=(0.72, 0.72, 0.75))]), "chair_rusalka.png": dict(key="x3", spokes=[dict(side=1, c=(-121.3, 323.3), hc=(-116.9, 317.4), zp=255, fl=14, cut_r=(62, 264), cut_z=(240, 270), rh=32, rr=268, n=24, col=(0.12, 0.12, 0.13)), dict(side=-1, c=(-121.1, 323.3), hc=(-117.1, 320.1), zp=255, fl=14, cut_r=(62, 264), cut_z=(240, 270), rh=32, rr=268, n=24, col=(0.12, 0.12, 0.13))]),
        "chair_ra.png": dict(key="nitrum", spokes=[dict(side=1, c=(-106.7, 328.4), hc=(-106.7, 328.4), zp=252, fl=10, cut_r=(118, 264), cut_z=(240, 263), rh=100, rr=268, n=24, cross=0.05, col=(0.62, 0.62, 0.66)), dict(side=-1, c=(-108.1, 328.6), hc=(-108.1, 328.6), zp=252, fl=10, cut_r=(118, 264), cut_z=(240, 263), rh=100, rr=268, n=24, cross=0.05, col=(0.62, 0.62, 0.66))], hubs=[dict(c=(-106.7, 328.4, 257.5), r=115, w=60), dict(c=(-108.1, 328.6, -257.5), r=115, w=60)]),   # ступицы Alber e-motion
@@ -74,7 +75,7 @@ for art in arts:
         xf = json.load(open(os.path.join(HERE, "gen3d", GLB[art]["key"] + "_xform.json"), encoding="utf-8"))
         spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"), hubs=GLB[art].get("hubs"),
                     spokes=GLB[art].get("spokes"), move=GLB[art].get("move"), antitips=GLB[art].get("antitips"), clones=GLB[art].get("clones"),
-                    tubes=GLB[art].get("tubes"))
+                    tubes=GLB[art].get("tubes"), paint=GLB[art].get("paint"))
         json.dump(spec, open(src, "w"), separators=(",", ":"))
     out = os.path.join(ROUT, name)
     for f in glob.glob(os.path.join(out, "*.png")):
