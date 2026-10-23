@@ -53,6 +53,10 @@ class V(ast.NodeVisitor):
 
 
 V().visit(ast.parse(src))
-dst = os.path.join(HERE, sys.argv[1] if len(sys.argv) > 1 else "chunk5.json")
+dst = os.path.join(HERE, sys.argv[1] if len(sys.argv) > 1 else "_new_strings.json")
+if os.path.basename(dst).startswith("chunk") and os.path.exists(dst) and os.path.getsize(dst) > 10:
+    # готовый chunk с переводом не затираем (раньше проверка «extract_new.py chunk5.json» стирала 3,7 тыс. строк)
+    dst = os.path.join(HERE, "_new_strings.json")
+    print("chunk-файл уже есть — пишу в", dst)
 json.dump(out, open(dst, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 print(len(out), "строк ->", dst, "| уже в старых chunk:", sum(1 for o in out if o["ru"] in known))

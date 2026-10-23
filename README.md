@@ -23,7 +23,7 @@ invited to a party, the leg is missing again, so he **rents a wheelchair** — a
 "How do you even fix these?!" Enter **Bartholomew (Barty)**, the ghost of the chair's previous owner. He never
 really knew how to repair anything, but he *"watched the masters do it"*, so his hints are sometimes spot on and
 sometimes hilariously wrong. Martin gets hooked, opens a workshop and builds a **collection of unusual
-wheelchairs** belonging to fantasy clients — an elf, a dwarf, a fairy, an orc, a troll, a kitsune, a dryad, a
+wheelchairs** belonging to fantasy clients — an elf, a werewolf, a fairy, an orc, a troll, a kitsune, a dryad, a
 little dragon, an owl grandmother — and later takes on **power wheelchairs** too.
 
 Once word spreads, the **Wheelwrights' Guild** notices him, and Martin becomes the apprentice of **Master
@@ -334,7 +334,7 @@ Pygame. Один файл, играть можно мышью или **толь�
 **Бартоломью** — призрак прошлого хозяина коляски. Сам он чинить толком не умел,
 но *«видел, как делали мастера»*, и теперь подсказывает Мартину — иногда дельно,
 иногда мимо. Вместе они учатся. Мартин втягивается, открывает мастерскую и
-**собирает коллекцию диковинных колясок** фэнтези-клиентов: эльфийки, гнома, феи,
+**собирает коллекцию диковинных колясок** фэнтези-клиентов: эльфийки, оборотня, феи,
 орка, тролля, кицунэ, дриады, дракончика и бабушки-совы — а позже берётся и за
 **электрические коляски**.
 

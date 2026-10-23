@@ -24,14 +24,19 @@ byte-identical copies of the `ru` field (including spaces, punctuation, «», \n
 
 ## Names (fixed)
 Мартин → Martin · Бартоломью → Bartholomew · Барти → Barty · Бренна / Мастерица Бренна → Brenna / Master Brenna ·
-Аэлин → Aelin (elf) · Дургин → Durgin (dwarf, gnome→use "dwarf") · Тилли → Tilly (fairy) ·
+Аэлин → Aelin (elf) · Вольф → Wolf (werewolf; до 23.10.2026 на его месте был гном Дургин → Durgin) · Тилли → Tilly (fairy) ·
 Гра → Gra (orc, male; talks about himself in 3rd person, short blunt words: "Gra likes quiet.") ·
 Бомм → Bomm (troll; very simple speech: "Bomm sit. Bomm not fall. Bomm friend.") ·
 Зикс → Zix (goblin mechanic, cheeky) · Мора → Mora (sorceress, dry wit) ·
 Грунд → Grund (stone golem, speaks in CAPS: "GRUND. ROLLS. GRUND PLEASED.") ·
 Тавр → Tavr (centaur courier) · Некромант Мортимер → Mortimer the Necromancer (Seating Clinic mentor, gothic-pompous but kind) · Гильдия Колёсников → the Wheelwrights' Guild ·
 «Колёса и Кости» → "Wheels & Bones".
-Эльфийка → Elf · Гном → Dwarf · Фея → Fairy · Орк → Orc · Тролль → Troll ·
+Клиенты второй волны и народных заданий (так в assets/lang_en.json): Кицунэ Юки → Yuki the Kitsune · Дриада Ивушка →
+Ivushka the Dryad · Дракончик Искра → Iskra the Dragonling · Бабушка Агата → Granny Agatha · Ящерка-картограф Сайра →
+Saira the Lizardfolk Cartographer · Барсучиха-пасечница Матильда → Matilda the Badger Beekeeper · Баба Яга → Baba Yaga ·
+Русалка Ольга → Olga the Mermaid · Леший → Leshy · Мумия Сенеб → Seneb the Mummy (до 22.10 — Ра) · Змей Горыныч →
+Zmey Gorynych · Оборотень Вольф → Wolf the Werewolf.
+Эльфийка → Elf · Оборотень → Werewolf · Гном/гномка → Dwarf (Бренна) · Фея → Fairy · Орк → Orc · Тролль → Troll ·
 Гоблин-механик → Goblin mechanic · Чародейка → Sorceress · Голем → Golem · Кентавр → Centaur.
 
 ## Glossary (real terminology)

@@ -186,7 +186,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Hint:* Barty: “Go straight for the bolts!” ...nope — pressure first.  
    *After the step:* The #1 cause of “the lock won't hold” is low tire pressure.
 2. Top up the tire through the valve to the correct pressure.  
-   *Tool:* Pump → *Part:* Tire (also accepted: Rear wheel, Valve)
+   *Tool:* Pump → *Part:* Tire (also accepted: Valve, Rear wheel)
 3. Tighten the wheel lock mechanism bolts.  
    *Tool:* Hex key → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
    *After the step:* Don't overdo it: overtighten them and the lock gets stiff to engage.

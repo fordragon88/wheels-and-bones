@@ -4569,7 +4569,8 @@ JOBS = [
               "спец-станке.",
               "Барти: «Крути от души, на пол-оборота за раз... ладно, по чуть-чуть.»", alt=("rim",)),
             S("Подтяни ослабшие болты/гайки на раме.", "allen", "bolts",
-              "Сорванный болт меняют на такой же по классу прочности (число на головке)."),
+              "Сорванный болт меняют на такой же по классу прочности (число на головке).",
+              alt_tools=("socket", "wrench")),       # отзыв: ключ — по головке крепежа (шестигранник, гайка)
         ],
         test="Катишь колесо — дребезг ушёл, обод идёт ровно.",
         fact="Натяжение спиц проверяют пинг-тестом. Тянут до нужного натяжения и равномерно — "
@@ -7847,6 +7848,7 @@ class Game:
         self.seatc = None
         self.act = None                   # анимация инструмента на детали
         self.ride_t0 = None               # тест-драйв: клиент проезжает через экран
+        self.ride_done = False            # проезд закончился — ждём «ГОТОВО» (успеть дочитать — отзыв игрока)
         self._vol_drag = None
         if not headless:
             self.load_progress()
@@ -8368,6 +8370,7 @@ class Game:
         self.m3d = None                   # 3D прямо в окне диагностики (ракурс, перетаскивание)
         self.act = None
         self.ride_t0 = None
+        self.ride_done = False
         self.ghost_line = self.cur.get("intro") or \
             "Бартоломью: «Так-так... осмотри детали и реши, что сломалось.»"
         self.ghost_quip = ""
@@ -10015,7 +10018,7 @@ class Game:
                 return
         elif self.phase == "test":
             if self._test_btn_rect().collidepoint(m) and self.ride_t0 is None:
-                self.start_ride()
+                self.finish_test() if self.ride_done else self.start_ride()
 
     def _result_next(self):
         """Куда ведёт итог задания (кнопка и Esc): Гильдия, вечеринка после последнего ремонта или мастерская."""
@@ -10109,7 +10112,7 @@ class Game:
                     return
         elif self.phase == "test":
             if self._test_btn_rect().collidepoint(m) and self.ride_t0 is None:
-                self.start_ride()
+                self.finish_test() if self.ride_done else self.start_ride()
 
     # =========================================================== #
     #  UPDATE
@@ -10170,7 +10173,9 @@ class Game:
             self.ride_t0 = None                       # ушли из задания — проезд отменён
         if self.ride_t0 is not None and self.t - self.ride_t0 >= self.RIDE_SECS:
             self.ride_t0 = None
-            self.finish_test()
+            self.ride_done = True                      # дочитать текст и реплику — итог по «ГОТОВО» (отзыв)
+            if self.cur and self.cur.get("track") != "tech":
+                self.ghost_line = "Бартоломью: «Едет как надо! Дочитаешь — жми ГОТОВО.»"
 
     # =========================================================== #
     #  РЕНДЕР — общие куски
@@ -10335,6 +10340,7 @@ class Game:
         self.show_manual = False
         self.v3d = self.m3d = None
         self.act = self.ride_t0 = None
+        self.ride_done = False
         self.dispute = self.seatc = None
         self.esc_timer = 0
         self._talk_later = None
@@ -12291,7 +12297,6 @@ class Game:
             aa_circle(w_surf, (*MET, 165), wc, int((R - 4) * k), max(1, int(1.4 * k)))
             aa_circle(w_surf, (*MET, 210), wc, max(3, int(3.5 * k)))
             surf.blit(w_surf, rect.topleft)
-
         has_bad = pose.get("p", 0) > 8 or pose.get("knee_up") or pose.get("short") or pose.get("deep") or pose.get("dangle")
         if show_necro:
             targets = [
@@ -12307,9 +12312,36 @@ class Game:
             pt_deg = round(pose.get("p", 0))
             badge_col = BAD if pt_deg > 12 else (AMBER if pt_deg > 5 else GOOD)
             status_txt = f"Завал таза назад: {pt_deg}° (на крестце)" if pt_deg > 5 else "Таз в нейтрали · позвоночник стабилен"
+            # главное в позе — подножка, а не крестец (отзыв: урок 3 выглядел как урок 2); в зачёте до ответа
+            # (highlight=False) не подсказываем
+            if highlight and pose.get("knee_up"):
+                status_txt, badge_col = "Подножка высоко: колени выше бёдер", BAD
+            elif highlight and pose.get("dangle"):
+                status_txt, badge_col = "Подножка низко: стопы не достают", BAD
             sw_, sh_ = font(12, True).size(tr(status_txt))          # подпись — на тёмной плашке, поверх рисунка
             aa_rect(surf, (16, 12, 24, 225), (rect.x + 134, rect.y + 10, sw_ + 12, sh_ + 4), border_radius=4)
             draw_text(surf, status_txt, (rect.x + 140, rect.y + 12), 12, badge_col, bold=True)
+
+        if pose.get("measure"):                  # урок «Мерки»: где меряют (отзыв «покажи, где мерки»), поверх нитей
+            MC, MG = (255, 200, 90), (255, 120, 110)
+
+            def dim(p0, p1, col, label, lp, **kw):
+                q0, q1 = T(*p0), T(*p1)
+                DR.line(surf, col, q0, q1, 2)
+                dx_, dy_ = q1[0] - q0[0], q1[1] - q0[1]
+                ln_ = math.hypot(dx_, dy_) or 1.0
+                ox, oy = -dy_ / ln_ * 5, dx_ / ln_ * 5
+                for q in (q0, q1):
+                    DR.line(surf, col, (q[0] - ox, q[1] - oy), (q[0] + ox, q[1] + oy), 2)
+                draw_text(surf, label, T(*lp), 12, col, bold=True, plate=True, **kw)
+
+            pop_x = knee[0] - 3.0                # подколенная ямка — сзади колена
+            y_th = hip[1] + 8.0
+            dim((0.0, y_th), (pop_x, y_th), MC, "до подколенной ямки", (pop_x, y_th + 7.5), right=True)
+            dim((depth, -7.0), (pop_x, -7.0), MG, "−5 см", (pop_x + 2.0, -5.0))
+            dim((-15.0, 0.0), (-15.0, scap_bot[1]), MC, "спинка", (-16.5, scap_bot[1] * 0.5 + 2), right=True)
+            dim((hand[0] + 3.0, 2.0), (hand[0] + 3.0, elbow[1] - 1.5), MC, "локоть 90°", (hand[0] + 5.0, elbow[1] + 4.0))
+            dim((knee[0] + 9.0, knee[1] - 3.0), (knee[0] + 9.0, -leg), MC, "голень", (knee[0] + 11.0, (knee[1] - leg) * 0.5))
 
         if not highlight:
             return
@@ -12518,6 +12550,8 @@ class Game:
                 case["seat_h"] = max(case["seat_h"], cfg["leg"] + 4)   # подножка висит, но над полом
         case.update(back=(40, 50), angle=(95, 105), kind="power" if spec.get("tilt") else "manual")
         _, pose = self.seat_eval(case, cfg)
+        if spec.get("measure"):
+            pose["measure"] = True
         if not force_good:
             if "p" in spec:
                 pose["p"] = spec["p"]
@@ -13548,6 +13582,13 @@ class Game:
     def _test_btn_rect(self):
         return pygame.Rect(WIDTH // 2 - 170, 560, 340, 64)
 
+    def _draw_ride_done(self, surf):
+        """После проезда: отметка над кнопкой «ГОТОВО» — проверка пройдена, итог по нажатию."""
+        if self.ride_done:
+            r = self._test_btn_rect()
+            draw_text(surf, "✔ Проверка пройдена", (r.centerx, r.y - 22), 17, GOOD, bold=True, center=True,
+                      plate=True)
+
     def draw_job(self, surf):
         if self.cur.get("track") == "tech":
             self.draw_job_tech(surf)
@@ -13566,7 +13607,10 @@ class Game:
         # коляска по центру — детали кликабельны прямо на схеме
         crect = self._chair_rect()
         if self.ride_t0 is None:
-            if self._m3d_mesh() is not None:
+            if self.ride_done:                    # после проезда клиент в починенной коляске (и без анимации —
+                img = load_image(job["client_art"], (230, 250), GHOST)   # «не было картинки проезда»)
+                blit_idle(surf, img, img.get_rect(center=crect.center).topleft, self.t)
+            elif self._m3d_mesh() is not None:
                 self._draw_m3d(surf, crect, mouse)
                 if self._m3d_zoom_on():
                     zin, zout = self._m3d_zoom_rects()
@@ -13619,7 +13663,9 @@ class Game:
             draw_text(surf, "ТЕСТ-ДРАЙВ", (360, 70), 20, GOOD, bold=True)
             draw_wrapped(surf, job["test"], (360, 100), 560, 19, WHITE)
             if self.ride_t0 is None:
-                Button(self._test_btn_rect(), "ПРОКАТИТЬ И ПРОВЕРИТЬ", GOOD).draw(surf, mouse)
+                self._draw_ride_done(surf)
+                Button(self._test_btn_rect(), "ГОТОВО ▸" if self.ride_done else "ПРОКАТИТЬ И ПРОВЕРИТЬ",
+                       GOOD).draw(surf, mouse)
             else:
                 self._draw_ride(surf)
         if self.v3d is None:
@@ -13933,7 +13979,9 @@ class Game:
             draw_wrapped(surf, job["test"], (360, 100), 560, 19, WHITE)
             if self.ride_t0 is None:                     # реплика — над кнопкой, кнопку не закрывает
                 self._draw_ghost_bubble(surf, 440)
-                Button(self._test_btn_rect(), "ПРОВЕРИТЬ РАБОТУ", GOOD).draw(surf, mouse)
+                self._draw_ride_done(surf)
+                Button(self._test_btn_rect(), "ГОТОВО ▸" if self.ride_done else "ПРОВЕРИТЬ РАБОТУ",
+                       GOOD).draw(surf, mouse)
             else:
                 self._draw_ride(surf)
 
@@ -14990,7 +15038,8 @@ def run_selftest():
     # другие верные ответы из отзывов игроков (alt — детали, alt_tools — инструменты) засчитываются
     for jid, n, tool, part in (("yaga_d100", 1, "hands", "axle"), ("yaga_d100", 8, "hands", "brake"),
                                ("cushion", 3, "hands", "cushion"), ("ra_emotion", 2, "charger", "rear_wheel"),
-                               ("leshy_x8", 7, "eyes", "freewheel"), ("olga_x3", 12, "socket", "brake")):
+                               ("leshy_x8", 7, "eyes", "freewheel"), ("olga_x3", 12, "socket", "brake"),
+                               ("spokes", 4, "socket", "bolts"), ("spokes", 4, "wrench", "bolts")):
         g = Game(headless=True)
         g.start_job(jid, variant=0)
         g.phase, g.step_idx = "repair", n - 1
@@ -15526,6 +15575,22 @@ def run_selftest():
             failures.append("«Без анимации»: тест-драйв не завершился сразу")
     finally:
         A11Y["calm"], A11Y["instant"] = calm0, inst0
+    for calm_ in (False, True):                                # проезд ждёт «ГОТОВО» (успеть дочитать — отзыв)
+        calm0 = A11Y["calm"]
+        A11Y["calm"] = calm_
+        gr = Game(headless=True)
+        gr.start_job("flat")
+        gr.phase = "test"
+        gr.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gr._test_btn_rect().center))
+        for _ in range(int(Game.RIDE_SECS * 30) + 15):
+            gr.update(1 / 30)
+        if gr.scene != "job" or not gr.ride_done:
+            failures.append("Тест-драйв: после проезда итог открылся сам, без «ГОТОВО»")
+        gr.draw(pygame.display.get_surface())
+        gr.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gr._test_btn_rect().center))
+        if gr.scene != "result":
+            failures.append("Тест-драйв: «ГОТОВО» не открыло итог")
+        A11Y["calm"] = calm0
     gk = Game(headless=True)                                   # «Пропустить обучение»: всё открыто, сброс — снова закрыто
     gk.scene, gk.intro_idx = "intro", 0
     gk.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gk._skip_tut_rect().center))

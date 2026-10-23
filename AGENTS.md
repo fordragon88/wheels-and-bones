@@ -62,7 +62,14 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 | `assets/` | PNG (фоны `bg_*`, коляски `chair_*`, клиенты `client_*`, `martin`, `ghost`, `master`, `mentor_necro*`, иконки `tool_*`), `models/` (3D JSON), `music/` (mp3), `lang_en.json`, `icon.ico` |
 | `assets/models/chair_<k>_ai.json`, `*_ai_lod.json` | 3D-модели колясок (полная и облегчённая) |
 | `art_tests/` | инструменты и черновики (см. ниже), бэкапы `game.py.bak_before_*` |
-| `art_tests/build_9_chairs.py` | **владелец** — процедурные 3D первых 9 колясок (можно править, делать бэкап) |
+| `meshy_models/` | исходные GLB колясок из Meshy (владелец) + `*_fixed.glb`; таблица и порядок — `meshy_models/README.md`; не в git |
+| `art_tests/gen3d/` | облегчённые копии Meshy (`<ключ>_full.npz`, `_grid.png`) и матрицы `<ключ>_xform.json` для Blender |
+| `art_tests/meshy_ref/` | референсы для Meshy: по 4 ракурса на коляску (`meshy_prep.py`), сырьё — `_raw/` |
+| `art_tests/codex_<герой>/` | ТЗ (`BRIEF.md`) и референсы для портретов через Codex; не в git |
+| `tools/blender-4.2.23-windows-x64/` | portable Blender для кадров поворота (`blender_frames.py`); не в git |
+| `art_tests/asset_check.py` | целостность ассетов по заданиям (портрет, арт, модель, 36 кадров, хотспоты) |
+| `docs/FEEDBACK_STATUS.md` | все отзывы игроков по строкам таблицы и что по каждому сделано |
+| `art_tests/build_9_chairs.py` | **владелец** — процедурные 3D первых 9 колясок (теперь только запасные; в игре — Meshy) |
 | `art_tests/build_new_chairs.py` | 3D 8 колясок второй волны (импортирует хелперы из build_9_chairs.py) |
 | `art_tests/build_assets.py`, `build_new_assets.py` | сборка PNG в `assets/` (вписывание в рамку 380×300) |
 | `art_tests/hotspots_<model>.json` | точки клика на арте колясок |
@@ -121,26 +128,35 @@ safety проваливает задание.
 
 ## 5. Контент сейчас
 
-**15 обычных заданий (20 вариантов поломок) + 5 Гильдии + экзамен (случайный билет из Гильдии).**
+**20 обычных заданий (25 вариантов поломок) + 5 Гильдии + экзамен (случайный билет из Гильдии).**
+3D-модель (кадры поворота): **Meshy** — модель владельца из `meshy_models/`; **код** — процедурная модель игры.
 
-| id | Клиент | Коляска (`chair_model`) | Поломка |
-|---|---|---|---|
-| flat | Мартин | Invacare 9000 (inv9000) | прокол |
-| caster | Эльфийка Аэлин | Progeo Ego (ego) | флаттер кастора, 2 варианта |
-| brake | Гном Дургин | Progeo Tekna Advance (tekna) | тормоз-замок |
-| spokes | Фея Тилли | Progeo Exelle Junior (exelle_jr), детская | спицы |
-| bearing | Орк Гра | Progeo Noir 2.0 (noir) | вой подшипника, 2 варианта |
-| cushion | Тролль Бомм | Invacare 9000 XDT (xdt) | дырявая подушка |
-| lift | Гоблин Зикс | Quantum Edge 4 (edge4) | не поднимается лифт сиденья, 2 варианта |
-| joystick | Чародейка Мора | Permobil M3 Corpus (m3) | джойстик/пыльник |
-| freewheel | Голем Грунд | Drive Trident HD (trident) | свободный ход |
-| aeroz_lock | Кицунэ Юки | TiLite Aero Z (aeroz) | замок на уклоне |
-| cross6_back | Дриада Ивушка | Etac Cross 6 (cross6) | перекос спинки |
-| iris_tilt | Дракончик Искра (ребёнок) | Zippie Iris (iris) | наклон, антиопрокидыватели |
-| focuscr_cable | Бабушка Агата (сова) | Ki Focus CR (focuscr) | трос наклона |
-| whill_code | Ящерка Сайра | WHILL Model C2 (whillc2) | коды 01/02/10, 3 варианта |
-| f5_charge | Барсучиха Матильда | Permobil F5 Corpus (f5) | не заряжается после зимы |
-| truing, t_battery, toe, t_pulse6, t_q6brake | Гильдия | Ego / Edge 4 / Pulse 6 / Q6 Edge | правка обода, пара батарей, схождение, VR2, Q-Logic #203 |
+| id | Клиент | Коляска (`chair_model`) | 3D | Поломка |
+|---|---|---|---|---|
+| flat | Мартин | Invacare 9000 (inv9000) | Meshy | прокол |
+| caster | Эльфийка Аэлин | Progeo Ego (ego) | Meshy | флаттер кастора, 2 варианта |
+| brake | Оборотень Вольф (до 23.10 — гном Дургин) | Quickie 2 (quickie2; файлы chair_dwarf/client_dwarf) | Meshy | тормоз-замок |
+| spokes | Фея Тилли | Progeo Exelle Junior (exelle_jr), детская, розовая | Meshy | спицы |
+| bearing | Орк Гра | Progeo Noir 2.0 (noir) | Meshy | вой подшипника, 2 варианта |
+| cushion | Тролль Бомм | Invacare 9000 XDT (xdt) | Meshy (×1,07) | дырявая подушка |
+| lift | Гоблин Зикс | Quantum Edge 4 (edge4) | Meshy | не поднимается лифт сиденья, 2 варианта |
+| joystick | Чародейка Мора | Permobil M3 Corpus (m3) | Meshy | джойстик/пыльник |
+| freewheel | Голем Грунд | Drive Trident HD (trident) | Meshy | свободный ход |
+| aeroz_lock | Кицунэ Юки | TiLite Aero Z (aeroz) | Meshy (+антиопрокидыватели) | замок на уклоне |
+| cross6_back | Дриада Ивушка | Etac Cross 6 (cross6) | Meshy | перекос спинки |
+| iris_tilt | Дракончик Искра (+ мама) | Zippie Iris (iris) | **код** (решение владельца) | наклон, антиопрокидыватели |
+| focuscr_cable | Бабушка Агата (+ внук) | Ki Focus CR (focuscr) | Meshy, наклон 20° | трос наклона |
+| whill_code | Ящерка Сайра | WHILL Model C2 (whillc2) | Meshy | коды 01/02/10, 3 варианта |
+| f5_charge | Барсучиха Матильда | Permobil F5 Corpus (f5) | Meshy | не заряжается после зимы |
+| yaga_d100 | Баба Яга | Vermeiren D100 (d100) | Meshy | подняла сиденье — тормоза не держат |
+| olga_x3 | Русалка Ольга | Panthera X3 (x3) | Meshy | после моря хрустит |
+| leshy_x8 | Леший | Magic Mobility Extreme X8 (x8) | Meshy | застрял в болоте |
+| ra_emotion | Мумия Сенеб (до 22.10 — Ра) | Quickie Nitrum + Alber e-motion (nitrum_em) | Meshy + ступицы | зарядка обрывается на солнце |
+| gorynych_jazzy | Змей Горыныч | Pride Jazzy 614 (jazzy614) | Meshy | в горку выбивает автомат |
+| truing, t_battery, toe, t_pulse6, t_q6brake | Гильдия | Ego / Edge 4 / Invacare 9000 / Pulse 6 / Q6 Edge | Meshy | правка обода, пара батарей, схождение, VR2, Q-Logic #203 |
+
+Народные коляски (Яга, Ольга, Леший, Сенеб, Горыныч) — кадры в `assets/turntable/index_folk.json`, модели
+деталей — `art_tests/tripo/models/` (в `assets/models` их нет — так задумано, `art_tests/asset_check.py` это знает).
 
 Связь коляски с картинками: `chair_art` → `assets/chair_<k>.png`, модель `assets/models/chair_<k>_ai.json`,
 точки клика `CHAIR_HOTSPOTS[chair_model]` (координаты в рамке 380×300). Соглашение 3D: мм, x — вперёд, y — вверх (пол 0),
@@ -217,19 +233,82 @@ Windswept, 2017) и таблица Lange & Presperin Pedersen «Positioning Char
   так можно точно повторить любую прошлую картинку.
 - Стиль: **Qwen Image 2.1 edit** (`qwen2.1\qwen_image_2.1_int8_convrot`, текст-энкодер `qwen3vl_8b_int8_convrot`,
   `TextEncodeQwenImage21`, 25 шагов, cfg 1). Образец стиля для колясок — `input/wnb_m3final.png`, фон — `wnb_bg_workshop.png`.
-- Конвейер реальной коляски: картинка из мануала → Qwen «перерисуй в стиле <image2>» → вырезка **BiRefNetRMBG**
-  (BiRefNet-HR-matting) → `art_tests/build_new_assets.py` → хотспоты по сетке.
-  Персонаж: Qwen «посади X из <image3> в коляску <image1> в стиле <image2>».
+- (Старый путь, до 22.10 — сейчас коляски из Meshy, §8б.) Конвейер реальной коляски: картинка из мануала → Qwen
+  «перерисуй в стиле <image2>» → вырезка **BiRefNetRMBG** (BiRefNet-HR-matting) → `art_tests/build_new_assets.py` →
+  хотспоты по сетке. Персонаж: Qwen «посади X из <image3> в коляску <image1> в стиле <image2>».
 - **Проверять крупно**: лишние/двоящиеся колёса, висящий джойстик, лишние ручки, подлокотники и подножки не той модели,
   персонаж боком (владелец хочет лицом к зрителю). Делать 3–4 сида и давать владельцу выбрать.
-- 3D-модели процедурные (код), сверка с артом: `python art_tests/fit_view.py <key>` (IoU силуэта, `art_tests/fit/`),
-  `art_tests/art_vs_3d.py`. Старые ИИ-модели (Hunyuan/Pixal3D) — в `art_tests/models_bak_before_smooth`, в игре не используются.
+- **3D-модели — Meshy владельца** (кроме Zippie Iris — она процедурная), арт коляски (`assets/chair_*.png`) — кадр
+  поворота из Blender, поэтому арт и 3D совпадают сами. Как переносили — §8б. Процедурные модели (`build_9_chairs.py`,
+  `build_new_chairs.py`) — запасные; сверка с артом (`fit_view.py`, `art_vs_3d.py`) нужна только для них.
+  Старые ИИ-модели (Hunyuan/Pixal3D/Tripo) — в `art_tests/models_bak_before_smooth`, `art_tests/tripo/bak_before_meshy/`.
+- **Портреты клиентов** рисует **Codex (ChatGPT)** по ТЗ (решение владельца 23.10), фон вырезает **Qwen**
+  (`art_tests/qwen_cut.py`), не BiRefNet и не `cut_white` — те оставляли белое между спицами. Подробно — §8б.
+
+## 8б. Перенос колясок на модели Meshy (22–23.10.2026) — конвейер
+Зачем: процедурные и Tripo-модели были «игрушечными»; владелец сделал в Meshy (Multi-image to 3D) настоящие модели
+по 4 фото, мы довели их до игры и перерисовали портреты. Сделано для 19 колясок (таблица — `meshy_models/README.md`).
+
+**1. Референсы для Meshy** (собираем мы, генерирует владелец):
+- фото — каталоги производителей; Shopify-магазины — `meshy_shop.py <ключ> <url товара>` (`/products/<handle>.json`),
+  закрытые сайты — Wayback (`web.archive.org/web/2023id_/<url картинки>`); `meshy_fetch.py` кладёт в `_raw/<ключ>/`;
+- `meshy_prep.py` → `art_tests/meshy_ref/<N>_<модель>/`: 4 ракурса (спереди-сбоку, сбоку, сзади, спереди), белый фон,
+  1024², цвет — как у коляски в игре. **Ракурсы не повторять** (владелец ловит «один и тот же ракурс»); рамы разного
+  цвета на фото — перекрашивать к одному;
+- владелец кладёт GLB в `meshy_models/<модель>.glb` и пишет «<Модель> Готово».
+
+**2. Модель → игра** (python из meshenv, где fast-simplification и scipy):
+1. `tripo_convert.py meshy_models/X.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002` — облегчённая копия в осях
+   игры (мм, x вперёд, y вверх, пол 0, z вбок, пульт = +z); `--keep-big` отсекает мусорные островки Meshy.
+2. `glb_xform.py meshy_models/X.glb <ключ> height=<мм> --keep-big=0.002` — та же матрица для Blender (полная сетка).
+3. `tripo_views.py art_tests/gen3d/<ключ> --raw` — сетка видов с линейкой 50 мм: по ней мерим колёса, сиденье, пульт.
+4. `tripo_label.py`: запись в `SPECS` (колёса `wheel` с `kind="spoked"|"power"|"caster"` и `sectors`, коробки `box`
+   деталей, `drop`/`move` — правка геометрии, `add_antitips`), затем `tripo_label.py <ключ> --target 22000 --dir
+   art_tests/gen3d` → `chair_<k>_ai(_lod).json` в `assets/models/` (старые — `art_tests/tripo/bak_before_meshy/`).
+5. `blender_frames.py`: запись в `GLB` (ключ + правки, см. ниже) и в `portrait_chair.py`; `blender_frames.py chair_X.png`
+   — 36 кадров с ОРИГИНАЛЬНОГО GLB → `assets/turntable/chair_X_NN.jpg` + `.a.png`, `index.json`/`index_folk.json`.
+6. `art_from_turntable.py <job_id>` — арт коляски = кадр поворота (у колясок Гильдии — вписать вручную в 760×600).
+7. `python game.py --selftest` (хотспоты, детали на модели), `python art_tests/asset_check.py`, снимки задания —
+   `art_tests/layout_shots.py <job>`.
+
+**Правки модели при рендере** (`GLB[...]` в `blender_frames.py`, код — `blender_render.py`; исходник не трогаем):
+- `spokes` (`fix_spokes`) — у Meshy тонкие спицы рвутся: вырезать (`cut_r`, `cut_z`) и поставить ровные (`n`, `cross`,
+  `rh`/`rr` — радиусы втулки и обода, `c`/`hc` — центры обода и втулки, `zp`, `fl`, `col`), по колесу на сторону;
+- `hubs` (`add_hub`) — мотор-ступица (Alber e-motion у Сенеба); `antitips` (`add_antitip`) — дорисовать
+  антиопрокидыватели (Aero Z); `clones` — копия детали со сдвигом/зеркалом (пара у Exelle — в комментарии);
+- `move` — коробка x/y/z (или `az` = |z|) → `delete` или сдвиг `d`, поворот `rot=(yaw, pitch[, roll])` вокруг `pivot`
+  (Exelle: поперечина колёсика удалена, колесо — к трубе; Q6 Edge: фланец удалён, пульт вплотную к подлокотнику);
+- `tubes` — трубы-кронштейны (Q6 Edge: крепление пульта под подушкой); `recolor=[h0, h1, tol, sat]` — перекраска
+  (Exelle салатовая → розовая, M3, Edge 4, F5, X8);
+- `glb_fixed.py` (`WB_EXPORT=1`) пишет `meshy_models/<модель>_fixed.glb` — исправленная копия в осях игры, на будущее;
+  `WB_CULL=1` — рендер без задних граней (искать «дыры»).
+- **Сначала смотреть сзади и с 8 сторон**: кривые спицы, висящий джойстик, перепутанные стороны антиопрокидывателей,
+  мусор Meshy. Сдвиг части может зацепить соседнюю (у Q6 порвалась текстура сиденья) — сужать коробку.
+
+**3. Портрет клиента в новой коляске:**
+1. `portrait_chair.py chair_X.png -0.95,-0.7` — рендер коляски в ракурсе портрета (`tools/render_out/portrait_<chair>/`).
+2. ТЗ для Codex: `art_tests/codex_<герой>/BRIEF.md` + `ref_chair_*.png` (рендер — ГЛАВНЫЙ образец; фото) +
+   `ref_style_*.png` (2 соседних портрета) + прежний портрет героя. Запуск:
+   `codex exec --skip-git-repo-check --ephemeral -m gpt-6-luna -s workspace-write -C art_tests/codex_<герой> -i <refs…>
+   -o reply.txt "<задача>" < /dev/null` (без `< /dev/null` в фоне висит). 3 варианта — владелец выбирает.
+3. `qwen_cut.py in.png out.png` — вырезка Qwen 2.1 («Remove the background, and output a PNG image»): альфа от Qwen,
+   цвет — с оригинала. Проверять на пурпурном фоне (белое между спицами, под сиденьем).
+4. Установка — `assets/<портрет>.png` (прежний — в `art_tests/retired/`); коляска смотрит влево — `RIDE_FLIP`.
+   Старый путь (Qwen reseat → `portrait_install.py <ключ>=<сид>`) — запасной.
+- **Владелец ловит:** двойные подножки/джойстики/колёса, подлокотники не там, лишние накладки под ногой, обрубки,
+  кривые спицы, белый фон в просветах. Чинить от 3D-рендера, а не 2D-заплатками.
+
+**Решения владельца:** Zippie Iris (Искра) — наша процедурная с наклоном; Exelle Junior — родной одиночный
+антиопрокидыватель (колесо приставлено к трубе); гном Дургин → оборотень Вольф (Quickie 2); Q6 Edge — классическая
+жёлтая (пробная Q6 Edge 2.0 в игру не ставилась). Tripo убран из титров, README и LICENSE (его моделей в игре нет).
 
 ## 9. Перевод
 Логика на русских ключах, перевод на выводе. **Любой новый текст → в словарь**:
-`python i18n_work/extract_new.py chunkN.json` (выгрузка непереведённого) → перевести по `i18n_work/GUIDE.md`
-→ добавить в `i18n_work/en6.json` (или новый `enN.json`) → `python i18n_work/build_lang.py` (пересобирает
-`assets/lang_en.json` и проверяет «строк с кириллицей на экране: 0»).
+`python i18n_work/extract_new.py` (непереведённое → `i18n_work/_new_strings.json`, не в git) → перевести по
+`i18n_work/GUIDE.md` → добавить в `i18n_work/en9_fixes99_feedback.json` (последний по сортировке) → `python
+i18n_work/build_lang.py` (пересобирает `assets/lang_en.json` и проверяет «строк с кириллицей на экране: 0»).
+**Не передавать `extract_new.py` имя готового chunk** — `extract_new.py chunk5.json` затирал 3,7 тыс. строк перевода
+(теперь скрипт сам пишет в `_new_strings.json`, если такой chunk уже есть).
 
 ## 10. Как проверять (обязательно после правок)
 ```bash
@@ -247,13 +326,46 @@ python i18n_work/build_lang.py       # перевод полон
 Плюс **реальный запуск окна** на 30+ секунд (`python game.py`) и exe после `build_exe.bat` — некоторые падения
 (порча памяти) видны только в настоящем окне при RS>1.
 
+### 10а. Полная проверка игры (перед выкладкой и при аудите) — чек-лист
+Так проверяли 23.10.2026 (аудит после переноса колясок на Meshy). Порядок — от быстрого к долгому.
+
+**1. Автоматика** (bash: `export PYTHONIOENCODING=utf-8 SDL_VIDEODRIVER=dummy`; ожидаемый итог — справа):
+| Команда | Итог |
+|---|---|
+| `python game.py --selftest`; `WNB_TT=1 python game.py --selftest`; `py game.py --selftest` | `SELFTEST OK — 20 заданий (25 вариантов поломок) + 5 про-заданий + экзамен Гильдии.` (×3: модели, кадры поворота, Python 3.14) |
+| `python art_tests/asset_check.py` | `АССЕТЫ OK — 25 заданий…` |
+| `python art_tests/ui_playthrough.py` | `ПРОЙДЕНО: все задания, Гильдия, экзамен, финал` (снимки — `art_tests/audit_shots/`) |
+| `python art_tests/keyboard_playthrough.py` и `… en` | `ПРОЙДЕНО С КЛАВИАТУРЫ: 20 заданий, 5 Гильдии, примерка, настройки` (en ловит кириллицу в озвучке) |
+| `python art_tests/switch_playthrough.py`, `pad_playthrough.py` | `ПРОЙДЕНО ОДНОЙ КНОПКОЙ…`, `ПРОЙДЕНО С ГЕЙМПАДА…` |
+| `python art_tests/rs_smoke.py 2` | `RS 2.0 — все сцены отрисованы без ошибок` |
+| `python i18n_work/build_lang.py`; `python i18n_work/extract_new.py` | `строк с кириллицей на экране: 0`; `0 строк -> …_new_strings.json` |
+| `python art_tests/monkey_test.py` (долго) | `уникальных падений: 0` |
+| `WNB_URL=https://fordragon88.github.io/wheels-and-bones-web/ python art_tests/web_smoke.py --no-build` | `WEB SMOKE: 20 ok, 0 FAIL` (выложенный сайт; без `WNB_URL` — локальная сборка) |
+
+**2. Глазами** (снимки ботов + свои): `art_tests/layout_shots.py <job…>` — диагноз/ремонт без наложений;
+`audit_shots/` — мастерская, задание, проезд и «ГОТОВО», итог, гараж, Гильдия, экзамен, финал; Кабинет посадки — все
+7 уроков в «ошибке» и «норме» (подпись позы совпадает с темой урока), примерка, зачёт (рисунок не подсказывает ответ);
+крупный текст 125 % и `--rs 1.5`; настройки «Без анимации», «Призрак Барти» выкл, «Клиент: одна фраза».
+Каждая коляска в 3D-осмотре с 8 сторон: спицы, джойстик на месте, антиопрокидыватели к раме, нет мусора.
+Портреты на пурпурном фоне — без белого в просветах; подножек/джойстиков/колёс ровно столько, сколько у модели.
+
+**3. Несостыковки в текстах** (grep по game.py, README, docs, GUIDE): имена прежних героев (Дургин, Ра), прежние
+коляски (Tekna) и Tripo; `chair_name` = модель на кадрах; цвета рамы в репликах = цвет модели; `docs/QUESTS*.md`
+пересобраны (`python docs/export_quests.py`); `docs/FEEDBACK_STATUS.md` — нет строк без решения.
+
+**4. Отзывы:** онлайн-таблица (§10б) — новые строки после последней разобранной; `python game.py --feedback` (локальные).
+
+**5. Выкладка:** `python build_web.py --deploy` (ждёт сборку Pages этого коммита) → снова `web_smoke` по `WNB_URL` →
+открыть сайт в браузере (первый запуск, звук, телефон) — навык `web-check`. Вкладки после проверки закрыть.
+
 ## 10б. Замечания игроков — читать перед правкой контента
 Игроки отмечают спорные места кнопкой «Я не согласен» (после ошибки) и флажком ⚑ (любая неточность, со снимком экрана в `feedback_shots/`). Перед правкой заданий посмотри `python game.py --feedback`
 (или `%APPDATA%\WheelsAndBoneseedback.json` у владельца). Если игрок прав — поправь шаг (часто достаточно
 добавить верную альтернативу в `alt=` шага (детали) или `alt_tools=` (инструменты: «сдвинуть» — руками, «проверить» —
 и глазами) или уточнить формулировку), если нет — уточни подсказку/`wrongmsg`. Онлайн-таблица отзывов — лист
 `gid=2080929712` (читать в Chrome: `docs.google.com/spreadsheets/u/5/d/1A-NdhjWYNus9GDh98kt1Hp08C4LxwionP7dIvUfsRKI/htmlview/sheet?headers=true&gid=2080929712`).
-Разобрано по строку 88 включительно (23.10.2026) — новые смотреть с 89-й.
+Разобрано по строку 89 включительно (23.10.2026) — новые смотреть с 90-й. **Сводка «отзыв → что сделано»** —
+`docs/FEEDBACK_STATUS.md` (дописывать туда каждую разобранную строку).
 
 ## 11. Грабли (не наступать повторно)
 - Анимации, которые режут/растягивают спрайт, считать в РЕАЛЬНЫХ пикселях (`pygame.Surface.*`, RS), а не в
@@ -294,6 +406,13 @@ python i18n_work/build_lang.py       # перевод полон
 - **Окно SDL.** Не использовать `Window.from_display_module()` / `pygame._sdl2` без хранения ссылки — был краш (объект
   умирал, SDL обращался к освобождённой памяти). Сейчас окно управляется только через `pygame.display.set_mode`.
 - Не называть свои функции/классы `D`, `T`, `S` (это хелперы заданий).
+- `i18n_work/extract_new.py` не запускать с именем готового `chunkN.json` — затрёт перевод (теперь пишет в
+  `_new_strings.json`). Если `git status` показал изменённый chunk — `git checkout -- i18n_work/chunkN.json`.
+- **Концы строк.** game.py, AGENTS.md, README.md и др. в git — CRLF. Правка скриптом `io.open(p).read()` → `write`
+  молча делает LF, и `git diff` показывает весь файл. Писать байтами (LF → CRLF перед записью) или через Edit;
+  проверка — `git ls-files --eol <файл>` (должно быть i/crlf w/crlf).
+- Тест-драйв не закрывается сам: после проезда `ride_done` и кнопка «ГОТОВО ▸» (та же `_test_btn_rect`). Новые
+  боты/проверки после `RIDE_SECS` должны нажать её, иначе останутся в задании.
 - `build_exe.bat` — только ASCII + CRLF.
 - numpy нужен для 3D (без него — запасной арт); exe собирать с numpy.
 - Не удалять `settings.json`/сохранения владельца при тестах. Перед большими правками `game.py` — бэкап
@@ -304,13 +423,13 @@ python i18n_work/build_lang.py       # перевод полон
   селфтест проверяет всё это.
 
 ## 12. Идеи и открытые вопросы
-- У Edge 4 на арте джойстик слева, в игре — справа (соглашение +z). Можно перенести по желанию владельца.
-- Совпадение 3D с артом 0.66–0.82 (предел — перспектива арта).
+- (закрыто 23.10) Джойстик Edge 4 и совпадение 3D с артом — арт теперь кадр поворота той же модели.
 - ACE-Step для чистой инструментальной музыки (~10 ГБ, спросить владельца).
 - Ещё коляски из базы BARC: Permobil F3/M5, Explorer Mini/Koala (детские), Invacare TDX/Storm4, Broda, скутеры.
 - Тела клиентов в Кабинете посадки: векторный Бомм от Codex (3 версии, art_tests/seat_bodies/codex_svg) владельцу
   не понравился («кривой»); SEAT_BODY_ON = False. Возможный путь — растровые части от ChatGPT по ТЗ chatgpt_brief.
-- Сноски из мануалов для первых заданий (Мартин, Аэлин, Дургин, Тилли, Гра, Мора) — нужны страницы мануалов BARC.
+- Сноски из мануалов для первых заданий (Мартин, Аэлин, Вольф, Тилли, Гра, Мора) — нужны страницы мануалов BARC.
+- Q6 Edge: висящие кабели/ремешок у модели Meshy — спросили владельца, убирать ли (23.10, ответа пока нет).
 - Коляски в коде остались только у Искры (Zippie Iris — решение владельца) и у заданий Гильдии без окна коляски
   (Edge 4/Ego/Invacare в truing/t_battery/toe — свои Meshy-кадры уже есть). Meshy 23.10: Invacare 9000 (Мартин, Бомм),
   Exelle Junior (Тилли), Aero Z (Юки), Cross 6 (Ивушка), Noir 2.0 (Гра), Ego (Аэлин), Quickie 2 (Вольф), Q6 Edge (Гильдия). **Zippie Iris
@@ -331,6 +450,28 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-10-23 — Claude (Opus 5.5) — **аудит 3 (после переноса колясок на Meshy) + сверка всей таблицы отзывов +
+  документация.** Отзывы, оставшиеся незакрытыми: **№68/84 проезд** — после тест-драйва итог больше не открывается
+  сам: «✔ Проверка пройдена» и кнопка «ГОТОВО ▸» (`ride_done`, та же `_test_btn_rect`; в Гильдии тоже), клиент сидит в
+  починенной коляске по центру — и в «Без анимации» (там проезда нет; системное «уменьшить движение» включает режим
+  само — отсюда «не было картинки проезда»), Барти: «Едет как надо! Дочитаешь — жми ГОТОВО.»; боты жмут «ГОТОВО»
+  (ui/keyboard → switch/pad), selftest — в обоих режимах. **№50** — урок 3 Кабинета посадки («Подножка») подписывался
+  «Завал таза назад: 16° (на крестце)», как урок 2 → подпись по главной ошибке позы («Подножка высоко: колени выше
+  бёдер» / «Подножка низко: стопы не достают»; в зачёте до ответа — прежняя, не подсказка). **№51** — урок «Мерки»:
+  рулетки на рисунке (до подколенной ямки, −5 см, спинка до лопатки, локоть 90°, голень → подножка; `pose["measure"]`).
+  **№54** — болты рамы у Тилли — и торцевым, и разводным ключом (`alt_tools`, selftest). Сводка всех 88 строк —
+  новый `docs/FEEDBACK_STATUS.md` (открыто только №67 — живая проверка с NVDA). Несостыковки: README (dwarf → werewolf,
+  гнома → оборотня), `i18n_work/GUIDE.md` (Вольф/Оборотень, имена второй волны и народных клиентов). **Грабли:**
+  `extract_new.py chunk5.json` в наборе проверок затирал готовый chunk5 (3,7 тыс. строк; восстановлен из git) —
+  теперь вывод по умолчанию `i18n_work/_new_strings.json` (в .gitignore), чужой chunk не перезаписывается.
+  Новое: `art_tests/asset_check.py` (портрет, арт, модель, 36 кадров + маски, хотспоты по каждому заданию).
+  AGENTS: §3 (новые папки), §5 (все 20 заданий, у кого Meshy), §8 + **§8б конвейер Meshy → игра → портрет**,
+  §9 (extract_new), **§10а чек-лист полной проверки**, §10б, §12. Проверки (до правок, сайт): selftest ×3, ui,
+  клавиатура ru/en, одна кнопка, геймпад, monkey (0 падений), rs ×2, перевод, web_smoke живого сайта 20/0 — всё ок.
+  (game.py, art_tests/ui_playthrough.py, art_tests/keyboard_playthrough.py, art_tests/asset_check.py,
+  i18n_work/extract_new.py, i18n_work/en9_fixes99_feedback.json, i18n_work/GUIDE.md, assets/lang_en.json, README.md,
+  docs/FEEDBACK_STATUS.md, docs/QUESTS*.md, .gitignore, AGENTS.md)
 
 - 2026-10-23 — Claude (Opus 5.5) — **Гном Дургин → оборотень Вольф** (решение владельца; Хэллоуин). Задание `brake`
   (тормоз-замок) то же — шаги общие для любой ручной складной; сменились клиент («Оборотень Вольф»), коляска

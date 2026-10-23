@@ -110,6 +110,8 @@ def play_base(jid):
     assert g.phase == "test"
     enter_on(lambda it: it["key"][0] == "btn", "прокатить")
     frame(game.Game.RIDE_SECS + 0.7)
+    if g.scene == "job" and g.ride_done:                # проезд ждёт «ГОТОВО»
+        enter_on(lambda it: it["key"][0] == "btn" and ("ГОТОВО" in it["label"] or "DONE" in it["label"].upper()), "готово")
     assert g.scene == "result", (jid, g.scene)
     enter_on(lambda it: it["key"][0] == "btn", "дальше")
 
@@ -135,6 +137,8 @@ def play_tech(jid):
         done.add(nxt["id"])
     enter_on(lambda it: it["key"][0] == "btn", "проверить")
     frame(game.Game.RIDE_SECS + 0.7)
+    if g.scene == "job" and g.ride_done:
+        enter_on(lambda it: it["key"][0] == "btn" and ("ГОТОВО" in it["label"] or "DONE" in it["label"].upper()), "готово")
     assert g.scene in ("result", "exam_result"), (jid, g.scene)
     key(pygame.K_ESCAPE)
 

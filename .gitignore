@@ -61,3 +61,4 @@ meshy_models/*.glb
 .claude/skills/hyperframes-registry/
 .claude/skills/media-use/
 skills-lock.json
+i18n_work/_new_strings.json
