@@ -490,7 +490,9 @@ python i18n_work/build_lang.py       # перевод полон
   Мартин и Бомм — одна картинка коляски; lang_en.json ~600 мёртвых ключей; кадры 570 px при RS 2 слегка растягиваются.
   Проверки после всех правок: selftest (кадры, `WNB_TT=0`, py 3.14), asset_check, ui_playthrough, keyboard ru/en,
   switch, pad, rs_smoke 2, build_lang (0 кириллицы), extract_new (0 экранных), monkey (0 падений); до правок —
-  web_smoke сайта 20/0. Не закоммичено и не выложено. Бэкап кода — art_tests/game.py.bak_before_audit4.
+  web_smoke сайта 20/0. Закоммичено (eaef51f, dc8ab5a), **выложено** 18:53 (`build_web.py --deploy`, Pages 4376f41,
+  архив 39,1 МБ — +1 МБ за jpg-кадры Iris), web_smoke живого сайта после выкладки 20/0, запушено.
+  Бэкап кода — art_tests/game.py.bak_before_audit4.
   (game.py, AGENTS.md, README.md, PROMPTS.md, docs/*, i18n_work/en9_fixes99_feedback.json, assets/lang_en.json,
   assets/chair_iris.png, assets/turntable/chair_iris_*, index.json, art_tests/{dialogs_export,ui_playthrough,v3d_sheet}.py,
   art_tests/dialogs/WheelsAndBones_dialogues_v4.xlsx, meshy_models/README.md)
