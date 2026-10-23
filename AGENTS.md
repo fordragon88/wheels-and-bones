@@ -504,6 +504,10 @@ python i18n_work/build_lang.py       # перевод полон
   `qwen_cut.py` (сдвиг цвета 3/255), установлен как `assets/client_focuscr.png` 595×640 (прежний — art_tests/retired/
   client_focuscr_before_codex_2310.png). Используется в Кабинете посадки (seat_owl); в квесте — портрет с внуком, он
   прежний. Пакет: `art_tests/codex_agata/`. **Выложено** (Pages 5d38f894, вместе с чисткой словаря), web_smoke сайта 20/0.
+  **Портрет с внуком тоже перерисован Codex** (`art_tests/codex_agata_grandson/`, главный образец — утверждённый
+  одиночный портрет, внук с прежней картинки, стиль — Искра с мамой; вариант 2 — выбор владельца: внук держит ручку и
+  трогает подголовник) → `qwen_cut.py` → `assets/client_focuscr_grandson.png` 549×640 (прежний —
+  retired/client_focuscr_grandson_before_codex_2310.png). Теперь обе картинки Агаты — в одной коляске с подголовником.
   (BRIEF.md, `run.sh` с готовой командой `codex exec`, рефы: нынешние портреты, рендер Focus CR в ракурсе портрета
   `portrait_chair.py chair_focuscr.png -0.95,-0.7` — с подголовником и наклоном 20°, фото, 2 портрета-образца стиля).
   Дальше по §8б: `qwen_cut.py` → `assets/client_focuscr.png`, старый — в retired; портрет с внуком — отдельно, если нужно.
