@@ -2051,7 +2051,7 @@ def window_to_logical(pos):
 
 VOL = {"master": 0.8, "music": 0.45, "sfx": 0.9, "amb": 0.45, "on": True}   # сохраняется в settings.json
 MUSIC_DIR = os.path.join(ASSETS_DIR, "music")
-MUSIC = {"cur": None, "next": None, "at": 0.0}       # фоновая музыка: текущая тема и отложенный старт
+MUSIC = {"cur": None, "next": None, "xf": 1.0, "t": None}   # фоновая музыка: тема, следующая, громкость перехода
 
 
 def _amb_level():
@@ -2066,7 +2066,7 @@ MUSIC_LOUD_SCENES = ("title", "intro", "ending", "credits")
 
 
 def _music_level():
-    return (VOL["master"] * VOL["music"] * MUSIC.get("duck", 1.0)) if VOL["on"] else 0.0
+    return (VOL["master"] * VOL["music"] * MUSIC.get("duck", 1.0) * MUSIC.get("xf", 1.0)) if VOL["on"] else 0.0
 
 
 def music_duck(scene, since, dt):
@@ -2102,23 +2102,36 @@ def music_path(theme):
 
 
 def music_update(theme, now):
-    """Сменить тему с плавным переходом: старая гаснет, новая вступает чуть позже."""
+    """Сменить тему с плавным переходом: старая гаснет (~0,7 с), новая вступает (~1,5 с) — громкостью, своими руками.
+    Затухания SDL_mixer (music.fadeout, play(fade_ms)) нельзя: load/play ждут в цикле конца затухания старой темы,
+    а в браузере звук обрабатывается в том же единственном потоке — на первом запуске страница висла намертво."""
     try:
         if not pygame.mixer.get_init():
             return
-        if theme == MUSIC["cur"] and MUSIC["next"] not in (None, theme):
-            MUSIC["next"], MUSIC["at"] = theme, now     # вернулись до конца перехода: прежняя тема заново
-        elif theme != MUSIC["cur"] and theme != MUSIC["next"]:
+        dt = 0.0 if MUSIC["t"] is None else max(0.0, min(0.1, now - MUSIC["t"]))
+        MUSIC["t"] = now
+        if theme == MUSIC["cur"]:
+            MUSIC["next"] = None                          # вернулись до конца перехода — прежняя тема остаётся
+        elif theme != MUSIC["next"]:
             MUSIC["next"] = theme
-            MUSIC["at"] = now + (0.8 if MUSIC["cur"] else 0.0)
-            pygame.mixer.music.fadeout(700)
-        if MUSIC["next"] is not None and now >= MUSIC["at"]:
-            MUSIC["cur"], MUSIC["next"] = MUSIC["next"], None
-            path = music_path(MUSIC["cur"]) if MUSIC["cur"] else None
-            if path:
-                pygame.mixer.music.load(path)
-                pygame.mixer.music.set_volume(_music_level())
-                pygame.mixer.music.play(loops=-1, fade_ms=1500)
+        if MUSIC["next"] is not None:
+            if MUSIC["cur"] and MUSIC["xf"] > 0.0:        # старая тема гаснет
+                MUSIC["xf"] = max(0.0, MUSIC["xf"] - dt / 0.7)
+            else:
+                MUSIC["cur"], MUSIC["next"] = MUSIC["next"], None
+                pygame.mixer.music.stop()                 # мгновенно, без ожидания затухания
+                path = music_path(MUSIC["cur"]) if MUSIC["cur"] else None
+                if path:
+                    MUSIC["xf"] = 0.0
+                    pygame.mixer.music.load(path)
+                    pygame.mixer.music.set_volume(0.0)
+                    pygame.mixer.music.play(loops=-1)
+        elif MUSIC["xf"] < 1.0:                           # новая тема вступает
+            MUSIC["xf"] = min(1.0, MUSIC["xf"] + dt / 1.5)
+        vol = _music_level()
+        if abs(vol - MUSIC.get("vol", -1.0)) > 1e-3:
+            MUSIC["vol"] = vol
+            pygame.mixer.music.set_volume(vol)
     except Exception:
         pass
 
