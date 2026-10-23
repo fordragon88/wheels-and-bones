@@ -499,6 +499,10 @@ python i18n_work/build_lang.py       # перевод полон
   шаблон f-строки, ни в скриптах art_tests/docs. Первая попытка без проверки по AST-литералам срезала живые многострочные
   факты — build_lang поймал кириллицу; откатил из git и повторил. Проверки: build_lang 0 кириллицы, keyboard en 0 в
   озвучке, selftest ×2, extract_new 3 (только консоль). В выгрузке диалогов ушли 3 строки «Other scenes» — старые реплики.
+  **Портрет Агаты (без внука) — владелец делегирует ChatGPT/Codex**: пакет собран в `art_tests/codex_agata/`
+  (BRIEF.md, `run.sh` с готовой командой `codex exec`, рефы: нынешние портреты, рендер Focus CR в ракурсе портрета
+  `portrait_chair.py chair_focuscr.png -0.95,-0.7` — с подголовником и наклоном 20°, фото, 2 портрета-образца стиля).
+  Дальше по §8б: `qwen_cut.py` → `assets/client_focuscr.png`, старый — в retired; портрет с внуком — отдельно, если нужно.
   (game.py, AGENTS.md, README.md, PROMPTS.md, docs/*, i18n_work/en9_fixes99_feedback.json, assets/lang_en.json,
   assets/chair_iris.png, assets/turntable/chair_iris_*, index.json, art_tests/{dialogs_export,ui_playthrough,v3d_sheet}.py,
   art_tests/dialogs/WheelsAndBones_dialogues_v4.xlsx, meshy_models/README.md)
