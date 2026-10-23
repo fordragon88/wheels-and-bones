@@ -79,7 +79,8 @@ def stage():
     from PIL import Image
     for name in os.listdir(dst):
         fp = os.path.join(dst, name)
-        if not name.endswith(".png") or name.endswith(".a.png") or os.path.getsize(fp) < 150_000:
+        if (not name.endswith(".png") or name.endswith(".a.png") or os.path.getsize(fp) < 150_000
+                or name.startswith("seat_body_")):            # части куклы тела грузятся напрямую — им нужна PNG
             continue
         im = Image.open(fp)
         if name.startswith("bg_"):

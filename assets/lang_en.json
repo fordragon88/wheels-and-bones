@@ -3075,5 +3075,15 @@
  "Автомат выбивает при перегрузке: подождать около минуты, нажать кнопку, включить пульт. Выбивает снова и снова — в сервис Pride.": "The breaker trips under overload: wait about a minute, press the button, switch on the joystick. If it trips again and again — Pride service.",
  "Предел веса — вместе со всем, что на коляске: Jazzy 614 — 136 кг (300 lb), 614 HD — 204 кг.": "The weight limit includes everything on the chair: Jazzy 614 — 136 kg (300 lb), 614 HD — 204 kg.",
  "Нет питания — проверить разъёмы жгутов, автомат и клеммы батарей.": "No power — check the harness connectors, the breaker and the battery terminals.",
- "У деталей с книжкой есть сноска из мануала — наведи на деталь.": "Parts with a book icon have a manual footnote — hover over the part."
+ "У деталей с книжкой есть сноска из мануала — наведи на деталь.": "Parts with a book icon have a manual footnote — hover over the part.",
+ "Винты и колпачки (крест, шлиц)": "Screws and caps (Phillips, flat)",
+ "Обод гуляет на 2–3 мм — лёгкая «восьмёрка».": "The rim wobbles by 2–3 mm — a slight wobble out of true.",
+ "Включи коляску кнопкой на пульте и легонько толкни джойстик: должны щёлкнуть все электротормоза.": "Switch the chair on with the joystick's power button and push the joystick gently: all the electric brakes should click.",
+ "Еженедельная проверка из мануала (§7.17): на ровном полу, вокруг метр свободного места.": "A weekly check from the manual (§7.17): on a level floor with a metre of clear space around.",
+ "Включи зарядку в розетку, потом вставь штекер в гнездо на кнопке ступицы: он сам защёлкнется магнитом.": "Plug the charger into the wall, then put the plug into the socket on the hub button: the magnet snaps it into place.",
+ "Действуй по блок-схеме: открути торцевым ключом и замени узел мотора с тормозом": "Follow the flowchart: unbolt it with a socket wrench and replace the motor/brake assembly",
+ "Леший: «Если застрял — не дави джойстик. Мотор перегреется, а моторы на ёлках не растут.»": "Leshy: “If you get stuck, don't keep pushing the joystick. The motor will overheat — and motors don't grow on fir trees.”",
+ "Ещё раз Esc — выйти из игры.": "Press Esc again to quit the game.",
+ "Что-то пошло не так — вернулись назад. Прогресс сохранён.": "Something went wrong — we went back. Your progress is saved.",
+ "Сиденье широкое: таз съезжает вбок": "Seat too wide: the pelvis slides sideways"
 }

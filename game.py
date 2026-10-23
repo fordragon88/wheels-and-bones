@@ -673,9 +673,15 @@ def aa_rect(surf, color, rect, width=0, border_radius=0, **kw):
     col = tuple(int(c) for c in color)
     col = col if len(col) == 4 else (*col, 255)
     rad = min(round(border_radius * k), rr.w // 2, rr.h // 2)
-    img = _aa_cached(("rr", rr.w, rr.h, col, wd, rad), rr.size,
-                     lambda b, s: pygame.draw.rect(b, col, b.get_rect(), wd * s, border_radius=rad * s))
-    pygame.Surface.blit(surf, img, rr.topleft)
+    base = (*col[:3], 255)
+    img = _aa_cached(("rr", rr.w, rr.h, base, wd, rad), rr.size,
+                     lambda b, s: pygame.draw.rect(b, base, b.get_rect(), wd * s, border_radius=rad * s))
+    if col[3] < 255:
+        img.set_alpha(col[3])
+        pygame.Surface.blit(surf, img, rr.topleft)
+        img.set_alpha(255)
+    else:
+        pygame.Surface.blit(surf, img, rr.topleft)
     return r
 
 
@@ -981,10 +987,13 @@ def draw_wrapped(surf, text, pos, width, size=16, color=WHITE, center=False, lin
         else:
             r.topleft = (x, y)
         if left > 0:
-            img = f.render(ln[:left], True, color)
+            img = f.render(ln, True, color)
             if alpha < 255:
                 img.set_alpha(max(0, int(alpha)))
-            surf.blit(img, r.topleft)
+            if left < len(ln):                              # печать по буквам: видна только начальная часть строки
+                surf.blit(img, r.topleft, pygame.Rect(0, 0, f.size(ln[:left])[0], f.get_height()))
+            else:
+                surf.blit(img, r.topleft)
         left -= len(ln) + 1
         y += f.get_height() + line_gap
     return y
@@ -1607,13 +1616,14 @@ def web_setup_touch():
         try { var p = f.call(d); if (p && p.then) p.then(function(){ try { screen.orientation.lock('landscape')
           .catch(function(){}); } catch (e) {} }).catch(function(){}); } catch (e) {} }
       if (phone) window.addEventListener('touchend', full, {once: true});
+      if (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen) {
       var b = document.createElement('button'); b.id = 'wnb-full'; b.type = 'button'; b.textContent = '\\u26F6';
       b.setAttribute('aria-label', 'Fullscreen');
       b.style.cssText = 'position:fixed;left:6px;top:6px;z-index:9998;width:40px;height:40px;border:0;border-radius:8px;' +
         'background:rgba(0,0,0,.45);color:#fff;font-size:22px;opacity:.8';
       b.onclick = function(){ if (document.fullscreenElement) { document.exitFullscreen && document.exitFullscreen(); }
         else full(); };
-      document.body.appendChild(b);
+      document.body.appendChild(b); }
       window.wnbText = function(x, y, w, h, fs, show){     // comment box over the canvas (on-screen keyboard)
         var t = document.getElementById('wnb-text');
         if (!show) { if (t) { t.style.display = 'none'; t.blur(); } return ''; }
@@ -2225,7 +2235,7 @@ def _to_sound(samples, vol=0.5):
     vals = [max(-1.0, min(1.0, v * k)) for v in samples]
     if chans > 1:
         vals = [v for v in vals for _ in range(chans)]
-    if size == 32:                                    # 32-битный float
+    if abs(size) == 32:                               # 32-битный float (pygame отдаёт -32)
         buf = array.array("f", vals)
     elif abs(size) == 8:
         buf = array.array("B" if size > 0 else "b", (int(v * 127) + (128 if size > 0 else 0) for v in vals))
@@ -3944,7 +3954,7 @@ TOOLS = {
     "allen":     ("Шестигранник", "Большинство болтов коляски (бери точный размер!)"),
     "socket":    ("Торцевой ключ", "Ось и гайки колеса"),
     "wrench":    ("Разводной ключ", "Подтянуть узлы, шток кастора"),
-    "screw":     ("Отвёртка", "Винты (крест)"),
+    "screw":     ("Отвёртка", "Винты и колпачки (крест, шлиц)"),
     "lever":     ("Монтажка", "Бортировать покрышку (нужны 2 шт.)"),
     "pump":      ("Насос", "Накачать камеру / шину / подушку"),
     "patch":     ("Заплатка", "Ремкомплект для прокола"),
@@ -4427,7 +4437,7 @@ JOBS = [
                 ],
                 steps=[
                     S("Сними колесо кастора с вилки.", "allen", "caster",
-                      "Обычно держится на одном болте."),
+                      "Обычно держится на одном болте.", alt_tools=("socket",)),
                     S("Вычисти волосы и грязь из оси кастора пинцетом/щёткой.", "brush", "caster",
                       "Намотанные волосы — частая причина, что кастор не крутится свободно.",
                       "Барти: «Волос там — будто кто-то линял веками. Ах да, это я.»"),
@@ -4438,7 +4448,7 @@ JOBS = [
                       "Барти: «Туже! Ещё туже! ...хотя нет, он потом ругался, что закусило.»", ghost_wrong=True,
                       wrongmsg="Узел штока кастора подтягивают разводным ключом."),
                     S("Прикрути колесо кастора обратно к вилке.", "allen", "caster",
-                      "Перетянешь крепление — колесо застопорится."),
+                      "Перетянешь крепление — колесо застопорится.", alt_tools=("socket",)),
                     S("Прокрути и покачай кастор: крутится свободно, люфта нет.", "hands", "caster",
                       "Свободный ход без люфта — значит, крепление затянуто в меру.", alt=("caster_stem",)),
                 ],
@@ -4538,7 +4548,7 @@ JOBS = [
         parts=["spokes", "rim", "bolts", "bearing", "tube"],
         inspect={
             "spokes": "Несколько спиц (три) на ощупь мягче соседних — ослабли.",
-            "rim": "Обод гуляет на доли миллиметра — лёгкая «восьмёрка».",
+            "rim": "Обод гуляет на 2–3 мм — лёгкая «восьмёрка».",
             "bolts": "Несколько болтов на раме подразболтались.",
             "bearing": "Подшипник тихий — звук именно дребезжащий, не воющий.",
             "tube": "Камера держит давление.",
@@ -5155,7 +5165,8 @@ JOBS += [
             S("Проверь манометром давление в обеих задних шинах и сравни с давлением, напечатанным на боковине шины.",
               "gauge", "tire",
               "TiLite: давление проверять КАЖДУЮ неделю. Если шина спущена, замок на этой стороне может проскальзывать.",
-              "Барти: «Мастер говорил: замок держит не рычаг, а воздух. Я тогда не понял. Я и сейчас не понял.»"),
+              "Барти: «Мастер говорил: замок держит не рычаг, а воздух. Я тогда не понял. Я и сейчас не понял.»",
+              alt=("valve",)),
             # source: p70 (регулировать только на накачанной шине); число — GAME (мануал: «см. боковину»)
             S("Накачай шину через ниппель до давления, напечатанного на боковине. Замок регулируют только на накачанной "
               "шине!", "pump", "tire",
@@ -5246,7 +5257,8 @@ JOBS += [
             S("Ослабь гайку 13 мм на внутренней стороне крепления левого колеса.", "wrench", "bolts",
               "Угол спинки держит эта гайка. Винты 4 и 8 мм на стойках отвечают за ВЫСОТУ спинки, их не трогаем.",
               "Барти: «Да крути все винты на спинке подряд, какой-нибудь да тот!»", ghost_wrong=True,
-              wrongmsg="Угол стойки держит гайка 13 мм у крепления колеса — её ослабляют разводным ключом."),
+              wrongmsg="Угол стойки держит гайка 13 мм у крепления колеса — её ослабляют разводным ключом.",
+              alt_tools=("socket",)),
             # source: p31 (равенство сторон); допуск ±1 мм — GAME
             S("Выставь левую стойку так, чтобы расстояние совпало с правой стороной.", "hands", "backrest",
               "Etac: угол обеих стоек одинаковый.",
@@ -5257,7 +5269,7 @@ JOBS += [
                         fb_hi="Ещё не совпало с правой стороной: спинку всё ещё перекашивает.")),
             # source: p31
             S("Затяни гайку 13 мм.", "wrench", "bolts",
-              "Затянутая гайка не даст стойке снова провернуться под весом."),
+              "Затянутая гайка не даст стойке снова провернуться под весом.", alt_tools=("socket",)),
             # source: p15
             S("Ивушка садится обратно. Подстрой нижний ремень обивки — опора таза.", "hands", "backrest",
               "Etac: обивку настраивают, когда человек сидит в коляске, — снизу вверх."),
@@ -5347,7 +5359,7 @@ JOBS += [
             # source: p27
             S("Нажми и отпусти курок, глядя на штифт-плунжер: нажат — штифт полностью убран, отпущен — полностью вошёл "
               "в рокер.", "hands", "tilt_lock",
-              "Главный критерий правильной натяжки троса по мануалу.", alt_tools=("eyes",)),
+              "Главный критерий правильной натяжки троса по мануалу.", alt=("tilt_lever",), alt_tools=("eyes",)),
             # source: p27
             S("Затяни контргайку.", "wrench", "tilt_cable",
               "Иначе регулятор открутится от вибрации, и трос снова провиснет.", alt=("tilt_lever",)),
@@ -5432,11 +5444,12 @@ JOBS += [
               "Одним ключом держишь корпус регулятора, другим отпускаешь гайку.", alt=("tilt_lock", "tilt_lever")),
             # source: p19
             S("Вкручивай или выкручивай регулятор, пока не уйдёт провис. Зуб фиксатора должен остаться полностью в зубьях.", "hands", "tilt_cable",
-              "Грубая настройка: основной провис ушёл. Точную доводку покажет проверка по всему диапазону."),
+              "Грубая настройка: основной провис ушёл. Точную доводку покажет проверка по всему диапазону.",
+              alt=("tilt_lever", "tilt_lock")),
             # source: p19
             S("Наклоняй кресло вперёд-назад по всему диапазону и слушай зуб фиксатора: он не должен чиркать.", "hands",
               "tilt_lock",
-              "Наклон должен фиксироваться в любом положении, а зуб не должен чиркать по зубьям.",
+              "Наклон должен фиксироваться в любом положении, а зуб не должен чиркать по зубьям.", alt=("tilt_lever",),
               mini=dict(kind="meter", reading="«тр-р-р» при наклоне",
                         sub="зуб фиксатора чиркает по зубьям поворотной рамы, курок с люфтом",
                         prompt="Что сделать с регулятором?",
@@ -5450,7 +5463,7 @@ JOBS += [
             # source: p19 (зуб чиркает или у курка люфт -> выкрутить регулятор)
             S("Выкрути регулятор ещё немного — пока зуб не перестанет чиркать, а у курка не уйдёт люфт.",
               "hands", "tilt_cable",
-              "Ki: зуб фиксатора полностью в зубьях и не чиркает ни в одном положении наклона."),
+              "Ki: зуб фиксатора полностью в зубьях и не чиркает ни в одном положении наклона.", alt=("tilt_lever", "tilt_lock")),
             # source: p19
             S("Затяни контргайку. Крути только гайку, не регулятор и не корпус.", "wrench", "tilt_cable",
               "Если провернуть регулятор или корпус, собьёшь только что найденную настройку.", alt=("tilt_lock", "tilt_lever")),
@@ -5845,13 +5858,14 @@ FOLK_JOBS = [
             S("Выкрути болт вилки и переставь переднее колесо в отверстие C, затяни.", "socket", "caster_stem",
               "Колесо должно крутиться легко, но без люфта.",
               "Барти: «Да оставь как есть, виляет — значит, весело!»", ghost_wrong=True,
-              wrongmsg="Вилку переставляют торцевым ключом: выкрутить болт, переставить, затянуть.", alt=("caster",)),
+              wrongmsg="Вилку переставляют торцевым ключом: выкрутить болт, переставить, затянуть.", alt=("caster",),
+              alt_tools=("allen",)),
             # source: p16, шаг 9
             S("Посмотри сбоку: вилка должна стоять отвесно к полу.", "eyes", "caster_stem",
               "Наклонная вилка — и колёсики на ходу виляют."),
             # source: p7 §2.2, p16 шаг 8
             S("Поставь заднее колесо: кнопку держи нажатой, вставь ось до упора, отпусти и подёргай колесо.",
-              "hands", "rear_wheel", "Колесо не должно сниматься без кнопки."),
+              "hands", "rear_wheel", "Колесо не должно сниматься без кнопки.", alt=("axle",)),
             # source: p17 §3.4, шаги 2–5
             S("Отведи рычаг тормоза назад и ослабь болты тормоза.", "allen", "brake",
               "Болты ослабляют, чтобы тормоз можно было сдвинуть по направляющей."),
@@ -5863,7 +5877,7 @@ FOLK_JOBS = [
             S("Зажми тормоза и сильно толкни коляску: колёса не должны прокручиваться.", "hands", "tire",
               "Если колесо проворачивается — повтори регулировку.",
               "Барти: «А можно ими тормозить на спуске?» Нельзя: это стояночные тормоза, не для движения.",
-              ghost_wrong=True, wrongmsg="Проверка простая: зажми тормоз и толкни коляску.", alt=("brake",)),
+              ghost_wrong=True, wrongmsg="Проверка простая: зажми тормоз и толкни коляску.", alt=("brake", "rear_wheel")),
         ],
         test="Яга ставит коляску на тормоз на крыльце избушки и подпрыгивает на сиденье: ни с места. "
              "Отпускает — и колёсики катят прямо, не виляя.",
@@ -5970,7 +5984,7 @@ FOLK_JOBS = [
     #   p17  — §3.22: не въезжать в воду, реки и болота; намокла — вытереть
     #   p36, p38 — §7.1, §7.6: шины X8 для бездорожья: давление по весу (до 8 psi на бездорожье),
     #          максимум 24 psi, гайки колёс 47–50 Н·м; проверять раз в неделю
-    #   p40  — еженедельно: давление, износ, посторонние предметы у моторов и осей; ежедневно — тормоза
+    #   p40  — §7.16 ежедневно: заряд, джойстик; §7.17 еженедельно: тест электротормозов, давление, износ, мусор у моторов
     dict(
         id="leshy_x8", kind="power", client="Леший", client_art="client_leshy.png",
         chair_art="chair_leshy.png",
@@ -6028,9 +6042,9 @@ FOLK_JOBS = [
             S("Проверь, что рычаги свободного хода стоят в положении «езда».", "hands", "freewheel",
               "В свободном ходе тормозов нет.", alt_tools=("eyes",)),
             # source: p40 (ежедневная проверка тормозов)
-            S("Включи коляску кнопкой на пульте и легонько толкни джойстик: должны щёлкнуть оба электротормоза.", "hands",
+            S("Включи коляску кнопкой на пульте и легонько толкни джойстик: должны щёлкнуть все электротормоза.", "hands",
               "controller",
-              "Ежедневная проверка из мануала: каждый тормоз слышно за пару секунд."),
+              "Еженедельная проверка из мануала (§7.17): на ровном полу, вокруг метр свободного места."),
         ],
         test="Леший выезжает на лесную тропу и катит прямо, не уводя в сторону. Моторы гудят ровно.",
         fact="Magic Mobility: если коляска застряла, джойстик не жмут дольше нескольких секунд — мотор перегреется. "
@@ -6103,7 +6117,8 @@ FOLK_JOBS = [
             S("Протри магнитное гнездо зарядки сухой тряпкой.", "cloth", "motor",
               "Магнит тянет металлическую пыль, а она мешает контакту. Только сухая тряпка.", alt=("rear_wheel",)),
             # source: p57
-            S("Вставь штекер в гнездо на кнопке ступицы: он сам защёлкнется магнитом.", "charger", "motor",
+            S("Включи зарядку в розетку, потом вставь штекер в гнездо на кнопке ступицы: он сам защёлкнется магнитом.",
+              "charger", "motor",
               "Пока идёт зарядка, на обручи не давят — зарядка может остановиться.", alt=("rear_wheel",)),
             S("Проверь: огоньки зарядки мигают зелёным, колесо коротко пискнуло.", "eyes", "motor",
               "Зарядка идёт. Полная — до 6 часов, перезарядить нельзя: она остановится сама.", alt=("rear_wheel",)),
@@ -6170,7 +6185,7 @@ FOLK_JOBS = [
             # source: p10 (давление по цифре на боковине); число — GAME (по боковине шины в игре)
             S("Накачай ведущие шины до давления, напечатанного на шине.", "pump", "tire",
               "Мягкие шины нагружают моторы сильнее.",
-              mini=dict(kind="pump", lo=228, hi=245, mx=310, unit="кПа",
+              mini=dict(kind="pump", lo=228, hi=241, mx=310, unit="кПа",
                         hint="На боковине этой шины: 241 кПа (35 psi) — не больше")),
             # source: p37
             S("Дожми до щелчка разъёмы жгута батарей.", "hands", "battery",
@@ -6598,7 +6613,7 @@ TECH_JOBS += [
                              "0,5–1,5 Ом — обмотка мотора на контактах 1–2. Тормоз — 3–4, ≈80 Ом."),
                         ])),
             # source: Q6_TS p16 (not about 80 ohms -> replace the left motor and retest)
-            T("b_replace", "Действуй по блок-схеме: замени узел мотора с тормозом",
+            T("b_replace", "Действуй по блок-схеме: открути торцевым ключом и замени узел мотора с тормозом",
               "socket", "motor", after=["b_ohm"],
               note="Мотор и тормоз — один узел (motor/brake assembly): меняют целиком.",
               spec=dict(manual="q6_qlogic", prompt="Левый тормоз — обрыв. Что по блок-схеме?",
@@ -7019,9 +7034,9 @@ CLIENT_TALK = {
         good=[
             "Мартин: «Получилось! Ха! Руки помнят. Ну, теперь помнят.»",
             "Барти: «Браво! Мастер бы одобрил. Он одобрял молча, но ты бы почувствовал.»",
-            "Мартин: «Камера на месте, борт заправлен. Я почти механик.»",
         ],
-        test=["Мартин: «Ну что, колесо, держи воздух. Я на тебя рассчитываю.»"],
+        test=["Мартин: «Ну что, колесо, держи воздух. Я на тебя рассчитываю.»",
+              "Мартин: «Камера на месте, борт заправлен. Я почти механик.»"],
     ),
 
     # === Эльфийка Аэлин, Progeo Ego: флаттер кастора ===
@@ -7638,7 +7653,7 @@ FOLK_TALK = {
                "Леший: «Трава в колёсах — это не я. Ну, может, немного я.»",
                "Леший: «Мох на мне — для красоты. А в моторе — не надо.»",
                "Барти: «Мартин, у него в бороде гриб! Съедобный? Не трогай, на всякий случай.»"],
-        learn=["Леший: «Если застрял — не дави джойстик. Мотор перегреется, а он один такой.»",
+        learn=["Леший: «Если застрял — не дави джойстик. Мотор перегреется, а моторы на ёлках не растут.»",
                "Леший: «Разное давление в шинах тянет коляску вбок. Вот почему я кружил по лесу.»",
                "Леший: «Гайки колёс X8 тянут на 47–50 Н·м. Не богатырской силой.»"],
         mistake=["Леший: «Не то, мастер. Даже я в лесу иногда тропинку путаю.»",
@@ -7884,7 +7899,7 @@ class Game:
     def dispute_visible(self):
         d = self.dispute
         return bool(self.scene == "job" and d and not d["sent"] and self.cur and d["job"] == self.cur["id"]
-                    and self.t - d["t"] < 25 and not self.dispute_ui and self.v3d is None)
+                    and self.t - d["t"] < 25 and not self.dispute_ui and self.v3d is None and self.ride_t0 is None)
 
     FEEDBACK_REASONS = ["Неточность в картинке или 3D", "Ошибка в тексте или шагах", "Непонятно, что делать", "Другое"]
 
@@ -7895,7 +7910,8 @@ class Game:
 
     def _top_back_rect(self):
         """Кнопка «◂ Назад» в левом верхнем углу = Esc (на iPad и телефоне клавиши нет)."""
-        return pygame.Rect(8, 8, 38, 38) if self.scene in self.BACK_SCENES else None
+        x = 60 if TOUCH["on"] else 8                    # на касаниях левый угол занят кнопкой ⛶ страницы
+        return pygame.Rect(x, 8, 38, 38) if self.scene in self.BACK_SCENES else None
 
     def press_back(self):
         snd("tick")
@@ -7905,6 +7921,10 @@ class Game:
         r = self._top_back_rect()
         if r is None:
             return
+        back = tr("Назад").upper()
+        if surf is CAPTURE["frame"] and not any(b["label"].strip(" ◂").upper() == back for b in CAPTURE["buttons"]):
+            # пункт «Назад» для клавиатуры, геймпада и одной кнопки (если у сцены нет своей кнопки «НАЗАД»)
+            CAPTURE["buttons"].append(dict(rect=pygame.Rect(r), label=tr("Назад"), sub="", enabled=True, active=False))
         hov = r.collidepoint(mouse_pos())
         h = _hover_amt(("backbtn",), 1.0 if hov else 0.0)
         aa_rect(surf, (30, 28, 40, int(170 + 80 * h)), r, border_radius=10)
@@ -8156,6 +8176,7 @@ class Game:
             self.mini_pending = None
             self.spec_pending = None
             self.show_manual = False
+            self._fail_zap = False
             snd("fail")
             self.scene = "failed"
 
@@ -8324,6 +8345,7 @@ class Game:
     def start_job(self, jid, variant=None):
         self.cur = resolve_job(self.job_by_id(jid), variant)
         shuffle_answers(self.cur)
+        self._fail_zap = False
         tech = self.cur.get("track") == "tech"
         self.phase = "repair" if tech else "diagnose"
         self.step_idx = 0
@@ -9224,6 +9246,8 @@ class Game:
                 return True
         if v3d and k != pygame.K_RETURN:
             return False
+        if self.scene == "credits" and k in (pygame.K_UP, pygame.K_DOWN):
+            return False                                   # титры листаются стрелками (handle_credits_event)
         items = self.kb["items"]
         nav = (pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT, pygame.K_TAB,
                pygame.K_RETURN, pygame.K_KP_ENTER) + (() if typing else (pygame.K_SPACE,))
@@ -9448,6 +9472,8 @@ class Game:
     def _a11y_activate(self, it):
         if it["act"]:
             it["act"]()
+        elif it.get("adj"):                                # ползунок: значение меняют стрелками, Enter — повторить
+            self.say(it["label"], True)
         elif it["rect"] is not None:                       # обычный клик в центр кнопки
             c = it["rect"].center
             self._scan_inject = True                       # свой клик — не нажатие «одной кнопки»
@@ -9750,12 +9776,16 @@ class Game:
                         self.esc_timer = 0
                         self.scene = "guild" if tech else "hub"
                     else:
-                        self.esc_timer = 2.5
+                        self.esc_timer = 10.0 if A11Y.get("scan") else 2.5
                         self.flash("Ещё раз Esc — покинуть ремонт (прогресс задания сбросится).",
-                                   AMBER, 2.5)
+                                   AMBER, self.esc_timer)
                 elif self.scene == "garage" and getattr(self, "garage_open", None) is not None:
                     self.garage_open = None                 # Esc закрывает окно урока, а не гараж
-                elif self.scene in ("garage", "guild", "result", "exam_result", "failed", "seating"):
+                elif self.scene == "result":
+                    self.scene = self._result_next()
+                elif self.scene in ("exam_result", "failed"):
+                    self.scene = "guild"
+                elif self.scene in ("garage", "guild", "seating"):
                     self.scene = "hub"
                 elif self.scene in ("hub", "intro"):
                     self.scene = "title"
@@ -9764,7 +9794,12 @@ class Game:
                 elif self.scene == "credits":
                     self.close_credits()
                 elif self.scene == "title":
-                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    if self.esc_timer > 0:                  # выход из игры — только вторым Esc (B геймпада, «назад»)
+                        self.esc_timer = 0
+                        pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    elif not IS_WEB:
+                        self.esc_timer = 10.0 if A11Y.get("scan") else 2.5
+                        self.flash("Ещё раз Esc — выйти из игры.", AMBER, self.esc_timer)
 
     def _credits_btn_rect(self):
         if self.scene == "title":
@@ -9983,14 +10018,15 @@ class Game:
             if self._test_btn_rect().collidepoint(m) and self.ride_t0 is None:
                 self.start_ride()
 
+    def _result_next(self):
+        """Куда ведёт итог задания (кнопка и Esc): Гильдия, вечеринка после последнего ремонта или мастерская."""
+        if self.cur and self.cur.get("track") == "tech":
+            return "guild"
+        return "ending" if self.user_done_count() >= len(JOBS) else "hub"
+
     def click_result(self, m):
         if self._result_btn_rect().collidepoint(m):
-            if self.cur.get("track") == "tech":
-                self.scene = "guild"
-            elif self.user_done_count() >= len(JOBS):
-                self.scene = "ending"
-            else:
-                self.scene = "hub"
+            self.scene = self._result_next()
 
     def click_ending(self, m):
         cb = self._credits_btn_rect()
@@ -10781,7 +10817,8 @@ class Game:
         sk = self._skip_tut_rect()
         if sk is not None and sk.y < 60:              # первое задание: сообщение не уходит под «Пропустить обучение»
             reserve = WIDTH - sk.x + 6
-        left = 54 if self._top_back_rect() else 8               # не под кнопкой «◂ Назад»
+        br = self._top_back_rect()
+        left = br.right + 8 if br else 8                        # не под кнопкой «◂ Назад»
         w = WIDTH - left - 8 - reserve
         for tsz in (16, 15, 14, 13, 12):                       # сообщение — в полосе заголовка (до 52 px), не на задании
             lines = wrap_lines(self.toast, w - 40, tsz)
@@ -10812,7 +10849,8 @@ class Game:
         else:
             draw_text(surf, "КОЛЁСА И КОСТИ", (right, 16), 18, GHOST, bold=True, right=True)
             right -= font(18, True).size(tr("КОЛЁСА И КОСТИ"))[0] + 16
-        x0 = 56 if self._top_back_rect() else 24                     # место под «◂ Назад»
+        br = self._top_back_rect()
+        x0 = br.right + 10 if br else 24                             # место под «◂ Назад»
         if sub:                                                  # вторая строка — какая коляска (модель)
             for ts, ss in ((20, 14), (18, 13), (17, 12), (16, 11), (15, 10)):   # крупный шрифт — обе строки в полосе
                 th, sh = font(ts, True).get_height(), font(ss).get_height()
@@ -15075,8 +15113,11 @@ def run_selftest():
                 assert tr_en(_x) != _x, f"титры без перевода: {_x}"
     pygame.event.clear()
     _esc(g)
+    assert not any(e.type == pygame.QUIT for e in pygame.event.get()) and g.esc_timer > 0, \
+        "первый Esc с титула — только предупреждение (B геймпада / «назад» не закрывают игру сразу)"
+    _esc(g)
     assert any(e.type == pygame.QUIT for e in pygame.event.get()), \
-        "Esc с титула должен закрывать игру"
+        "второй Esc с титула должен закрывать игру"
     g = Game(headless=True)
     g.start_job("truing")
     g.open_manual()
@@ -15560,6 +15601,35 @@ def _install_crash_log():
         return None
 
 
+_LOOP_ERR = []
+
+
+def _loop_error(game, log):
+    """Ошибка в кадре — игру не роняем: в браузере исключение навсегда замораживало холст («игра зависла»).
+    Трейс — в консоль и crash.log; окна задания закрыты, игрок — в мастерскую (часто повторяется — на титул)."""
+    import time as _time, traceback
+    tb = traceback.format_exc()
+    print(tb, flush=True)
+    if log:
+        try:
+            log.write(tb)
+            log.flush()
+        except Exception:
+            pass
+    now = _time.time()
+    _LOOP_ERR[:] = [t for t in _LOOP_ERR if now - t < 10] + [now]
+    try:
+        game.mini_pending = game.spec_pending = None
+        game.v3d = None
+        game.show_manual = game.show_sound = False
+        game.dispute_ui = None
+        game.ride_t0 = None
+        game.scene = "hub" if (len(_LOOP_ERR) <= 3 and game.tutorial_ok()) else "title"
+        game.flash("Что-то пошло не так — вернулись назад. Прогресс сохранён.", BAD, 5)
+    except Exception:
+        pass
+
+
 async def main():
     _crash_log = _install_crash_log()
     if IS_WEB:
@@ -15654,60 +15724,63 @@ async def main():
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0
-        evs = pygame.event.get()
-        has_finger = any(e.type in (pygame.FINGERDOWN, pygame.FINGERUP, pygame.FINGERMOTION) for e in evs)
-        for event in evs:
-            if event.type == pygame.QUIT:
-                running = IS_WEB                              # в браузере «выход» некуда — остаёмся в игре
-            elif event.type == pygame.VIDEORESIZE:            # окно растянули/развернули — масштаб пересчитаем чуть позже
-                DISPLAY["resize_at"] = pygame.time.get_ticks()
-            else:
-                fe = finger_events(event, has_finger)
-                if fe is not None:                            # касания: уже в логических координатах
-                    for e in fe:
-                        game.handle_event(e)
-                    continue
-                if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION):
-                    d = dict(event.dict)
-                    d["pos"] = window_to_logical(d["pos"])
-                    v = DISPLAY.get("view")
-                    if "rel" in d and v:
-                        d["rel"] = (d["rel"][0] * WIDTH / v.w, d["rel"][1] * HEIGHT / v.h)
-                    event = pygame.event.Event(event.type, d)
-                game.handle_event(event)
-        if DISPLAY.get("resize_at") and pygame.time.get_ticks() - DISPLAY["resize_at"] > 350:
-            DISPLAY["resize_at"] = None
-            _update_rs()
-        if DISPLAY.pop("rs_changed", False):
-            game.m3d = None
-            game._fade_from = game._last_frame = None
-        game.update(dt)
-        game.draw(DISPLAY["frame"])                    # кадр пересоздаётся при смене разрешения
-        present(DISPLAY["frame"])
-        pygame.display.flip()
-        if IS_WEB:
-            DISPLAY["_px_t"] = DISPLAY.get("_px_t", 0) + dt
-            if DISPLAY["_px_t"] > 1 and DISPLAY.get("web_quality", "auto") == "auto":   # окно игры поменялось?
-                DISPLAY["_px_t"] = 0
-                web_auto_resize(web_measure())
-            DISPLAY["_st_t"] = DISPLAY.get("_st_t", 0) + dt
-            if DISPLAY["_st_t"] > 0.5:                # состояние для автопроверки (art_tests/web_smoke.py)
-                DISPLAY["_st_t"] = 0
-                web_js("window.wnbState=" + json.dumps(json.dumps(game.debug_state())))
-            DISPLAY["_fps_t"] = DISPLAY.get("_fps_t", 0) + dt
-            if DISPLAY["_fps_t"] > 3:                 # окно замера 3 с
-                DISPLAY["_fps_t"] = 0
-                fps = clock.get_fps()
-                print(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} scene {game.scene}", flush=True)
-                slow = fps < 20 and game.scene in ("job", "hub", "seating", "guild")
-                DISPLAY["_slow"] = DISPLAY.get("_slow", 0) + 1 if slow else 0
-                cw = (DISPLAY.get("res") or WEB_RES["standard"])[0]
-                lower = [i for i, k in enumerate(WEB_LEVELS) if WEB_RES[k][0] < cw]   # ступени меньше нынешнего холста
-                if DISPLAY["_slow"] >= 2 and DISPLAY.get("web_quality", "auto") == "auto" and lower:
-                    DISPLAY["web_cap"] = lower[-1]         # слабый ПК: холст не больше этой ступени
-                    DISPLAY["_slow"] = 0
-                    apply_display()
-                    game.flash("Качество снижено для плавности. Настройки → Графика.", AMBER, 5)
+        try:
+            evs = pygame.event.get()
+            has_finger = any(e.type in (pygame.FINGERDOWN, pygame.FINGERUP, pygame.FINGERMOTION) for e in evs)
+            for event in evs:
+                if event.type == pygame.QUIT:
+                    running = IS_WEB                              # в браузере «выход» некуда — остаёмся в игре
+                elif event.type == pygame.VIDEORESIZE:            # окно растянули/развернули — масштаб пересчитаем чуть позже
+                    DISPLAY["resize_at"] = pygame.time.get_ticks()
+                else:
+                    fe = finger_events(event, has_finger)
+                    if fe is not None:                            # касания: уже в логических координатах
+                        for e in fe:
+                            game.handle_event(e)
+                        continue
+                    if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION):
+                        d = dict(event.dict)
+                        d["pos"] = window_to_logical(d["pos"])
+                        v = DISPLAY.get("view")
+                        if "rel" in d and v:
+                            d["rel"] = (d["rel"][0] * WIDTH / v.w, d["rel"][1] * HEIGHT / v.h)
+                        event = pygame.event.Event(event.type, d)
+                    game.handle_event(event)
+            if DISPLAY.get("resize_at") and pygame.time.get_ticks() - DISPLAY["resize_at"] > 350:
+                DISPLAY["resize_at"] = None
+                _update_rs()
+            if DISPLAY.pop("rs_changed", False):
+                game.m3d = None
+                game._fade_from = game._last_frame = None
+            game.update(dt)
+            game.draw(DISPLAY["frame"])                    # кадр пересоздаётся при смене разрешения
+            present(DISPLAY["frame"])
+            pygame.display.flip()
+            if IS_WEB:
+                DISPLAY["_px_t"] = DISPLAY.get("_px_t", 0) + dt
+                if DISPLAY["_px_t"] > 1 and DISPLAY.get("web_quality", "auto") == "auto":   # окно игры поменялось?
+                    DISPLAY["_px_t"] = 0
+                    web_auto_resize(web_measure())
+                DISPLAY["_st_t"] = DISPLAY.get("_st_t", 0) + dt
+                if DISPLAY["_st_t"] > 0.5:                # состояние для автопроверки (art_tests/web_smoke.py)
+                    DISPLAY["_st_t"] = 0
+                    web_js("window.wnbState=" + json.dumps(json.dumps(game.debug_state())))
+                DISPLAY["_fps_t"] = DISPLAY.get("_fps_t", 0) + dt
+                if DISPLAY["_fps_t"] > 3:                 # окно замера 3 с
+                    DISPLAY["_fps_t"] = 0
+                    fps = clock.get_fps()
+                    print(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} scene {game.scene}", flush=True)
+                    slow = fps < 20 and game.scene in ("job", "hub", "seating", "guild")
+                    DISPLAY["_slow"] = DISPLAY.get("_slow", 0) + 1 if slow else 0
+                    cw = (DISPLAY.get("res") or WEB_RES["standard"])[0]
+                    lower = [i for i, k in enumerate(WEB_LEVELS) if WEB_RES[k][0] < cw]   # ступени меньше нынешнего холста
+                    if DISPLAY["_slow"] >= 2 and DISPLAY.get("web_quality", "auto") == "auto" and lower:
+                        DISPLAY["web_cap"] = lower[-1]         # слабый ПК: холст не больше этой ступени
+                        DISPLAY["_slow"] = 0
+                        apply_display()
+                        game.flash("Качество снижено для плавности. Настройки → Графика.", AMBER, 5)
+        except Exception:
+            _loop_error(game, _crash_log)
         await asyncio.sleep(0)                        # браузеру — нарисовать кадр и принять ввод
     pygame.quit()
 
