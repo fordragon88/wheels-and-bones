@@ -39,6 +39,7 @@ GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]),            # кра
        "chair_aeroz.png": dict(key="aeroz", antitips=[dict(p0=(-235, 245, s * 172), p1=(-470, 58, s * 172), r=10, wheel=(24, 18)) for s in (1, -1)],   # в модели Meshy их нет
            spokes=[dict(side=1, c=(-205.9, 295.9), hc=(-204.9, 294.6), zp=235, fl=12, cut_r=(40, 228), cut_z=(212, 262), rh=28, rr=232, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-204.6, 302.1), hc=(-204.5, 298.9), zp=235, fl=12, cut_r=(40, 228), cut_z=(212, 262), rh=28, rr=232, n=24, col=(0.72, 0.72, 0.75))]),
        "chair_cross6.png": dict(key="cross6", spokes=[dict(side=1, c=(-146.5, 322.2), hc=(-154.0, 324.4), zp=290, fl=12, cut_r=(40, 255), cut_z=(262, 318), rh=30, rr=258, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-147.1, 322.9), hc=(-152.5, 323.9), zp=290, fl=12, cut_r=(40, 255), cut_z=(262, 318), rh=30, rr=258, n=24, col=(0.72, 0.72, 0.75))]),
+       "chair_orc.png": dict(key="noir", spokes=[dict(side=1, c=(-101.3, 352.8), hc=(-101.7, 357.0), zp=290, fl=12, cut_r=(34, 272), cut_z=(250, 332), rh=28, rr=276, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-101.6, 344.4), hc=(-101.7, 346.8), zp=290, fl=12, cut_r=(34, 272), cut_z=(250, 332), rh=28, rr=276, n=24, col=(0.72, 0.72, 0.75))]),
        "chair_focuscr.png": dict(key="fcr"),
        "chair_leshy.png": dict(key="x8", recolor=[28, 4, 26])}           # оранжевый -> красный                               # цвета Meshy (тёмно-синяя рама, как на фото)
 total = 0

@@ -333,6 +333,17 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-23 — Claude (Opus 5.5) — **Ивушка — Etac Cross 6 Meshy** (`meshy_models/etac_cross_6.glb`, height=940, ключ
+  `cross6`): гайка 13 мм угла спинки (`bolts`) — кольцо у оси на внутренней стороне осевой пластины, тормоз — штифт
+  перед колесом, антиопрокидыватели — родные из модели, `cushion` — верх сиденья, спицы — fix_spokes. Портрет — Codex
+  (`art_tests/codex_ivushka/`, вариант 2). **Вырезка фона картинок Codex — `art_tests/qwen_cut.py`** (Qwen 2.1 «Remove the
+  background, and output a PNG image» → настоящий RGBA; берётся только альфа, цвет — с оригинала, кадр совпадает:
+  сдвиг цвета 3–5/255). `cut_white.py` (заливка белого) для портретов НЕ годится: замкнутый фон между спицами
+  оставался, а «умная» доочистка вырезала блики на обручах (дыры) — владелец заметил «между спицами не чисто».
+  Ивушка и Юки перевырезаны через Qwen; остальные 23 портрета (BiRefNet) проверены на пурпурном фоне — чистые. Zippie Iris (Искра) — не меняем (решение владельца).
+  (assets/chair_cross6.png, assets/client_cross6.png, assets/client_aeroz.png, assets/models/chair_cross6_ai*.json,
+  assets/turntable/*, art_tests/tripo_label.py, blender_frames.py, portrait_chair.py, cut_white.py)
+
 - 2026-10-23 — Claude (Opus 5.5) — **Юки — TiLite Aero Z Meshy** (`meshy_models/tilite_aero_z.glb`, height=880, ключ
   `aeroz`): спицы — fix_spokes; антиопрокидывателей в модели нет, а в задании `aeroz_lock` это деталь — добавлены:
   в кадрах `GLB[...]["antitips"]` (blender_render.add_antitip), в размеченной модели — `SPECS["aeroz"]["antitips"]`
