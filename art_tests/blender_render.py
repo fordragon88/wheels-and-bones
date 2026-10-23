@@ -72,7 +72,8 @@ def import_glb(path, M, recolor=None):
 def move_parts(moves):
     """Сдвиг части оригинальной модели (напр. подножка выше под короткие ноги): вершины с x, y (мм игры) в зоне
     (и |z| в az, если задано), кроме тех, что в круге колеса (not_wheel = cx, cy, R, |z| от), едут на d (мм игры);
-    delete=True — вершины зоны удаляются (напр. антиопрокидыватель). Порядок — как в списке."""
+    delete=True — вершины зоны удаляются (напр. антиопрокидыватель); rot=(yaw°, pitch°[, roll°]) с pivot (+ сдвиг d) — поворот части
+    (кривой джойстик Meshy). Порядок — как в списке."""
     import bmesh
     for o in [o for o in sc.objects if o.type == "MESH"]:
         mw = o.matrix_world
@@ -85,9 +86,31 @@ def move_parts(moves):
             sel = (x >= mv["x"][0]) & (x <= mv["x"][1]) & (y >= mv["y"][0]) & (y <= mv["y"][1])
             if mv.get("az"):
                 sel &= (np.abs(z) >= mv["az"][0]) & (np.abs(z) <= mv["az"][1])
+            if mv.get("z"):                                     # знаковый диапазон z (одна сторона коляски)
+                sel &= (z >= mv["z"][0]) & (z <= mv["z"][1])
             if mv.get("not_wheel"):
                 cx, cy, R, zw = mv["not_wheel"]
                 sel &= ~((np.hypot(x - cx, y - cy) < R) & (np.abs(z) > zw))
+            if mv.get("rot"):                                # поворот части: rot=(yaw°, pitch°), pivot=(x, y, z) мм игры
+                yaw, pitch, roll = [math.radians(v) for v in (list(mv["rot"]) + [0])[:3]]
+                px, py, pz = mv["pivot"]
+                gx, gy, gz = x[sel] - px, y[sel] - py, z[sel] - pz
+                cr, sr = math.cos(roll), math.sin(roll)                  # roll — вокруг оси x (крен)
+                gy, gz = gy * cr - gz * sr, gy * sr + gz * cr
+                # pitch — вокруг оси z игры (нос x вниз при pitch<0), потом yaw — вокруг оси y (вертикали)
+                cp, sp_ = math.cos(pitch), math.sin(pitch)
+                gx, gy = gx * cp - gy * sp_, gx * sp_ + gy * cp
+                cy_, sy_ = math.cos(yaw), math.sin(yaw)
+                gx, gz = gx * cy_ - gz * sy_, gx * sy_ + gz * cy_
+                dx_, dy_, dz_ = mv.get("d", (0, 0, 0))
+                nx, ny, nz = gx + px + dx_, gy + py + dy_, gz + pz + dz_
+                w[sel, 0] = nx / 1000
+                w[sel, 1] = -nz / 1000
+                w[sel, 2] = ny / 1000
+                print("повёрнуто вершин:", int(sel.sum()), o.name)
+                new = w @ np.asarray(mw.inverted()).T
+                o.data.vertices.foreach_set("co", new[:, :3].ravel())
+                continue
             if mv.get("delete"):
                 bm = bmesh.new()
                 bm.from_mesh(o.data)
@@ -279,6 +302,9 @@ if d.get("glb"):
     import_glb(d["glb"], d["glb_matrix"], d.get("recolor"))
     if d.get("move"):
         move_parts(d["move"])
+    if os.environ.get("WB_CULL"):                      # проверка: с отсечением задних граней видны дыры/вывернутые нормали
+        for m_ in bpy.data.materials:
+            m_.use_backface_culling = True
     if d.get("spokes"):
         fix_spokes(d["spokes"])
     for cl in d.get("clones") or []:

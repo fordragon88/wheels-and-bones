@@ -26,6 +26,11 @@ SETS = {
     "4_Quantum_Q6_Edge": ("q6edge2", [("01_PWR01076Front.jpg", "1_front"), ("02_PWR01076RightSide.jpg", "2_side"),
                                       ("05_PWR01076Back.jpg", "3_back"), ("06_PWR01076LeftSide.jpg", "4_other_side")],
                           False, None),                         # студийные фото магазина (Q6 Edge 2.0), белый фон
+    "4b_Quantum_Q6_Edge_classic": ("q6edge", [("00_", "1_front_3-4"), ("05_", "2_side"), ("03_", "3_back"),
+                                              ("07_", "4_front")], True, None),   # классическая Q6 Edge (жёлтая, капитанское
+                                              # кресло, одна площадка-подножка, простой пульт) — фото TMD Mobility, с фоном
+    "22_Quickie_2": ("quickie2_oad", [("00_", "1_front_3-4"), ("04_", "2_side"), ("05_", "3_back"), ("01_", "4_front")],
+                     False, None),   # Quickie 2 (магазин, белый фон; вариант с приводом одной рукой — двойной обруч справа)
     "5_Drive_Trident_HD": ("trident", [("00_trident_hd_power_wheelchair.jpg", "1_front_3-4"),
                                        ("01_side_trident_hd_power_wheelchair.jpg", "2_side"),
                                        ("03_back_trident_hd_power_wheelchair.jpg", "3_back"),

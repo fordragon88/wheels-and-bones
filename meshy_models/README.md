@@ -22,6 +22,8 @@
 | `tilite_aero_z.glb` | TiLite Aero Z (антиопрокидыватели добавлены) | кицунэ Юки (`aeroz_lock`), `chair_aeroz.png` | 2026-10-23 |
 | `etac_cross_6.glb` | Etac Cross 6 | дриада Ивушка (`cross6_back`), `chair_cross6.png` | 2026-10-23 |
 | `progeo_noir_2.glb` | Progeo Noir 2.0 | орк Гра (`bearing`), `chair_orc.png` | 2026-10-23 |
+| `progeo_ego.glb` | Progeo Ego | эльфийка Аэлин (`caster`), `chair_elf.png` | 2026-10-23 |
+| `quantum_q6_edge.glb` | Quantum Q6 Edge 2.0 — пробная (кривые пульт и подножки, правка — move rot в blender_frames); владелец перегенерирует по набору 4b_Quantum_Q6_Edge_classic; в игру не ставилась | Гильдия (`t_q6brake`) | 2026-10-23 |
 
 Как модель попадает в игру:
 1. `art_tests/tripo_convert.py meshy_models/<файл>.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002`
