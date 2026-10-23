@@ -24,7 +24,7 @@
 | `progeo_noir_2.glb` | Progeo Noir 2.0 | орк Гра (`bearing`), `chair_orc.png` | 2026-10-23 |
 | `progeo_ego.glb` | Progeo Ego | эльфийка Аэлин (`caster`), `chair_elf.png` | 2026-10-23 |
 | `quickie_2.glb` | Quickie 2 | оборотень Вольф (`brake`, бывший гном Дургин), `chair_dwarf.png` | 2026-10-23 |
-| `quantum_q6_edge_classic.glb` | Quantum Q6 Edge (классическая, жёлтая); крепление пульта дорисовано (tubes) | Гильдия (`t_q6brake`), `chair_q6edge.png` | 2026-10-23 |
+| `quantum_q6_edge_classic.glb` | Quantum Q6 Edge (классическая, жёлтая); крепление пульта дорисовано (tubes), висящие провода, ремешок и зажим убраны (move delete, петля жгута — `seed`) | Гильдия (`t_q6brake`), `chair_q6edge.png` | 2026-10-23 |
 | `quantum_q6_edge.glb` | Quantum Q6 Edge 2.0 — пробная (кривые пульт и подножки, правка — move rot в blender_frames); владелец перегенерирует по набору 4b_Quantum_Q6_Edge_classic; в игру не ставилась | Гильдия (`t_q6brake`) | 2026-10-23 |
 
 Как модель попадает в игру:
@@ -36,8 +36,8 @@
 
 **Исправленные копии `*_fixed.glb`** (`python art_tests/glb_fixed.py`): у моделей Meshy тонкие спицы рвутся на куски —
 в копии они вырезаны и поставлены ровные (`blender_render.fix_spokes`), у Nitrum добавлены ступицы Alber e-motion
-(`add_hub`). Копия уже в осях игры: метры, пол на 0, вперёд +X, правая сторона +Z (исходник не меняется). Есть для
-`vermeiren_d100`, `panthera_x3`, `quickie_nitrum`, `progeo_exelle_junior` — для других появятся, когда им зададут `spokes`/`hubs` в
+(`add_hub`), у Q6 Edge убраны висящие провода и ремешок. Копия уже в осях игры: метры, пол на 0, вперёд +X, правая сторона +Z (исходник не меняется). Есть для
+`vermeiren_d100`, `panthera_x3`, `quickie_nitrum`, `progeo_exelle_junior`, `tilite_aero_z`, `quantum_q6_edge_classic` — для других появятся, когда им зададут `spokes`/`hubs` в
 `art_tests/blender_frames.py` (словарь `GLB`).
 
 Файлы `.glb` не в git (крупные) — храните копию.

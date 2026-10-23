@@ -69,11 +69,46 @@ def import_glb(path, M, recolor=None):
             print("перекрашено пикселей:", int(sel.sum()), img.name)
 
 
+def _seed_piece(o, P, sel, seed):
+    """Из вершин зоны sel — только связный кусок (по граням, целиком лежащим в зоне; вершины сварены по
+    координате 0,01 мм — glTF режет сетку по швам текстуры), в котором ближайшая к seed вершина."""
+    w = np.unique(np.round(P, 2), axis=0, return_inverse=True)[1].ravel()
+    nf = len(o.data.polygons)
+    if nf == 0 or not sel.any():
+        return sel
+    loops = np.empty(len(o.data.loops), dtype=np.int64)
+    o.data.loops.foreach_get("vertex_index", loops)
+    starts = np.empty(nf, dtype=np.int64)
+    o.data.polygons.foreach_get("loop_start", starts)
+    par = np.arange(w.max() + 1)
+
+    def find(a):
+        while par[a] != a:
+            par[a] = par[par[a]]
+            a = par[a]
+        return a
+    ends = np.r_[starts[1:], len(loops)]
+    for s0, s1 in zip(starts, ends):
+        vs = loops[s0:s1]
+        if sel[vs].all():
+            r = find(w[vs[0]])
+            for v in vs[1:]:
+                par[find(w[v])] = r
+    idx = np.nonzero(sel)[0]
+    v0 = idx[np.argmin(np.linalg.norm(P[idx] - np.asarray(seed, float), axis=1))]
+    root = find(w[v0])
+    keep = np.array([find(w[i]) == root for i in idx])
+    out = np.zeros_like(sel)
+    out[idx[keep]] = True
+    return out
+
+
 def move_parts(moves):
     """Сдвиг части оригинальной модели (напр. подножка выше под короткие ноги): вершины с x, y (мм игры) в зоне
     (и |z| в az, если задано), кроме тех, что в круге колеса (not_wheel = cx, cy, R, |z| от), едут на d (мм игры);
     delete=True — вершины зоны удаляются (напр. антиопрокидыватель); rot=(yaw°, pitch°[, roll°]) с pivot (+ сдвиг d) — поворот части
-    (кривой джойстик Meshy). Порядок — как в списке."""
+    (кривой джойстик Meshy); seed=(x, y, z) — из зоны только связный кусок у этой точки (провод, приросший к кожуху).
+    Порядок — как в списке."""
     import bmesh
     for o in [o for o in sc.objects if o.type == "MESH"]:
         mw = o.matrix_world
@@ -91,6 +126,8 @@ def move_parts(moves):
             if mv.get("not_wheel"):
                 cx, cy, R, zw = mv["not_wheel"]
                 sel &= ~((np.hypot(x - cx, y - cy) < R) & (np.abs(z) > zw))
+            if mv.get("seed") is not None:                   # только связный кусок зоны, где лежит точка seed (мм игры):
+                sel = _seed_piece(o, np.c_[x, y, z], sel, mv["seed"])   # провод у кожуха, а не сам кожух
             if mv.get("rot"):                                # поворот части: rot=(yaw°, pitch°), pivot=(x, y, z) мм игры
                 yaw, pitch, roll = [math.radians(v) for v in (list(mv["rot"]) + [0])[:3]]
                 px, py, pz = mv["pivot"]
