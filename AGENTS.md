@@ -508,6 +508,7 @@ python i18n_work/build_lang.py       # перевод полон
   одиночный портрет, внук с прежней картинки, стиль — Искра с мамой; вариант 2 — выбор владельца: внук держит ручку и
   трогает подголовник) → `qwen_cut.py` → `assets/client_focuscr_grandson.png` 549×640 (прежний —
   retired/client_focuscr_grandson_before_codex_2310.png). Теперь обе картинки Агаты — в одной коляске с подголовником.
+  **Выложено** (Pages b16b9a35), web_smoke сайта 20/0.
   (BRIEF.md, `run.sh` с готовой командой `codex exec`, рефы: нынешние портреты, рендер Focus CR в ракурсе портрета
   `portrait_chair.py chair_focuscr.png -0.95,-0.7` — с подголовником и наклоном 20°, фото, 2 портрета-образца стиля).
   Дальше по §8б: `qwen_cut.py` → `assets/client_focuscr.png`, старый — в retired; портрет с внуком — отдельно, если нужно.
