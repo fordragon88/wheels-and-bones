@@ -21,6 +21,7 @@
 | `progeo_exelle_junior.glb` | Progeo Exelle Junior (рама в кадрах — розовая; антиопрокидыватель клонирован на обе стороны) | фея Тилли (`spokes`), `chair_fairy.png` | 2026-10-23 |
 | `tilite_aero_z.glb` | TiLite Aero Z (антиопрокидыватели добавлены) | кицунэ Юки (`aeroz_lock`), `chair_aeroz.png` | 2026-10-23 |
 | `etac_cross_6.glb` | Etac Cross 6 | дриада Ивушка (`cross6_back`), `chair_cross6.png` | 2026-10-23 |
+| `progeo_noir_2.glb` | Progeo Noir 2.0 | орк Гра (`bearing`), `chair_orc.png` | 2026-10-23 |
 
 Как модель попадает в игру:
 1. `art_tests/tripo_convert.py meshy_models/<файл>.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002`

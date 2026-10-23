@@ -311,9 +311,9 @@ python i18n_work/build_lang.py       # перевод полон
 - Тела клиентов в Кабинете посадки: векторный Бомм от Codex (3 версии, art_tests/seat_bodies/codex_svg) владельцу
   не понравился («кривой»); SEAT_BODY_ON = False. Возможный путь — растровые части от ChatGPT по ТЗ chatgpt_brief.
 - Сноски из мануалов для первых заданий (Мартин, Аэлин, Дургин, Тилли, Гра, Мора) — нужны страницы мануалов BARC.
-- Модели Meshy для колясок, которые ещё строятся кодом: **Progeo Noir 2.0** (Гра), **Progeo Ego** (Аэлин); по желанию —
+- Модели Meshy для колясок, которые ещё строятся кодом: **Progeo Ego** (Аэлин); по желанию —
   Tekna Advance (Дургин — его портрет владелец просил не трогать; фото только с одного ракурса), Q6 Edge (Гильдия).
-  Сделаны 23.10: Invacare 9000 (Мартин, Бомм), Exelle Junior (Тилли), Aero Z (Юки), Cross 6 (Ивушка). **Zippie Iris
+  Сделаны 23.10: Invacare 9000 (Мартин, Бомм), Exelle Junior (Тилли), Aero Z (Юки), Cross 6 (Ивушка), Noir 2.0 (Гра). **Zippie Iris
   (Искра) — остаётся нашей моделью с наклоном** (решение владельца: нравится наклон, референсов с наклоном нет). Референсы — art_tests/meshy_ref/<N>_<модель>/ (по 4; у Ego/Tekna рамы на фото
   разного цвета). Лист сравнения — art_tests/_review/chairs_to_replace.jpg. После замены — перерисовать портреты.
   Новая модель: tripo_convert/glb_xform/tripo_views → SPECS в tripo_label → кадры blender_frames (спицы — fix_spokes)
@@ -332,6 +332,12 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-10-23 — Claude (Opus 5.5) — **Гра — Progeo Noir 2.0 Meshy** (`meshy_models/progeo_noir_2.glb`, height=880, ключ
+  `noir`): карбоновая рама-петля, развал задних колёс (центры колёс по сторонам расходятся на ~8 мм — так в модели),
+  тормоз — компактный замок под боковой трубой у переднего верха колеса, спицы — fix_spokes. Портрет — Codex
+  (`art_tests/codex_gra/`, вариант 1), фон — `art_tests/qwen_cut.py`. (assets/chair_orc.png, assets/client_orc.png,
+  assets/models/chair_orc_ai*.json, assets/turntable/chair_orc_*, art_tests/qwen_cut.py, meshy_models/README.md)
 
 - 2026-10-23 — Claude (Opus 5.5) — **Ивушка — Etac Cross 6 Meshy** (`meshy_models/etac_cross_6.glb`, height=940, ключ
   `cross6`): гайка 13 мм угла спинки (`bolts`) — кольцо у оси на внутренней стороне осевой пластины, тормоз — штифт
