@@ -142,7 +142,7 @@ pip install pygame          # on new Python (3.12+), where pygame won't install:
 python game.py
 ```
 
-Optional: `numpy` enables the live 3D chair (without it — pre-rendered turntable frames); on Windows `cytolk` and `pywin32` enable speech.
+Optional: `numpy` enables the big 3D inspection (V key) with a live mesh; the diagnosis window always uses pre-rendered turntable frames. On Windows `cytolk` and `pywin32` enable speech.
 
 On Windows the easiest way is to double-click **`start_game.bat`**: it starts the game and, if something goes
 wrong, keeps the window with the error message open instead of closing silently.
@@ -472,7 +472,7 @@ pip install pygame          # на новых Python (3.12+), где pygame не
 python game.py
 ```
 
-Необязательно: `numpy` включает живую 3D-модель коляски (без него — заранее снятые кадры поворота); на Windows `cytolk` и `pywin32` — озвучку.
+Необязательно: `numpy` включает большой 3D-осмотр (клавиша V) с живой сеткой; в окне диагностики всегда заранее снятые кадры поворота. На Windows `cytolk` и `pywin32` — озвучку.
 
 На Windows проще всего — двойной клик по **`start_game.bat`**: он запускает
 игру и, если что-то пошло не так, оставляет окно с текстом ошибки открытым
