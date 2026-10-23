@@ -342,7 +342,8 @@ python i18n_work/build_lang.py       # перевод полон
   art_tests/tripo/bak_before_meshy/*_procedural*, бэкап кода — art_tests/game.py.bak_before_wolf. Портрет — Codex
   (`art_tests/codex_wolf/`, вариант 1; бриф со стилем по портретам Гра и Бомма), фон — qwen_cut. **Q6 Edge** —
   классическая жёлтая Meshy (`quantum_q6_edge_classic.glb`, height=1250, ключ `q6c`); пульт у Meshy висел в воздухе —
-  `blender_render.add_tube` (стойка + поперечина + хомут на подлокотник, `GLB[...]["tubes"]`). Рисунок chair_q6edge.png
+  `blender_render.add_tube` + move: пульт висел в 4 см перед торцом подлокотника с круглым фланцем — фланец удалён,
+  пульт сдвинут вплотную к подушке (move d=-66 мм), под подушкой — кронштейн-планка с двумя хомутами (`tubes`). Рисунок chair_q6edge.png
   вписан в прежний холст 760×600. Таблицу диалогов коллеги нужно обновить (dialogs_export → Диск → импорт).
 
 - 2026-10-23 — Claude (Opus 5.5) — **Аэлин — Progeo Ego Meshy** (`meshy_models/progeo_ego.glb`, height=900, ключ `ego`):
