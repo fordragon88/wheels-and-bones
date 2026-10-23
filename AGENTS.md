@@ -465,6 +465,11 @@ python i18n_work/build_lang.py       # перевод полон
   `art_tests/_review/q6_cables_before_after.jpg`. Облегчённая модель игры (`assets/models/chair_q6edge_ai.json`) не
   менялась: у заданий Гильдии 3D-осмотра нет. (art_tests/blender_frames.py, art_tests/blender_render.py,
   assets/chair_q6edge.png, assets/turntable/chair_q6edge_*, assets/turntable/index.json, meshy_models/README.md)
+  Выложено, web_smoke сайта 20/0. **Таблица диалогов для коллеги обновлена** (Вольф вместо Дургина, реплика Барти
+  после проезда и др.): перед заменой проверено, что в «New English»/«Comment» правок нет (gviz CSV из вкладки);
+  `dialogs_export.py` → копия `WheelsAndBones_dialogues_v3.xlsx` → Диск (Создать → Загрузить файл; файловое поле —
+  перехват `HTMLInputElement.click` + file_upload) → в таблице Файл → Импорт → «Мой диск» (выбор и «Insert» — скриптом
+  через `contentDocument` окна выбора) → «Заменить таблицу» → «Импортировать». Ссылка прежняя.
 
 - 2026-10-23 — Claude (Opus 5.5) — **аудит 3 (после переноса колясок на Meshy) + сверка всей таблицы отзывов +
   документация.** Отзывы, оставшиеся незакрытыми: **№68/84 проезд** — после тест-драйва итог больше не открывается
