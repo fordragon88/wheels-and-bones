@@ -66,7 +66,7 @@ In the hub every job is tagged **ⓜ MANUAL** or **⚡ POWER**.
 |---|---|---|
 | Martin (tutorial) — Invacare 9000 | Flat rear tyre | Removing the tyre, replacing the tube, inflating to the gauge |
 | Aelin the elf — Progeo Ego | Caster flutter — **2 possible causes** | Cleaning the axle and tightening the stem OR the fork mounting — tell them apart by inspection |
-| Durgin the dwarf — Progeo Tekna Advance | Wheel lock doesn't hold | Pressure, tightening and moving the lock clamp, 3–6 mm gap on a scale |
+| Wolf the werewolf — Quickie 2 | Wheel lock doesn't hold | Pressure, tightening and moving the lock clamp, 3–6 mm gap on a scale |
 | Tilly the fairy — Progeo Exelle Junior | Loose spokes | Ping test by ear, spoke tension, bolt strength grades |
 | Gra the orc — Progeo Noir 2.0 | Whine from the rear wheel — **2 possible causes** | Replacing a bearing OR moving a rubbing brake away — listen to the hub |
 | Bomm the troll — Invacare 9000 XDT | Leaking air cushion | Finding the puncture, patching, pressure-sore prevention |
@@ -386,7 +386,7 @@ Pygame. Один файл, играть можно мышью или **толь�
 |---|---|---|
 | Мартин (туториал) — Invacare 9000 | Прокол заднего колеса | Бортировка покрышки, замена камеры, накачка по манометру |
 | Эльфийка Аэлин — Progeo Ego | Тряска переда — **2 варианта причины** | Чистка оси и подтяжка штока ИЛИ крепёж вилки — различай осмотром |
-| Гном Дургин — Progeo Tekna Advance | Тормоз-замок не держит | Давление, подтяжка и сдвиг крепления, зазор 3–6 мм по шкале |
+| Оборотень Вольф — Quickie 2 | Тормоз-замок не держит | Давление, подтяжка и сдвиг крепления, зазор 3–6 мм по шкале |
 | Фея Тилли — Progeo Exelle Junior | Ослабли спицы | Пинг-тест на слух («пинь»/«тук»), натяжение спиц, класс прочности болтов |
 | Орк Гра — Progeo Noir 2.0 | Вой у заднего колеса — **2 варианта причины** | Замена подшипника ИЛИ отодвинуть трущий тормоз — слушай ступицу |
 | Тролль Бомм — Invacare 9000 XDT | Дырявая воздушная подушка | Поиск прокола, заплатка, профилактика пролежней |

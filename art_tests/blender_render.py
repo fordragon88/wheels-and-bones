@@ -256,6 +256,37 @@ def clone_parts(cl):
         print("скопировано граней:", len(src), "x", len(cl["copies"]), o.name)
 
 
+def add_tube(t):
+    """Трубка, которой нет в модели (крепление пульта и т.п.): p0→p1 (мм игры), r — радиус, col — цвет."""
+    p0, p1 = np.array(t["p0"], float), np.array(t["p1"], float)
+    ax = (p1 - p0) / np.linalg.norm(p1 - p0)
+    ref = np.array([0, 0, 1.0]) if abs(ax[2]) < 0.9 else np.array([1.0, 0, 0])
+    u = np.cross(ax, ref); u /= np.linalg.norm(u)
+    v = np.cross(ax, u)
+    k, r = 16, t.get("r", 8)
+    verts = []
+    for p in (p0, p1):
+        for j in range(k):
+            q = p + r * (math.cos(2 * math.pi * j / k) * u + math.sin(2 * math.pi * j / k) * v)
+            verts.append((q[0] / 1000, -q[2] / 1000, q[1] / 1000))
+    faces = [(j, (j + 1) % k, k + (j + 1) % k, k + j) for j in range(k)] + [tuple(range(k))[::-1], tuple(range(k, 2 * k))]
+    me_ = bpy.data.meshes.new("tube")
+    me_.from_pydata(verts, [], faces)
+    ob_ = bpy.data.objects.new("tube", me_)
+    sc.collection.objects.link(ob_)
+    m = bpy.data.materials.new("tube")
+    m.use_nodes = True
+    b = m.node_tree.nodes["Principled BSDF"]
+    b.inputs["Base Color"].default_value = (*t.get("col", (0.06, 0.06, 0.065)), 1)
+    b.inputs["Metallic"].default_value = 0.7
+    b.inputs["Roughness"].default_value = 0.35
+    me_.materials.append(m)
+    bpy.context.view_layer.objects.active = ob_
+    ob_.select_set(True)
+    bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35))
+    ob_.select_set(False)
+
+
 def add_antitip(a):
     """Антиопрокидыватель, которого нет (или он кривой) в модели Meshy: трубка от рамы назад-вниз и колёсико.
     a: p0, p1 — концы трубки (x, y, z, мм игры), r — радиус трубки, wheel — (r, ширина) колёсика у p1."""
@@ -311,6 +342,8 @@ if d.get("glb"):
         clone_parts(cl)
     for at in d.get("antitips") or []:
         add_antitip(at)
+    for t in d.get("tubes") or []:
+        add_tube(t)
     for h in d.get("hubs") or []:
         add_hub(h)
     if os.environ.get("WB_EXPORT"):                    # исправленная копия модели (glb_fixed.py): без рендера

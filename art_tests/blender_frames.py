@@ -41,11 +41,11 @@ GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]),            # кра
        "chair_cross6.png": dict(key="cross6", spokes=[dict(side=1, c=(-146.5, 322.2), hc=(-154.0, 324.4), zp=290, fl=12, cut_r=(40, 255), cut_z=(262, 318), rh=30, rr=258, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-147.1, 322.9), hc=(-152.5, 323.9), zp=290, fl=12, cut_r=(40, 255), cut_z=(262, 318), rh=30, rr=258, n=24, col=(0.72, 0.72, 0.75))]),
        "chair_orc.png": dict(key="noir", spokes=[dict(side=1, c=(-101.3, 352.8), hc=(-101.7, 357.0), zp=290, fl=12, cut_r=(34, 272), cut_z=(250, 332), rh=28, rr=276, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-101.6, 344.4), hc=(-101.7, 346.8), zp=290, fl=12, cut_r=(34, 272), cut_z=(250, 332), rh=28, rr=276, n=24, col=(0.72, 0.72, 0.75))]),
        "chair_elf.png": dict(key="ego", spokes=[dict(side=1, c=(-133.6, 327.9), hc=(-128.1, 327.1), zp=300, fl=12, cut_r=(34, 252), cut_z=(258, 342), rh=28, rr=258, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-137.3, 328.0), hc=(-133.7, 327.1), zp=300, fl=12, cut_r=(34, 252), cut_z=(258, 342), rh=28, rr=258, n=24, col=(0.72, 0.72, 0.75))]),
-       "chair_q6edge.png": dict(key="q6m", move=[
-           dict(x=[165, 410], y=[636, 775], z=[100, 300], rot=(11, -15), pivot=(205, 668, 200), d=(-85, 6, 0)),  # пульт: ровно и
-           #   на передний край подлокотника (у Meshy задран на 15°, развёрнут на 11° и вынесен вперёд на кронштейне)
-           dict(x=[285, 520], y=[40, 80], z=[-180, -20], rot=(4.1, 0, 3.4), pivot=(292, 60, -111), d=(-20, 0, 0)),
-           dict(x=[285, 520], y=[40, 80], z=[-20, 125], rot=(-5.2, -0.8, -3.2), pivot=(292, 60, 53), d=(-20, 0, 0))]),   # подножки: параллельно, без крена, к стойкам
+       "chair_q6edge.png": dict(key="q6c", tubes=[   # классическая Q6 Edge (жёлтая); пульт у Meshy висит в воздухе —
+           dict(p0=(121, 652, 310), p1=(121, 606, 310), r=9),          # стойка пульта вниз
+           dict(p0=(121, 606, 318), p1=(121, 606, 228), r=10),         # поперечина под подлокотник
+           dict(p0=(80, 606, 232), p1=(165, 606, 232), r=12)]),        # хомут на трубе подлокотника
+       "chair_dwarf.png": dict(key="q2"),   # Quickie 2 (оборотень Вольф)
        "chair_focuscr.png": dict(key="fcr"),
        "chair_leshy.png": dict(key="x8", recolor=[28, 4, 26])}           # оранжевый -> красный                               # цвета Meshy (тёмно-синяя рама, как на фото)
 total = 0
@@ -59,7 +59,8 @@ for art in arts:
         spec = json.load(open(src, encoding="utf-8"))
         xf = json.load(open(os.path.join(HERE, "gen3d", GLB[art]["key"] + "_xform.json"), encoding="utf-8"))
         spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"), hubs=GLB[art].get("hubs"),
-                    spokes=GLB[art].get("spokes"), move=GLB[art].get("move"), antitips=GLB[art].get("antitips"), clones=GLB[art].get("clones"))
+                    spokes=GLB[art].get("spokes"), move=GLB[art].get("move"), antitips=GLB[art].get("antitips"), clones=GLB[art].get("clones"),
+                    tubes=GLB[art].get("tubes"))
         json.dump(spec, open(src, "w"), separators=(",", ":"))
     out = os.path.join(ROUT, name)
     for f in glob.glob(os.path.join(out, "*.png")):

@@ -311,15 +311,13 @@ python i18n_work/build_lang.py       # перевод полон
 - Тела клиентов в Кабинете посадки: векторный Бомм от Codex (3 версии, art_tests/seat_bodies/codex_svg) владельцу
   не понравился («кривой»); SEAT_BODY_ON = False. Возможный путь — растровые части от ChatGPT по ТЗ chatgpt_brief.
 - Сноски из мануалов для первых заданий (Мартин, Аэлин, Дургин, Тилли, Гра, Мора) — нужны страницы мануалов BARC.
-- Модели Meshy для колясок, которые ещё строятся кодом: **Q6 Edge** (Гильдия, перегенерация по 4b_…_classic), **Quickie 2**
-  (вместо Tekna у Дургина/нового героя, референсы 22_Quickie_2); по желанию —
-  Tekna Advance (Дургин — его портрет владелец просил не трогать; фото только с одного ракурса), Q6 Edge (Гильдия).
-  Сделаны 23.10: Invacare 9000 (Мартин, Бомм), Exelle Junior (Тилли), Aero Z (Юки), Cross 6 (Ивушка), Noir 2.0 (Гра), Ego (Аэлин). **Zippie Iris
+- Коляски в коде остались только у Искры (Zippie Iris — решение владельца) и у заданий Гильдии без окна коляски
+  (Edge 4/Ego/Invacare в truing/t_battery/toe — свои Meshy-кадры уже есть). Meshy 23.10: Invacare 9000 (Мартин, Бомм),
+  Exelle Junior (Тилли), Aero Z (Юки), Cross 6 (Ивушка), Noir 2.0 (Гра), Ego (Аэлин), Quickie 2 (Вольф), Q6 Edge (Гильдия). **Zippie Iris
   (Искра) — остаётся нашей моделью с наклоном** (решение владельца: нравится наклон, референсов с наклоном нет). Референсы — art_tests/meshy_ref/<N>_<модель>/ (по 4; у Ego/Tekna рамы на фото
   разного цвета). Лист сравнения — art_tests/_review/chairs_to_replace.jpg. После замены — перерисовать портреты.
   Новая модель: tripo_convert/glb_xform/tripo_views → SPECS в tripo_label → кадры blender_frames (спицы — fix_spokes)
   → art_from_turntable → portrait_chair/reseat/install.
-- Гнома Дургина (коренастый) пока не трогать — решение владельца.
 - **Ролик к запуску (Хэллоуин) — HyperFrames** (heygen-com/hyperframes: HTML+CSS+GSAP → MP4, Node 22+ и FFmpeg).
   Скиллы стоят в проекте: `.claude/skills/hyperframes`, `hyperframes-cli`, `hyperframes-registry`, `media-use` (в git
   не идут — переустановка: `npm_config_cache=D:\wheels_and_bones\tools\hyperframes\npm-cache npx -y skills add
@@ -333,6 +331,19 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-10-23 — Claude (Opus 5.5) — **Гном Дургин → оборотень Вольф** (решение владельца; Хэллоуин). Задание `brake`
+  (тормоз-замок) то же — шаги общие для любой ручной складной; сменились клиент («Оборотень Вольф»), коляска
+  (**Quickie 2** Meshy: `meshy_models/quickie_2.glb`, height=950, ключ `q2`, литые колёса — fix_spokes не нужен;
+  `chair_model="quickie2"`, CHAIR_HOTSPOTS["quickie2"] = как у tekna), symptom/test/thanks и все реплики CLIENT_TALK
+  (полнолуние, стая, холм, линька, рваные джинсы), английский — en9_fixes99_feedback.json; docs/QUESTS*.md
+  перегенерированы, README — таблицы заданий. **Имена файлов прежние** (client_dwarf.png, chair_dwarf.png,
+  chair_dwarf_ai*.json, кадры chair_dwarf_*) — чтобы не трогать код; старые — art_tests/retired/,
+  art_tests/tripo/bak_before_meshy/*_procedural*, бэкап кода — art_tests/game.py.bak_before_wolf. Портрет — Codex
+  (`art_tests/codex_wolf/`, вариант 1; бриф со стилем по портретам Гра и Бомма), фон — qwen_cut. **Q6 Edge** —
+  классическая жёлтая Meshy (`quantum_q6_edge_classic.glb`, height=1250, ключ `q6c`); пульт у Meshy висел в воздухе —
+  `blender_render.add_tube` (стойка + поперечина + хомут на подлокотник, `GLB[...]["tubes"]`). Рисунок chair_q6edge.png
+  вписан в прежний холст 760×600. Таблицу диалогов коллеги нужно обновить (dialogs_export → Диск → импорт).
 
 - 2026-10-23 — Claude (Opus 5.5) — **Аэлин — Progeo Ego Meshy** (`meshy_models/progeo_ego.glb`, height=900, ключ `ego`):
   тормоз — рычаг на боковой трубе перед колесом, `caster_stem` — труба над вилкой, `bolts` — верх вилки; «дыры», о

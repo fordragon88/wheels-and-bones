@@ -23,6 +23,8 @@
 | `etac_cross_6.glb` | Etac Cross 6 | дриада Ивушка (`cross6_back`), `chair_cross6.png` | 2026-10-23 |
 | `progeo_noir_2.glb` | Progeo Noir 2.0 | орк Гра (`bearing`), `chair_orc.png` | 2026-10-23 |
 | `progeo_ego.glb` | Progeo Ego | эльфийка Аэлин (`caster`), `chair_elf.png` | 2026-10-23 |
+| `quickie_2.glb` | Quickie 2 | оборотень Вольф (`brake`, бывший гном Дургин), `chair_dwarf.png` | 2026-10-23 |
+| `quantum_q6_edge_classic.glb` | Quantum Q6 Edge (классическая, жёлтая); крепление пульта дорисовано (tubes) | Гильдия (`t_q6brake`), `chair_q6edge.png` | 2026-10-23 |
 | `quantum_q6_edge.glb` | Quantum Q6 Edge 2.0 — пробная (кривые пульт и подножки, правка — move rot в blender_frames); владелец перегенерирует по набору 4b_Quantum_Q6_Edge_classic; в игру не ставилась | Гильдия (`t_q6brake`) | 2026-10-23 |
 
 Как модель попадает в игру:
