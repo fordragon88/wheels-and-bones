@@ -147,7 +147,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Hands → *Part:* Caster (front) (also accepted: Caster stem)  
    *After the step:* The fork rocks on a sound stem — so it's the mounting.
 2. Tighten the caster fork mounting bolts.  
-   *Tool:* Hex key → *Part:* Frame bolts/nuts (also accepted: Caster stem, Caster (front))  
+   *Tool:* Hex key → *Part:* Frame bolts/nuts (also accepted: Caster (front), Caster stem)  
    *Hint:* Barty: “Tap it with a hammer, it'll seat itself!” — no. Only the hex key.  
    *After the step:* Hex key of exactly the right size: a stripped bolt has to be drilled out.
 3. Check: the caster spins freely, no play.  
@@ -186,7 +186,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Hint:* Barty: “Go straight for the bolts!” ...nope — pressure first.  
    *After the step:* The #1 cause of “the lock won't hold” is low tire pressure.
 2. Top up the tire through the valve to the correct pressure.  
-   *Tool:* Pump → *Part:* Tire (also accepted: Valve, Rear wheel)
+   *Tool:* Pump → *Part:* Tire (also accepted: Rear wheel, Valve)
 3. Tighten the wheel lock mechanism bolts.  
    *Tool:* Hex key → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
    *After the step:* Don't overdo it: overtighten them and the lock gets stiff to engage.
@@ -404,40 +404,40 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 ---
 
-### 7. Seat elevator won't rise — Variant 1/2
+### 7. Seat elevator won't lower — Variant 1/2
 - **Client:** Zix the Goblin Mechanic  
 - **Wheelchair:** Quantum Edge 4 (mid-wheel drive, power seat elevator)  
-- **Symptom:** Zix selects lift mode on the joystick, pushes the joystick forward — and the seat won't budge. “I only tweaked it a little! Well, maybe not a little. I need to reach the top shelf with the nuts, and the elevator's on strike!”
+- **Symptom:** Zix raised the seat to grab a jar of nuts from the top shelf — and now it won't come down. Joystick back — nothing. “I only improved it a tiny bit! Well, maybe not tiny. Now I crawl at a quarter speed and can't get over the workshop threshold!”
 
 **Inspection clues (what the player sees)**
 
-- *Seat elevator* — The scissor mechanism is folded, clean, nothing stuck between the parts.
+- *Seat elevator* — The scissor mechanism is extended — the seat sits at the top. The mechanism is clean, nothing stuck.
 - *Seat lift actuator* — The actuator housing is intact. But its connector at the electronics block is pulled out half a finger's width — the latch won't hold.
-- *Connectors/wiring* — The elevator wiring harness is cinched with new zip ties to a homemade cup holder and pinched by the seat frame at the bend. The braiding is still intact for now.
-- *Joystick (control box)* — The seat screen opens, lift mode can be selected, no error codes. The lockout indicator is green.
+- *Connectors/wiring* — The lift harness is zip-tied to a home-made cup holder: with the seat raised it's stretched like a string and pinched by the frame at the bend. The sheathing is still intact.
+- *Joystick (control box)* — The seat screen opens, lift mode can be selected, no error codes. The indicator is YELLOW with the iLevel icon next to it: seat raised, speed reduced.
 - *Battery* — The charge indicator is full — Zix charged it all night.
 - *Flip-up armrest* — On the armrest is a brand-new “Zix-Turbo” cup holder, bolted on tight.
 
 **Diagnosis options**
 
-- ✅ (correct) Actuator connector not fully seated, harness pinched
-- ❌ The factory lift lockout tripped because of tilt — If it were locked out, the indicator would be red or yellow, but it's green.
+- ✅ (correct) The harness stretched at the top and pulled out the actuator connector
+- ❌ The controller locked the seat because of its position — A lockout is a RED indicator. Yellow only means the seat is raised and speed is reduced.
 - ❌ Battery is low — not enough power for the lift — Charge is full, and if drained the Q-Logic 3 would show error 20 “Undervoltage”.
 
 **Repair steps**
 
 1. Put the wheelchair on the level floor of the workshop: nothing above the seat, clear space next to the scissor mechanism.  
    *Tool:* Hands → *Part:* Seat elevator  
-   *After the step:* Edge 4 manual: the elevator — only on level ground, not under a table or shelf.
+   *After the step:* Edge 4 manual: move the seat only on a level surface, never under a table or shelf.
 2. Turn on the joystick.  
    *Tool:* Hands → *Part:* Joystick (control box)
 3. Press key 2 to open the seat screen and select “lift”.  
    *Tool:* Hands → *Part:* Joystick (control box)  
-   *After the step:* Lift mode is selected — the joystick now moves the seat.
-4. Push the joystick forward.  
+   *After the step:* Lift mode selected — the joystick controls the seat: forward is up, back is down.
+4. Pull the joystick back.  
    *Tool:* Hands → *Part:* Joystick (control box) (also accepted: Seat elevator)  
-   *After the step:* The seat doesn't move. Now read the joystick display — it will tell us whether it's a lockout or a broken connection.
-5. Check the joystick's lockout indicator against the table in the Edge 4 manual.  
+   *After the step:* The seat stays at the top. Now read the controller — it will tell you whether it's a lockout or a break.
+5. Check the indicator on the controller against the table in the Q-Logic 3 manual.  
    *Tool:* Eyes → *Part:* Joystick (control box)  
    *Mini-game:* meter  
    *After the step:* The indicator and codes are the first thing you check before digging into the wiring.
@@ -450,19 +450,19 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 8. Press the yellow circuit breaker button in the battery tray — the batteries are disconnected from the system.  
    *Tool:* Hands → *Part:* Battery  
    *After the step:* The circuit breaker on the Edge 4 doubles as the battery disconnect.
-9. Inspect the scissor mechanism from the outside, with a flashlight. Keep hands out of the scissors.  
+9. Inspect the extended scissors from the outside, with a flashlight. Keep hands out of the mechanism.  
    *Tool:* Eyes → *Part:* Seat elevator  
-   *Hint:* Barty: “Stick your paw between the scissors and give it a push — it's just being lazy!” — no! That's a pinch point: you don't put your hands in the mechanism even on a switched-off wheelchair.  
-   *After the step:* The scissors are pinch points. We look with our eyes, not our fingers.
+   *Hint:* Barty: “Stick your paw between the scissors and push — the seat will fold on its own!” — no! That's a pinch point: you don't put your hands in the mechanism even on a switched-off wheelchair.  
+   *After the step:* The scissors are pinch points, even when still. Look with your eyes, not your fingers.
 10. Inspect the actuator connector: is the housing intact, the contacts free of green corrosion?  
    *Tool:* Eyes → *Part:* Seat lift actuator (also accepted: Connectors/wiring)  
    *After the step:* Intact and clean — you can plug it in. Cracked or scorched — we don't repair it; it goes to a certified technician.
 11. Push the actuator connector in until the latch clicks.  
    *Tool:* Hands → *Part:* Seat lift actuator (also accepted: Connectors/wiring)  
    *After the step:* The latch clicked — vibration won't pull the connector out any more.
-12. Lift wiring: move the harness from the cup-holder zip ties to the factory mounting points, away from the seat frame.  
+12. Lift wiring: cut the cup-holder zip ties and route the harness to the factory mounting points, with slack for the lift.  
    *Tool:* Hands → *Part:* Connectors/wiring  
-   *After the step:* The elevator moves up and down: the harness needs free travel. Chafed braiding isn't taped up — it's replaced at the service center.
+   *After the step:* The lift travels 30 cm up and down: the harness needs free play over the full height. Chafed sheathing isn't taped up — it's replaced by the service center.
 13. Flip the circuit breaker lever down — battery power is back.  
    *Tool:* Hands → *Part:* Battery  
    *After the step:* The breaker button disconnects the batteries; the lever down reconnects them.
@@ -474,92 +474,97 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 16. Press key 2 to open the seat screen and select “lift”.  
    *Tool:* Hands → *Part:* Joystick (control box)  
    *After the step:* Lift mode is selected — the joystick now moves the seat.
-17. Push the joystick forward: the seat rises.  
+17. Pull the joystick back: the seat lowers.  
    *Tool:* Hands → *Part:* Joystick (control box) (also accepted: Seat elevator)  
-   *After the step:* The seat went up — so the command reaches the actuator.
-18. Look at the joystick display: the iLevel icon and a yellow indicator — speed is limited, about 3 km/h.  
+   *After the step:* The seat is going down — so the command reaches the actuator.
+18. Look at the controller: seat down — the yellow indicator is off, the iLevel icon is gone, full speed is back.  
    *Tool:* Eyes → *Part:* Joystick (control box)  
-   *After the step:* The manual says to check the speed reduction system before every trip with the seat raised.
-19. Lower the seat fully with the joystick, making sure the harness doesn't stretch.  
+   *After the step:* Green — no limits: you can go outside and over the threshold.
+19. Raise the seat fully with the joystick and lower it again, making sure the harness doesn't stretch at the top.  
    *Tool:* Hands → *Part:* Seat elevator (also accepted: Joystick (control box), Connectors/wiring)  
-   *After the step:* Outdoors, on a ramp and over a threshold — only with the seat lowered.
+   *After the step:* We check the full travel: at the top the harness must lie loose, or it will happen again.
 
-**Test:** The seat rises smoothly, the yellow indicator lights up, Zix slowly rolls to the shelving and takes a jar of nuts off the top shelf. It lowers — the harness lies free.  
-**What you learn:** A green indicator and silence mean there's no lockout and the command is lost along the way. The Edge 4 manual says to check that all connectors are tight and the harness isn't pinched by the seat frame; a cracked connector or chafed harness is replaced only at the service center.  
+**Test:** The seat lowers smoothly, the yellow indicator goes out, Zix rolls over the threshold at full speed. He raises it again — at the top the harness lies loose.  
+**What you learn:** A yellow indicator with the seat raised is normal: the wheelchair drives at a quarter speed. If the seat doesn't respond and the indicator isn't red, the command is getting lost on the way: the Edge 4 manual says to check that connectors are tight and the harness isn't pinched or stretched by the seat frame; a cracked connector or chafed harness is replaced only by the service center.  
 **Client says:** Zix: “I'll keep the cup holder, but I won't touch the wires anymore. Almost. Thanks, bony!”  
 
 ---
 
-### 7. Seat elevator won't rise — Variant 2/2
+### 7. Seat elevator won't lower — Variant 2/2
 - **Client:** Zix the Goblin Mechanic  
 - **Wheelchair:** Quantum Edge 4 (mid-wheel drive, power seat elevator)  
-- **Symptom:** Zix selects lift mode on the joystick, pushes the joystick forward — and the seat won't budge. “I only tweaked it a little! Well, maybe not a little. I need to reach the top shelf with the nuts, and the elevator's on strike!”
+- **Symptom:** Zix raised the seat to grab a jar of nuts from the top shelf — and now it won't come down. Joystick back — nothing. “I only improved it a tiny bit! Well, maybe not tiny. Now I crawl at a quarter speed and can't get over the workshop threshold!”
 
 **Inspection clues (what the player sees)**
 
-- *Seat elevator* — The scissors are folded, clean, nothing stuck.
-- *Seat* — The seat is tilted back, the backrest reclined almost flat: Zix “upgraded” the wheelchair to “siesta mode” and dozed in it.
-- *Joystick (control box)* — A RED lockout indicator is lit on the screen; in lift mode the seat doesn't move.
+- *Seat elevator* — The scissors are extended, the seat is up. Between the seat frame and the base, right next to the scissors, a tin box “Zix-Box” is zip-tied on — full of nuts.
+- *Seat* — Seat and backrest in the normal position, no tilt. Nut marks on the cushion.
+- *Joystick (control box)* — The indicator is YELLOW with the iLevel icon; no codes. In lift mode, on the “down” command the seat jerks, the actuator hums and stops.
 - *Seat lift actuator* — The actuator connector is seated tight, the cable intact.
 - *Battery* — Charge is full.
 - *Freewheel lever* — The freewheel levers are up — the motors are in drive mode.
 
 **Diagnosis options**
 
-- ✅ (correct) Lockout: tilt or recline over 20°
-- ❌ The lift actuator burned out — the seat won't move — A red indicator isn't a breakdown, it's a lockout based on seat position.
+- ✅ (correct) A foreign object got into the mechanism — the scissors have nowhere to fold
+- ❌ The lift actuator burned out — the seat won't move — The actuator hums and moves the seat a finger's width: it's alive, something is just in the way.
 - ❌ Motors in freewheel — the joystick won't send commands — The levers are up, and freewheel doesn't interfere with the elevator.
 
 **Repair steps**
 
-1. Check: the wheelchair is on level ground, nothing above, clear space around the scissors and backrest.  
+1. Check: the wheelchair is on a level floor, nothing above, the area around the scissors is clear.  
    *Tool:* Eyes → *Part:* Seat elevator (also accepted: Seat)  
-   *After the step:* The backrest and seat are about to move — they need room.
+   *After the step:* The seat is about to move — it needs room.
 2. Turn on the joystick.  
    *Tool:* Hands → *Part:* Joystick (control box)
 3. Press key 2 to open the seat screen and select “lift”.  
    *Tool:* Hands → *Part:* Joystick (control box)  
    *After the step:* Lift mode is selected — the joystick now moves the seat.
-4. Push the joystick forward.  
+4. Pull the joystick back.  
    *Tool:* Hands → *Part:* Joystick (control box) (also accepted: Seat elevator)  
-   *After the step:* The seat doesn't move. The joystick display will tell you first whether it's a fault or a safety lockout.
-5. Check the joystick's lockout indicator against the table in the Edge 4 manual.  
+   *After the step:* The seat jerked and stopped, the actuator hums. Release the joystick — don't keep the motor under load.
+5. Check the indicator on the controller against the table in the Q-Logic 3 manual.  
    *Tool:* Eyes → *Part:* Joystick (control box)  
    *Mini-game:* meter  
-   *After the step:* The indicator color tells a fault from a safety lockout.
-6. Use the joystick left-right to select seat tilt mode.  
+   *After the step:* The indicator color tells a fault, a safety lockout and an obstruction apart.
+6. Turn off the joystick.  
    *Tool:* Hands → *Part:* Joystick (control box)  
-   *Hint:* Barty: “Reprogram the lockout — and the elevator will move at any tilt!” — no! The manual explicitly forbids bypassing or reconfiguring factory lockouts: it's protection against tipping over.  
-   *After the step:* We work with the standard modes — no “tricks”.
-7. Use the joystick to reduce the seat tilt until the angle is 20° or less.  
-   *Tool:* Hands → *Part:* Joystick (control box) (also accepted: Seat)  
-   *Mini-game:* gap  
-   *After the step:* Lifting is permitted only when tilt and recline are no more than 20°.
-8. Use the joystick left-right to select backrest mode.  
-   *Tool:* Hands → *Part:* Joystick (control box)  
-   *After the step:* Backrest mode is selected — now the joystick moves the backrest.
-9. Use the joystick to bring the backrest closer to upright: recline no more than 20°.  
-   *Tool:* Hands → *Part:* Joystick (control box) (also accepted: Seat)  
-   *After the step:* A reclined backrest blocks the lift just like tilt.
-10. Look at the indicator: red should change to green.  
-   *Tool:* Eyes → *Part:* Joystick (control box)  
-   *After the step:* Green — no limits, you can lift.
-11. Use the joystick left-right to select “lift” mode.  
+   *After the step:* Work on the mechanism only with the wheelchair powered down: first the controller, then the breaker.
+7. Take off the rear battery cover and press the yellow circuit breaker button.  
+   *Tool:* Hands → *Part:* Battery  
+   *After the step:* Batteries disconnected — the actuator can't start while you're under the seat.
+8. Inspect the scissors from the outside with a flashlight: what keeps them from folding?  
+   *Tool:* Eyes → *Part:* Seat elevator  
+   *Hint:* Barty: “Let the seat squash the box once — it's heavy, it'll crush it!” — no! The scissors are pinch points: crushing anything with them is forbidden, you can break the actuator and the frame.  
+   *After the step:* The “Zix-Box” sits exactly where the seat frame needs to come down.
+9. Cut the zip ties and pull the box out from under the seat without reaching between the scissors.  
+   *Tool:* Hands → *Part:* Seat elevator (also accepted: Seat)  
+   *After the step:* The box is beside the mechanism: pull it outward, not through the scissors.
+10. Check that nothing else is left between the seat frame and the base: no nuts, no zip ties.  
+   *Tool:* Eyes → *Part:* Seat elevator (also accepted: Seat)  
+   *After the step:* One nut in the scissors — and it all happens again.
+11. Flip the circuit breaker lever down and put the cover back.  
+   *Tool:* Hands → *Part:* Battery  
+   *After the step:* Lever down — batteries connected.
+12. Turn on the joystick.  
+   *Tool:* Hands → *Part:* Joystick (control box)
+13. Press key 2 to open the seat screen and select “lift”.  
    *Tool:* Hands → *Part:* Joystick (control box)  
    *After the step:* Lift mode is selected — the joystick now moves the seat.
-12. Push the joystick forward: the seat rises and the iLevel icon appears on the joystick display.  
+14. Pull the joystick back: the seat lowers all the way.  
    *Tool:* Hands → *Part:* Joystick (control box) (also accepted: Seat elevator)  
-   *After the step:* iLevel turns on by itself as soon as the seat starts moving up.
-13. Look at the joystick display with the seat raised: the yellow indicator is on — speed is limited, about 3 km/h.  
+   *After the step:* The scissors have room to fold — the seat moves smoothly.
+15. Look at the controller: seat down — yellow is off, the iLevel icon is gone.  
    *Tool:* Eyes → *Part:* Joystick (control box)  
-   *After the step:* If it says “iLevel not engaged” on level ground — don't use the elevator, see the service center.
-14. Lower the seat all the way with the joystick.  
-   *Tool:* Hands → *Part:* Joystick (control box) (also accepted: Seat elevator)  
-   *After the step:* Outdoors, on a ramp and over a threshold — only with the seat lowered.
+   *After the step:* Green — full speed again, you can go outside.
+16. Zix also asks for “siesta mode” with the seat raised. Check the TRU-Balance inhibit matrix.  
+   *Tool:* Eyes → *Part:* Joystick (control box)  
+   *Mini-game:* meter  
+   *After the step:* The matrix in the TRU-Balance 4 manual — what can't be combined with what.
 
-**Test:** The indicator is green, the seat glides up, the yellow lights up. Zix solemnly takes a jar of nuts off the top shelf and lowers back down.  
-**What you learn:** On TRU-Balance systems the lift is locked out if the seat is tilted or the backrest is reclined more than 20°: the red Q-Logic 3 indicator is a safety lockout, not a fault. Return the angle — the indicator will turn green. A raised seat limits speed to about 3 km/h.  
-**Client says:** Zix: “So ‘siesta mode’ and the elevator don't get along. I'll doze lower down. Thanks, bony!”  
+**Test:** The seat glides down, the yellow indicator goes out, Zix rolls over the threshold at full speed. The box of nuts has moved to a shelf — the bottom one.  
+**What you learn:** Before every seat movement the TRU-Balance manual says to check that nothing can get into the mechanism: the lift scissors are pinch points. If the seat is stuck and the indicator isn't red, don't force the joystick: power down and look for the obstruction. An elevated seat locks out tilt and recline, and tilt over 20° locks out elevating.  
+**Client says:** Zix: “So the Zix-Box and the lift don't get along. I'll move it to a shelf. The bottom one. Thanks, bony!”  
 
 ---
 
@@ -605,7 +610,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Hands → *Part:* Joystick knob (stick)  
    *After the step:* The chair is off, so handling the knob is safe. A bent knob or a weak spring is a job for a technician.
 7. Wipe dirt and dust off the joystick with a dry cloth.  
-   *Tool:* Cloth → *Part:* Joystick knob (stick) (also accepted: Joystick (control box), Joystick boot)  
+   *Tool:* Cloth → *Part:* Joystick knob (stick) (also accepted: Joystick boot, Joystick (control box))  
    *After the step:* Dirt at the base dulls the response.
 8. Check and reseat the joystick cable connector (power off).  
    *Tool:* Hands → *Part:* Connectors/wiring  
@@ -735,7 +740,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Hands → *Part:* Wheel lock  
    *After the step:* The wheel-lock lever goes to the “released” position.
 7. Spin the wheel: the lock's shoe must not touch the tire.  
-   *Tool:* Hands → *Part:* Rear wheel (also accepted: Tire, Spokes)  
+   *Tool:* Hands → *Part:* Rear wheel (also accepted: Spokes, Tire)  
    *After the step:* TiLite checklist: when released the lock doesn't touch the tire, hinges free of wear and play.
 8. Engage both wheel locks.  
    *Tool:* Hands → *Part:* Wheel lock  
@@ -914,7 +919,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Hands → *Part:* Tilt cable  
    *After the step:* Ki: the cable should have as few bends as possible, that means less friction.
 5. Loosen the locknut of the cable adjuster with 10 mm and 3/8" wrenches.  
-   *Tool:* Adjustable wrench → *Part:* Tilt cable (also accepted: Tilt lock (rocker/teeth), Tilt trigger)  
+   *Tool:* Adjustable wrench → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
    *After the step:* You hold the adjuster body with one wrench and loosen the nut with the other.
 6. Screw the adjuster in or out until the slack is gone. The locking tooth must stay fully in the teeth.  
    *Tool:* Hands → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
@@ -927,7 +932,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Hands → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
    *After the step:* Ki: the locking tooth sits fully in the teeth and doesn't chatter at any tilt position.
 9. Tighten the locknut. Turn only the nut, not the adjuster or the body.  
-   *Tool:* Adjustable wrench → *Part:* Tilt cable (also accepted: Tilt lock (rocker/teeth), Tilt trigger)  
+   *Tool:* Adjustable wrench → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
    *After the step:* If you turn the adjuster or the body, you'll ruin the setting you just found.
 10. Return the seat to the tilt position she needs.  
    *Tool:* Hands → *Part:* Tilt trigger (also accepted: Tilt lock (rocker/teeth))  
@@ -1411,7 +1416,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Hands → *Part:* Motor (also accepted: Rear wheel)  
    *After the step:* Both wheels must be switched off before charging.
 4. Push the wheelchair by its wheels into the shade, somewhere cool.  
-   *Tool:* Hands → *Part:* Rear wheel (also accepted: Tire, Frame)  
+   *Tool:* Hands → *Part:* Rear wheel (also accepted: Frame, Tire)  
    *Hint:* Barty: “Just wrap the wheels in Seneb's bandages — instant shade!”  
    *After the step:* Charge only at 0…40 °C, and don't leave the wheels in the sun or near heat sources.  
    *If wrong:* The wheelchair is rolled into the shade by hand.
@@ -1466,7 +1471,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *After the step:* The weight limit covers the rider and everything hanging on the wheelchair.  
    *If wrong:* The chest is removed by hand. And the wheelchair never carries passengers.
 3. Find the weight limit on the wheelchair's label and compare it with Gorynych's weight.  
-   *Tool:* Eyes → *Part:* Frame (also accepted: Seat, Backrest (posts, upholstery), Joystick (control box), Battery)  
+   *Tool:* Eyes → *Part:* Frame (also accepted: Backrest (posts, upholstery), Battery, Joystick (control box), Seat)  
    *Mini-game:* meter  
    *After the step:* Every wheelchair has its own weight limit. It's on the serial number label and in the specifications table.
 4. Inflate the drive tires to the pressure printed on the tire.  
@@ -1474,7 +1479,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Mini-game:* pump  
    *After the step:* Soft tires put more load on the motors.
 5. Push the battery harness plugs in until they click.  
-   *Tool:* Hands → *Part:* Battery (also accepted: Joystick (control box), Main circuit breaker)  
+   *Tool:* Hands → *Part:* Battery (also accepted: Main circuit breaker, Joystick (control box))  
    *After the step:* A loose connector can also cut the power.
 6. Wait about a minute and press the main circuit breaker button.  
    *Tool:* Hands → *Part:* Main circuit breaker  

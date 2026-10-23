@@ -68,7 +68,7 @@ def job_block(job, n, T, out, label=""):
         if not tech:
             line += f" → *{T['part']}:* {part(st['part'])}"
             if st.get("alt"):
-                line += f" ({T['also']}: {', '.join(part(a) for a in st['alt'])})"
+                line += f" ({T['also']}: {', '.join(part(a) for a in sorted(st['alt']))})"   # alt — set: порядок фиксируем
         else:
             if st.get("after"):
                 names = [str(next(k for k, s2 in enumerate(job["steps"], 1) if s2["id"] == a)) for a in st["after"]]

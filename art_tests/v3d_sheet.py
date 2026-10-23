@@ -11,6 +11,8 @@ CW, CH, SS = 420, 340, 2
 jobs = [game.resolve_job(b) for b in game.ALL_JOBS]
 sheet = pygame.Surface((CW * 2 * 3, CH * 3)); sheet.fill((20, 26, 36))
 font = pygame.font.SysFont("segoeui", 18, bold=True)
+jobs = [j for j in jobs if game.get_ai_chair3d(j.get("chair_art"))]   # народные коляски — только кадры, без сетки
+sheet = pygame.Surface((CW * 2 * 3, CH * ((len(jobs) + 2) // 3))); sheet.fill((20, 26, 36))
 for n, job in enumerate(jobs):
     mesh = game.get_ai_chair3d(job.get("chair_art"))
     for k, yaw in enumerate((-0.75, 2.35)):

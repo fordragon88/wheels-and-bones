@@ -25,6 +25,11 @@ def tick(n=3):
         g.draw(S)
 
 
+for _old in os.listdir(SHOTS) if os.path.isdir(SHOTS) else []:   # снимки прошлых прогонов (нумерация сдвигается) — убрать
+    if _old.endswith(".png"):
+        os.remove(os.path.join(SHOTS, _old))
+
+
 def shot(tag):
     key = tag
     if key in seen:
