@@ -17,6 +17,8 @@
 | `vermeiren_d100.glb` | Vermeiren D100 | Баба Яга (`yaga_d100`), `chair_yaga.png` | 2026-10-23 |
 | `panthera_x3.glb` | Panthera X3 | русалка Ольга (`olga_x3`), `chair_rusalka.png` | 2026-10-23 |
 | `quickie_nitrum.glb` | Quickie Nitrum (без e-motion — ступицы дорисовываем) | мумия Сенеб (`ra_emotion`), `chair_ra.png` | 2026-10-23 |
+| `invacare_9000.glb` | Invacare 9000 | Мартин (`flat`, `toe`) и Бомм (`cushion`, ×1.07), `chair_basic.png`, `chair_troll.png` | 2026-10-23 |
+| `progeo_exelle_junior.glb` | Progeo Exelle Junior (рама в кадрах — розовая; антиопрокидыватель клонирован на обе стороны) | фея Тилли (`spokes`), `chair_fairy.png` | 2026-10-23 |
 
 Как модель попадает в игру:
 1. `art_tests/tripo_convert.py meshy_models/<файл>.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002`
@@ -28,7 +30,7 @@
 **Исправленные копии `*_fixed.glb`** (`python art_tests/glb_fixed.py`): у моделей Meshy тонкие спицы рвутся на куски —
 в копии они вырезаны и поставлены ровные (`blender_render.fix_spokes`), у Nitrum добавлены ступицы Alber e-motion
 (`add_hub`). Копия уже в осях игры: метры, пол на 0, вперёд +X, правая сторона +Z (исходник не меняется). Есть для
-`vermeiren_d100`, `panthera_x3`, `quickie_nitrum` — для других появятся, когда им зададут `spokes`/`hubs` в
+`vermeiren_d100`, `panthera_x3`, `quickie_nitrum`, `progeo_exelle_junior` — для других появятся, когда им зададут `spokes`/`hubs` в
 `art_tests/blender_frames.py` (словарь `GLB`).
 
 Файлы `.glb` не в git (крупные) — храните копию.

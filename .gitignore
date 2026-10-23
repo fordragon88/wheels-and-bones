@@ -55,3 +55,9 @@ MUSE_3D_TASK.md
 tools/
 art_tests/meshy_ref/
 meshy_models/*.glb
+# сторонние скиллы HyperFrames (ставятся командой, см. AGENTS.md «Идеи»)
+.claude/skills/hyperframes/
+.claude/skills/hyperframes-cli/
+.claude/skills/hyperframes-registry/
+.claude/skills/media-use/
+skills-lock.json

@@ -319,11 +319,38 @@ python i18n_work/build_lang.py       # перевод полон
   Новая модель: tripo_convert/glb_xform/tripo_views → SPECS в tripo_label → кадры blender_frames (спицы — fix_spokes)
   → art_from_turntable → portrait_chair/reseat/install.
 - Гнома Дургина (коренастый) пока не трогать — решение владельца.
+- **Ролик к запуску (Хэллоуин) — HyperFrames** (heygen-com/hyperframes: HTML+CSS+GSAP → MP4, Node 22+ и FFmpeg).
+  Скиллы стоят в проекте: `.claude/skills/hyperframes`, `hyperframes-cli`, `hyperframes-registry`, `media-use` (в git
+  не идут — переустановка: `npm_config_cache=D:\wheels_and_bones\tools\hyperframes\npm-cache npx -y skills add
+  heygen-com/hyperframes -s hyperframes -s hyperframes-cli -s hyperframes-registry -s media-use -a claude-code -y --copy`).
+  Всё на D: npm-кэш — tools/hyperframes/npm-cache (ВСЕГДА задавать npm_config_cache, иначе npx кладёт на C), проекты
+  роликов — tools/hyperframes/. План: запись геймплея из браузера + титры/переходы/наша музыка YuE, клипы для соцсетей.
+  Для анимаций ВНУТРИ игры не годится (pygame/WASM). GSAP (gsap.com, теперь бесплатный целиком) — движок анимаций
+  HyperFrames; можно взять и для страницы вокруг игры (заставка, пока качается архив 23 МБ).
 
 ---
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-10-23 — Claude (Opus 5.5) — **Тилли — Progeo Exelle Junior Meshy** (`meshy_models/progeo_exelle_junior.glb`,
+  height=760, ключ `exelle`, art chair_fairy): рама в кадрах салатовый → пастельный розовый (`recolor=[72, 330, 30, 0.5]`
+  — 4-й параметр recolor: множитель насыщенности), спицы — fix_spokes. Антиопрокидыватель — **родной Meshy, один по
+  центру** (решение владельца). Пробовали пару: `blender_render.clone_parts` копирует кусок модели (у нас — стойку с
+  колёсиком на обе боковые трубы, левая копия зеркальная, колёсики наружу, +78 мм вперёд) и move-удаление U-трубки —
+  параметры в комментарии у `GLB["chair_fairy.png"]`. Есть и `add_antitip` (трубка + колёсико с нуля) — не используется.
+  **Тилли — нарисована Codex** (`art_tests/codex_tilly/`, вариант
+  v3_dangle_try1/2: сидит, свесив ножки; вариант 1 отвергнут — подлокотники не там, ножки стоят на раме); защёлку
+  спинки, заходившую на трубу, владелец подрезал в Photoshop (tilly_for_photoshop.png).
+  **Портреты**: Бомм — Invacare 9000 (seed 55); **Мартин — нарисован Codex** (`art_tests/codex_martin/`:
+  BRIEF.md + рефы → `codex exec … -i …`, функция image_generation): по варианту 33 Qwen (шляпа, очки) в Invacare,
+  культя левой ноги в бинте, правая ступня висит (Qwen/Flux Fill упорно дорисовывали «ступеньку» под ступню — для
+  портрета подножки поднимались `MOVE["chair_basic.png"]`, не помогло). **Убегающая нога** (assets/gag_leg.png) — тоже
+  Codex (BRIEF_LEG.md, вариант 2): голень с зашитым срезом и босая ступня (старая — нога целиком в джинсах и ботинке —
+  в art_tests/retired/); фон вырезан заливкой белого от краёв (BiRefNet делал светлую кожу полупрозрачной).
+  (assets/chair_fairy.png, assets/models/chair_fairy_ai*.json, assets/turntable/chair_fairy_*, assets/martin.png,
+  assets/client_troll.png, assets/gag_leg.png, art_tests/blender_render.py, blender_frames.py, portrait_chair.py,
+  portrait_reseat.py, tripo_label.py, glb_fixed.py, codex_martin/*)
 
 - 2026-10-23 — Claude (Opus 5.5) — **Мартин и Бомм — Invacare 9000 Meshy** (`meshy_models/invacare_9000.glb`; Мартин —
   ключ `inv9000`, height=920, art chair_basic; Бомм — та же модель ×1.07, ключ `inv9000xdt`, height=985, art chair_troll).

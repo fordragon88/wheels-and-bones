@@ -29,7 +29,8 @@ def import_glb(path, M, recolor=None):
         if o.parent is None:
             o.matrix_world = T @ o.matrix_world
     if recolor:                                          # оттенок текстуры как у коляски в игре (красный -> фиолетовый)
-        h0, h1, tol = recolor
+        h0, h1, tol, *rest = recolor                   # 4-й (необязательный) — множитель насыщенности (пастель < 1)
+        smul = rest[0] if rest else 1.0
         for img in bpy.data.images:
             if img.size[0] == 0 or "normal" in img.name.lower():
                 continue
@@ -57,7 +58,7 @@ def import_glb(path, M, recolor=None):
                 print("в графит пикселей:", int(sel.sum()), img.name)
                 continue
             hh = h1 / 60.0                               # тот же цвет с новым оттенком (яркость и насыщенность — прежние)
-            c = mx * sat
+            c = mx * sat * smul
             x = c * (1 - abs(hh % 2 - 1))
             base = mx - c
             rr, gg, bb = {0: (c, x, 0 * c), 1: (x, c, 0 * c), 2: (0 * c, c, x), 3: (0 * c, x, c), 4: (x, 0 * c, c),
@@ -188,6 +189,91 @@ def fix_spokes(ws):
         me_.materials.append(m)
 
 
+def clone_parts(cl):
+    """Копии куска оригинальной модели (напр. единственный антиопрокидыватель Meshy — на обе стороны): грани, все
+    вершины которых в зоне x/y/|z| (мм игры), копируются; copies — [dict(mirror=bool (отразить по z), d=(dx, dy, dz))];
+    исходник удаляется (keep=False). Текстура/UV у копий — свои, как у исходника."""
+    import bmesh
+    for o in [o for o in sc.objects if o.type == "MESH"]:
+        M = o.matrix_world
+        Mi = M.inverted()
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+
+        def g(v):
+            w = M @ v.co
+            return w.x * 1000, w.z * 1000, -w.y * 1000                    # мм игры: x, y (вверх), z
+
+        def inzone(v):
+            x, y, z = g(v)
+            return (cl["x"][0] <= x <= cl["x"][1] and cl["y"][0] <= y <= cl["y"][1]
+                    and cl["az"][0] <= abs(z) <= cl["az"][1])
+        src = [f for f in bm.faces if all(inzone(v) for v in f.verts)]
+        if not src:
+            bm.free()
+            continue
+        for cp in cl["copies"]:
+            ret = bmesh.ops.duplicate(bm, geom=src)
+            nv = [e for e in ret["geom"] if isinstance(e, bmesh.types.BMVert)]
+            nf = [e for e in ret["geom"] if isinstance(e, bmesh.types.BMFace)]
+            dx, dy, dz = cp["d"]
+            for v in nv:
+                x, y, z = g(v)
+                if cp.get("mirror"):
+                    z = -z
+                x, y, z = x + dx, y + dy, z + dz
+                v.co = Mi @ Vector((x / 1000, -z / 1000, y / 1000))
+            if cp.get("mirror"):
+                bmesh.ops.reverse_faces(bm, faces=nf)
+        if not cl.get("keep"):
+            bmesh.ops.delete(bm, geom=src, context="FACES")
+        bm.to_mesh(o.data)
+        bm.free()
+        o.data.update()
+        print("скопировано граней:", len(src), "x", len(cl["copies"]), o.name)
+
+
+def add_antitip(a):
+    """Антиопрокидыватель, которого нет (или он кривой) в модели Meshy: трубка от рамы назад-вниз и колёсико.
+    a: p0, p1 — концы трубки (x, y, z, мм игры), r — радиус трубки, wheel — (r, ширина) колёсика у p1."""
+    import bmesh
+    p0, p1 = np.array(a["p0"], float), np.array(a["p1"], float)
+    ax = (p1 - p0) / np.linalg.norm(p1 - p0)
+    u = np.cross(ax, [0, 0, 1.0]); u /= np.linalg.norm(u)
+    v = np.cross(ax, u)
+    k, r = 12, a.get("r", 9)
+    verts, faces = [], []
+    for p in (p0, p1):
+        for j in range(k):
+            q = p + r * (math.cos(2 * math.pi * j / k) * u + math.sin(2 * math.pi * j / k) * v)
+            verts.append((q[0] / 1000, -q[2] / 1000, q[1] / 1000))
+    faces = [(j, (j + 1) % k, k + (j + 1) % k, k + j) for j in range(k)]
+    me_ = bpy.data.meshes.new("antitip")
+    me_.from_pydata(verts, [], faces)
+    ob_ = bpy.data.objects.new("antitip", me_)
+    sc.collection.objects.link(ob_)
+    for nm, col, met in (("tube", a.get("col", (0.05, 0.05, 0.055)), 0.6),):
+        m = bpy.data.materials.new(nm)
+        m.use_nodes = True
+        b = m.node_tree.nodes["Principled BSDF"]
+        b.inputs["Base Color"].default_value = (*col, 1)
+        b.inputs["Metallic"].default_value = met
+        b.inputs["Roughness"].default_value = 0.35
+        me_.materials.append(m)
+    wr, ww = a.get("wheel", (24, 18))
+    for rr, w, col in ((wr, ww, (0.04, 0.04, 0.045)), (wr * 0.5, ww + 4, (0.55, 0.56, 0.6))):
+        bpy.ops.mesh.primitive_cylinder_add(vertices=40, radius=rr / 1000, depth=w / 1000,
+                                            location=(p1[0] / 1000, -p1[2] / 1000, p1[1] / 1000), rotation=(math.pi / 2, 0, 0))
+        ob = bpy.context.active_object
+        m = bpy.data.materials.new("atw")
+        m.use_nodes = True
+        b = m.node_tree.nodes["Principled BSDF"]
+        b.inputs["Base Color"].default_value = (*col, 1)
+        b.inputs["Roughness"].default_value = 0.5
+        ob.data.materials.append(m)
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35))
+
+
 # ---------- модель ----------
 if d.get("glb"):
     import_glb(d["glb"], d["glb_matrix"], d.get("recolor"))
@@ -195,6 +281,10 @@ if d.get("glb"):
         move_parts(d["move"])
     if d.get("spokes"):
         fix_spokes(d["spokes"])
+    for cl in d.get("clones") or []:
+        clone_parts(cl)
+    for at in d.get("antitips") or []:
+        add_antitip(at)
     for h in d.get("hubs") or []:
         add_hub(h)
     if os.environ.get("WB_EXPORT"):                    # исправленная копия модели (glb_fixed.py): без рендера

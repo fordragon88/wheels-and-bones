@@ -94,8 +94,30 @@ JOBS = {   # ключ: (рендер коляски, портрет, описа�
               "cushion, black spoked rear wheels with black pushrims and large dark grey round power-assist motor hubs "
               "(Alber e-motion) with light grey caps in the wheel centres, small black front casters, a black footplate",
               "The mummy's bandaged hands rest on the knees, as in <image2>."),
+    # Мартин и Бомм в Invacare 9000 Meshy (было — синее сиденье, серебристая рама), 2026-10-23
+    "martin": ("portrait_chair_basic/portrait_chair_basic_00_white.png", "martin.png",
+               "an Invacare 9000 standard manual wheelchair: black steel frame, black nylon sling seat and backrest with a small blue Invacare badge on the side, black padded armrests, swing-away footrests with black footplates, big black mag rear wheels with straight composite spokes and thin silver pushrims, small black front casters",
+               "His hands rest on his lap, as in <image2>; his feet rest on the footplates."),
+    # Мартин заново: поза по рендеру (подножки подняты под его голень), культя левой ноги — хорошо видна, не сливается
+    "martin_new": ("portrait_chair_basic/portrait_chair_basic_00_white.png", "martin.png",
+                   "an Invacare 9000 standard manual wheelchair: black steel frame, black nylon sling seat and backrest "
+                   "with a small blue Invacare badge on the side, black padded armrests, swing-away footrests with black "
+                   "footplates, big black mag rear wheels with straight composite spokes and thin silver pushrims, small "
+                   "black front casters",
+                   "Martin is a friendly teenage zombie boy. His hands rest on his thighs. His LEFT leg ends just below the "
+                   "knee: the left blue jeans leg is neatly folded up and pinned over a short stump wrapped in a clean "
+                   "light beige bandage, resting on the front edge of the black seat, clearly visible and separate from "
+                   "the wheelchair. His RIGHT leg is whole: his right bare green foot hangs freely in the air in front "
+                   "of the seat, above the footplates, NOT touching anything — nothing at all under the foot (no step, "
+                   "no extra footrest, no box). The wheelchair's two footplates stay lower down, empty, exactly as in "
+                   "<image1>. Exactly one foot in the picture."),
+    # Тилли — нарисована Codex (art_tests/codex_tilly), здесь только для portrait_install
+    "fairy": ("portrait_chair_fairy/portrait_chair_fairy_00_white.png", "client_fairy.png", "", ""),
+    "troll": ("portrait_chair_troll/portrait_chair_troll_00_white.png", "client_troll.png",
+              "an Invacare 9000 standard manual wheelchair: black steel frame, black nylon sling seat and backrest with a small blue Invacare badge on the side, black padded armrests, swing-away footrests with black footplates, big black mag rear wheels with straight composite spokes and thin silver pushrims, small black front casters",
+              "His big hands rest on his round belly, as in <image2>; his big feet rest on the footplates."),
 }
-FREE_POSE = {"badger_new"}   # от старого портрета — только облик персонажа, поза и коляска — по рендеру
+FREE_POSE = {"badger_new", "martin_new"}   # от старого портрета — только облик персонажа, поза и коляска — по рендеру
 
 
 def white(path, name):
@@ -127,10 +149,11 @@ prompt = ("Redraw the character from <image2> sitting in the wheelchair from <im
           "Plain pure white background, no shadow, no text.")
 if key in FREE_POSE:
     prompt = ("Draw the character from <image2> sitting in the wheelchair from <image1>. Keep the character's look EXACTLY "
-              "as in <image2>: the same face, glasses, hat, scarf, clothes, colours, body proportions and expression, and "
+              "as in <image2>: the same face, hair, clothes, colours, body proportions and expression, nothing added "
+              "(no new glasses, hats or accessories), and "
               "the same clean cartoon art style with soft cel shading and dark outlines. The wheelchair must be exactly "
               "the wheelchair from <image1> — the same model, design, viewing angle and every part, nothing added or "
-              "doubled — drawn in the same cartoon style. It is " + desc + ". " + hands + " She sits naturally on the "
+              "doubled — drawn in the same cartoon style. It is " + desc + ". " + hands + " The character sits naturally on the "
               "seat, back against the backrest. Whole character and wheelchair fully visible, uncropped. Plain pure "
               "white background, no shadow, no text.")
 ids = []
