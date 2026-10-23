@@ -477,8 +477,9 @@ python i18n_work/build_lang.py       # перевод полон
   X8 (Леший): «подножки на разной высоте» — перспектива, по сетке симметричны (x 454…689, y 113…220 с обеих сторон),
   две раздельные площадки есть и на фото. Не чинится правками (текстура): глянцевые пятна на спинке X8, белёсые
   пластины осей Cross 6 — только перегенерация в Meshy, если владелец захочет. Проверки: selftest (кадры и `WNB_TT=0`),
-  asset_check, ui_playthrough. (art_tests/blender_render.py, blender_frames.py, glb_fixed.py, portrait_chair.py,
-  assets/chair_pulse6.png, assets/turntable/chair_pulse6_*, meshy_models/README.md)
+  asset_check, ui_playthrough. **Выложено** (Pages 850d6bf8), web_smoke сайта 20/0. (art_tests/blender_render.py,
+  blender_frames.py, glb_fixed.py, portrait_chair.py, assets/chair_pulse6.png, assets/turntable/chair_pulse6_*,
+  meshy_models/README.md)
 
 - 2026-10-23 — Claude (Fable 5.1) — **аудит 4 (3D по референсам + код) и правки по нему.** Осмотр: 21 Meshy-коляска
   с 8 сторон против актуальных наборов `meshy_ref` (все GLB сделаны после обновления референсов) — спицы, джойстики,
