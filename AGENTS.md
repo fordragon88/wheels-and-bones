@@ -322,6 +322,18 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-23 — Claude (Opus 5.5) — **Баба Яга (Vermeiren D100) и Ольга (Panthera X3) — модели Meshy** владельца вместо
+  Tripo (`meshy_models/vermeiren_d100.glb`, height=940, ключ `d100`; `meshy_models/panthera_x3.glb`, height=800, ключ
+  `x3`). SPECS в tripo_label: D100 — тормоз у переднего края заднего колеса (x 85–190, y 360–515), X3 — тормоз на раме
+  у верха колеса (x 130–220, y 415–515), подножка-петля. Модели — art_tests/tripo/models/chair_{yaga,rusalka}_ai*.json
+  (в игру — только кадры, index_folk.json), прежние Tripo — art_tests/tripo/bak_before_meshy/chair_*_tripo*. Кадры —
+  `blender_frames.py chair_yaga.png` / `chair_rusalka.png` с оригинальных GLB, рисунки — `art_from_turntable.py
+  yaga_d100` / `olga_x3`. `blender_render.add_hub` — мотор-ступица поверх модели (`GLB[...]["hubs"]`, для Сенеба:
+  Alber e-motion, которого нет в чистой модели Nitrum). Строка Tripo в титрах/README/LICENSE — пока прежняя: владелец
+  делает третью коляску (Сенеб), тогда Tripo убрать целиком. Портреты Яги и Ольги — ещё в старых колясках.
+  (art_tests/tripo_label.py, blender_frames.py, blender_render.py, portrait_chair.py, assets/chair_yaga.png,
+  assets/chair_rusalka.png, assets/turntable/*, meshy_models/README.md)
+
 - 2026-10-23 — Claude (Opus 5.5) — **аудит, часть 2: крупный текст 125 % (в браузере по умолчанию), Кабинет посадки,
   отзывы 84–88.** Итог задания — карточка «что ты узнал» ниже «спасибо» в 3 строки; окно спецификации — варианты
   ниже вопроса в 2 строки (`_spec_prompt_bottom`); вступление — окно по самому длинному слайду; пузырь Барти —

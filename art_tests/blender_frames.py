@@ -25,6 +25,7 @@ GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]),            # кра
        "chair_f5.png": dict(key="f5m", recolor=[175, -1, 30]),           # бирюзовый -> графит
        "chair_trident.png": dict(key="trident"), "chair_pulse6.png": dict(key="pulse6"),
        "chair_gorynych.png": dict(key="jazzy"), "chair_whillc2.png": dict(key="whill"),
+       "chair_yaga.png": dict(key="d100"), "chair_rusalka.png": dict(key="x3"),
        "chair_focuscr.png": dict(key="fcr"),
        "chair_leshy.png": dict(key="x8", recolor=[28, 4, 26])}           # оранжевый -> красный                               # цвета Meshy (тёмно-синяя рама, как на фото)
 total = 0
@@ -37,7 +38,7 @@ for art in arts:
     if art in GLB:
         spec = json.load(open(src, encoding="utf-8"))
         xf = json.load(open(os.path.join(HERE, "gen3d", GLB[art]["key"] + "_xform.json"), encoding="utf-8"))
-        spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"))
+        spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"), hubs=GLB[art].get("hubs"))
         json.dump(spec, open(src, "w"), separators=(",", ":"))
     out = os.path.join(ROUT, name)
     for f in glob.glob(os.path.join(out, "*.png")):

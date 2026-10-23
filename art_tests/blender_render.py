@@ -106,11 +106,32 @@ def move_parts(moves):
         o.data.update()
 
 
+def add_hub(h):
+    """Мотор-ступица (Alber e-motion), которой нет в модели Meshy: тёмный корпус и светлая крышка.
+    h: c — центр (x, y, z, мм игры), r — радиус, w — толщина, мм."""
+    x, y, z = h["c"]
+    for r, w, col, met in ((h["r"], h["w"], (0.03, 0.03, 0.035, 1), 0.35),
+                           (h["r"] * 0.45, h["w"] + 6, (0.6, 0.61, 0.65, 1), 0.85)):
+        bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=r / 1000, depth=w / 1000,
+                                            location=(x / 1000, -z / 1000, y / 1000), rotation=(math.pi / 2, 0, 0))
+        ob = bpy.context.active_object
+        m = bpy.data.materials.new("hub")
+        m.use_nodes = True
+        b = m.node_tree.nodes["Principled BSDF"]
+        b.inputs["Base Color"].default_value = col
+        b.inputs["Metallic"].default_value = met
+        b.inputs["Roughness"].default_value = 0.35
+        ob.data.materials.append(m)
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35))
+
+
 # ---------- модель ----------
 if d.get("glb"):
     import_glb(d["glb"], d["glb_matrix"], d.get("recolor"))
     if d.get("move"):
         move_parts(d["move"])
+    for h in d.get("hubs") or []:
+        add_hub(h)
 V = np.asarray(d["verts"], dtype=np.float64)
 VB = np.c_[V[:, 0], -V[:, 2], V[:, 1]] / 1000.0          # мм -> м, оси Blender
 tris, fcol, fmet, fpart = [], [], [], []
