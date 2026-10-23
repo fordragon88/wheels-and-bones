@@ -1788,6 +1788,8 @@ def feedback_send(payload, shot=None, local_png=None):
     shot — снимок экрана (уменьшенный JPEG для таблицы), local_png — куда сохранить полный снимок (имя .jpg);
     кодирование — в фоне (pygame держит интерпретатор, поэтому форматы выбраны быстрые).
     True — замечание уходит на сервер (FEEDBACK_URL задан)."""
+    import uuid
+    payload = dict(payload, uid=payload.get("uid") or uuid.uuid4().hex)
     if IS_WEB:                                        # в браузере потоков нет; очередь — в localStorage (wnbSend)
         if not FEEDBACK_URL:
             return False
@@ -1795,8 +1797,6 @@ def feedback_send(payload, shot=None, local_png=None):
             payload = _with_shot(payload, shot)
         r = web_js(f"window.wnbSend ? (wnbSend({json.dumps(FEEDBACK_URL)}, {json.dumps(json.dumps(payload))}), 'ok') : 'no'")
         return str(r) == "ok"                          # мост к странице не работает — «сохранено у тебя»
-    import uuid
-    payload = dict(payload, uid=payload.get("uid") or uuid.uuid4().hex)
     uid = payload["uid"]
     if FEEDBACK_URL:
         _outbox(lambda q: q + [payload])
@@ -10935,7 +10935,9 @@ class Game:
                          pygame.Rect(0, 560, WIDTH, 150))
         n = self.typed("intro", text)
         sk = ease_out((self.t - self._typing["intro"][1]) / 0.35)
-        panel = pygame.Rect(360, 250 + int(24 * (1 - sk)), 560, 250)
+        lh = font(19).get_height() + 4                # крупный текст: окно — по самому длинному слайду
+        ph = max(250, 70 + max(len(wrap_lines(t_, 510, 19)) for _, t_ in self.intro_slides) * lh + 54)
+        panel = pygame.Rect(360, 250 + int(24 * (1 - sk)), 560, ph)
         s = Surf(panel.size, pygame.SRCALPHA)
         s.fill((22, 20, 30, int(230 * sk)))
         surf.blit(s, panel)
@@ -11105,6 +11107,8 @@ class Game:
         self.seatc.update(case=i, cfg=cfg, solved=False, view=c.get("view", "side"), focus=None)
         if c.get("view"):                                   # перекос/поворот: сбоку не видно — Мортимер подсказывает
             self.seatc["say"] = SEAT_MENTOR["view_" + c["view"]]
+        else:
+            self.seatc["say"] = SEAT_MENTOR["fit"]
 
     @staticmethod
     def seat_eval(case, cfg):
@@ -11162,7 +11166,8 @@ class Game:
                     checks.append((key, True, ok_t))
             if abs(fl - fr) > 1:
                 checks.append(("feet", False, "Подножки на разной высоте: таз перекашивается"))
-            obl += 1.2 * (fl - fr)                           # выше правая подножка — правая сторона таза выше
+            if abs(fl - fr) > 1:                             # 1 см — в допуске
+                obl += 1.2 * (fl - fr)                       # выше правая подножка — правая сторона таза выше
         pose = dict(shift=shift)
         if fx:                                                # неисправимый перекос: таз не выпрямляется
             high, gap = fx["high"], fx["gap"]
@@ -11227,7 +11232,8 @@ class Game:
                 checks.append((key, True, ok_t))
         ok = all(o for _, o, _ in checks)
         status = ("Поворот учли: глубина своя для каждой ноги" if ok else
-                  "Таз развёрнут сильнее: сиденье узкое" if w < hip else "Поворот таза: подстрой сиденье под ноги")
+                  "Таз развёрнут сильнее: сиденье узкое" if w < hip else
+                  "Сиденье широкое: таз съезжает вбок" if w > hip + 2 else "Поворот таза: подстрой сиденье под ноги")
         return checks, dict(rot=max(-16.0, min(16.0, rot)), shift=shift, ok=ok, status=status, knee_press=press)
 
     @staticmethod
@@ -11273,7 +11279,7 @@ class Game:
                            f"Позиция разгрузки: наклон ≥ {case['tilt']}°" if tl >= case["tilt"]
                            else f"Нет разгрузки: наклон {tl}° — нужно не меньше {case['tilt']}°"))
         # поза (для рисунка): завал таза назад, сползание, колени вверх, стопы висят
-        deep = max(0.0, d - tgt_depth - 1.5)
+        deep = max(0.0, d - tgt_depth - 2)
         high = max(0.0, tgt_leg - 1.5 - lg)
         low = max(0.0, lg - tgt_leg - 1.5)
         p = 3.0 * deep + 2.5 * high + 2.0 * low + 2.5 * max(0, lo_b - bh) + 1.5 * max(0, lo_a - ba)
@@ -11413,8 +11419,10 @@ class Game:
                 if cv_:                                     # перекос/поворот: вид спереди (сверху) ⇄ сбоку
                     sc["view"] = "side" if sc.get("view") == cv_ else cv_
                     sc["say"] = SEAT_MENTOR["side_ok" if sc["view"] == "side" else "view_" + cv_]
-                else:
+                elif self.SEAT_BODY_ON:
                     sc["xray"] = not sc.get("xray", True)
+                else:
+                    return
                 snd("tick")
                 return
             for k, r in self._seat_slider_rects():
@@ -12508,6 +12516,7 @@ class Game:
                 cfg["leg"] -= 8
             if spec.get("dangle"):
                 cfg["leg"] += 7
+                case["seat_h"] = max(case["seat_h"], cfg["leg"] + 4)   # подножка висит, но над полом
         case.update(back=(40, 50), angle=(95, 105), kind="power" if spec.get("tilt") else "manual")
         _, pose = self.seat_eval(case, cfg)
         if not force_good:
@@ -12598,9 +12607,8 @@ class Game:
             if case.get("view"):
                 vname = {"front": "ВИД: СПЕРЕДИ  ⇄", "top": "ВИД: СВЕРХУ  ⇄", "side": "ВИД: СБОКУ  ⇄"}[view]
                 Button(tbtn, vname, CYAN).draw(surf, mouse, active=view != "side")
-            else:
-                Button(tbtn, ("ТЕЛО: ВИДНО" if xray else "ТЕЛО: СКРЫТО") if self.SEAT_BODY_ON else
-                       ("РЕНТГЕН: ВКЛ" if xray else "РЕНТГЕН: СКЕЛЕТ"),
+            elif self.SEAT_BODY_ON:                         # без тел клиентов переключать нечего
+                Button(tbtn, "ТЕЛО: ВИДНО" if xray else "ТЕЛО: СКРЫТО",
                        PURPLE if xray else CYAN).draw(surf, mouse, active=xray)
             for i, r in self._seat_list_rects():
                 done = SEAT_CASES[i]["id"] in self.seat_done
@@ -12614,7 +12622,7 @@ class Game:
             for key, track in sliders:
                 label, unit, lo, hi = SEAT_SLIDERS[key]
                 v = sc["cfg"][key]
-                ok = next((o for kk, o, _ in checks if kk == key), True)
+                ok = all(o for kk, o, _ in checks if kk == key or (key == "leg" and kk == "floor"))
                 draw_text(surf, label, (track.x, track.y - 20), 13, WHITE)
                 fit_text(surf, seat_val_text(key, v), (track.right + 8, track.y - 9), 150, 14, GOOD if ok else AMBER)
                 aa_rect(surf, (44, 46, 60), track, border_radius=4)
@@ -12672,9 +12680,14 @@ class Game:
                 if sc["picked"] is not None:
                     col = GOOD if ok else (BAD if i == sc["picked"] else DIM)
                 Button(r, "", col).draw(surf, mouse, enabled=sc["picked"] is None or i == sc["picked"] or ok)
-                draw_wrapped(surf, text, (r.x + 14, r.y + 10), r.w - 28, 15, WHITE)
-                if sc["picked"] == i and fb:
-                    draw_wrapped(surf, fb, (r.x + 14, r.y + 46), r.w - 28, 13, BAD)
+                ty = draw_wrapped(surf, text, (r.x + 14, r.y + 8), r.w - 28, 15, WHITE)
+                if sc["picked"] == i and fb:                 # крупный текст: вариант в 2 строки — пояснение ниже
+                    for fsz in (13, 12, 11):
+                        flh = font(fsz).get_height() + 2
+                        if ty + len(wrap_lines(fb, r.w - 28, fsz)) * flh <= r.bottom - 4:
+                            break
+                    draw_wrapped(surf, fb, (r.x + 14, ty), r.w - 28, fsz, BAD,
+                                 max_lines=max(1, (r.bottom - 4 - ty) // flh))
             if sc["picked"] is not None:
                 Button(self._seat_btn_rect(), "ДАЛЬШЕ ▶", AMBER).draw(surf, mouse)
 
@@ -12858,8 +12871,8 @@ class Game:
         if s.get("spots_key") == key:
             return s["spots"]
         fr, zoom = self._m3d_frame()
-        r = max(10, min(14, int(rect.h * 0.035)))
-        r = int(max(9, min(24, r * s.get("zoom_k", 1.0))))     # крупнее коляска («+») — крупнее кружки и цифры
+        r = max(17, min(20, int(rect.h * 0.05)))     # крупные кружки — под палец на iPad и для всех
+        r = int(max(14, min(30, r * s.get("zoom_k", 1.0))))    # крупнее коляска («+») — крупнее кружки и цифры
         pts = []
         for pid in self.cur["parts"]:
             cs = mesh.centers.get(pid)
@@ -12868,7 +12881,22 @@ class Game:
             near = max(cs, key=lambda c: project_point(c, yaw, pitch, fr, zoom, mesh.pivot)[1])
             (x, y), _ = project_point(near, yaw, pitch, fr, zoom, mesh.pivot)
             pts.append([pid, x, y, x, y])
-        need = 2 * r + 3
+        need = 2 * r + max(8, r)                     # просвет между кружками: видно, к какой точке ведёт выноска
+        groups = []                                  # скопления точек (несколько деталей в одном месте)
+        for p in pts:
+            near = [g for g in groups if any(math.hypot(p[3] - q[3], p[4] - q[4]) < need for q in g)]
+            groups = [g for g in groups if all(g is not h for h in near)] + [[p] + [q for g in near for q in g]]
+        for g in groups:                             # скопление — веером вокруг его центра, по кругу в том же порядке
+            k = len(g)
+            if k < 2:
+                continue
+            cx, cy = sum(q[3] for q in g) / k, sum(q[4] for q in g) / k
+            rad = need / (2 * math.sin(math.pi / k)) + r // 2       # чуть дальше от детали — выноска видна
+            g.sort(key=lambda q: math.atan2(q[4] - cy, q[3] - cx))
+            a0 = (math.atan2(g[0][4] - cy, g[0][3] - cx) if math.hypot(g[0][3] - cx, g[0][4] - cy) > 1
+                  else -math.pi / 2)
+            for i, q in enumerate(g):
+                q[1], q[2] = cx + rad * math.cos(a0 + 2 * math.pi * i / k), cy + rad * math.sin(a0 + 2 * math.pi * i / k)
         for _ in range(60):
             moved = False
             for i in range(len(pts)):
@@ -13480,9 +13508,11 @@ class Game:
         hover = None
         if self._m3d_mesh() is not None:              # на 3D: тёмная подложка и выноска к детали
             for pid, x, y, r, (ax, ay) in self._m3d_spots():
-                if abs(ax - x) + abs(ay - y) > r * 0.6:
-                    DR.line(surf, AMBER, (ax, ay), (x, y), 1)
-                    aa_circle(surf, AMBER, (ax, ay), 2)
+                if abs(ax - x) + abs(ay - y) > r * 0.6:      # выноска к детали — с тёмной обводкой, видна на любом фоне
+                    DR.line(surf, (14, 12, 20), (ax, ay), (x, y), 4)
+                    DR.line(surf, AMBER, (ax, ay), (x, y), 2)
+                    aa_circle(surf, (14, 12, 20), (ax, ay), 5)
+                    aa_circle(surf, AMBER, (ax, ay), 3)
                 disc = Surf((r * 2 + 2, r * 2 + 2), pygame.SRCALPHA)
                 aa_circle(disc, (12, 12, 18, 110), (r + 1, r + 1), r)
                 surf.blit(disc, (x - r - 1, y - r - 1))
@@ -13837,8 +13867,12 @@ class Game:
         s.fill((24, 30, 36, 220))
         surf.blit(s, bubble)
         aa_rect(surf, CYAN, bubble, 2, border_radius=8)
-        draw_wrapped(surf, line, (bubble.x + 14, bubble.y + 12), bubble.w - 28, 16, GHOST,
-                     limit=self.typed("ghost", line, cps=90))
+        for size in (16, 15, 14, 13):                 # крупный текст: длинная реплика — мельче, но в рамке
+            lh = font(size).get_height() + 2
+            if len(wrap_lines(line, bubble.w - 28, size)) * lh <= bubble.h - 20:
+                break
+        draw_wrapped(surf, line, (bubble.x + 14, bubble.y + 10), bubble.w - 28, size, GHOST,
+                     limit=self.typed("ghost", line, cps=90), max_lines=max(1, (bubble.h - 20) // lh))
 
     # ----- tech-задание (Гильдия): свободный порядок операций -----
     def _op_rects(self):
@@ -13884,7 +13918,7 @@ class Game:
                 prefix = "✔ " if done else "• "
                 txt = prefix + st["instr"]
                 pad = 4 if rect.h >= 44 else 2
-                for fs in (13, 12, 11):                        # длинная операция — мельче, но целиком в карточке
+                for fs in (13, 12, 11, 10):                    # длинная операция — мельче, но целиком в карточке
                     if len(wrap_lines(tr(txt), rect.w - 20, fs)) * (font(fs).get_height() + 2) <= rect.h - 2 * pad:
                         break
                 draw_wrapped(surf, txt, (rect.x + 10, rect.y + pad), rect.w - 20, fs, GREY if done else WHITE)
@@ -13920,10 +13954,16 @@ class Game:
     def _spec_panel_rect(self):
         return pygame.Rect(WIDTH // 2 - 370, 140, 740, 460)
 
+    def _spec_prompt_bottom(self):
+        p = self._spec_panel_rect()
+        lines = wrap_lines(self.spec_pending["spec"]["prompt"], p.w - 48, 20)
+        return p.y + 40 + len(lines) * (font(20).get_height() + 2)
+
     def _spec_option_rects(self):
         p = self._spec_panel_rect()
         n = len(self.spec_pending["spec"]["options"])
-        return [(i, pygame.Rect(p.x + 24, p.y + 110 + i * 86, p.w - 48, 74)) for i in range(n)]
+        top = max(p.y + 110, self._spec_prompt_bottom() + font(15).get_height() + 16)   # крупный текст: вопрос в 2 строки
+        return [(i, pygame.Rect(p.x + 24, top + i * 86, p.w - 48, 74)) for i in range(n)]
 
     def _spec_manual_rect(self):
         p = self._spec_panel_rect()
@@ -13949,7 +13989,8 @@ class Game:
         viewed = spec["manual"] in self.manual_viewed
         if not viewed:
             draw_text(surf, "Сначала сверься с мануалом — варианты откроются.",
-                      (p.centerx, p.y + 82), 15, AMBER, center=True)
+                      (p.centerx, max(p.y + 82, self._spec_prompt_bottom() + 4 + font(15).get_height() // 2)),
+                      15, AMBER, center=True)
         for i, rect in self._spec_option_rects():
             aa_rect(surf, PANEL, rect, border_radius=8)
             aa_rect(surf, CYAN if viewed else DIM, rect, 2, border_radius=8)
@@ -14385,22 +14426,23 @@ class Game:
                 img = font(40).render("★" if i < stars else "☆", True, AMBER)
                 img = TF.rotozoom(img, 0, k)
                 surf.blit(img, img.get_rect(center=c))
-        draw_wrapped(surf, job["thanks"], (WIDTH // 2, 185), 760, 20, WHITE, center=True, plate=st > 1.2,
-                     limit=self.typed("thanks", job["thanks"]) if st > 1.2 else 0)
+        ty = draw_wrapped(surf, job["thanks"], (WIDTH // 2, 185), 760, 20, WHITE, center=True, plate=st > 1.2,
+                          limit=self.typed("thanks", job["thanks"]) if st > 1.2 else 0)
+        top = max(250, ty + 12)                      # крупный текст: «спасибо» в 3 строки — карточка ниже
         # карточка «что ты узнал»
         fsz = 18                                     # длинный факт — мельче, но целиком в карточке (до y≈450)
         for fsz in (18, 17, 16, 15, 14):
             if 54 + len(wrap_lines(job["fact"], 712, fsz)) * (font(fsz).get_height() + 2) + 14 <= 200:
                 break
         fh = len(wrap_lines(job["fact"], 712, fsz)) * (font(fsz).get_height() + 2)
-        card = pygame.Rect(WIDTH // 2 - 380, 250 + int(50 * (1 - appear(st, 0.9, 0.5))), 760, max(180, 54 + fh + 14))
+        card = pygame.Rect(WIDTH // 2 - 380, top + int(50 * (1 - appear(st, 0.9, 0.5))), 760, max(180, 54 + fh + 14))
         s = Surf(card.size, pygame.SRCALPHA)
         s.fill((26, 32, 30, 235))
         surf.blit(s, card)
         aa_rect(surf, GHOST, card, 2, border_radius=10)
         draw_text(surf, "ЧТО ТЫ УЗНАЛ (по-настоящему):", (card.x + 24, card.y + 18), 18, GHOST, bold=True)
         draw_wrapped(surf, job["fact"], (card.x + 24, card.y + 54), card.w - 48, fsz, WHITE)
-        gy = max(470, 250 + card.h + 14)
+        gy = max(470, top + card.h + 14)
         draw_text(surf, self.result_gag, (WIDTH // 2, gy), 17, PURPLE, center=True, plate=True)
         if self.result_gag in LEG_GAGS and st > 1.4:
             kind = LEG_GAG_KIND[LEG_GAGS.index(self.result_gag)]
