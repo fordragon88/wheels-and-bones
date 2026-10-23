@@ -493,6 +493,12 @@ python i18n_work/build_lang.py       # перевод полон
   web_smoke сайта 20/0. Закоммичено (eaef51f, dc8ab5a), **выложено** 18:53 (`build_web.py --deploy`, Pages 4376f41,
   архив 39,1 МБ — +1 МБ за jpg-кадры Iris), web_smoke живого сайта после выкладки 20/0, запушено.
   Бэкап кода — art_tests/game.py.bak_before_audit4.
+  **Словарь почищен** (просьба владельца): 356 мёртвых ключей (375 записей, старые тексты первой версии, Дургин, Ра,
+  Tekna) удалены из `i18n_work/en*.json` и записей `chunk*.json`, `lang_en.json` 3450 → 2852. Критерий: текст ключа не
+  встречается в game.py ни как литерал (AST, включая склеенные из нескольких строк кода), ни как кусок литерала, ни как
+  шаблон f-строки, ни в скриптах art_tests/docs. Первая попытка без проверки по AST-литералам срезала живые многострочные
+  факты — build_lang поймал кириллицу; откатил из git и повторил. Проверки: build_lang 0 кириллицы, keyboard en 0 в
+  озвучке, selftest ×2, extract_new 3 (только консоль). В выгрузке диалогов ушли 3 строки «Other scenes» — старые реплики.
   (game.py, AGENTS.md, README.md, PROMPTS.md, docs/*, i18n_work/en9_fixes99_feedback.json, assets/lang_en.json,
   assets/chair_iris.png, assets/turntable/chair_iris_*, index.json, art_tests/{dialogs_export,ui_playthrough,v3d_sheet}.py,
   art_tests/dialogs/WheelsAndBones_dialogues_v4.xlsx, meshy_models/README.md)

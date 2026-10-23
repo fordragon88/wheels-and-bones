@@ -30,18 +30,6 @@
   "context": "f\"Гильдия: {self.tech_done_count()} из {len(TECH_JOBS)}\" + (\", диплом получен\" if self.exam_passed else \"\"),"
  },
  {
-  "ru": "Кабинет посадки: {0} из {1}",
-  "line": 7789,
-  "fmt": true,
-  "context": "f\"Кабинет посадки: {len(self.seat_done)} из {len(SEAT_CASES)}\" + (\", зачёт сдан\" if self.seat_quiz_ok else \"\")]"
- },
- {
-  "ru": ", зачёт сдан",
-  "line": 7789,
-  "fmt": false,
-  "context": "f\"Кабинет посадки: {len(self.seat_done)} из {len(SEAT_CASES)}\" + (\", зачёт сдан\" if self.seat_quiz_ok else \"\")]"
- },
- {
   "ru": "Прогресс сброшен. Начинаем с начала — настройки сохранены.",
   "line": 7806,
   "fmt": false,

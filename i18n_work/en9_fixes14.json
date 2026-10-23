@@ -18,8 +18,6 @@
  "По руководству Permobil «Seating & Positioning Guide».": "Based on the Permobil \"Seating & Positioning Guide\".",
  "АРТ, МОДЕЛИ И МУЗЫКА": "ART, MODELS & MUSIC",
  "Сделаны с помощью ИИ-инструментов и доработаны нашей командой.": "Made with AI tools, edited by our human team.",
- "Рисунки: ComfyUI и Qwen-Image. Музыка: YuE.": "Images: ComfyUI with Qwen-Image. Music: YuE.",
- "3D-модели колясок фольклорных клиентов: Tripo AI (CC BY 4.0).": "3D models of the folk-tale clients' wheelchairs: Tripo AI (CC BY 4.0).",
  "КОД": "CODE",
  "Написан при небольшой помощи Claude (Anthropic).": "Built with a little help from Claude (Anthropic).",
  "Мартин и Барти передают привет.": "Martin and Barty say hi.",
@@ -30,7 +28,6 @@
  "Учись здесь, а настоящую коляску чини с её мануалом в руках": "Learn here, then fix with your wheelchair's manual in hand,",
  "или доверь квалифицированному технику. Названия брендов принадлежат их владельцам.": "or ask a qualified technician. Brand names belong to their owners.",
  "СПАСИБО": "THANK YOU",
- "Тестирование: Ольга.": "Testing: Olga.",
  "Нашим тестировщикам, каждому волонтёру с гаечным ключом": "To our testers, to every volunteer with a wrench,",
  "и всем, кто помогает коляскам катиться.": "and to everyone who keeps wheelchairs rolling.",
  "Наклон в пространстве (tilt-in-space) сохраняет углы в тазобедренных и коленных суставах, снимая нагрузку с таза и помогая удерживать голову и корпус. Чтобы ручная коляска при этом не опрокинулась, сиденье при наклоне смещается вперёд, а сзади стоят антиопрокидыватели.": "Tilt-in-space keeps the hip and knee angles the same, taking load off the pelvis and helping hold the head and trunk up. So that a manual wheelchair does not tip over, the seat shifts forward as it tilts, and anti-tippers are fitted at the back.",
@@ -40,7 +37,6 @@
  "[ тап — посмотреть гараж ]": "[ tap — view the garage ]",
  "прогресс сохраняется автоматически": "progress saves automatically",
  "протяни пальцем — листать": "swipe to scroll",
- "{0}/{1}   [ тап — далее ]": "{0}/{1}   [ tap — next ]",
  "Меньше": "Less",
  "Больше": "More",
  "Готово": "Done",
@@ -63,8 +59,6 @@
  "нажать, назад, настройки": "press, back, settings",
  "За работой мелодия через минуту стихает до фона": "While you work, the tune fades to a quiet background after a minute",
  "ПОДДЕРЖАТЬ GOAT ♥": "SUPPORT GOAT ♥",
- "Поддержать GOAT (откроется сайт)": "Support GOAT (opens the website)",
- "Спасибо! Страница GOAT открывается в браузере.": "Thank you! The GOAT page is opening in your browser.",
  "ТЕЛО: ВИДНО": "BODY: SHOWN",
  "ТЕЛО: СКРЫТО": "BODY: HIDDEN",
  "Назад (Esc)": "Back (Esc)",
@@ -108,6 +102,5 @@
  "Мельче нельзя.": "Can't zoom out further.",
  "ЛКМ — вращать · колесо или +/− — зум · клик по детали — осмотр · Esc — закрыть": "drag — rotate · scroll or +/− — zoom · click a part — inspect · Esc — close",
  "Спасибо! Страница пожертвований GOAT (PayPal) открывается в браузере.": "Thank you! GOAT's donation page (PayPal) is opening in your browser.",
- "Поддержать GOAT (откроется PayPal)": "Support GOAT (opens PayPal)",
- "загрузка…": "loading…"
+ "Поддержать GOAT (откроется PayPal)": "Support GOAT (opens PayPal)"
 }

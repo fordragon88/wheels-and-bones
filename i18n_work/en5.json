@@ -1,19 +1,13 @@
 {
  "Permobil M3 Corpus (средний привод)": "Permobil M3 Corpus (mid-wheel drive)",
- "Джойстик лечат перезагрузкой, чисткой, проверкой разъёма и калибровкой. Порванный пыльник меняют сразу: влага губит электронику. Сложную электронику доверяй сертифицированному технику. У Моры Permobil M3 Corpus — средний привод, разворот на месте ~1,1 м; шины ведущих колёс держат 200–250 кПа.": "A joystick is fixed by restarting, cleaning, checking the connector and calibrating. A torn boot is replaced right away: moisture ruins electronics. Leave complex electronics to a certified technician. Mora rides a Permobil M3 Corpus — mid-wheel drive, turns in place in about 1.1 m; drive wheel tires take 200–250 kPa.",
  "МОДЕЛЬ: ПО ЧЕРТЕЖУ": "MODEL: BLUEPRINT",
  "Invacare 9000 (стандартная складная)": "Invacare 9000 (standard folding)",
  "Progeo Ego (активная, жёсткая рама)": "Progeo Ego (active, rigid frame)",
- "Progeo Tekna Advance (складная активная)": "Progeo Tekna Advance (active folding)",
  "Progeo Exelle Junior (детская)": "Progeo Exelle Junior (pediatric)",
  "Progeo Noir 2.0 (жёсткая рама)": "Progeo Noir 2.0 (rigid frame)",
  "Invacare 9000 XDT (усиленная, до 159 кг)": "Invacare 9000 XDT (heavy-duty, up to 159 kg)",
- "Quantum Edge 4 (средний привод)": "Quantum Edge 4 (mid-wheel drive)",
  "Drive Trident HD (бариатрическая, передний привод)": "Drive Trident HD (bariatric, front-wheel drive)",
  "Quantum Edge 4 (батареи 22NF / группа 24)": "Quantum Edge 4 (22NF / group 24 batteries)",
  "⟲ тяни — повернуть": "⟲ drag to rotate",
- "МОДЕЛЬ: ДЕТАЛЬНАЯ": "MODEL: DETAILED",
- "ЗВУК И ЭКРАН": "SOUND & SCREEN",
- "В ОКНО  [F11]": "WINDOWED  [F11]",
- "ВО ВЕСЬ ЭКРАН  [F11]": "FULL SCREEN  [F11]"
+ "МОДЕЛЬ: ДЕТАЛЬНАЯ": "MODEL: DETAILED"
 }

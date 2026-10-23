@@ -15,10 +15,7 @@
  "Спустила шина — колесо катится туго и вязнет": "Flat tire — the wheel rolls stiffly and drags",
  "Провисла стропа сиденья под подушкой": "The seat sling under the cushion sags",
  "Ослабла спинка — тролль заваливается": "Loose backrest — the troll slumps",
- "Разъём актуатора недовставлен, жгут прижат": "Actuator connector not fully seated, harness pinched",
- "Сработала заводская блокировка подъёма по наклону": "The factory lift lockout tripped because of tilt",
  "Разряжена батарея — лифту не хватает тока": "Battery is low — not enough power for the lift",
- "Блокировка: наклон или откидка больше 20°": "Lockout: tilt or recline over 20°",
  "Сгорел актуатор лифта — сиденье не двигается": "The lift actuator burned out — the seat won't move",
  "Моторы в свободном ходе — пульт не даёт команд": "Motors in freewheel — the joystick won't send commands",
  "Джойстик залит и загрязнён, пыльник порван": "Joystick got wet and dirty, the boot is torn",
@@ -46,8 +43,6 @@
  "Замёрзла батарея — на холоде не держит напряжение": "The battery froze — it can't hold voltage in the cold",
  "Выключен главный автомат, а в сарае ниже +5 °C": "The main breaker is off, and the shed is below +5 °C",
  "примерки {0}/{1}": "fittings {0}/{1}",
- "примерки {0}/{1} · зачёт ✔": "fittings {0}/{1} · test ✔",
  "Кабинет посадки: примерки {0}/{1}": "Seating Clinic: fittings {0}/{1}",
- "Кабинет посадки: примерки {0}/{1} · зачёт ✔": "Seating Clinic: fittings {0}/{1} · test ✔",
  " · зачёт ✔": " · test ✔"
 }

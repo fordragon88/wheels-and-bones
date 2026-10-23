@@ -96,7 +96,6 @@
  "Enter на кнопке — дальше.": "Enter on the button — continue.",
  "3D-осмотр коляски. Esc — закрыть.": "3D wheelchair inspection. Esc — close.",
  "Нужно попасть в зелёную зону": "Aim for the green zone",
- "Enter на «Качать» — подкачать, потом «Готово».": "Enter on “Pump” to pump, then “Done”.",
  "Стрелки влево-вправо — значение, потом «Проверить».": "Left and right arrows — value, then “Check”.",
  "Простукивай спицы по очереди и слушай: звонкая — в норме, глухая — ослабла.": "Tap the spokes one by one and listen: ringing — fine, dull — loose.",
  "Сначала открой мануал — варианты откроются.": "Open the manual first — the options will unlock.",
@@ -119,7 +118,6 @@
  "Контрастный фон": "High-contrast background",
  "Текст сразу": "Instant text",
  "Озвучка: {0}": "Speech: {0}",
- "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. С экранным чтецом (NVDA, JAWS) игра говорит его голосом.": "The whole game is playable from the keyboard: arrow keys, Tab, Enter. F1 — all keys. With a screen reader (NVDA, JAWS), the game speaks through it.",
  "ДОСТУПНОСТЬ": "ACCESSIBILITY",
  "Вопрос": "Question",
  "Выполнено": "Done",
@@ -152,7 +150,6 @@
  "включена": "on",
  "выключена": "off",
  "голень": "lower leg",
- "до лопаток": "to shoulder blades",
  "до плеч": "to shoulders",
  "F1 — управление с клавиатуры · F2 — озвучка для незрячих": "F1 — keyboard controls · F2 — speech for blind players"
 }
