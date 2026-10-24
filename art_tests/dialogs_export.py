@@ -1,6 +1,6 @@
 """Реплики и тексты игры -> таблица для редактора (английский текст правят в колонке «New English»).
 python art_tests/dialogs_export.py  -> art_tests/dialogs/WheelsAndBones_dialogues.xlsx
-Обратно: python art_tests/dialogs_import.py <файл.xlsx>  (правки -> i18n_work/en9_fixes15_editor.json).
+Обратно: python art_tests/dialogs_import.py <файл.xlsx>  (правки -> i18n_work/en9_fixes99z_editor.json).
 
 Каждая строка привязана к квесту, варианту поломки и шагу (колонки Quest / Variant / Where / Step), чтобы редактор
 видел, к чему относится реплика: подсказка Барти идёт рядом с номером и текстом шага, у ловушек пометка WRONG hint.

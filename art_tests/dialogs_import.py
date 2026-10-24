@@ -1,4 +1,4 @@
-"""Правки редактора из таблицы (art_tests/dialogs_export.py) -> i18n_work/en9_fixes15_editor.json.
+"""Правки редактора из таблицы (art_tests/dialogs_export.py) -> i18n_work/en9_fixes99z_editor.json.
 python art_tests/dialogs_import.py <файл.xlsx | файл.csv из Google Sheets> [--dry]
 Берёт строки, где заполнена колонка «New English»; ключ — скрытая колонка «key» (русский исходник).
 Файл правок сортируется после остальных en*.json, поэтому перекрывает старый перевод. Потом:
@@ -6,7 +6,7 @@ python i18n_work/build_lang.py, selftest и проверки — как посл
 import csv, json, os, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "..", "i18n_work", "en9_fixes15_editor.json")
+OUT = os.path.join(HERE, "..", "i18n_work", "en9_fixes99z_editor.json")   # сортируется ПОСЛЕ en9_fixes99_feedback — правки редактора главнее
 src = sys.argv[1]
 rows = []
 if src.lower().endswith(".csv"):

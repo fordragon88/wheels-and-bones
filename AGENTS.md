@@ -1007,7 +1007,7 @@ python i18n_work/build_lang.py       # перевод полон
   **Таблица диалогов для редактора**: `python art_tests/dialogs_export.py` → art_tests/dialogs/WheelsAndBones_dialogues.xlsx
   (листы How to edit / Dialogues / Story / Job texts; правят только «New English»; скрытый «key» — русский исходник);
   копия — Google-таблица у владельца в «Мой диск» (WheelsAndBones_dialogues). Обратно:
-  `python art_tests/dialogs_import.py <xlsx|csv>` → i18n_work/en9_fixes15_editor.json → build_lang.py.
+  `python art_tests/dialogs_import.py <xlsx|csv>` → i18n_work/en9_fixes99z_editor.json (сортируется после en9_fixes99_feedback — правки редактора главнее) → build_lang.py.
   **web_smoke**: таймауты (state — 15 с, снимок — 20 с, сценарий — 480 с), пауза 8 с после готовности сервера,
   `WNB_URL=… --no-build` — проверить выложенный сайт. В headless-Chromium на этой машине случайный настольный
   сценарий иногда «замерзает» после проверки холста — так же и на ВЫЛОЖЕННОЙ версии (проверено), пошаговые пробы
