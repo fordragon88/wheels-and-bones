@@ -157,7 +157,7 @@ safety проваливает задание.
 | leshy_x8 | Леший | Magic Mobility Extreme X8 (x8) | Meshy | застрял в болоте |
 | ra_emotion | Мумия Сенеб (до 22.10 — Ра) | Quickie Nitrum + Alber e-motion (nitrum_em) | Meshy + ступицы | зарядка обрывается на солнце |
 | gorynych_jazzy | Змей Горыныч | Pride Jazzy 614 (jazzy614) | Meshy | в горку выбивает автомат |
-| truing, t_battery, toe, t_pulse6, t_q6brake | Гильдия | Ego / Edge 4 / Invacare 9000 / Pulse 6 / Q6 Edge (жёлтая классика) | Meshy | правка обода, пара батарей, схождение, VR2, Q-Logic #203 |
+| truing, t_battery, toe, t_pulse6, t_q6brake | Гильдия | Ego / Edge 4 с опущенным сиденьем (edge4b) / Invacare 9000 / Pulse 6 / Q6 Edge (жёлтая классика) | Meshy | правка обода, пара батарей, схождение, VR2, Q-Logic #203 |
 
 Народные коляски (Яга, Ольга, Леший, Сенеб, Горыныч) — кадры в `assets/turntable/index_folk.json`, модели
 деталей — `art_tests/tripo/models/` (в `assets/models` их нет — так задумано, `art_tests/asset_check.py` это знает).
@@ -263,7 +263,8 @@ Windswept, 2017) и таблица Lange & Presperin Pedersen «Positioning Char
   цвета на фото — перекрашивать к одному;
 - владелец кладёт GLB в `meshy_models/<модель>.glb` и пишет «<Модель> Готово».
 
-**2. Модель → игра** (python из meshenv, где fast-simplification и scipy):
+**2. Модель → игра** (нужны scipy и fast-simplification; отдельного venv meshenv на диске больше нет — 24.10 обе библиотеки
+поставлены прямо в системный Python 3.10 `pip install scipy fast-simplification`, скрипты запускаются обычным `python`):
 1. `tripo_convert.py meshy_models/X.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002` — облегчённая копия в осях
    игры (мм, x вперёд, y вверх, пол 0, z вбок, пульт = +z); `--keep-big` отсекает мусорные островки Meshy.
 2. `glb_xform.py meshy_models/X.glb <ключ> height=<мм> --keep-big=0.002` — та же матрица для Blender (полная сетка).
@@ -475,6 +476,20 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-24 — Claude (Fable 5.1) — **Edge 4 с опущенным сиденьем — модель Meshy для Бренны** (`meshy_models/
+  quantum_edge_4_seat_down.glb`, из Downloads; height=1180 — поднятая была 1430, ход лифта ~250 мм). Конвейер §8б: `tripo_convert`
+  → `glb_xform` (ключ **edge4b**) → `tripo_views --raw` (коробки деталей промерены заново: сиденье y 400–570, подлокотники
+  605–695, пульт 625–715/джойстик 690–750, лифт-ножницы сложены 315–415) → SPECS `edge4b` в `tripo_label.py` → `--target 22000`
+  → `assets/models/chair_edge4b_ai(_lod).json` → `blender_frames.py chair_edge4b.png` (`GLB` без recolor: Meshy уже чёрно-красная
+  по перекрашенным рефам) → 36 кадров `assets/turntable/chair_edge4b_*` + запись в index.json → рисунок `assets/chair_edge4b.png`
+  (кадр 0 раскладкой обычного задания — скрипт art_from_turntable с подменой chair_art, 760×600). game.py: `AI_MODELS` +edge4b,
+  `PART_CENTER_FIX` батарея как у edge4, ART `chair_edge4b`, **`t_battery` → `chair_art="chair_edge4b.png"`** (шаги и chair_name
+  прежние, по мануалу Edge 4). У Зикса — по-прежнему поднятая `chair_edge4.png`. Библиотеки scipy и fast-simplification
+  поставлены в системный Python 3.10 (venv meshenv на диске не нашёлся — искал pyvenv.cfg по C: и D:). Проверки: selftest ×2,
+  asset_check, ui 28, keyboard ru/en, switch, pad, rs 2.0, build_lang 0 кириллицы, monkey 0. **Выложено** (Pages e43260c1, архив
+  12,5 МБ), web_smoke сайта 20/0. (meshy_models/*, art_tests/gen3d/edge4b_*,
+  art_tests/tripo_label.py, blender_frames.py, assets/models/chair_edge4b_*, assets/turntable/*, assets/chair_edge4b.png, game.py,
+  meshy_models/README.md, AGENTS.md)
 - 2026-10-24 — Claude (Fable 5.1) — **замечания коллеги-тестировщицы: шаг назад, правки английского, один инструмент
   «Руки и глаза», новые иконки.** (1) «◂» в ремонте — настоящий откат: `step_back` уменьшает `step_idx`, закрывает мини-игру,
   возвращает подсказку и заметку шага; ошибки не списываются (звёзды откатом не накрутить); только обычные задания
@@ -514,7 +529,7 @@ python i18n_work/build_lang.py       # перевод полон
   опускается»; для Бренны («Замена пары батарей») владелец сделает в Meshy ОТДЕЛЬНУЮ Edge 4 с опущенным сиденьем —
   набор референсов `art_tests/meshy_ref/3b_Quantum_Edge_4_seat_down/` (4 вида из фото без лифта, синий → красный как в
   игре; главный — первый, `1_front_3-4`); когда придёт GLB — завести как новую коляску (ключ edge4b, арт
-  `chair_edge4b.png`, LOD через tripo_label — нужен meshenv с fast-simplification, на диске не найден) и переставить
+  `chair_edge4b.png`, LOD через tripo_label) и переставить
   `t_battery` на неё; шаги квеста остаются по мануалу Edge 4. Синяя Q6 Edge 2.0 (`chair_q6edge2`) остаётся в запасе
   без задания (черновик квеста батарей под Q6 Edge 2.0 по OM с. 7/18/20/24–25 — в сессии, не в коде). Проверки после (1)–(4): selftest ×2, asset_check,
   ui, keyboard ru/en, switch, pad, rs×2, build_lang 0 кириллицы, monkey. docs/FEEDBACK_STATUS №90–91, QUESTS* пересобраны.

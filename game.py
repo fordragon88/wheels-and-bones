@@ -2882,6 +2882,7 @@ VECTOR_ART = {
     "gag_leg": _art_gag_leg,
     "chair_power": _chair_power,
     "chair_edge4": _chair_power,
+    "chair_edge4b": _chair_power,
     "chair_trident": _chair_power,
     "chair_elf": lambda: _chair_manual((110, 170, 110)),
     "chair_dwarf": lambda: _chair_manual((160, 118, 74)),
@@ -3329,12 +3330,13 @@ _CHAIR3D_CACHE = {}
 # для окна диагностики.
 AI_MODELS = {f"chair_{k}.png": f"chair_{k}_ai.json"
              for k in ("basic", "troll", "elf", "dwarf", "fairy", "orc", "edge4", "trident", "m3",
-                       "aeroz", "cross6", "iris", "focuscr", "whillc2", "f5", "pulse6", "q6edge")}
+                       "aeroz", "cross6", "iris", "focuscr", "whillc2", "f5", "pulse6", "q6edge", "edge4b")}
 
 
 # Кружок детали — в выбранной точке, а не по граням модели: у Edge 4 «батарея» — короб с боковинами у самых
 # колёс, кружок садился на шину и при повороте прыгал с одной стороны на другую; ставим на заднюю стенку короба.
-PART_CENTER_FIX = {"chair_edge4.png": {"battery": [(-200.0, 230.0, 0.0)]}}
+PART_CENTER_FIX = {"chair_edge4.png": {"battery": [(-200.0, 230.0, 0.0)]},
+                   "chair_edge4b.png": {"battery": [(-200.0, 230.0, 0.0)]}}   # Edge 4 с опущенным сиденьем (Бренна)
 
 
 def get_ai_chair3d(chair_art, lod=False):
@@ -6298,7 +6300,7 @@ TECH_JOBS = [
     # === Т2. Замена пары батарей: safety-шаги (питание, порядок клемм) ===
     dict(
         id="t_battery", track="tech", kind="power", client="Мастерица Бренна",
-        client_art="master.png", chair_art="chair_edge4.png",
+        client_art="master.png", chair_art="chair_edge4b.png",   # Edge 4 с ОПУЩЕННЫМ сиденьем (Meshy 24.10; у Зикса — поднятое)
         chair_name="Quantum Edge 4 (батареи 22NF / группа 24)",
         title="Замена пары батарей",
         symptom="Экзаменационная коляска Гильдии: батареи четвёртый год не держат заряд. "
