@@ -1,4 +1,8 @@
 # КОЛЁСА И КОСТИ — как генерируется арт
+> **Актуальность (24.10.2026).** Этот файл описывает первый конвейер арта (ComfyUI, Qwen Image, коляски «по чертежу»).
+> Сейчас коляски — 3D-модели Meshy, снятые кадрами в Blender (AGENTS.md §8б), а новые портреты и иконки инструментов рисует
+> Codex по ТЗ `art_tests/codex_*/BRIEF.md`. Фоны, Мартин, призраки, Мортимер и ранние клиенты — по-прежнему из ComfyUI.
+
 
 Весь арт игры сделан локально в ComfyUI на **Qwen Image 2.1** (стиль выбран после
 сравнения с Flux 2 Klein + LoRA, Hunyuan Image 3 и Krea 2). Исходники и рабочие
@@ -104,6 +108,18 @@ background, no room, no text.
 | `client_golem.png` | Грунд — каменный голем, мох, светящиеся руны-глаза | электро |
 | `client_centaur.png` | Тавр — кентавр-курьер, кепка, зелёная рубашка, сумка; задние ноги на колёсной тележке | своя тележка |
 | `client_q6edge2.png` | Граф Дракулеску — вампир-библиотекарь: бледная серо-лиловая кожа, монокль, чёрный плащ с красной подкладкой, бордовый жилет, жабо с рубином, стопка старых книг на коленях, летучая мышь на подголовнике; **портрет — Codex** (`art_tests/codex_dracula/BRIEF.md`, 24.10) | Quantum Q6 Edge 2.0, синяя (рендер нашей модели — главный референс) |
+| `client_aeroz.png` | Юки — кицунэ-лисица, рыжая, несколько хвостов | TiLite Aero Z (3D Meshy) |
+| `client_cross6.png` | Ивушка — дриада, кора и листья, зелёные волосы | Etac Cross 6 (3D Meshy) |
+| `client_f5.png` | Матильда — барсучиха-пасечница, фартук, дымарь | Permobil F5 Corpus (3D Meshy) |
+| `client_focuscr.png`, `client_focuscr_grandson.png` | Агата — пожилая сова-астроном, очки, мантия в звёздах; с внуком-филином; **портреты — Codex** (`art_tests/codex_agata*/`) | Ki Mobility Focus CR, наклон 20° (3D Meshy) |
+| `client_iris.png`, `client_iris_mom.png` | Искра — дракончик; с мамой-драконихой за спинкой | Zippie Iris, наклон ≥ 45° (процедурная 3D) |
+| `client_whillc2.png` | Сайра — ящерка-картограф, тубус с картами | WHILL Model C2 (3D Meshy) |
+| `client_yaga.png` | Баба Яга — ступа заменена коляской, платок, клюка | Vermeiren D100 (3D Meshy) |
+| `client_rusalka.png` | Ольга — русалка, хвост, мокрые волосы | Panthera X3 (3D Meshy) |
+| `client_leshy.png` | Леший — мох, ветки, болотная тина | Magic Mobility Extreme X8 (3D Meshy) |
+| `client_mummy.png` | Сенеб — мумия в бинтах (до 22.10 — Ра) | Quickie Nitrum + Alber e-motion (3D Meshy) |
+| `client_gorynych.png` | Змей Горыныч — три головы | Pride Jazzy 614 (3D Meshy) |
+| `chair_*.png` (25 файлов) | рисунки колясок — кадр 0 кадров поворота 3D-моделей (`art_from_turntable.py`); список моделей и заданий — `meshy_models/README.md` | — |
 
 ## Грабли, на которые уже наступили
 

@@ -22,7 +22,7 @@
 | `tilite_aero_z.glb` | TiLite Aero Z (антиопрокидыватели добавлены) | кицунэ Юки (`aeroz_lock`), `chair_aeroz.png` | 2026-10-23 |
 | `etac_cross_6.glb` | Etac Cross 6 | дриада Ивушка (`cross6_back`), `chair_cross6.png` | 2026-10-23 |
 | `progeo_noir_2.glb` | Progeo Noir 2.0 | орк Гра (`bearing`), `chair_orc.png` | 2026-10-23 |
-| `progeo_ego.glb` | Progeo Ego | эльфийка Аэлин (`caster`), `chair_elf.png` | 2026-10-23 |
+| `progeo_ego.glb` | Progeo Ego | эльфийка Аэлин (`caster`) и Гильдия «Правка обода» (`truing`), `chair_elf.png` | 2026-10-23 |
 | `quickie_2.glb` | Quickie 2 | оборотень Вольф (`brake`, бывший гном Дургин), `chair_dwarf.png` | 2026-10-23 |
 | `quantum_q6_edge_classic.glb` | Quantum Q6 Edge классическая (жёлтая): крепление пульта дорисовано (tubes), висящие провода, ремешок и зажим убраны (move delete, петля жгута — `seed`) | Гильдия (`t_q6brake`), `chair_q6edge.png` | 2026-10-23 |
 | `quantum_edge_4_seat_down.glb` | Quantum Edge 4 с ОПУЩЕННЫМ сиденьем (рефы `art_tests/meshy_ref/3b_Quantum_Edge_4_seat_down/` — фото без лифта; height=1180; чёрная с красным уже у Meshy, без recolor) | Гильдия, Бренна «Замена пары батарей» (`t_battery`), `chair_edge4b.png`; у Зикса остаётся поднятая `chair_edge4.png` | 2026-10-24 |

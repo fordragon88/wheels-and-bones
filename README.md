@@ -138,9 +138,9 @@ Guide*.
   universal "90-90-90" recipe); measurements; pressure and tilt-in-space (≥ 45° for pressure relief; recline
   without tilt means shear).
 - **Fitting:** the client sits in the chair, side view; sliders change seat depth, footrest length, backrest
-  height and angle, tilt — the posture and pressure zones change live. An X-ray skeleton view, "show the
-  target", a front view with three-point support. Six fitting clients.
-- **Quiz:** 6 questions on postures; pass with 5 correct.
+  height and angle, tilt — the posture and pressure zones change live. "Show the target", front and top
+  views (pelvic obliquity and rotation) with three-point support. Nine fitting clients.
+- **Quiz:** 7 questions on postures; pass with 6 correct.
 
 ### Running the game
 
@@ -188,7 +188,7 @@ spokes are checked by ear.
 The **gear** in the top-right corner of every screen opens the settings menu:
 
 - **SOUND** — master, music, effects and ambience volume, mute (or the **M** key);
-- **GRAPHICS** — windowed / fullscreen, resolution (AUTO, 1280×720 … 2560×1440, whatever fits your monitor),
+- **GRAPHICS** — windowed / fullscreen, resolution (AUTO, 1280×720 … 3840×2160, whatever fits your monitor),
   glow and GPU-accelerated 3D; **F11** / **Alt+Enter** toggles fullscreen;
 - **ACCESSIBILITY** — see above.
 - **GAME** — progress summary and **RESET PROGRESS** (asks yes/no; settings are kept).
@@ -236,7 +236,7 @@ python build_web.py --serve     # build and serve locally at http://127.0.0.1:80
 
 The browser version is **English only**, has no 3D models (the chair pictures are used instead) and keeps saves
 in localStorage; speech goes through an aria-live region on the page (plus the browser voice on F2). It is
-currently **not public** and will be published later with `python build_web.py --on`.
+**public**: https://fordragon88.github.io/wheels-and-bones-web/ (GitHub Pages; `python build_web.py --deploy` rebuilds and publishes).
 
 ### Building a single Windows exe
 
@@ -255,12 +255,14 @@ that no Cyrillic is left on English screens.
 ### Art
 
 The main art in `assets/` (backgrounds, Martin, the ghosts, Mortimer, clients in their chairs, the wheelchairs,
-tool icons) was generated locally in ComfyUI with **Qwen Image** in one clean cartoon style — the pipeline and
-prompts are described in **[PROMPTS.md](PROMPTS.md)**, sources and scripts are in `art_tests/`. The wheelchairs
-are **drawn from blueprints** in real proportions and only restyled by the model, so the click hotspots land on
-the right parts. The 3D models are either procedural (built in code, real millimetres) or made by our team in Meshy
-(`meshy_models/`). To replace a picture, drop a
-PNG with the same name into `assets/`; `python game.py --assets` prints the full list.
+tool icons) is in one clean cartoon style: backgrounds and most characters were generated locally in ComfyUI
+(**Qwen Image**), newer portraits and tool icons were drawn by Codex (GPT image generation) from written briefs
+(`art_tests/codex_*/BRIEF.md`). **Wheelchairs are real 3D models**: made by our team in Meshy from photo
+references (`meshy_models/`), cleaned up in Blender and rendered into 36 turntable frames (`assets/turntable/`);
+the chair picture in each job is frame 0 of its model, so the click hotspots and the 3D part centres always
+agree (only the Zippie Iris is a procedural model built in code). The pipeline is described in AGENTS.md §8б;
+the older ComfyUI pipeline and the character table are in **[PROMPTS.md](PROMPTS.md)**. To replace a picture,
+drop a PNG with the same name into `assets/`; `python game.py --assets` prints the full list.
 
 ### Checks
 
@@ -475,9 +477,9 @@ Pygame. Один файл, играть можно мышью или **толь�
   наклон сиденья (≥ 45° для разгрузки, откидывание без наклона = сдвиг тканей).
 - **Примерка:** клиент в коляске сбоку; ползунками меняешь глубину сиденья, длину
   подножки, высоту и угол спинки, наклон — поза фигуры и зоны давления меняются вживую.
-  Скелет-«рентген», «показать норму», вид спереди с тремя точками опоры; шесть клиентов.
+  «Показать норму», виды спереди и сверху (перекос и поворот таза) с тремя точками опоры; девять клиентов.
   Мерки клиента и карта терапевта даны: игрок — техник, который настраивает коляску.
-- **Проверь себя:** 6 вопросов по позам, зачёт — 5 верных.
+- **Проверь себя:** 7 вопросов по позам, зачёт — 6 верных.
 
 ### Запуск
 
@@ -527,7 +529,7 @@ python game.py --feedback   # показать замечания игроков
 - **ЗВУК** — общая громкость, музыка, эффекты и атмосфера сцен отдельными ползунками, «без звука»
   (или клавиша **M**);
 - **ГРАФИКА** — режим (в окне / весь экран), разрешение (АВТО, 1280×720, 1600×900, 1920×1080,
-  2560×1440 — что помещается на монитор), свечение и 3D через видеокарту. Раскладка задана в 1280×720,
+  2560×1440, 3840×2160 — что помещается на монитор), свечение и 3D через видеокарту. Раскладка задана в 1280×720,
   а рисуется всё в выбранном разрешении; кадр вписывается в окно по центру без искажений, окно можно
   тянуть и разворачивать. **F11** / **Alt+Enter** — весь экран;
 - **ДОСТУПНОСТЬ** — см. выше.
@@ -589,27 +591,24 @@ python build_web.py --serve     # собрать и запустить лока�
 ```
 
 Браузерная версия — **только на английском**, без 3D-моделей (вместо них рисунки колясок), сохранения —
-в localStorage; озвучка — через aria-live на странице (плюс голос браузера по F2). Сейчас она **скрыта**
-и будет опубликована позже командой `python build_web.py --on`.
+в localStorage; озвучка — через aria-live на странице (плюс голос браузера по F2). Она **опубликована**:
+https://fordragon88.github.io/wheels-and-bones-web/ (GitHub Pages; пересобрать и выложить — `python build_web.py --deploy`).
 
-### Арт: сгенерированный в ComfyUI + векторный запасной
+### Арт: 3D-модели Meshy, ComfyUI и Codex + векторный запасной
 
 Основной арт — в папке **`assets/`**: фоны, Мартин, два призрака, Мортимер, клиенты
-в своих колясках, учебные коляски и иконки инструментов. Всё сделано локально в ComfyUI на
-**Qwen Image** в едином чистом мультяшном стиле — конвейер, промпты и грабли описаны в
-**[PROMPTS.md](PROMPTS.md)**, исходники и скрипты — в `art_tests/`.
+в своих колясках, учебные коляски и иконки инструментов. Единый чистый мультяшный стиль: фоны и большинство
+персонажей сделаны локально в ComfyUI на **Qwen Image**, новые портреты и иконки инструментов нарисовал Codex
+(генерация картинок GPT) по письменным ТЗ (`art_tests/codex_*/BRIEF.md`).
 
-**Коляски — по чертежу.** Учебные коляски не «придуманы» нейросетью: сначала
-рисуется чертёж в реальных пропорциях (`art_tests/chair_skeleton.py`,
-`art_tests/power_skeleton.py`), модель только перерисовывает его в стиле.
-`art_tests/build_assets.py` вписывает каждую коляску в габарит чертежа, поэтому
-хотспоты (`CHAIR_HOTSPOTS`) попадают в детали на любой коляске своего типа.
+**Коляски — настоящие 3D-модели.** Их делает наша команда в Meshy по фотореференсам (`meshy_models/`), затем
+модель чистится в Blender и снимается в 36 кадров поворота (`assets/turntable/`); рисунок коляски в задании — это
+кадр 0 её модели, поэтому кружки деталей и центры 3D всегда совпадают. Только Zippie Iris (Искра) — процедурная
+модель, построенная кодом. Конвейер описан в AGENTS.md §8б; старый конвейер ComfyUI и таблица персонажей — в
+**[PROMPTS.md](PROMPTS.md)**.
 
-**Без `assets/` игра тоже работает**: всё рисуется векторным кодом (`VECTOR_ART`),
-и векторные схемы колясок построены по тому же чертежу — механика и хотспоты
-совпадают с PNG. **3D-модели** колясок — либо процедурные (строятся кодом в реальных мм, `assets/models/`,
-сборка — `art_tests/build_9_chairs.py`, `art_tests/build_new_chairs.py`), либо сделаны нашей командой в Meshy
-(`meshy_models/`).
+**Без `assets/` игра тоже работает**: всё рисуется векторным кодом (`VECTOR_ART`) — механика и хотспоты
+совпадают с PNG.
 
 Заменить картинку — положить PNG с тем же именем в `assets/` (кода не трогать).
 Персонажи — с прозрачным фоном, вписываются без искажения пропорций.

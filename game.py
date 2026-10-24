@@ -7157,6 +7157,9 @@ class Speech:
         if IS_WEB:
             self.kind, self.name = "web", "web"
             return
+        if os.environ.get("SDL_AUDIODRIVER") == "dummy":   # тесты и проверки (§10а) — без голоса Windows в наушниках
+            self.kind, self.name = "mute", "mute"           # владельца (24.10); журнал say() ведётся как обычно
+            return
         try:
             from cytolk import tolk
             tolk.load()
@@ -7203,7 +7206,7 @@ class Speech:
             web_js(f"window.wnbSay && wnbSay({json.dumps(text)}, {str(bool(interrupt)).lower()}, "
                    f"{str(bool(A11Y['on'])).lower()})")
             return
-        if not A11Y["on"] or not self.kind:
+        if not A11Y["on"] or not self.kind or self.kind == "mute":
             return
         try:
             if self.kind == "tolk":
@@ -8759,7 +8762,8 @@ class Game:
         self.phase = "repair" if tech else "diagnose"
         self.step_idx = 0
         self.done_steps = set()
-        self.step_order = [s["id"] for s in self.cur["steps"]] if tech else []
+        self.step_order = [s["id"] for s in self.cur["steps"]] if tech else []
+        self.tt_show = None                      # коляска Гильдии кадрами: ракурс заново (аудит 24.10)
         if tech:
             random.shuffle(self.step_order)   # порядок карточек не подсказывает решение
         self.sel_tool = None
@@ -9251,6 +9255,7 @@ class Game:
                          f"безопасности: «{pre['instr']}». " + (pre.get("failnote") or ""))
         self.spec_pending = None
         self.show_manual = False
+        self.mini_pending = None
         snd("fail")
         self._fail_zap = step.get("part") in ELECTRIC_PARTS or pre.get("part") in ELECTRIC_PARTS
         if self._fail_zap:
@@ -11263,7 +11268,7 @@ class Game:
         br = self._top_back_rect()
         left = br.right + 8 if br else 8                        # не под кнопкой «◂ Назад»
         w = WIDTH - left - 8 - reserve
-        for tsz in (16, 15, 14, 13, 12):                       # сообщение — в полосе заголовка (до 52 px), не на задании
+        for tsz in (16, 15, 14, 13, 12, 11):                   # сообщение — в полосе заголовка (до 52 px), не на задании
             lines = wrap_lines(self.toast, w - 40, tsz)
             lh = font(tsz).get_height() + 1
             if 8 + len(lines) * lh <= 50:
@@ -11489,7 +11494,7 @@ class Game:
                 if nl <= 2 and tl >= 1:
                     break
             ny = draw_wrapped(surf, job["client"], (r.x + 12, r.y + 162), r.w - 24, nsz, WHITE, max_lines=2, line_gap=0)
-            draw_wrapped(surf, job["title"], (r.x + 12, ny + 2), r.w - 24, 12, GREY, max_lines=max(1, min(3 - min(nl, 2), tl)))
+            draw_wrapped(surf, job["title"], (r.x + 12, ny + 2), r.w - 24, 12, GREY, max_lines=max(1, min(4 - min(nl, 2), tl)))   # имя в 2 строки — поломке до 2 строк, если влезает (аудит 24.10)
             power = job.get("kind") == "power"
             draw_text(surf, "ЭЛЕКТРО" if power else "РУЧНАЯ",
                       (r.x + 12, r.bottom - 22), 12, CYAN if power else AMBER, bold=True)
@@ -11995,7 +12000,7 @@ class Game:
             self._draw_necro_thread(surf, (staff_x, staff_y), (tx, ty), col=col_t, active=is_act, phase=i * 1.3)
 
     _SEAT_RIGS = None
-    SEAT_BODY_ON = False                # тела клиентов в «Рентгене» (в работе: кукла из рисунков) — пока выкл
+    SEAT_BODY_ON = False                # тела клиентов в «Рентгене» — идея закрыта 24.10 (коллега владельца); код куклы оставлен выкл. Было: (в работе: кукла из рисунков) — пока выкл
     SEAT_XRAY = False                   # тело — голубоватый «рентгеновский» силуэт вместо цветного рисунка
     SEAT_SLIM = 0.65                    # тело клиента поперёк костей и голова — на 35 % меньше рисунка
 
@@ -14511,8 +14516,8 @@ class Game:
             else:
                 self._draw_ride(surf)
 
-        if self.v3d is None:                         # анимация инструмента — под окнами (мануал, спека, мини)
-            self._draw_action(surf)
+        if self.v3d is None and self.phase == "repair":   # анимация инструмента — под окнами (мануал, спека, мини);
+            self._draw_action(surf)                      # в «Проверке» не рисуем — иначе иконка висит над коляской (аудит 24.10)
         if self.mini_pending:
             self._draw_mini_overlay(surf, mouse)
         if self.spec_pending:
@@ -14813,9 +14818,19 @@ class Game:
         aa_rect(surf, (16, 24, 18), disp, border_radius=8)
         aa_rect(surf, GOOD, disp, 2, border_radius=8)
         rsz = 34                                      # показание прибора — целиком в табло
-        while rsz > 16 and font(rsz, True).size(tr(cfg["reading"]))[0] > disp.w - 24:
+        while rsz > 14 and font(rsz, True).size(tr(cfg["reading"]))[0] > disp.w - 24:
             rsz -= 1
-        draw_text(surf, cfg["reading"], disp.center, rsz, GOOD, bold=True, center=True)
+        if font(rsz, True).size(tr(cfg["reading"]))[0] <= disp.w - 24:
+            draw_text(surf, cfg["reading"], disp.center, rsz, GOOD, bold=True, center=True)
+        else:                                         # длинное показание («ЖЁЛТЫЙ · «скорость снижена» · кодов нет»,
+            for rsz in (16, 15, 14, 13, 12):          # Яга) — в две строки (аудит 24.10)
+                lines = wrap_lines(tr(cfg["reading"]), disp.w - 24, rsz)
+                if len(lines) <= 2 and all(font(rsz, True).size(ln)[0] <= disp.w - 24 for ln in lines):
+                    break
+            lh = font(rsz, True).get_height()
+            for i, ln in enumerate(lines[:2]):
+                draw_text(surf, ln, (disp.centerx, disp.centery + (i - (len(lines[:2]) - 1) / 2) * (lh + 1)), rsz, GOOD,
+                          bold=True, center=True)
         if cfg.get("sub"):                            # пояснение — переносом, в пределах панели
             draw_wrapped(surf, cfg["sub"], (p.centerx, disp.bottom + 6), p.w - 60, 13, GREY, center=True, max_lines=2)
         for i, rect in self._mini_meter_rects():
