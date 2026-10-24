@@ -508,7 +508,9 @@ python i18n_work/build_lang.py       # перевод полон
   кронштейна (232,616→656); подножки `d=(0,35,0)`, стойка (270,200)→(322,105) и поперечина под площадками. Кадры и арт
   перерисованы (арт — кадр 0 на место прежнего, 760×600), `quantum_q6_edge_fixed.glb`; облегчённая модель
   `chair_q6edge_ai.json` осталась от классики (у Гильдии ни 3D-окна, ни хотспотов — арт только на карточках). Иконка
-  рук — v2 «две руки и глаз» (`tool_hands_v2.png`, v1 — retired). **Выложено** (Pages 1cf45e49), web_smoke сайта 20/0. Проверки после (1)–(4): selftest ×2, asset_check,
+  рук — v2 «две руки и глаз» (`tool_hands_v2.png`, v1 — retired). **Выложено** (Pages 1cf45e49), web_smoke сайта 20/0.
+  Затем классика возвращена на «#203», данные без «eyes», коляска на экранах Гильдии — **выложено** (Pages 22db28bb),
+  web_smoke сайта 20/0; синяя 2.0 ждёт решения владельца (батареи Бренны — Edge 4 или 2.0 с переписыванием квеста). Проверки после (1)–(4): selftest ×2, asset_check,
   ui, keyboard ru/en, switch, pad, rs×2, build_lang 0 кириллицы, monkey. docs/FEEDBACK_STATUS №90–91, QUESTS* пересобраны.
   (game.py, assets/tool_*.png, i18n_work/en9_fixes99z_editor.json, en9_fixes99_feedback.json, assets/lang_en.json,
   art_tests/dialogs_import.py, dialogs_export.py, docs/*, AGENTS.md)
