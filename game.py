@@ -1325,7 +1325,7 @@ def tool_icon(tid, size):
             surf = Surf((size, size), pygame.SRCALPHA)
             aa_circle(surf, (60, 56, 74), (size // 2, size // 2), size // 2 - 1)
             aa_circle(surf, AMBER, (size // 2, size // 2), size // 2 - 1, 2)
-            label = tr(TOOLS[tid][0])[:2]
+            label = tr(TOOLS.get(tid, (tid,))[0])[:2]          # "eyes" — только анимация осмотра, в TOOLS его нет
             img = font(max(10, size // 3), True).render(label, True, WHITE)
             surf.blit(img, img.get_rect(center=(size // 2, size // 2)))
         _tool_icon_cache[key] = surf
@@ -3951,8 +3951,7 @@ def project_point(p, yaw, pitch, rect, zoom=1.0, center=None):
 #  Инструменты и детали (реальные)
 # ----------------------------------------------------------------------------- #
 TOOLS = {
-    "hands":     ("Руки", "Снять/поставить, нажать, проверить рукой"),
-    "eyes":      ("Глаза", "Посмотреть: индикатор, экран, код ошибки, износ, трещины"),
+    "hands":     ("Руки и глаза", "Потрогать, нажать, снять/поставить; посмотреть: индикатор, экран, код, износ"),
     "allen":     ("Шестигранник", "Большинство болтов коляски (бери точный размер!)"),
     "socket":    ("Торцевой ключ", "Ось и гайки колеса"),
     "wrench":    ("Разводной ключ", "Подтянуть узлы, шток кастора"),
@@ -6676,6 +6675,21 @@ for _job in JOBS:
 
 ALL_JOBS = JOBS + TECH_JOBS
 
+# «Глаза» и «Руки» — один инструмент (просьба тестировщицы, 24.10): в данных шаги по-прежнему написаны с "eyes"
+# (так читается, что шаг — осмотр), но в игре инструмент один — "hands". У шага остаётся anim="eyes": анимация
+# и звук осмотра прежние. Из палитр Гильдии «глаза» убираются.
+MERGED_TOOLS = {"eyes": "hands"}
+for _job in ALL_JOBS:
+    for _v in [_job] + _job.get("variants", []):
+        for _st in _v.get("steps", []):
+            if _st.get("tool") in MERGED_TOOLS:
+                _st["anim"] = _st["tool"]
+                _st["tool"] = MERGED_TOOLS[_st["tool"]]
+            if _st.get("alt_tools"):
+                _st["alt_tools"] = tuple(MERGED_TOOLS.get(t, t) for t in _st["alt_tools"] if MERGED_TOOLS.get(t, t) != _st["tool"])
+    if _job.get("tools"):
+        _job["tools"] = [t for t in _job["tools"] if t not in MERGED_TOOLS]
+
 # Сноски из мануалов (карточка внизу справа при наведении на деталь в ремонте): задание -> {деталь: (мануал,
 # страница или None, текст)}. Только то, что помогает в ремонте и чего нет в общем шаге: особенности этой модели,
 # размеры, усилия, давление, где кнопка. Источник каждой — в «# source:» над заданием.
@@ -8609,10 +8623,6 @@ class Game:
                           f"{TOOLS.get(tool_id, (tool_id,))[0]} → {PARTS.get(part_id, part_id)}", step.get("wrongmsg", ""))
         self._start_action(tool_id, False, part=part_id)
         msg = step.get("wrongmsg", "")
-        if step["tool"] == "eyes" and tool_id == "hands" and (part_id == step["part"] or part_id in step.get("alt", ())):
-            msg = "Тут нужно посмотреть, а не трогать: возьми «Глаза»."
-        elif step["tool"] == "hands" and tool_id == "eyes" and (part_id == step["part"] or part_id in step.get("alt", ())):
-            msg = "Посмотрел — теперь нужно сделать руками: возьми «Руки»."
         if not msg:
             if tool_id != step["tool"] and part_id == step["part"]:
                 msg = f"Деталь верная, но инструмент не тот. Нужен: {TOOLS[step['tool']][0]}."
@@ -8738,7 +8748,7 @@ class Game:
                    AMBER, 7, sticky=True)
 
     def complete_base_step(self, step):
-        self._start_action(step["tool"], True, part=step["part"])
+        self._start_action(step.get("anim") or step["tool"], True, part=step["part"])   # anim="eyes": осмотр глазами
         self.last_note = step.get("note", "")
         snd("ok")
         self.flash("Шаг выполнен. " + (self.last_note or ""), GOOD, 4, sticky=True)
@@ -8843,7 +8853,7 @@ class Game:
         return "ok"
 
     def complete_tech_step(self, step):
-        self._start_action(step["tool"], True, sid=step["id"])
+        self._start_action(step.get("anim") or step["tool"], True, sid=step["id"])
         self.done_steps.add(step["id"])
         self.sel_tool = None
         self.spec_pending = None
@@ -15026,7 +15036,7 @@ def run_selftest():
     if g.do_action(_st0["tool"], _st0["part"]) == "mini":
         _solve_mini(g)
     assert g.step_idx == 1
-    g.do_action("eyes" if _st0["tool"] != "eyes" else "hands", "frame")       # ошибка на 2-м шаге
+    g.do_action("lube" if _st0["tool"] != "lube" else "hands", "frame")       # ошибка на 2-м шаге
     _m = g.mistakes
     g.step_back()
     assert g.step_idx == 0 and g.mistakes == _m and g.mini_pending is None, "«◂» возвращает на шаг, ошибки не трогает"
@@ -15126,7 +15136,7 @@ def run_selftest():
     # другие верные ответы из отзывов игроков (alt — детали, alt_tools — инструменты) засчитываются
     for jid, n, tool, part in (("yaga_d100", 1, "hands", "axle"), ("yaga_d100", 8, "hands", "brake"),
                                ("cushion", 3, "hands", "cushion"), ("ra_emotion", 2, "charger", "rear_wheel"),
-                               ("leshy_x8", 7, "eyes", "freewheel"), ("olga_x3", 12, "socket", "brake"),
+                               ("leshy_x8", 7, "hands", "freewheel"), ("olga_x3", 12, "socket", "brake"),
                                ("spokes", 4, "socket", "bolts"), ("spokes", 4, "wrench", "bolts")):
         g = Game(headless=True)
         g.start_job(jid, variant=0)

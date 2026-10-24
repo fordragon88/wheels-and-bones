@@ -2852,5 +2852,7 @@
  "Зикс: «Пульт подскажет: зелёный — можно, жёлтый — сиденье поднято, ползём, красный — блокировка.»": "Zix: “The controller tells you: green — go, yellow — seat's up, we crawl, red — lockout.”",
  "Зикс: «Гайки, я вас достал! Теперь — вниз и за порог!»": "Zix: “Nuts, I got you! Now — down and over the threshold!”",
  "Шаг назад": "Step back",
- "Вернуться на шаг назад": "Go back one step"
+ "Вернуться на шаг назад": "Go back one step",
+ "Руки и глаза": "Hands & eyes",
+ "Потрогать, нажать, снять/поставить; посмотреть: индикатор, экран, код, износ": "Touch, press, remove/refit; look: indicator, screen, error code, wear"
 }
