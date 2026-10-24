@@ -23,6 +23,10 @@ SETS = {
     "3_Quantum_Edge_4": ("edge4", [("00_Quantum-Edge-4.jpg", "1_front_3-4"), ("03_Quantum-Edge-left-view.jpg", "2_side"),
                                    ("04_Quantum-Edge-right-view.jpg", "3_other_side")],   # вида сзади у новой Edge 4 нет нигде
                          False, (228, 2, 30)),                         # синий -> красный, как в игре
+    "3b_Quantum_Edge_4_seat_down": ("edge4", [("00_Quantum-Edge-4.jpg", "1_front_3-4"), ("03_Quantum-Edge-left-view.jpg", "2_side"),
+                                              ("04_Quantum-Edge-right-view.jpg", "3_other_side"), ("05_Quantum-Edge-4-base-view.jpg", "4_front_base")],
+                                     False, (228, 2, 30)),             # 24.10: Edge 4 с ОПУЩЕННЫМ сиденьем для Бренны («Замена пары
+                                              # батарей»): только фото без лифта (01/02 elevated исключены) — в прошлой модели Meshy поднял сиденье
     "4_Quantum_Q6_Edge": ("q6edge2", [("01_PWR01076Front.jpg", "1_front"), ("02_PWR01076RightSide.jpg", "2_side"),
                                       ("05_PWR01076Back.jpg", "3_back"), ("06_PWR01076LeftSide.jpg", "4_other_side")],
                           False, None),                         # студийные фото магазина (Q6 Edge 2.0), белый фон

@@ -510,7 +510,13 @@ python i18n_work/build_lang.py       # перевод полон
   `chair_q6edge_ai.json` осталась от классики (у Гильдии ни 3D-окна, ни хотспотов — арт только на карточках). Иконка
   рук — v2 «две руки и глаз» (`tool_hands_v2.png`, v1 — retired). **Выложено** (Pages 1cf45e49), web_smoke сайта 20/0.
   Затем классика возвращена на «#203», данные без «eyes», коляска на экранах Гильдии — **выложено** (Pages 22db28bb),
-  web_smoke сайта 20/0; синяя 2.0 ждёт решения владельца (батареи Бренны — Edge 4 или 2.0 с переписыванием квеста). Проверки после (1)–(4): selftest ×2, asset_check,
+  web_smoke сайта 20/0. **Решения владельца (24.10, вечер):** Зиксу оставить Edge 4 с поднятым сиденьем и «лифт не
+  опускается»; для Бренны («Замена пары батарей») владелец сделает в Meshy ОТДЕЛЬНУЮ Edge 4 с опущенным сиденьем —
+  набор референсов `art_tests/meshy_ref/3b_Quantum_Edge_4_seat_down/` (4 вида из фото без лифта, синий → красный как в
+  игре; главный — первый, `1_front_3-4`); когда придёт GLB — завести как новую коляску (ключ edge4b, арт
+  `chair_edge4b.png`, LOD через tripo_label — нужен meshenv с fast-simplification, на диске не найден) и переставить
+  `t_battery` на неё; шаги квеста остаются по мануалу Edge 4. Синяя Q6 Edge 2.0 (`chair_q6edge2`) остаётся в запасе
+  без задания (черновик квеста батарей под Q6 Edge 2.0 по OM с. 7/18/20/24–25 — в сессии, не в коде). Проверки после (1)–(4): selftest ×2, asset_check,
   ui, keyboard ru/en, switch, pad, rs×2, build_lang 0 кириллицы, monkey. docs/FEEDBACK_STATUS №90–91, QUESTS* пересобраны.
   (game.py, assets/tool_*.png, i18n_work/en9_fixes99z_editor.json, en9_fixes99_feedback.json, assets/lang_en.json,
   art_tests/dialogs_import.py, dialogs_export.py, docs/*, AGENTS.md)
