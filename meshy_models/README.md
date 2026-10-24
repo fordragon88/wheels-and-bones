@@ -24,8 +24,8 @@
 | `progeo_noir_2.glb` | Progeo Noir 2.0 | орк Гра (`bearing`), `chair_orc.png` | 2026-10-23 |
 | `progeo_ego.glb` | Progeo Ego | эльфийка Аэлин (`caster`), `chair_elf.png` | 2026-10-23 |
 | `quickie_2.glb` | Quickie 2 | оборотень Вольф (`brake`, бывший гном Дургин), `chair_dwarf.png` | 2026-10-23 |
-| `quantum_q6_edge_classic.glb` | Quantum Q6 Edge классическая (жёлтая) — была в игре 23.10 (пульт на кронштейне tubes, провода/ремешок убраны); с 24.10 заменена на 2.0, арт — art_tests/retired/chair_q6edge_classic_yellow_2310.png | — | 2026-10-23 |
-| `quantum_q6_edge.glb` | **Quantum Q6 Edge 2.0 (синяя) — в игре с 24.10** (выбор владельца): пульт выровнен и придвинут к подушке подлокотника, стояк с кронштейна (`tubes`), две площадки подножек подняты с пола на центральную стойку с поперечиной (по фото `_raw/q6edge2`) | Гильдия (`t_q6brake`), `chair_q6edge.png` | 2026-10-23 |
+| `quantum_q6_edge_classic.glb` | Quantum Q6 Edge классическая (жёлтая): крепление пульта дорисовано (tubes), висящие провода, ремешок и зажим убраны (move delete, петля жгута — `seed`) | Гильдия (`t_q6brake`), `chair_q6edge.png` | 2026-10-23 |
+| `quantum_q6_edge.glb` | Quantum Q6 Edge 2.0 (синяя): пульт выровнен и придвинут к подушке подлокотника, стояк с кронштейна (`tubes`), площадки подножек подняты с пола на центральную стойку с поперечиной (по фото `_raw/q6edge2`) | подготовлена как `chair_q6edge2.png` (кадры, арт), заданию пока не назначена (24.10) | 2026-10-23 |
 
 Как модель попадает в игру:
 1. `art_tests/tripo_convert.py meshy_models/<файл>.glb art_tests/gen3d/<ключ> height=<мм> --keep-big=0.002`
