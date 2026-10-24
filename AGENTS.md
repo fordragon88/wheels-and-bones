@@ -491,8 +491,12 @@ python i18n_work/build_lang.py       # перевод полон
   Решение владельца: **поставлены** новые `tool_allen.png`, `tool_brush.png`, `tool_bucket.png`; мультиметр и спицевой ключ
   оставлены старые (варианты Codex — `*_codex_rejected.png` в папке). Новые иконки Codex рисует мельче — при установке предмет
   вписан в 112 px из 128 по bbox, как у остальных. Старые — `art_tests/retired/tool_*_before_codex_2410b.png`. asset_check,
-  selftest — OK; **выложено** (Pages 42e150c7, web_smoke 20/0). Третья партия (манометр, заплатки, отвёртка, разводной и
-  торцевой ключи — BRIEF3.md) заказана по просьбе владельца. (assets/tool_allen.png, tool_brush.png, tool_bucket.png,
+  selftest — OK; **выложено** (Pages 42e150c7, web_smoke 20/0). Затем по просьбе владельца перерисованы и **поставлены**
+  ещё 9 (BRIEF3.md: манометр `gauge`, заплатки `patch`, отвёртка `screw`, разводной `wrench`, торцевой `socket`; BRIEF4.md:
+  тензиометр, маслёнка `lube`, зарядное `charger`, насос `pump`) — у старых были срезаны концы по краю кадра. Итого 12 из 20
+  иконок новые; без замены: hands, dial (Codex 24.10 утром), multimeter, spoke_key (владелец оставил старые), cloth, lever,
+  pencil, tape. Лист после замены — `art_tests/codex_icons2/_all_icons_after.png`. **Выложено** (Pages da63debf, web_smoke
+  20/0); exe пересобран после иконок (selftest внутри exe — код 0). (assets/tool_allen.png, tool_brush.png, tool_bucket.png,
   art_tests/codex_icons2/, AGENTS.md)
 - 2026-10-24 — Claude (Fable 5.1) — **exe пересобран** (`dist/WheelsAndBones.exe`, те же опции, что в build_exe.bat; прежний был
   от 18.10). Размер 64 → 129 МБ: в `assets/` теперь кадры поворота всех колясок (jpg + маски), полные и LOD-модели, новые
