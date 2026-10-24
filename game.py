@@ -3346,9 +3346,9 @@ def get_ai_chair3d(chair_art, lod=False):
     fn = AI_MODELS.get(chair_art)
     if not fn:
         return None
-    if lod:
-        lf = fn.replace(".json", "_lod.json")
-        if os.path.exists(os.path.join(ASSETS_DIR, "models", lf)):
+    lf = fn.replace(".json", "_lod.json")
+    if lod or not os.path.exists(os.path.join(ASSETS_DIR, "models", fn)):   # exe без полных моделей (exe_assets.py)
+        if os.path.exists(os.path.join(ASSETS_DIR, "models", lf)):          # — облегчённая и для «полной»
             fn = lf
     key = ("ai", fn)
     if key not in _CHAIR3D_CACHE:

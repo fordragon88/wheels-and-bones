@@ -19,10 +19,20 @@ rem speech for blind players: Tolk (NVDA/JAWS) + Windows voices (pywin32)
 python -m pip install --quiet cytolk pywin32
 
 echo.
+echo Preparing assets for the exe (without full 3D models and seat bodies)...
+python exe_assets.py
+if errorlevel 1 (
+  echo.
+  echo ERROR: exe_assets.py failed.
+  pause
+  exit /b 1
+)
+
+echo.
 echo Building WheelsAndBones.exe ^(1-3 minutes^)...
 python -m PyInstaller --noconfirm --clean --onefile --windowed ^
   --name WheelsAndBones --icon assets\icon.ico ^
-  --add-data "assets;assets" ^
+  --add-data "build\exe_assets;assets" ^
   --exclude-module tkinter ^
   --hidden-import moderngl --hidden-import glcontext --hidden-import glcontext.wgl --hidden-import glcontext.empty ^
   --collect-all cytolk --hidden-import win32com.client --hidden-import pythoncom --hidden-import pywintypes ^

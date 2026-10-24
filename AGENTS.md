@@ -490,7 +490,11 @@ python i18n_work/build_lang.py       # перевод полон
   портреты; PyInstaller кладёт весь `assets/` целиком (в отличие от build_web, который кадры и тела не пакует). Проверено:
   `WheelsAndBones.exe --selftest` — код выхода 0; реальный запуск окна 15 с — живой, в crash.log только строки запуска.
   Если размер важен — исключать из `--add-data` `assets/models/chair_*_ai.json` (полные, в игре используются только `_lod`)
-  и `seat_body_*` (SEAT_BODY_ON = False); пока не делал. (dist/ — не в git)
+  и `seat_body_*` (SEAT_BODY_ON = False). **Сделано (владелец попросил):** `exe_assets.py` копирует assets/ в `build/exe_assets`
+  без `models/chair_*_ai.json` (полных; `_lod.json` остаются), `seat_body_*.png`, `seat_bodies.json` (24 файла, 15,9 МБ);
+  `build_exe.bat` вызывает его и берёт `--add-data "build\exe_assets;assets"`. `get_ai_chair3d`: если полной модели нет —
+  берёт `_lod.json` и для «полной» (чтобы selftest в exe и V3D не ломались). Exe 129 → 124 МБ (JSON хорошо жался); selftest
+  внутри exe — код 0, запуск 15 с — живой. (exe_assets.py, build_exe.bat, game.py; dist/ и build/ — не в git)
 - 2026-10-24 — Claude (Fable 5.1) — **таблица диалогов коллеги переэкспортирована** (`dialogs_export.py` v4: Dialogues 594,
   Story 10, Job texts 1320 строк — с графом, Гильдией Q6 Edge 2.0, «Руки и глаза», шагом назад) и **заменена в ТОМ ЖЕ файле**
   11U1Aj9… (Файл → Импорт → Upload → «Replace spreadsheet»; ссылка и доступ коллеги прежние). Перед заменой её 82 правки
