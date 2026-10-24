@@ -3294,7 +3294,8 @@ VECTOR_ART["chair_m3"] = _chair_m3
 # вторая волна: если PNG вдруг нет — ближайший векторный аналог (коляска того же типа, похожий клиент)
 for _k, _v in {"chair_aeroz": "chair_basic", "chair_cross6": "chair_basic", "chair_iris": "chair_basic",
                "chair_focuscr": "chair_basic", "chair_whillc2": "chair_power", "chair_f5": "chair_power",
-               "chair_pulse6": "chair_power", "chair_q6edge": "chair_power",
+               "chair_pulse6": "chair_power", "chair_q6edge": "chair_power", "chair_q6edge2": "chair_power",
+               "client_q6edge2": "client_sorceress",   # граф Дракулеску (24.10)
                "client_aeroz": "client_elf", "client_cross6": "client_dwarf", "client_iris": "client_fairy",
                "client_focuscr": "client_sorceress", "client_iris_mom": "client_fairy", "client_focuscr_grandson": "client_sorceress",
                "client_whillc2": "client_goblin", "client_f5": "client_troll",
@@ -3330,7 +3331,7 @@ _CHAIR3D_CACHE = {}
 # для окна диагностики.
 AI_MODELS = {f"chair_{k}.png": f"chair_{k}_ai.json"
              for k in ("basic", "troll", "elf", "dwarf", "fairy", "orc", "edge4", "trident", "m3",
-                       "aeroz", "cross6", "iris", "focuscr", "whillc2", "f5", "pulse6", "q6edge", "edge4b")}
+                       "aeroz", "cross6", "iris", "focuscr", "whillc2", "f5", "pulse6", "q6edge", "edge4b", "q6edge2")}
 
 
 # Кружок детали — в выбранной точке, а не по граням модели: у Edge 4 «батарея» — короб с боковинами у самых
@@ -13059,6 +13060,8 @@ class Game:
     def _m3d_event(self, event):
         """Перетаскивание модели в окне диагностики. True = событие поглощено.
         Клик по кружку детали проходит дальше обычным путём (click_job)."""
+        if self.cur and self.cur.get("track") == "tech":
+            return self._tt_show_event(event)
         if self._m3d_mesh() is None or self.mini_pending or self.show_manual or self.spec_pending:
             return False
         s = self._m3d_state()
@@ -13202,6 +13205,88 @@ class Game:
             pygame.Surface.blit(surf, img, (round((ax + ox * scale) * RS), round((ay + oy * scale) * RS)))
         if not s["drag"] and rect.collidepoint(mouse) and self._hotspot_at(mouse) is None:
             draw_text(surf, "⟲ тяни — повернуть", (rect.x + 4, rect.bottom - 18), 12, (200, 196, 180))
+
+    # ----- Гильдия: коляска задания кадрами поворота (без кружков деталей — у tech-заданий их нет) -----
+    # Предложение владельца 24.10: в ремонте — крупнее в левой колонке под мастером, в «Проверке под нагрузкой» —
+    # большая по центру. Медленно крутится сама (кроме «Без анимации»), можно тянуть мышью/пальцем.
+    TT_SPIN = 0.35                  # рад/с
+
+    def _tech_chair_rect(self):
+        if self.phase == "test":
+            return pygame.Rect(WIDTH // 2 - 215, 190, 430, 246)      # под текстом проверки (до 4 строк), над пузырём (440)
+        return pygame.Rect(8, 300, 284, 234)                         # под именем мастера, над Барти (540), до карточек (300)
+
+    def _tt_show_state(self, art):
+        s = getattr(self, "tt_show", None)
+        if s is None or s.get("art") != art:
+            s = self.tt_show = dict(art=art, yaw=self.M3D_YAW, drag=False, last=None, t=self.t, sh_key=None)
+        return s
+
+    def _tt_show_event(self, event):
+        """Перетаскивание коляски Гильдии. True = событие поглощено."""
+        if (not self.cur or self.phase not in ("repair", "test") or self.ride_t0 is not None
+                or self.mini_pending or self.show_manual or self.spec_pending):
+            return False
+        s = self._tt_show_state(self.cur.get("chair_art"))
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._tech_chair_rect().collidepoint(event.pos) and get_turntable(s["art"]) is not None:
+                s.update(drag=True, last=event.pos)
+                return True
+            return False
+        if event.type == pygame.MOUSEMOTION and s["drag"]:
+            if not getattr(event, "buttons", (1, 0, 0))[0]:
+                s["drag"] = False
+                return False
+            s["yaw"] += (event.pos[0] - s["last"][0]) * 0.012
+            s["last"] = event.pos
+            if abs(s["yaw"] - s.setdefault("tick_yaw", s["yaw"])) > 0.35:
+                s["tick_yaw"] = s["yaw"]
+                snd("ratchet")
+            return True
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1 and s["drag"]:
+            s["drag"] = False
+            return True
+        return False
+
+    def _draw_tt_show(self, surf, rect, mouse):
+        """Коляска кадрами поворота в прямоугольнике rect; пока кадров нет (браузер качает) — рисунок коляски."""
+        art = self.cur.get("chair_art")
+        tt = get_turntable(art)
+        s = self._tt_show_state(art)
+        if tt is not None and not s["drag"] and not A11Y["calm"]:
+            s["yaw"] += self.TT_SPIN * max(0.0, min(0.1, self.t - s["t"]))
+        s["t"] = self.t
+        h = int(min(rect.h, rect.w * 300 / 380))                    # окно пропорций кадров (380×300); при повороте модель
+        fr = pygame.Rect(0, 0, h * 380 // 300, h)                   # может чуть выйти за него (M3D_WIDE) — вокруг фон
+        fr.center = rect.center
+        ready = tt is not None and (tt.update() or (tt.frames and not tt.failed))
+        if not ready:
+            img = load_image(art, fr.size, AMBER)
+            surf.blit(img, img.get_rect(center=fr.center))
+            return
+        i = tt.index(s["yaw"])
+        if i not in tt.frames:                                      # кадры ещё идут: ближайший пришедший
+            i = min(tt.frames, key=lambda k: min(abs(k - i), tt.n - abs(k - i)))
+        zoom = tt.z0 * (1.12 if self.phase == "test" else 1.0)     # по центру место есть — крупнее
+        scale = fr.h / 1250.0 * zoom
+        ax, ay = fr.x + fr.w / 2, fr.y + fr.h * 0.54
+        key = (i, tuple(fr), round(zoom, 4))
+        if s.get("sh_key") != key:                                  # мягкая тень на полу (как в окне задания)
+            loc = pygame.Rect(0, 0, fr.w, fr.h)
+            yw = tt.yaw0 + i * 2 * math.pi / tt.n
+            px = tt.pivot[0]
+            foot = [project_point((px + fx, 0, fz), yw, tt.pitch, loc, zoom, tt.pivot)[0]
+                    for fx, fz in ((-470, -310), (470, -310), (470, 310), (-470, 310))]
+            sh = Surf((max(1, fr.w // 10), max(1, fr.h // 10)), pygame.SRCALPHA)
+            DR.polygon(sh, (0, 0, 0, 110), [(x / 10, y / 10) for x, y in foot])
+            s["sh"], s["sh_key"] = TF.smoothscale(sh, fr.size), key
+        surf.blit(s["sh"], fr)
+        img = tt.image(i, scale * RS / tt.ref)
+        if img is not None:
+            ox, oy = tt.offsets[i]
+            pygame.Surface.blit(surf, img, (round((ax + ox * scale) * RS), round((ay + oy * scale) * RS)))
+        if not s["drag"] and rect.collidepoint(mouse) and not TOUCH["on"]:
+            draw_text(surf, "⟲ тяни — повернуть", (rect.x + 6, rect.bottom - 16), 12, (200, 196, 180))
 
     # ---------- 3D-осмотр: оверлей ----------
     # С 2026-10-19 из интерфейса не открывается (ни кнопки, ни клавиши V): модель крутится прямо на экране
@@ -13988,7 +14073,7 @@ class Game:
     # ----- tech-задание (Гильдия): свободный порядок операций -----
     def _op_rects(self):
         out = []
-        x0, y0, w, gx, gy = 200, 150, 520, 16, 10
+        x0, y0, w, gx, gy = 300, 150, 470, 16, 10               # с 24.10 от x=300: слева коляска кадрами поворота
         per_col = max(5, (len(self.step_order) + 1) // 2)        # больше 10 шагов — карточки ниже, по 6–8 в колонке
         if per_col > 5:                                           # длинное задание: место вниз до y≈512
             gy = 6                                                # (строка «Выполнено» — под карточками, пузырь — 540)
@@ -14011,16 +14096,14 @@ class Game:
         mouse = mouse_pos()
         blit_idle(surf, load_image(job["client_art"], (150, 190), GHOST), (24, 70), self.t)
         draw_wrapped(surf, job["client"], (24, 266), 168, 15, WHITE, max_lines=2)   # не заходит под карточки шагов
-        if self.phase == "repair":                     # какую коляску чиним — под портретом (замечание коллеги 24.10)
-            cimg = load_image(job["chair_art"], (168, 132), AMBER)
-            surf.blit(cimg, cimg.get_rect(midtop=(108, 318)))
-            draw_wrapped(surf, job.get("chair_name", ""), (24, 456), 168, 12, GREY, max_lines=3)
-
+        if self.phase == "repair":                     # какую коляску чиним — под портретом (замечание коллеги 24.10):
+            self._draw_tt_show(surf, self._tech_chair_rect(), mouse)   # кадрами поворота, крутится (24.10, владелец);
+                                                                       # модель названа в подзаголовке шапки
         if self.phase == "repair":
             head = ("ЭКЗАМЕН ГИЛЬДИИ — подсказок нет, мануал разрешён" if self.exam_mode
                     else "ЗАДАНИЕ ТЕХНИКА — порядок шагов выбираешь сам")
-            draw_text(surf, head, (200, 62), 17, CYAN, bold=True)
-            draw_wrapped(surf, job["symptom"], (200, 88), 850, 14, WHITE)
+            draw_text(surf, head, (300, 62), 17, CYAN, bold=True)
+            draw_wrapped(surf, job["symptom"], (300, 88), 770, 14, WHITE)
             Button(self._manual_btn_rect(), "МАНУАЛ", PURPLE).draw(surf, mouse)
             if not self.exam_mode:
                 Button(self._tech_skip_rect(), "ПРОПУСТИТЬ ▸", AMBER).draw(surf, mouse)
@@ -14041,13 +14124,14 @@ class Game:
             rects = self._op_rects()
             y_stat = max(466, max(r.bottom for _, r in rects) + 6) if rects else 466
             draw_text(surf, f"Выполнено: {len(self.done_steps)}/{len(job['steps'])}   "
-                            f"Ошибки: {self.mistakes}{lim}", (200, y_stat), 14, GHOST)
+                            f"Ошибки: {self.mistakes}{lim}", (300, y_stat), 14, GHOST)
             self._draw_ghost_bubble(surf, 540)
             self._draw_tools(surf, mouse)
         elif self.phase == "test":
             draw_text(surf, "ПРОВЕРКА ПОД НАГРУЗКОЙ", (360, 70), 20, GOOD, bold=True)
             draw_wrapped(surf, job["test"], (360, 100), 560, 19, WHITE)
             if self.ride_t0 is None:                     # реплика — над кнопкой, кнопку не закрывает
+                self._draw_tt_show(surf, self._tech_chair_rect(), mouse)   # коляска крупно по центру (24.10)
                 self._draw_ghost_bubble(surf, 440)
                 self._draw_ride_done(surf)
                 Button(self._test_btn_rect(), "ГОТОВО ▸" if self.ride_done else "ПРОВЕРИТЬ РАБОТУ",
