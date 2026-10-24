@@ -158,7 +158,7 @@ safety проваливает задание.
 | leshy_x8 | Леший | Magic Mobility Extreme X8 (x8) | Meshy | застрял в болоте |
 | ra_emotion | Мумия Сенеб (до 22.10 — Ра) | Quickie Nitrum + Alber e-motion (nitrum_em) | Meshy + ступицы | зарядка обрывается на солнце |
 | gorynych_jazzy | Змей Горыныч | Pride Jazzy 614 (jazzy614) | Meshy | в горку выбивает автомат |
-| truing, t_battery, toe, t_pulse6, t_q6brake | Гильдия | Ego / Edge 4 / Invacare 9000 / Pulse 6 / Q6 Edge | Meshy | правка обода, пара батарей, схождение, VR2, Q-Logic #203 |
+| truing, t_battery, toe, t_pulse6, t_q6brake | Гильдия | Ego / Edge 4 / Invacare 9000 / Pulse 6 / Q6 Edge 2.0 (синяя, с 24.10) | Meshy | правка обода, пара батарей, схождение, VR2, Q-Logic #203 |
 
 Народные коляски (Яга, Ольга, Леший, Сенеб, Горыныч) — кадры в `assets/turntable/index_folk.json`, модели
 деталей — `art_tests/tripo/models/` (в `assets/models` их нет — так задумано, `art_tests/asset_check.py` это знает).
@@ -314,8 +314,8 @@ Windswept, 2017) и таблица Lange & Presperin Pedersen «Positioning Char
 
 **Решения владельца:** Zippie Iris (Искра) — наша процедурная с наклоном (кадры — Blender, в стиле Meshy); Edge 4
 (Зикс) — Meshy с поднятым сиденьем, поэтому квест переписан: «лифт не опускается»; Exelle Junior — родной одиночный
-антиопрокидыватель (колесо приставлено к трубе); гном Дургин → оборотень Вольф (Quickie 2); Q6 Edge — классическая
-жёлтая (пробная Q6 Edge 2.0 в игру не ставилась). Tripo убран из титров, README и LICENSE (его моделей в игре нет).
+антиопрокидыватель (колесо приставлено к трубе); гном Дургин → оборотень Вольф (Quickie 2); Q6 Edge — с 24.10 синяя 2.0
+(`quantum_q6_edge.glb`, ключ q6m) с правками пульта и подножек; жёлтая классика q6c — в истории git. Tripo убран из титров, README и LICENSE (его моделей в игре нет).
 
 ## 9. Перевод
 Логика на русских ключах, перевод на выводе. **Любой новый текст → в словарь**:
@@ -496,7 +496,11 @@ python i18n_work/build_lang.py       # перевод полон
   из Downloads (md5 совпал) и попросил довести: пульт сдвинут на подлокотник (прежнее правило `rot=(11,-15)`,
   `d=(-85,6,0)`), две площадки подножек лежали на полу (y≈50) — подняты к подвескам `d=(-35,120,0)` (коробка
   x 285–520, y 40–80, z −180…125; левый кастор дальше z −250 — не задет). Рендеры-пробы — scratchpad сессии; **в игру
-  не ставилась, ждёт выбора владельца** (жёлтая классика или синяя 2.0). Проверки после (1)–(4): selftest ×2, asset_check,
+  поставлена 24.10 по выбору владельца**: пульт — `rot=(11,-15)`, `d=(-40,0,0)` вплотную к подушке, стояк `tubes` с
+  кронштейна (232,616→656); подножки `d=(0,35,0)`, стойка (270,200)→(322,105) и поперечина под площадками. Кадры и арт
+  перерисованы (арт — кадр 0 на место прежнего, 760×600), `quantum_q6_edge_fixed.glb`; облегчённая модель
+  `chair_q6edge_ai.json` осталась от классики (у Гильдии ни 3D-окна, ни хотспотов — арт только на карточках). Иконка
+  рук — v2 «две руки и глаз» (`tool_hands_v2.png`, v1 — retired). Проверки после (1)–(4): selftest ×2, asset_check,
   ui, keyboard ru/en, switch, pad, rs×2, build_lang 0 кириллицы, monkey. docs/FEEDBACK_STATUS №90–91, QUESTS* пересобраны.
   (game.py, assets/tool_*.png, i18n_work/en9_fixes99z_editor.json, en9_fixes99_feedback.json, assets/lang_en.json,
   art_tests/dialogs_import.py, dialogs_export.py, docs/*, AGENTS.md)
