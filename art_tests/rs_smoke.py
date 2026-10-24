@@ -1,5 +1,6 @@
 """Все сцены и оверлеи при масштабе рендера RS (ловим падения слоя): python art_tests/rs_smoke.py 2"""
 import os, sys
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")   # проверки — без звука
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import pygame

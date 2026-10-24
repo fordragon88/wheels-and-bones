@@ -12,7 +12,7 @@ An educational fantasy **wheelchair repair simulator** in Python + Pygame — re
 single-file Python + Pygame game. The art lives in `assets/`, but the game also runs **without any images**:
 characters, wheelchairs and backgrounds fall back to built-in vector art drawn by code.
 
-**Content:** 15 repair jobs (20 breakdown variants), 5 Wheelwrights' Guild jobs plus a final exam, and a
+**Content:** 21 repair jobs (27 breakdown variants), 6 Wheelwrights' Guild jobs plus a final exam, and a
 Seating Clinic about posture and positioning.
 
 ### The story
@@ -83,7 +83,13 @@ In the hub every job is tagged **ⓜ MANUAL** or **⚡ POWER**.
 | Mora the sorceress — Permobil M3 Corpus | Jerky joystick, torn boot | Dry it first, then restart, cleaning, cable connector (power off); calibration is a technician's job; replacing the boot against moisture |
 | Grund the golem — Drive Trident HD | Stalled, whining motor | Freewheel mode (push by hand), motor connectors, diagnosis by sound |
 | Saira the lizard — WHILL Model C2 | Red code on the joystick — **3 variants** (01/02/10) | Code table: armrest, joystick touched at power-on, seat connector |
+| Count Draculescu — Quantum Q6 Edge 2.0 | After the library the chair crawls — **2 variants** (yellow / red icon) | TRU-Balance 3 inhibits: seat elevated — 1/4 speed, tilt or recline > 20° — drive lockout; Q-Logic 3 indicator green/yellow/red; an object under the lift is removed with the power off; inhibits are never bypassed |
 | Matilda the badger — Permobil F5 Corpus | Won't charge after winter | Main breaker during storage, charging not below +5 °C, charger connection order, 250 kPa tyres |
+| Baba Yaga — Vermeiren D100 | Raised the seat — the brakes won't hold | Three seat heights (470/500/530 mm) by moving the wheels, forks vertical to the floor; brakes re-adjusted after any height change |
+| Olga the mermaid — Panthera X3 | Crunches and runs stiff after the sea | Sand and salt water: clean the caster forks, a drop of oil in the bearings, grease the quick-release axle; 8 bar in the tyres — a brake only holds on an inflated tyre |
+| Leshy — Magic Mobility Extreme X8 | Stuck in the bog — pulls to one side | Don't hold the joystick when stuck (motors overheat); unequal tyre pressure pulls the chair sideways; off-road pressure is lower but equal; no driving into water |
+| Seneb the mummy — Quickie Nitrum + Alber e-motion | Charging stops in the sun | e-motion wheels charge only at 0…40 °C (all lights flash white, 4 beeps); the wheels have no brakes of their own; a burning battery — sand or a class D extinguisher, never water |
+| Zmey Gorynych — Pride Jazzy 614 | Uphill the breaker trips | The main breaker protects motors and electronics: wait a minute, push the button, switch on; repeated tripping — service; 136 kg weight limit includes everything hanging on the chair |
 
 All real wheelchair models, numbers and step orders come from manufacturer manuals; the pages are cited in
 `source:` comments on each job in `game.py`.
@@ -107,8 +113,9 @@ plays differently — that is the difference between "following instructions" an
 | Toe-in: the chair pulls | ⓜ technician | Pressure first, then geometry; front/rear rim measurement, 1 mm tolerance, cross-pattern tightening |
 | Quickie Pulse 6: 2 bars flashing (VR2) | ⚡ technician | VR2 indicator codes, motor reading 0–1.5 Ω → controller or brushes, brush run-in with the gearbox unlocked |
 | Quantum Q6 Edge: code #203 | ⚡ technician | Q-Logic codes, freewheel only with power off, brake reading ≈80 Ω from the block diagram |
+| Replacing a battery pair: Q6 Edge 2.0 | ⚡ technician | Same job, different chair: front shroud on release handles, quick-release harness connectors, breaker button on the rear frame, batteries flat with terminals rearward — three specs that only the right manual answers |
 
-**Guild exam.** Pass all the Guild jobs and Brenna admits you to the exam: a **random ticket** from the topics
+**Guild exam.** Pass all six Guild jobs and Brenna admits you to the exam: a **random ticket** from the topics
 you have covered, **no hints** (the manual is allowed — just like real life), at most **3 mistakes**, and any
 safety violation means an instant retake. Pass and you get the **Guild diploma**, a checklist and the title
 "Certified Technician". And yes — Brenna finally remembers Barty.
@@ -320,7 +327,7 @@ Pygame. Один файл, играть можно мышью или **толь�
 Арт лежит в `assets/`, но игра запускается и **без картинок вообще**: весь визуал
 (персонажи, коляски, фоны) тогда рисуется кодом во встроенном векторном flat-стиле.
 
-**Контент:** 15 заданий (20 вариантов поломок), 5 заданий Гильдии и экзамен,
+**Контент:** 21 задание (27 вариантов поломок), 6 заданий Гильдии и экзамен,
 Кабинет посадки.
 
 ### Сценарий
@@ -403,7 +410,13 @@ Pygame. Один файл, играть можно мышью или **толь�
 | Чародейка Мора — Permobil M3 Corpus | Дёргает джойстик, порван пыльник | Сначала просушка, потом перезагрузка, чистка, разъём кабеля (без питания); калибровка — работа техника; замена пыльника против влаги |
 | Голем Грунд — Drive Trident HD | Заглохла, вой мотора | Режим свободного хода (откатить вручную), разъёмы мотора, диагностика по звуку |
 | Ящерка Сайра — WHILL Model C2 | Красный код на пульте — **3 варианта** (01/02/10) | Таблица кодов: подлокотник, джойстик при включении, разъём сиденья |
+| Граф Дракулеску — Quantum Q6 Edge 2.0 | После библиотеки коляска ползёт — **2 варианта** (жёлтый / красный значок) | Блокировки TRU-Balance 3: поднятое сиденье — 1/4 скорости, наклон или откидывание > 20° — ход запрещён; индикатор Q-Logic 3 зелёный/жёлтый/красный; посторонний предмет под лифтом убирают при выключенном питании; блокировки не обходят |
 | Барсучиха Матильда — Permobil F5 Corpus | Не заряжается после зимы | Главный автомат на хранении, заряд не ниже +5 °C, порядок подключения зарядки, шины 250 кПа |
+| Баба Яга — Vermeiren D100 | Подняла сиденье — тормоза не держат | Три высоты сиденья (470/500/530 мм) перестановкой колёс, вилки отвесно к полу; после смены высоты тормоза регулируют заново |
+| Русалка Ольга — Panthera X3 | После моря хрустит и туго ходит | Песок и солёная вода: чистить вилки касторов, по капле масла в подшипники, смазать быстросъёмную ось; 8 бар в шинах — тормоз держит только на накачанной шине |
+| Леший — Magic Mobility Extreme X8 | Застрял в болоте — тянет вбок | Застрял — джойстик не держать (мотор перегреется); разное давление в шинах тянет вбок; на бездорожье давление ниже, но одинаковое; в воду не въезжать |
+| Мумия Сенеб — Quickie Nitrum + Alber e-motion | Зарядка обрывается на солнце | Колёса e-motion заряжают только при 0…40 °C (все огоньки мигают белым, 4 сигнала); своих тормозов у колёс нет; горящая батарея — песок или огнетушитель класса D, не вода |
+| Змей Горыныч — Pride Jazzy 614 | В горку выбивает автомат | Главный автомат защищает моторы и электронику: минута, кнопка, включить; выбивает снова — сервис; предел 136 кг включает всё, что висит на коляске |
 
 Все реальные модели колясок, цифры и порядок шагов — из инструкций производителей
 (страницы указаны в комментариях `source:` у заданий в `game.py`).
@@ -433,6 +446,7 @@ Pygame. Один файл, играть можно мышью или **толь�
 | Схождение: коляску уводит | ⓜ техник | Сначала давление, потом геометрия; замер между ободами спереди/сзади, допуск 1 мм, затяжка крест-накрест, контрольный замер |
 | Quickie Pulse 6: мигают 2 деления (VR2) | ⚡ техник | Коды индикатора VR2, замер мотора 0–1,5 Ом → контроллер или щётки, обкатка щёток с разблокированным редуктором |
 | Quantum Q6 Edge: код #203 | ⚡ техник | Коды Q-Logic, свободный ход только без питания, замер тормоза ≈80 Ом по блок-схеме |
+| Замена пары батарей: Q6 Edge 2.0 | ⚡ техник | Та же работа, другая коляска: передний кожух на ручках-защёлках, быстросъёмные разъёмы жгута, автомат-кнопка на задней раме, батареи плашмя клеммами назад — три спеки, на которые отвечает только нужный мануал |
 
 **Экзамен Гильдии.** Сдал зачёты Гильдии — Бренна допускает к экзамену:
 **случайный билет** из пройденных тем, **без подсказок** (мануал разрешён — как

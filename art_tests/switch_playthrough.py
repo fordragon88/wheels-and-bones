@@ -3,6 +3,7 @@
 «назад» — долгое нажатие; ползунки — нажать, затем «меньше / больше / готово» по очереди.
 python art_tests/switch_playthrough.py [en]"""
 import os, sys
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")   # проверки — без звука (владелец слышал тесты в наушниках, 24.10)
 HERE = os.path.dirname(os.path.abspath(__file__))
 src = open(os.path.join(HERE, "keyboard_playthrough.py"), encoding="utf-8").read()
 head, tail = src.split("# --- титул и вступление ---", 1)

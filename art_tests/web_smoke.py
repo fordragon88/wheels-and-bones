@@ -261,7 +261,7 @@ async def main():
         for fn, args in ((desktop, ("site", 1100, 620, 1.0)), (desktop, ("full", 1920, 1080, 1.0)),
                          (desktop, ("laptop125", 1366, 768, 1.25)), (phone, ()), (gamepad, ())):
             print(f"— {fn.__name__} {args[0] if args else ''}", flush=True)
-            b = await pw.chromium.launch(args=["--autoplay-policy=no-user-gesture-required"])   # свой браузер на
+            b = await pw.chromium.launch(args=["--autoplay-policy=no-user-gesture-required", "--mute-audio"])   # свой браузер на
             try:                                                                                # сценарий
                 await asyncio.wait_for(fn(b, *args), 480)
             except Exception as e:

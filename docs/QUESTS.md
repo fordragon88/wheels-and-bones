@@ -1193,7 +1193,132 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 ---
 
-### 16. Raised the seat — the wheel locks won't hold
+### 16. After the library the chair crawls — Variant 1/2
+- **Client:** Count Draculescu  
+- **Wheelchair:** Quantum Q6 Edge 2.0 (mid-wheel drive, iLevel seat elevator)  
+- **Symptom:** The Count spent the night in his library: raising the seat to the top shelves, reclining to read. Now the chair "won't drive like before": it crawls, or won't move at all, and a restriction icon glows on the joystick. "The night is short, master. I must reach the cellar before dawn. For books."
+
+**Inspection clues (what the player sees)**
+
+- *Seat elevator* — The seat sits three fingers above the bottom stop. Between the lift frame and the base: a thick leather-bound folio.
+- *Joystick (control box)* — Joystick on, no error codes. The YELLOW "reduced speed" icon is lit: the controller thinks the seat is elevated.
+- *Seat* — Cushion and backrest are fine, the backrest is nearly upright. Crumbs of old binding on the seat.
+- *Connectors/wiring* — The lift harness lies free, connectors tight, no green corrosion.
+- *Battery* — Battery gauge full: the Count charged it all day while he slept.
+- *Freewheel lever* — Both freewheel levers are up — drive mode.
+
+**Diagnosis options**
+
+- ✅ (correct) The seat didn't reach the stop: a book under the lift — the controller sees "elevated"
+- ❌ Red drive lockout because of seat tilt — The icon is yellow, not red: driving is allowed, but at quarter speed.
+- ❌ The batteries ran down — the chair is saving power — The charge is full, and a flat battery would give a Q-Logic code, not a speed icon.
+
+**Repair steps**
+
+1. Put the chair on level floor: nothing around the lift, nothing above the seat.  
+   *Tool:* Hands & eyes → *Part:* Seat elevator  
+   *After the step:* Q6 Edge 2.0 manual: move the seat only on a level surface, with the area around it clear.
+2. Check the joystick icon against the Q-Logic 3 table.  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Mini-game:* meter  
+   *After the step:* Read the indicator before touching the mechanics: it tells you WHAT the controller sees.
+3. Ask the Count to move to the armchair by the fireplace and switch the joystick off.  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *After the step:* Nobody looks under the lift with a person in the seat and the power on.
+4. Look under the seat with a torch: the seat hasn't reached the stop, there is a folio under the lift frame.  
+   *Tool:* Hands & eyes → *Part:* Seat elevator  
+   *Hint:* Barty: "Yank the book out hard — the seat will drop by itself!" — no: fingers never go between the lift frame and the base. Raise the seat a little first.  
+   *After the step:* The lift is full of pinch points, even when still. Look with your eyes, hands outside.
+5. Switch the joystick on, open the seat screen with key 2 and select "elevate".  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *After the step:* Lift mode selected — the joystick controls the seat: forward is up, back is down.
+6. Push the joystick forward: raise the seat a hand's width — the book is free.  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
+   *After the step:* Raise it just enough for the folio to come out freely.
+7. Turn off the joystick.  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *After the step:* Hands near the mechanism only with the chair powered off.
+8. Take the folio out from under the lift frame. Hands on the book only, not in the mechanism.  
+   *Tool:* Hands & eyes → *Part:* Seat elevator (also accepted: Seat)  
+   *After the step:* A heavy, five-hundred-year-old book. A separate word for the Count: nothing goes under the seat.
+9. Switch the joystick on, open the seat screen with key 2 and select "elevate".  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *After the step:* Elevate mode again — now we lower it.
+10. Pull the joystick back and hold until the seat sits on the stop; once it stops — release at once.  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
+   *After the step:* Never run the lift motor more than a couple of seconds after the stop — it overheats and strains the mechanism.
+11. Look at the joystick: the yellow icon is gone, the indicator is green — no restrictions.  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *After the step:* Green means full speed: cellar and doorsteps allowed.
+12. Check the lift connectors and harness: tight, no corrosion, not pinched anywhere.  
+   *Tool:* Hands & eyes → *Part:* Connectors/wiring (also accepted: Seat elevator)  
+   *After the step:* A pre-ride check from the manual. A cracked connector is a job for the service centre only.
+
+**Test:** The seat is on its stop, the icon is green. The Count rolls out of the workshop at full speed, cape billowing, the bat barely keeping up.  
+**What you learn:** A yellow icon is not a fault: the controller thinks the seat is elevated and holds quarter speed. First check whether the seat has reached its stop and whether something is under the lift. Remove the object after raising the seat a little and switching the power off, and never run the lift motor past the stop.  
+**Client says:** Draculescu: "The folio is intact and my speed is back. You are admitted as a reader of my library. Night hours."  
+
+---
+
+### 16. After the library the chair crawls — Variant 2/2
+- **Client:** Count Draculescu  
+- **Wheelchair:** Quantum Q6 Edge 2.0 (mid-wheel drive, iLevel seat elevator)  
+- **Symptom:** The Count spent the night in his library: raising the seat to the top shelves, reclining to read. Now the chair "won't drive like before": it crawls, or won't move at all, and a restriction icon glows on the joystick. "The night is short, master. I must reach the cellar before dawn. For books."
+
+**Inspection clues (what the player sees)**
+
+- *Backrest (posts, upholstery)* — The backrest is reclined far back — some thirty degrees off vertical. The Count read lying down and "brought it back up by eye".
+- *Joystick (control box)* — Joystick on, no codes. The RED "full drive lockout" icon is lit: push the joystick forward and the chair won't budge.
+- *Seat elevator* — The seat is down on its stop. Nothing under the lift.
+- *Seat* — Seat tilt is nearly zero, the cushion is in place.
+- *Battery* — Battery gauge full.
+- *Connectors/wiring* — Backrest harness and connectors tight, no chafing.
+
+**Diagnosis options**
+
+- ✅ (correct) The backrest is reclined beyond 20° — the controller locked out driving (red lockout)
+- ❌ The seat is elevated — the controller holds quarter speed — The seat is down and the icon is red, not yellow: this is a full lockout, not a slowdown.
+- ❌ The batteries are flat — the chair won't move — The charge is full; a flat battery would give a low-battery code, not a red posture icon.
+
+**Repair steps**
+
+1. Put the chair on level floor: nothing around the seat.  
+   *Tool:* Hands & eyes → *Part:* Seat elevator  
+   *After the step:* The seat is moved only on a level surface.
+2. Check the joystick icon against the Q-Logic 3 table.  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Mini-game:* meter  
+   *After the step:* Red is not a fault but a ban: the controller sees an unsafe posture.
+3. Look at the backrest: reclined well past vertical.  
+   *Tool:* Hands & eyes → *Part:* Backrest (posts, upholstery)  
+   *After the step:* More than 20° of recline and TRU-Balance 3 locks out driving. Tip-over protection.
+4. Open the seat screen with key 2 and select "recline".  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *After the step:* The backrest actuator is selected — the joystick drives it.
+5. Push the joystick forward: raise the backrest until the red icon turns green.  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Backrest (posts, upholstery))  
+   *After the step:* Under 20° the lockout clears. The controller tells you itself — in green.
+6. Check the seat tilt: also under 20°?  
+   *Tool:* Hands & eyes → *Part:* Seat (also accepted: Seat elevator)  
+   *After the step:* Tilt triggers the same lockout. Check both axes.
+7. Check the backrest harness and connectors: tight, no chafing.  
+   *Tool:* Hands & eyes → *Part:* Connectors/wiring  
+   *After the step:* A check from the manual. A chafed harness is for the service centre only.
+8. To test, raise the seat with the joystick — yellow icon; lower it to the stop — green.  
+   *Tool:* Hands & eyes → *Part:* Seat elevator (also accepted: Joystick (control box))  
+   *After the step:* Yellow is a slowdown, red is a ban. The Count must tell them apart himself.
+9. Tell the Count: reading reclined is fine, driving reclined is not. The lockout is never bypassed.  
+   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Hint:* Barty: "Have the service centre reprogram the lockout — then ride lying down!" — no: the manual forbids bypassing or reprogramming the inhibits.  
+   *After the step:* Factory inhibits are never disabled or reprogrammed — they are tip-over protection.
+
+**Test:** The backrest is up, the icon is green. The Count pulls away, circles the workshop and bows ceremoniously — sitting upright.  
+**What you learn:** A red icon is a driving ban: seat tilt or recline beyond 20° (or recline beyond 125°) locks out both the lift and driving. Restore the posture and the controller goes green by itself. Yellow is different: the seat is elevated, we drive at quarter speed. The inhibits are never bypassed.  
+**Client says:** Draculescu: "Sitting upright, like in a portrait. Well, portraits are reading too. My thanks, master."  
+
+---
+
+### 17. Raised the seat — the wheel locks won't hold
 - **Client:** Baba Yaga  
 - **Wheelchair:** Vermeiren D100 (folding, steel)  
 - **Symptom:** Yaga raised the seat “to see farther from the hut window.” Now the wheelchair rolls downhill on its own, even with the locks on, and the front casters wobble while moving.
@@ -1257,7 +1382,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 ---
 
-### 17. Crunchy and stiff after the sea
+### 18. Crunchy and stiff after the sea
 - **Client:** Olga the Mermaid  
 - **Wheelchair:** Panthera X3 (ultralight, carbon)  
 - **Symptom:** Olga spent all day racing along the pier and the beach. Now a front caster crunches, the rear wheel won't come off — the axle button is stuck — and the lock won't hold on wet boards.
@@ -1326,7 +1451,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 ---
 
-### 18. Stuck in a swamp — pulls to the side
+### 19. Stuck in a swamp — pulls to the side
 - **Client:** Leshy  
 - **Wheelchair:** Magic Mobility Extreme X8 (all-wheel drive, off-road)  
 - **Symptom:** Leshy got stuck in a bog and kept pushing the joystick for a long time. The wheelchair stopped, and once it cooled down it drove again — but it pulls to the left, and grass is sticking out of the wheels.
@@ -1383,7 +1508,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 ---
 
-### 19. Charging stops in the sun
+### 20. Charging stops in the sun
 - **Client:** Seneb the Mummy  
 - **Wheelchair:** Quickie Nitrum + Alber e-motion power-assist wheels  
 - **Symptom:** Seneb the Mummy charges the motor wheels right under the noon sun by the pyramid. A minute later the lights flash white, the wheel beeps four times — and charging stops.
@@ -1439,7 +1564,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 ---
 
-### 20. Uphill, the circuit breaker trips
+### 21. Uphill, the circuit breaker trips
 - **Client:** Zmey Gorynych  
 - **Wheelchair:** Pride Jazzy 614 (mid-wheel drive)  
 - **Symptom:** Gorynych drives uphill to the castle — and the wheelchair freezes. A minute later it drives again, and on the next slope it stops again. The three heads argue about whose fault it is.
@@ -1818,5 +1943,75 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Test:** #203 is gone. The brake clicks in every direction; on a slope the wheelchair holds firm. Brenna marks it in the exam log.  
 **What you learn:** Q-Logic displays the error number: #203/#204 — brake 1/2 not responding. Quantum flowchart: both freewheel levers to drive mode, disconnect the power module, pins 3–4 on the motor connector should read about 80 Ω. No 80 Ω — replace the motor with its brake assembly. The power module is replaced only if both brakes are fine.  
 **Client says:** Brenna: “Didn't try to calibrate the joystick for a brake error — already smarter than half the fortune-tellers at the fair.”  
+
+---
+
+### G6. Replacing a battery pair: Q6 Edge 2.0
+- **Client:** Master Brenna  
+- **Wheelchair:** Quantum Q6 Edge 2.0 (NF-22 batteries, AGM or gel)  
+- **Symptom:** The Guild's second exam chair: same job — a battery pair — but a different chair. Whoever works from memory of the Edge 4 fails. The Q6 Edge 2.0 manual is on the bench.
+
+**Repair steps**
+
+1. Turn off the power at the joystick  
+   *Tool:* Hands & eyes  
+   **SAFETY step**  
+   *Hint:* Brenna: "Rule one is the same as on the Edge 4: kill the power. Rule two: check that you did."  
+   *After the step:* Work only on a powered-down wheelchair.
+2. Check that both freewheel levers are up — drive mode  
+   *Tool:* Hands & eyes  
+   **SAFETY step**  
+   *After the step:* Levers up means the motor brakes are engaged: the chair won't roll off while you're in the compartment.
+3. Remove the shroud that covers the batteries  
+   *Tool:* Hands & eyes  
+   *Value from the manual:* Where are the batteries on the Q6 Edge 2.0? — ✅ Under the FRONT shroud: squeeze the release handles, lift up and away from the base; ❌ Under the rear shroud behind two yellow latches; ❌ Under the seat: take the seat off the base  
+   *After the step:* No tools — release handles. But first find in the manual WHICH shroud.
+4. Disconnect the quick-release battery harness connectors  
+   *Tool:* Hands & eyes  
+   *Order: free; must come after:* 1, 2, 3  
+   **SAFETY step**  
+   *After the step:* Connector apart — the batteries are isolated from the power module. Pull the connector body, not the wire.
+5. Disconnect the NEGATIVE terminal — always first  
+   *Tool:* Adjustable wrench  
+   *Order: free; must come after:* 4  
+   **SAFETY step**  
+   *After the step:* Negative off — the ground circuit is broken; the wrench can no longer cause a short.
+6. Disconnect the positive terminal  
+   *Tool:* Adjustable wrench  
+   *Order: free; must come after:* 5
+7. Lift the old batteries out of the tray: the front one first, then the rear  
+   *Tool:* Hands & eyes  
+   *Order: free; must come after:* 6  
+   *Hint:* Barty: "I'll hold it! ...No. Still no. Fine."  
+   *After the step:* The batteries weigh 17 kg each: lift from a squat and keep them upright.
+8. Pick the new pair from the Guild catalogue  
+   *Tool:* Hands & eyes  
+   *Order: free; must come after:* 7  
+   *Value from the manual:* Which pair goes into the Q6 Edge 2.0? — ✅ Two new 12 V deep-cycle NF-22 AGM batteries — same type, capacity and age; ❌ One NF-22 AGM and one Group 24 gel — more capacity, more range!; ❌ One new NF-22 and last year's identical one (savings!)
+9. Set the batteries in the tray and connect the harness to the terminals per the diagram  
+   *Tool:* Adjustable wrench  
+   *Order: free; must come after:* 8  
+   *Value from the manual:* How do the batteries sit in the Q6 Edge 2.0 tray? — ✅ Flat, terminals facing REARWARD: a front one and a rear one; ❌ Flat, terminals facing forward — closer to the front shroud, handier; ❌ On their side, terminals up — shorter wires that way  
+   *After the step:* Red wire to the red (+) post, black wire to the black (−) post. Tighten the fasteners.
+10. Join the quick-release harness connectors until they click  
+   *Tool:* Hands & eyes  
+   *Order: free; must come after:* 9  
+   *After the step:* Assembly mirrors disassembly: terminals per the diagram, then the harness connectors.
+11. Check the main breaker on the rear frame: button pushed in, not tripped  
+   *Tool:* Hands & eyes  
+   *Order: free; must come after:* 10  
+   *After the step:* On the Q6 Edge 2.0 the breaker is a button on the rear frame. Tripped — rest a minute, then push it in.
+12. Refit the front shroud until the latches click  
+   *Tool:* Hands & eyes  
+   *Order: free; must come after:* 10, 11  
+   *After the step:* Without the shroud, dirt gets into the tray and hands reach for the terminals.
+13. Put the new pair on a full first charge  
+   *Tool:* Charger  
+   *Order: free; must come after:* 12  
+   *After the step:* First charge: a full one, and only with the stock charger — it sets the pair's lifespan.
+
+**Test:** The joystick comes alive, the battery gauge is full. Brenna tugs the harness connectors — they hold. A nod.  
+**What you learn:** Different chair, different access: on the Q6 Edge 2.0 the batteries sit under the FRONT shroud on latches, the harness unplugs with quick-release connectors, the breaker is a button on the rear frame. The batteries lie flat with terminals rearward. The procedure is the same: a pair of one type and age, negative off first, positive on first, a full first charge.  
+**Client says:** Brenna: "Not from memory — from the manual. That is what a technician is."  
 
 ---

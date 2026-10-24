@@ -1,6 +1,7 @@
 """Проверка геймпада: тот же «игрок», что в keyboard_playthrough.py, но жмёт кнопки геймпада (события SDL
 GameController: крестовина, A, B, LB/RB, Back, Y). python art_tests/pad_playthrough.py [en]"""
 import os
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")   # проверки — без звука (владелец слышал тесты в наушниках, 24.10)
 HERE = os.path.dirname(os.path.abspath(__file__))
 src = open(os.path.join(HERE, "keyboard_playthrough.py"), encoding="utf-8").read()
 head, tail = src.split("# --- титул и вступление ---", 1)
