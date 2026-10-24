@@ -56,13 +56,14 @@ def stage():
     with open(os.path.join(APP, "main.py"), "w", encoding="utf-8") as f:
         f.write(MAIN)
     src, dst = os.path.join(ROOT, "assets"), os.path.join(APP, "assets")
-    skip = shutil.ignore_patterns("*.ico", "README.txt", "*.mp3", "*.wav", "*_ai.json", "*_ai_lod.json")
+    skip = shutil.ignore_patterns("*.ico", "README.txt", "*.mp3", "*.wav", "*_ai.json", "*_ai_lod.json",
+                                  "seat_body_*.png", "seat_bodies.json")   # кукла Бомма отложена (SEAT_BODY_ON=False)
 
     def ignore(d, names):
         out = set(skip(d, names))
-        if os.path.basename(d) == "turntable":                # кадры поворота — не в пакет, а рядом на сайт
-            out |= {n for n in names if n.endswith(".png")}
-        return out
+        if os.path.basename(d) == "turntable":                # кадры поворота — не в пакет, а рядом на сайт:
+            out |= {n for n in names if n.endswith((".png", ".jpg"))}   # и png, и jpg+маски (в пакете — только index*.json;
+        return out                                            # браузер качает кадры с сайта, 23.10 jpg весили 27 МБ в архиве)
     shutil.copytree(src, dst, ignore=ignore)
     # 3D-модели (*_ai.json, 12 МБ) не берём: без numpy в браузере их не отрисовать. В окне диагностики
     # коляску показывают кадры поворота (assets/turntable): игра скачивает их с сайта, когда коляска на экране
