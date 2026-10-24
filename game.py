@@ -8680,14 +8680,23 @@ class Game:
         return pygame.Rect(882, 58, 88, 30)
 
     def step_back(self):
-        """«◂»: напомнить прошлый шаг (что сделали и зачем) — ремонт назад не откатывается."""
+        """«◂»: вернуться на шаг назад (просьба тестировщицы, 24.10) — прошлый шаг снова текущий, его можно
+        переделать (и перечитать заметку); ошибки не списываются, звёзды от этого не растут."""
         snd("tick")
+        if self.phase != "repair" or self.cur.get("track") == "tech":
+            return
         if self.step_idx <= 0:
             self.flash("Это первый шаг.", GHOST, 2.5)
             return
-        prev = self.cur["steps"][self.step_idx - 1]
+        self.step_idx -= 1
+        self.mini_pending = None
+        self.sel_tool = None
+        self.act = None
+        self.last_note = self.cur["steps"][self.step_idx - 1].get("note", "") if self.step_idx > 0 else ""
+        self._set_step_ghost()
+        prev = self.cur["steps"][self.step_idx]
         tool, part = TOOLS[prev["tool"]][0], PARTS.get(prev["part"], prev["part"])
-        self.flash(f"{tr('Прошлый шаг')}: {tr(prev['instr'])} ({tr(tool)} → {tr(part)})"
+        self.flash(f"{tr('Шаг назад')}: {tr(prev['instr'])} ({tr(tool)} → {tr(part)})"
                    + (f" ✔ {tr(prev['note'])}" if prev.get("note") else ""), CYAN, 7, sticky=True)
 
     def step_skip(self):
@@ -9167,7 +9176,7 @@ class Game:
             if not tech:
                 for pid, r in self._part_rects():
                     add("Детали", tr(PARTS[pid]), r, act=lambda pid=pid: self._a11y_apply(pid=pid), key=("part", pid))
-                add("Шаги", tr("Напомнить прошлый шаг"), self._step_prev_rect(), act=self.step_back, key="stepprev")
+                add("Шаги", tr("Вернуться на шаг назад"), self._step_prev_rect(), act=self.step_back, key="stepprev")
                 add("Шаги", tr("Пропустить шаг (минус звезда)"), self._step_skip_rect(), act=self.step_skip,
                     key="stepskip")
             elif not self.exam_mode:
@@ -15004,7 +15013,8 @@ def run_selftest():
             _solve_mini(g)
     assert pump_checked and g.phase == "test"
 
-    # кнопки шагов: «◂» напоминает прошлый шаг, «Шаг ▸» пропускает (минус звезда), Гильдия — тоже, экзамен — нет
+    # кнопки шагов: «◂» — на шаг назад (переделать, ошибки не списываются), «Шаг ▸» пропускает (минус звезда),
+    # Гильдия — тоже, экзамен — нет
     g = Game(headless=True)
     g.start_job("flat")
     for pid in g.cur["parts"][:INSPECT_REQ]:
@@ -15012,6 +15022,19 @@ def run_selftest():
     g.choose_diagnosis(next(i for i, d_ in enumerate(g.cur["diagnosis"]) if d_["correct"]))
     g.step_back()
     assert g.step_idx == 0
+    _st0 = g.cur["steps"][0]
+    if g.do_action(_st0["tool"], _st0["part"]) == "mini":
+        _solve_mini(g)
+    assert g.step_idx == 1
+    g.do_action("eyes" if _st0["tool"] != "eyes" else "hands", "frame")       # ошибка на 2-м шаге
+    _m = g.mistakes
+    g.step_back()
+    assert g.step_idx == 0 and g.mistakes == _m and g.mini_pending is None, "«◂» возвращает на шаг, ошибки не трогает"
+    assert g.ghost_line == _st0.get("ghost", ""), "«◂» вернул подсказку шага"
+    if g.do_action(_st0["tool"], _st0["part"]) == "mini":
+        _solve_mini(g)
+    assert g.step_idx == 1, "шаг после «◂» переделывается"
+    g.phase, g.step_idx, g.mistakes = "repair", 0, 0
     while g.phase == "repair":
         g.click_job(g._step_skip_rect().center)
     assert g.phase == "test" and g.mistakes == 2 * len(g.cur["steps"]), "пропуск шага = 2 ошибки"
