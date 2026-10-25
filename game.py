@@ -881,6 +881,7 @@ SEAT_BODY = {
 }
 SCAN_SPEEDS = (1.0, 1.6, 2.5)          # одна кнопка: секунд на пункт
 SCAN_HOLD = 1.2                        # держать кнопку столько — «назад» (Esc)
+SCAN_OFF_HOLD = 4.0                    # держать ещё дольше — выключить режим одной кнопки (коллега застряла в нём, 25.10)
 SCAN_SUB = ("Меньше", "Больше", "Готово")   # ползунок в режиме одной кнопки
 CAPTURE = dict(frame=None, texts=[], buttons=[], modal=None, mute=0)
 
@@ -9386,6 +9387,7 @@ class Game:
         ("C", "что сказал клиент"),
         ("F1", "справка по клавишам"),
         ("F2", "озвучка: включить или выключить"),
+        ("F3", "одна кнопка: включить или выключить (или держать кнопку 4 с)"),
         ("M", "звук: включить или выключить"),
         ("F11", "весь экран или окно"),
         ("Геймпад: крестовина", "выбрать пункт; LB, RB — группы"),
@@ -9652,6 +9654,9 @@ class Game:
         if k == pygame.K_F2:
             self.toggle_speech()
             return True
+        if k == pygame.K_F3:                              # одна кнопка вкл/выкл — выход из режима без сканирования
+            self.toggle_scan()
+            return True
         if self.kb["help"]:
             if k == pygame.K_F11:
                 return False
@@ -9798,6 +9803,9 @@ class Game:
         if up and getattr(self, "_scan_down", None) is not None:
             held = self.t - self._scan_down
             self._scan_down = None
+            if held >= SCAN_OFF_HOLD:                        # очень долго — выключить режим (мышь/палец без F3)
+                self.toggle_scan(False)
+                return True
             if held >= SCAN_HOLD:
                 self.kb["scan_sub"] = None
                 self.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE, mod=0, unicode=""))
@@ -9806,6 +9814,27 @@ class Game:
             self._scan_next = self.t + self._scan_iv() * 1.5
             return True
         return ev.type == pygame.MOUSEMOTION                # мышь фокус не сбивает
+
+    def toggle_scan(self, on=None):
+        """Режим одной кнопки: F3 или удержание кнопки SCAN_OFF_HOLD с. Выключение помнит скорость (`scan_last`), чтобы
+        тот, кто режимом пользуется, не терял настройку (коллега: «если человек не пользуется — не поймёт, как выключить»)."""
+        cur = A11Y.get("scan", 0)
+        if on is None:
+            on = not cur
+        if on and not cur:
+            A11Y["scan"] = max(1, min(len(SCAN_SPEEDS), A11Y.get("scan_last", 1) or 1))
+            self.flash("Режим одной кнопки включён. Выключить: F3 или держи кнопку 4 с.", AMBER, 6)
+        elif not on and cur:
+            A11Y["scan_last"] = cur
+            A11Y["scan"] = 0
+            self.flash("Режим одной кнопки выключен.", GOOD, 4)
+        else:
+            return
+        self._scan_down = None
+        self.kb["scan_sub"] = None
+        self._scan_next = self.t + 1.5
+        self.say(tr("Одна кнопка") + ": " + tr("ВКЛ" if on else "ВЫКЛ"), True)
+        self.save_settings()
 
     def scan_select(self):
         """Нажатие одной кнопки: выбрать выделенный пункт (ползунок — меньше / больше / готово)."""
@@ -9877,7 +9906,7 @@ class Game:
                     aa_rect(surf, AMBER if on else GREY, b, 3 if on else 1, border_radius=8)
                     draw_text(surf, ("− ", "+ ", "✓ ")[i] + tr(lab), b.center, 16,
                               AMBER if on else WHITE, bold=on, center=True)
-            hint = tr("Одна кнопка: нажми — выбрать, держи — назад")
+            hint = tr("Одна кнопка: нажми — выбрать, держи — назад · выключить: F3 или держи 4 с")
             fw = font(14).size(hint)[0] + 24
             b = pygame.Rect(WIDTH // 2 - fw // 2, HEIGHT - 26, fw, 22)
             aa_rect(surf, (12, 10, 18), b, border_radius=6)
@@ -10905,6 +10934,8 @@ class Game:
             A11Y["scan"] = (A11Y.get("scan", 0) + 1) % (len(SCAN_SPEEDS) + 1)
             self._scan_next = self.t + 1.5
             self.kb["scan_sub"] = None
+            if A11Y["scan"] == 1:                        # только что включили — сразу сказать, как выйти
+                self.flash("Режим одной кнопки включён. Выключить: F3 или держи кнопку 4 с.", AMBER, 6)
             self.say(self._access_label(k), True)
         elif k == "text":
             A11Y["text"] = (A11Y.get("text", 0) + 1) % len(TEXT_K)
@@ -11087,7 +11118,7 @@ class Game:
         y0 = self._access_rects()[-1][1].bottom + 6
         tw = self._sound_close_rect().x - p.x - 48
         note = ("Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
-                "Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад.")
+                "Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад; выключить — F3 или держать 4 с.")
         for sz in (13, 12, 11, 10):                   # крупный шрифт — мельче, но внутри панели
             lh = font(sz).get_height()
             if y0 + lh + 2 + len(wrap_lines(note, tw, sz)) * (lh + 2) <= p.bottom - 8:
@@ -15735,6 +15766,25 @@ def run_selftest():
     g2 = Game(headless=True)
     g2.start_job("flat")
     assert g2._notes_btn_rect() is None or g2._job_notes(), "кнопка только у заданий со сносками"
+
+    # одна кнопка: выход из режима — F3 и удержание ≥ SCAN_OFF_HOLD (коллега застряла в режиме, 25.10)
+    _scan0, _last0 = A11Y.get("scan", 0), A11Y.get("scan_last")
+    try:
+        g = Game(headless=True)
+        A11Y["scan"] = 2
+        g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F3, mod=0, unicode=""))
+        assert A11Y["scan"] == 0 and A11Y.get("scan_last") == 2, "F3 выключает режим одной кнопки и помнит скорость"
+        g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F3, mod=0, unicode=""))
+        assert A11Y["scan"] == 2, "F3 снова включает с прежней скоростью"
+        g._scan_down = g.t - SCAN_OFF_HOLD - 0.5
+        g.handle_event(pygame.event.Event(pygame.KEYUP, key=pygame.K_SPACE, mod=0, unicode=""))
+        assert A11Y["scan"] == 0, "удержание кнопки 4 с выключает режим"
+    finally:
+        A11Y["scan"] = _scan0
+        if _last0 is None:
+            A11Y.pop("scan_last", None)
+        else:
+            A11Y["scan_last"] = _last0
 
     # Esc: цепочка «назад» и двойной Esc из ремонта
     def _esc(g):
