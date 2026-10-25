@@ -9267,7 +9267,9 @@ class Game:
         self.scene = "failed"
 
     def open_manual(self, page=None):
-        pages = (self.cur.get("manual") if self.cur else None) or list(MANUAL)
+        pages = self._manual_pages()
+        if self.manual_page not in pages:
+            self.manual_page = None
         self.manual_page = page or self.manual_page or pages[0]
         self.manual_viewed.add(self.manual_page)
         self.show_manual = True
@@ -9524,7 +9526,7 @@ class Game:
             return
         if self.show_manual:
             for k, r in self._manual_page_rects():
-                add("Страницы", tr(MANUAL[k][0]) + (", " + tr("открыта") if k == self.manual_page else ""), r,
+                add("Страницы", tr(self._manual_entry(k)[0]) + (", " + tr("открыта") if k == self.manual_page else ""), r,
                     act=lambda k=k: (setattr(self, "manual_page", k), self.manual_viewed.add(k)), key=("page", k))
             return
         if self.spec_pending:
@@ -9986,7 +9988,7 @@ class Game:
                 out += f" {tr('Прибор показывает')}: {tr(cfg['reading'])}. {tr(cfg.get('sub', ''))}"
             return out
         if self.show_manual and self.manual_page:
-            title, lines = MANUAL[self.manual_page]
+            title, lines = self._manual_entry(self.manual_page)
             return f"{tr('Мануал')}. {tr(title)}. " + " ".join(tr(x) for x in lines)
         if self.spec_pending:
             spec = self.spec_pending["spec"]
@@ -10418,6 +10420,20 @@ class Game:
             return
         if self.mini_pending:
             self._click_mini(m)
+            return
+        if self.show_manual:                                  # окно сносок: только его кнопки
+            for key, rect in self._manual_page_rects():
+                if rect.collidepoint(m):
+                    self.manual_page = key
+                    self.manual_viewed.add(key)
+                    return
+            if self._manual_close_rect().collidepoint(m):
+                self.show_manual = False
+            return
+        nb = self._notes_btn_rect()
+        if nb and (nb.collidepoint(m) or (getattr(self, "_sub_rect", None) and self._sub_rect.collidepoint(m))):
+            self.open_manual("notes:" + self.cur["id"])
+            snd("tick")
             return
         if self.phase == "repair":
             if self._step_prev_rect().collidepoint(m):
@@ -11307,6 +11323,11 @@ class Game:
             right -= font(18, True).size(tr("КОЛЁСА И КОСТИ"))[0] + 16
         br = self._top_back_rect()
         x0 = br.right + 10 if br else 24                             # место под «◂ Назад»
+        nb = self._notes_btn_rect()
+        if nb:                                                   # сноски из мануалов одним окном (отзыв 93)
+            Button(nb, "СНОСКИ МАНУАЛА", PURPLE).draw(surf, mouse_pos())
+            right = nb.x - 12
+        self._sub_rect = None
         if sub:                                                  # вторая строка — какая коляска (модель)
             for ts, ss in ((20, 14), (18, 13), (17, 12), (16, 11), (15, 10)):   # крупный шрифт — обе строки в полосе
                 th, sh = font(ts, True).get_height(), font(ss).get_height()
@@ -11315,6 +11336,8 @@ class Game:
             y = max(1, (54 - th - sh - 1) // 2)
             fit_text(surf, title, (x0, y), right - x0, ts, AMBER, bold=True)
             fit_text(surf, sub, (x0, y + th + 1), right - x0, ss, GHOST)
+            if nb:                                               # клик по названию модели — тоже открывает сноски
+                self._sub_rect = pygame.Rect(x0, y + th, min(right - x0, font(ss).size(tr(sub))[0] + 8), sh + 2)
         else:
             fit_text(surf, title, (x0, 15), right - x0, 22, AMBER, bold=True)
 
@@ -14206,6 +14229,8 @@ class Game:
                 self._draw_ride(surf)
         if self.v3d is None:
             self._draw_action(surf)
+        if self.show_manual:                          # сноски одним окном (отзыв 93)
+            self._draw_manual_overlay(surf, mouse)
         if self.mini_pending:
             self._draw_mini_overlay(surf, mouse)
         if self.v3d is not None:
@@ -14394,7 +14419,7 @@ class Game:
             y = draw_wrapped(surf, hint, (info.x + 16, info.y + 12), info.w - 32, 15, GREY)
             if not tech and MANUAL_NOTES.get(self.cur["id"]):     # где сноски: значок книжки у детали
                 _draw_book_icon(surf, (info.x + 26, y + 16), 10, CYAN)
-                draw_wrapped(surf, "У деталей с книжкой есть сноска из мануала — наведи на деталь.",
+                draw_wrapped(surf, "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» вверху.",
                              (info.x + 44, y + 7), info.w - 60, 14, CYAN)
 
     def _draw_tool_in_hand(self, surf, mouse):
@@ -14593,9 +14618,46 @@ class Game:
     def _manual_panel_rect(self):
         return pygame.Rect(40, 62, WIDTH - 80, 646)
 
+    def _manual_pages(self):
+        """Страницы окна мануала: у задания Гильдии — его страницы MANUAL, у обычного задания — одна сводка сносок
+        («notes:<id>», отзыв 93: все сноски в одном окне по клику), иначе — весь MANUAL."""
+        if self.cur and self.cur.get("track") == "tech":
+            return self.cur.get("manual") or list(MANUAL)
+        if self.cur and self._job_notes():
+            return ["notes:" + self.cur["id"]]
+        return list(MANUAL)
+
+    def _job_notes(self):
+        """Сноски текущего обычного задания: [(деталь, (мануал, страница, текст))] — только по его деталям."""
+        if not self.cur or self.cur.get("track") == "tech":
+            return []
+        notes = MANUAL_NOTES.get(self.cur["id"], {})
+        return [(pid, notes[pid]) for pid in self.cur["parts"] if pid in notes]
+
+    def _manual_entry(self, key):
+        """(заголовок, строки) страницы: MANUAL[key] или сводка сносок задания — строки уже переведены."""
+        if not str(key).startswith("notes:"):
+            return MANUAL[key]
+        lines = [tr(PARTS.get(pid, pid)) + " — " + tr(text) + " (" + tr(self._note_head((manual, page, text))) + ")"
+                 for pid, (manual, page, text) in self._job_notes()]
+        return (self.cur.get("chair_name") or self.cur["title"], lines)
+
+    def _notes_btn_rect(self):
+        """Кнопка «СНОСКИ» в шапке обычного задания (есть сноски, идёт работа) или None."""
+        if (self.scene != "job" or not self.cur or self.cur.get("track") == "tech" or not self._job_notes()
+                or self.phase not in ("diagnose", "repair")):      # в «Проверке» деталей уже нет — кнопки тоже
+            return None
+        right = WIDTH - 170
+        if self.dispute_visible():
+            right = self._dispute_btn_rect().x - 12
+        elif self._skip_tut_rect() is not None:
+            right = self._skip_tut_rect().x - 12
+        else:
+            right -= font(18, True).size(tr("КОЛЁСА И КОСТИ"))[0] + 16
+        return pygame.Rect(right - 190, 11, 180, 32)
+
     def _manual_page_rects(self):
-        pages = (self.cur.get("manual") if (self.cur and self.cur.get("track") == "tech")
-                 else None) or list(MANUAL)
+        pages = self._manual_pages()
         p = self._manual_panel_rect()
         return [(key, pygame.Rect(p.x + 20, p.y + 70 + i * 54, 270, 46))
                 for i, key in enumerate(pages)]
@@ -14605,7 +14667,7 @@ class Game:
         key = (page, width, height, LANG["code"])
         cache = self.__dict__.setdefault("_manual_fit", {})
         if key not in cache:
-            lines = MANUAL[page][1]
+            lines = self._manual_entry(page)[1]
             best = (11, 4)
             for size in range(17, 10, -1):
                 gap = 8 if size >= 15 else 5
@@ -14631,19 +14693,20 @@ class Game:
         s.fill((26, 24, 34, 250))
         surf.blit(s, p)
         aa_rect(surf, PURPLE, p, 2, border_radius=10)
-        draw_text(surf, "МАНУАЛ ГИЛЬДИИ КОЛЁСНИКОВ", (p.x + 24, p.y + 20), 22, PURPLE, bold=True)
+        draw_text(surf, "СНОСКИ ИЗ МАНУАЛОВ" if str(self.manual_page).startswith("notes:") else "МАНУАЛ ГИЛЬДИИ КОЛЁСНИКОВ",
+                  (p.x + 24, p.y + 20), 22, PURPLE, bold=True)
         for key, rect in self._manual_page_rects():
             active = key == self.manual_page
             aa_rect(surf, PANEL2 if active else PANEL, rect, border_radius=6)
             aa_rect(surf, PURPLE if active else DIM, rect, 2, border_radius=6)
-            name = MANUAL[key][0]
+            name = self._manual_entry(key)[0]
             if font(14).size(tr(name))[0] <= rect.w - 20:
                 draw_text(surf, name, (rect.x + 10, rect.y + 13), 14, WHITE if active else GREY)
             else:                                        # длинное название — в две строки, а не мелким шрифтом
                 draw_wrapped(surf, name, (rect.x + 10, rect.y + 5), rect.w - 20, 13, WHITE if active else GREY,
                              max_lines=2)
         if self.manual_page:
-            title, lines = MANUAL[self.manual_page]
+            title, lines = self._manual_entry(self.manual_page)
             x0 = p.x + 320
             tw = p.right - 24 - x0
             fit_text(surf, title, (x0, p.y + 70), tw, 20, AMBER, bold=True)
@@ -15663,6 +15726,21 @@ def run_selftest():
     for name, fn in VECTOR_ART.items():
         art = fn()
         assert art.get_width() > 0 and art.get_height() > 0, f"арт {name} не отрисовался"
+
+    # окно сносок обычного задания (отзыв 93): кнопка в шапке, страница «notes:<id>», все сноски по деталям задания
+    g = Game(headless=True)
+    g.start_job("aeroz_lock")
+    assert g._notes_btn_rect() is not None and g._job_notes(), "у aeroz_lock есть сноски — должна быть кнопка «СНОСКИ»"
+    g.click_job(g._notes_btn_rect().center)
+    assert g.show_manual and g.manual_page == "notes:aeroz_lock", "клик по «СНОСКИ» открывает окно сносок"
+    title, lines = g._manual_entry(g.manual_page)
+    assert len(lines) == len(g._job_notes()) and all("—" in ln for ln in lines)
+    g.draw(pygame.display.get_surface())
+    g.click_job(g._manual_close_rect().center)
+    assert not g.show_manual, "«ЗАКРЫТЬ» закрывает окно сносок"
+    g2 = Game(headless=True)
+    g2.start_job("flat")
+    assert g2._notes_btn_rect() is None or g2._job_notes(), "кнопка только у заданий со сносками"
 
     # Esc: цепочка «назад» и двойной Esc из ремонта
     def _esc(g):

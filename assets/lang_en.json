@@ -3042,5 +3042,8 @@
  "Выкрути болт вилки и переставь переднее колесо в нижнее отверстие C (отверстия вилки A, B, C идут сверху вниз), затяни.": "Unscrew the caster fork bolt, move the front wheel to the bottom hole C (the fork holes A, B, C run top to bottom) and tighten (hint: the bolt has a six-sided head).",
  "Натяжение спиц проверяют пинг-тестом. Тянут до нужного натяжения и равномерно — перетянешь, и обод «восьмерит». Ослабший крепёж рамы подтягивают, пока не задребезжало всё остальное.": "Spoke tension is checked with a ping test. Tighten to the right tension and evenly — overtighten and the rim goes out of true. Loose frame fasteners get tightened before everything else starts rattling.",
  "Универсального рецепта вроде «90-90-90» (бёдра, колени и голеностопы — все под прямым углом) нет: решение — по осмотру и цели.": "There is no universal recipe like \"90-90-90\" (hips, knees and ankles all at right angles): the decision follows the assessment and the goal.",
- "Можно ли посадить всех по правилу «90-90-90» (бёдра, колени и голеностопы под 90°)?": "Can everyone be seated by the \"90-90-90\" rule (hips, knees and ankles at 90°)?"
+ "Можно ли посадить всех по правилу «90-90-90» (бёдра, колени и голеностопы под 90°)?": "Can everyone be seated by the \"90-90-90\" rule (hips, knees and ankles at 90°)?",
+ "СНОСКИ ИЗ МАНУАЛОВ": "MANUAL FOOTNOTES",
+ "СНОСКИ МАНУАЛА": "MANUAL NOTES",
+ "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» вверху.": "Parts with a book icon have a manual footnote — hover or click the icon; for all of them at once press MANUAL NOTES at the top."
 }
