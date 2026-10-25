@@ -11323,10 +11323,7 @@ class Game:
             right -= font(18, True).size(tr("КОЛЁСА И КОСТИ"))[0] + 16
         br = self._top_back_rect()
         x0 = br.right + 10 if br else 24                             # место под «◂ Назад»
-        nb = self._notes_btn_rect()
-        if nb:                                                   # сноски из мануалов одним окном (отзыв 93)
-            Button(nb, "СНОСКИ МАНУАЛА", PURPLE).draw(surf, mouse_pos())
-            right = nb.x - 12
+        nb = self._notes_btn_rect()                              # кнопка рисуется в draw_job (внизу справа)
         self._sub_rect = None
         if sub:                                                  # вторая строка — какая коляска (модель)
             for ts, ss in ((20, 14), (18, 13), (17, 12), (16, 11), (15, 10)):   # крупный шрифт — обе строки в полосе
@@ -14229,6 +14226,9 @@ class Game:
                 self._draw_ride(surf)
         if self.v3d is None:
             self._draw_action(surf)
+        nb = self._notes_btn_rect()
+        if nb:                                        # все сноски задания одним окном (отзыв 93), внизу справа
+            Button(nb, "СНОСКИ МАНУАЛА", PURPLE).draw(surf, mouse)
         if self.show_manual:                          # сноски одним окном (отзыв 93)
             self._draw_manual_overlay(surf, mouse)
         if self.mini_pending:
@@ -14419,7 +14419,7 @@ class Game:
             y = draw_wrapped(surf, hint, (info.x + 16, info.y + 12), info.w - 32, 15, GREY)
             if not tech and MANUAL_NOTES.get(self.cur["id"]):     # где сноски: значок книжки у детали
                 _draw_book_icon(surf, (info.x + 26, y + 16), 10, CYAN)
-                draw_wrapped(surf, "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» вверху.",
+                draw_wrapped(surf, "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа.",
                              (info.x + 44, y + 7), info.w - 60, 14, CYAN)
 
     def _draw_tool_in_hand(self, surf, mouse):
@@ -14647,14 +14647,8 @@ class Game:
         if (self.scene != "job" or not self.cur or self.cur.get("track") == "tech" or not self._job_notes()
                 or self.phase not in ("diagnose", "repair")):      # в «Проверке» деталей уже нет — кнопки тоже
             return None
-        right = WIDTH - 170
-        if self.dispute_visible():
-            right = self._dispute_btn_rect().x - 12
-        elif self._skip_tut_rect() is not None:
-            right = self._skip_tut_rect().x - 12
-        else:
-            right -= font(18, True).size(tr("КОЛЁСА И КОСТИ"))[0] + 16
-        return pygame.Rect(right - 190, 11, 180, 32)
+        return pygame.Rect(WIDTH - 24 - 180, HEIGHT - 44, 180, 34)   # правый нижний угол, под карточкой инструмента
+                                                                   # (владелец 25.10: шапка перегружена)
 
     def _manual_page_rects(self):
         pages = self._manual_pages()
