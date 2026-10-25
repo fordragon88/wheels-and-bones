@@ -882,6 +882,8 @@ SEAT_BODY = {
 SCAN_SPEEDS = (1.0, 1.6, 2.5)          # одна кнопка: секунд на пункт
 SCAN_HOLD = 1.2                        # держать кнопку столько — «назад» (Esc)
 SCAN_OFF_HOLD = 4.0                    # держать ещё дольше — выключить режим одной кнопки (коллега застряла в нём, 25.10)
+SCAN_ENABLED = False                   # 25.10 владелец: опцию «Одна кнопка» выключить совсем (коллега в ней застревала).
+                                       # Код режима оставлен: True — вернёт строку в Доступность, F3 и сброс настройки
 SCAN_SUB = ("Меньше", "Больше", "Готово")   # ползунок в режиме одной кнопки
 CAPTURE = dict(frame=None, texts=[], buttons=[], modal=None, mute=0)
 
@@ -1596,6 +1598,16 @@ def web_setup_touch():
     r = web_js("""(function(){
       document.documentElement.style.overflow = 'hidden';   // служебные полосы pygbag/xterm (50000 px) давали прокрутку
       document.body.style.overflow = 'hidden';               // в окне игры на сайте (Firefox)
+      if (!document.getElementById('wnb-exitfs') && (document.exitFullscreen || document.webkitExitFullscreen)) {
+        var x = document.createElement('button'); x.id = 'wnb-exitfs'; x.type = 'button';   // выход из полного экрана
+        x.textContent = '\u2716 Exit fullscreen (Esc)'; x.setAttribute('aria-label', 'Exit fullscreen');   // (владелец 25.10)
+        x.style.cssText = 'display:none;position:fixed;left:50%;bottom:4px;transform:translateX(-50%);z-index:9998;' +
+          'padding:5px 12px;border:0;border-radius:8px;background:rgba(0,0,0,.55);color:#fff;font:bold 13px sans-serif;opacity:.85;cursor:pointer';
+        x.onclick = function(){ (document.exitFullscreen || document.webkitExitFullscreen).call(document); };
+        document.body.appendChild(x);
+        var fs = function(){ x.style.display = (document.fullscreenElement || document.webkitFullscreenElement) ? 'block' : 'none'; };
+        document.addEventListener('fullscreenchange', fs); document.addEventListener('webkitfullscreenchange', fs); fs();
+      }
       var touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
       if (!touch || document.getElementById('wnb-rotate')) return touch ? 'y' : 'n';
       var c = document.getElementById('canvas');
@@ -8641,6 +8653,8 @@ class Game:
                         A11Y[k] = v
                 elif isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
                     A11Y[k] = int(max(-10, min(10, v)))
+        if not SCAN_ENABLED:                             # опция выключена: сохранённое значение не оживляет режим
+            A11Y["scan"] = 0
         if not A11Y.get("calm_set"):
             A11Y["calm"] = system_reduced_motion()
         if not A11Y.get("speech_set") and screen_reader_running():   # NVDA/JAWS/Диктор — говорим, пока не выключили F2
@@ -8763,7 +8777,7 @@ class Game:
         self.phase = "repair" if tech else "diagnose"
         self.step_idx = 0
         self.done_steps = set()
-        self.step_order = [s["id"] for s in self.cur["steps"]] if tech else []
+        self.step_order = [s["id"] for s in self.cur["steps"]] if tech else []
         self.note_pin = None                     # закреплённая сноска (клик по книжке, отзыв 93)
         self.tt_show = None                      # коляска Гильдии кадрами: ракурс заново (аудит 24.10)
         if tech:
@@ -9387,7 +9401,7 @@ class Game:
         ("C", "что сказал клиент"),
         ("F1", "справка по клавишам"),
         ("F2", "озвучка: включить или выключить"),
-        ("F3", "одна кнопка: включить или выключить (или держать кнопку 4 с)"),
+    ] + ([("F3", "одна кнопка: включить или выключить (или держать кнопку 4 с)")] if SCAN_ENABLED else []) + [
         ("M", "звук: включить или выключить"),
         ("F11", "весь экран или окно"),
         ("Геймпад: крестовина", "выбрать пункт; LB, RB — группы"),
@@ -9654,7 +9668,7 @@ class Game:
         if k == pygame.K_F2:
             self.toggle_speech()
             return True
-        if k == pygame.K_F3:                              # одна кнопка вкл/выкл — выход из режима без сканирования
+        if k == pygame.K_F3 and SCAN_ENABLED:             # одна кнопка вкл/выкл — выход из режима без сканирования
             self.toggle_scan()
             return True
         if self.kb["help"]:
@@ -10870,7 +10884,7 @@ class Game:
         draw_wrapped(surf, "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и "
                            "доступность останутся.", (p.x + 32, p.y + 356), p.w - 64, 13, GREY)
 
-    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "calm", "quiet", "barty", "text", "font", "scan")
+    ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "calm", "quiet", "barty", "text", "font") + (("scan",) if SCAN_ENABLED else ())
 
     def _access_rects(self):
         p = self._sound_panel_rect()
@@ -11117,8 +11131,9 @@ class Game:
             Button(r, label, GOOD if on else GREY).draw(surf, mouse, active=on and k not in ("rate", "text"))
         y0 = self._access_rects()[-1][1].bottom + 6
         tw = self._sound_close_rect().x - p.x - 48
-        note = ("Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
-                "Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад; выключить — F3 или держать 4 с.")
+        note = (("Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. "
+                 "Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад; выключить — F3 или держать 4 с.")
+                if SCAN_ENABLED else "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши.")
         for sz in (13, 12, 11, 10):                   # крупный шрифт — мельче, но внутри панели
             lh = font(sz).get_height()
             if y0 + lh + 2 + len(wrap_lines(note, tw, sz)) * (lh + 2) <= p.bottom - 8:
@@ -15773,9 +15788,12 @@ def run_selftest():
         g = Game(headless=True)
         A11Y["scan"] = 2
         g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F3, mod=0, unicode=""))
-        assert A11Y["scan"] == 0 and A11Y.get("scan_last") == 2, "F3 выключает режим одной кнопки и помнит скорость"
-        g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F3, mod=0, unicode=""))
-        assert A11Y["scan"] == 2, "F3 снова включает с прежней скоростью"
+        if SCAN_ENABLED:
+            assert A11Y["scan"] == 0 and A11Y.get("scan_last") == 2, "F3 выключает режим одной кнопки и помнит скорость"
+            g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F3, mod=0, unicode=""))
+            assert A11Y["scan"] == 2, "F3 снова включает с прежней скоростью"
+        else:
+            assert A11Y["scan"] == 2 and "scan" not in Game.ACCESS_ROWS, "опция выключена: F3 ничего не делает, строки в настройках нет"
         g._scan_down = g.t - SCAN_OFF_HOLD - 0.5
         g.handle_event(pygame.event.Event(pygame.KEYUP, key=pygame.K_SPACE, mod=0, unicode=""))
         assert A11Y["scan"] == 0, "удержание кнопки 4 с выключает режим"

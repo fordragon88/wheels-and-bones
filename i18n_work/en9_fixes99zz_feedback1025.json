@@ -22,5 +22,6 @@
  "одна кнопка: включить или выключить (или держать кнопку 4 с)": "switch mode on/off (or hold the switch for 4 s)",
  "Режим одной кнопки включён. Выключить: F3 или держи кнопку 4 с.": "Switch mode is on. To turn it off: F3 or hold the switch for 4 s.",
  "Режим одной кнопки выключен.": "Switch mode is off.",
- "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад; выключить — F3 или держать 4 с.": "The whole game can be played from the keyboard: arrows, Tab, Enter. F1 lists all keys. Switch mode: items are highlighted one by one, press — select, hold — back; turn off with F3 or by holding for 4 s."
+ "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад; выключить — F3 или держать 4 с.": "The whole game can be played from the keyboard: arrows, Tab, Enter. F1 lists all keys. Switch mode: items are highlighted one by one, press — select, hold — back; turn off with F3 or by holding for 4 s.",
+ "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши.": "The whole game can be played from the keyboard: arrows, Tab, Enter. F1 lists all keys."
 }
