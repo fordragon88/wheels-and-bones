@@ -530,7 +530,9 @@ python i18n_work/build_lang.py       # перевод полон
   (владелец в Firefox не видел выхода):** `document.fullscreenElement` пуст, если экран развернули F11 или если iframe
   развернула родительская страница — кнопка теперь показывается, когда окно размером с экран (`innerWidth/Height ≈
   screen`, опрос раз в секунду + resize); клик: API-выход, иначе `postMessage({wnb:'exitfs'})` родителю (слушатель в
-  `wordpress_embed.html` зовёт `exitFullscreen`), иначе подсказка «Press F11 (or Esc)» — F11 браузера скриптом не снять. Проверки §10а — OK,
+  `wordpress_embed.html` зовёт `exitFullscreen`), иначе подсказка «Press F11 (or Esc)» — F11 браузера скриптом не снять.
+  В блоке WordPress кнопка не показывалась из-за встроенного `display:none` (инлайн сильнее правила `:fullscreen`) — убран,
+  правило с `!important` + слушатель fullscreenchange; владелец перевставляет блок. Выложено Pages 76c50dd0. Проверки §10а — OK,
   **выложено** (Pages 65ebd358, web_smoke 20/0), exe пересобран. (game.py, wordpress_embed.html, AGENTS.md)
 - 2026-10-25 — Claude (Fable 5.1) — **опция «Одна кнопка» выключена совсем** (владелец после обсуждения с коллегой):
   `SCAN_ENABLED = False` — строка убрана из `ACCESS_ROWS`, F3 отключён, строка F3 убрана из справки и заметки настроек,
