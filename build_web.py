@@ -111,6 +111,53 @@ def build(serve=False):
     shutil.copytree(os.path.join(ROOT, "assets", "turntable"), tt,
                     ignore=lambda d, names: [n for n in names if not n.endswith((".png", ".jpg"))])
     subprocess.run(cmd, check=True, cwd=ROOT)
+    polish_index(os.path.join(APP, "build", "web"))
+
+
+SPLASH_CSS = """
+<style id="wnb-splash-css">
+  #wnb-splash { position: fixed; inset: 0; z-index: 999995; pointer-events: none; display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end; padding-bottom: 7vh; box-sizing: border-box;
+    background: linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,8,14,.72) 100%), #1d1b24 url(splash.jpg) center / cover no-repeat;
+    color: #f0b85a; transition: opacity .7s; }
+  #wnb-splash .t { font: bold clamp(34px, 6vw, 64px) Georgia, "Times New Roman", serif; letter-spacing: 2px;
+    text-shadow: 0 2px 16px #000, 0 0 3px #000; margin-bottom: 8px; }
+  #wnb-splash .s { font: clamp(13px, 1.6vw, 17px) sans-serif; color: #ece6d4; text-shadow: 0 1px 8px #000, 0 0 2px #000;
+    margin: 0 24px 18px; text-align: center; max-width: 680px; }
+  #wnb-splash progress { width: min(460px, 80vw); height: 14px; accent-color: #e8a33d; }
+  #wnb-splash .m { font: bold 15px sans-serif; color: #f0b85a; text-shadow: 0 1px 6px #000; margin-top: 10px; min-height: 20px; }
+  #infobox { background: rgba(29, 27, 36, .94) !important; color: #f0b85a !important; border: 2px solid #e8a33d; border-radius: 12px;
+    font: bold 18px sans-serif; text-align: center; box-shadow: 0 4px 24px #000; }
+</style>
+"""
+SPLASH_HTML = ('<div id="wnb-splash"><div class="t">Wheels &amp; Bones</div>'
+               '<div class="s">Loading the workshop… about 12 MB, usually 20–40 seconds. '
+               'Nothing to install — the game runs right here in your browser.</div>'
+               '<progress id="wnb-sp-bar" max="100" value="0"></progress><div class="m" id="wnb-sp-msg">Downloading…</div></div>'
+               '<script>(function(){var sp=document.getElementById("wnb-splash");'
+               'function tick(){if(window.wnbState){sp.style.opacity="0";setTimeout(function(){sp.remove();},800);return;}'
+               'var p=document.getElementById("progress"),st=document.getElementById("status"),ib=document.getElementById("infobox"),'
+               'bar=document.getElementById("wnb-sp-bar"),msg=document.getElementById("wnb-sp-msg");'
+               'if(p&&p.max&&p.value>0){bar.max=p.max;bar.value=p.value;}else{bar.removeAttribute("value");}'
+               'var txt=(ib&&ib.offsetParent!==null&&ib.innerText)||(st&&st.innerText)||"";'
+               'if(/Ready/i.test(txt)){txt="Ready — click or tap anywhere to start";bar.max=100;bar.value=100;}'
+               'if(txt)msg.textContent=txt;setTimeout(tick,250);}tick();})();</script>')
+
+
+def polish_index(web):
+    """Заставка загрузки (владелец 25.10): pygbag прячет свой #transfer почти сразу и 20–40 с показывает серую страницу с
+    «Loading, please wait». Свой оверлей #wnb-splash: фон splash.jpg (art_tests/web_splash.jpg), заголовок, подпись,
+    полоса (копирует #progress pygbag) и сообщение (#status / #infobox, «Ready…» → «click or tap anywhere to start»).
+    pointer-events:none — клик «Ready to start» проходит на страницу; исчезает, когда игра пошла (window.wnbState)."""
+    shutil.copy2(os.path.join(ROOT, "art_tests", "web_splash.jpg"), os.path.join(web, "splash.jpg"))
+    index = os.path.join(web, "index.html")
+    html = open(index, encoding="utf-8").read()
+    if "wnb-splash-css" in html:
+        return
+    html = html.replace("</head>", SPLASH_CSS + "</head>", 1)
+    html = html.replace("<body>", "<body>" + SPLASH_HTML, 1)
+    open(index, "w", encoding="utf-8").write(html)
+
 
 
 DEPLOY = os.path.join(ROOT, "web_deploy")

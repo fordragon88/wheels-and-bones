@@ -9482,7 +9482,7 @@ class Game:
         if not (self.show_sound or self.dispute_ui is not None or self.mini_pending or self.show_manual
                 or self.spec_pending or self.v3d is not None) and self.scene not in ("intro", "ending"):
             # на титуле тоже: незрячий игрок включает озвучку/язык до начала игры (мышью это работало и раньше)
-            add("Меню", tr("Настройки: звук, графика, доступность"), self._speaker_rect(),
+            add("Меню", tr("Настройки: звук, графика, доступность") + ("" if VOL["on"] and VOL["master"] > 0.001 else ". " + tr("Звук выключен")), self._speaker_rect(),
                 act=self._a11y_open_settings, key="settings")
             if self.scene != "title":
                 add("Меню", tr("Сообщить о неточности"), self._feedback_rect(), act=self.open_feedback, key="flag")
@@ -10806,9 +10806,11 @@ class Game:
         DR.polygon(surf, col, pts)
         aa_circle(surf, col, (cx, cy), 9)
         aa_circle(surf, (30, 28, 40), (cx, cy), 4)
-        if not VOL["on"] or VOL["master"] <= 0.001:
-            DR.line(surf, BAD, (r.right - 13, r.bottom - 13), (r.right - 5, r.bottom - 5), 2)
-            DR.line(surf, BAD, (r.right - 5, r.bottom - 13), (r.right - 13, r.bottom - 5), 2)
+        if not VOL["on"] or VOL["master"] <= 0.001:          # звук выключен: перечёркнутый динамик СЛЕВА от шестерёнки
+            sx, sy = r.x - 20, r.centery                      # (владелец 25.10: крестик на самой шестерёнке смотрелся как сбой)
+            DR.rect(surf, GHOST, (sx - 9, sy - 4, 6, 8))
+            DR.polygon(surf, GHOST, [(sx - 3, sy - 4), (sx + 4, sy - 10), (sx + 4, sy + 10), (sx - 3, sy + 4)])
+            DR.line(surf, BAD, (sx - 11, sy - 11), (sx + 9, sy + 11), 3)
 
     def _sound_panel_rect(self):
         return pygame.Rect(WIDTH // 2 - 290, HEIGHT // 2 - 250, 580, 500)

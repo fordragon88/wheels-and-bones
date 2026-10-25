@@ -508,6 +508,19 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-25 — Claude (Fable 5.1) — **значок «звук выключен» и заставка загрузки** (владелец). (1) Красный крестик на самой
+  шестерёнке (рисовался при `VOL["on"] = False` / громкости 0) выглядел как сбой — теперь слева от шестерёнки
+  перечёркнутый динамик (`_draw_speaker`), озвучка кнопки добавляет «Звук выключен». (2) Браузер: `build_web.polish_index`
+  после pygbag вставляет в index.html свой оверлей `#wnb-splash` (pygbag прячет свой `#transfer` почти сразу и 20–40 с
+  показывает серую страницу с «Loading, please wait»): фон `splash.jpg` (`art_tests/web_splash.jpg`), заголовок
+  «Wheels & Bones», подпись про 12 МБ и 20–40 с, полоса (копирует `#progress` pygbag, при 0 — бегущая) и сообщение из
+  `#status`/`#infobox` («Ready…» → «click or tap anywhere to start»); `pointer-events:none` — клик старта проходит;
+  исчезает, когда появляется `window.wnbState` (игра пошла). Проверено в встроенном браузере на локальной сборке
+  (`python -m http.server --directory web_build/.../web`, НЕ из самой папки — иначе stage() не может её удалить). Картинка
+  заставки — Codex (`art_tests/codex_splash/BRIEF.md`: мастерская, Мартин у колеса, Барти, две коляски, без текста; 3
+  варианта 1920×1080, поставлен `splash_1.png` → `art_tests/web_splash.jpg` 1280×720 q84, 182 КБ; снизу CSS-градиент под
+  заголовок). Владелец может выбрать другой вариант — заменить jpg и пересобрать. Проверки — OK; **выложено** (Pages
+  b822e5ee, web_smoke 20/0), exe пересобран. (game.py, build_web.py, art_tests/web_splash.jpg, AGENTS.md)
 - 2026-10-25 — Claude (Fable 5.1) — **кнопка выхода из полного экрана в веб-версии** (владелец). (1) `wordpress_embed.html`:
   «Play fullscreen» теперь разворачивает обёртку `#wnb-wrap` (iframe + кнопка `#wnb-exit` «✖ Exit fullscreen (Esc)» внизу по
   центру), а не сам iframe — кнопка живёт в родительской странице, `document.exitFullscreen()` там надёжен; CSS
