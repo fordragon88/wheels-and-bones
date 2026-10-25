@@ -1603,10 +1603,19 @@ def web_setup_touch():
         x.textContent = '\u2716 Exit fullscreen (Esc)'; x.setAttribute('aria-label', 'Exit fullscreen');   // (владелец 25.10)
         x.style.cssText = 'display:none;position:fixed;left:50%;bottom:4px;transform:translateX(-50%);z-index:9998;' +
           'padding:5px 12px;border:0;border-radius:8px;background:rgba(0,0,0,.55);color:#fff;font:bold 13px sans-serif;opacity:.85;cursor:pointer';
-        x.onclick = function(){ (document.exitFullscreen || document.webkitExitFullscreen).call(document); };
+        var api = function(){ return !!(document.fullscreenElement || document.webkitFullscreenElement); };
+        var big = function(){ return innerWidth >= screen.width - 2 && innerHeight >= screen.height - 2; };   // F11 или
+        x.onclick = function(){                                                                                  // iframe
+          if (api()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+          if (window.parent && window.parent !== window) {                 // сайт развернул iframe: просим страницу
+            try { window.parent.postMessage({wnb: 'exitfs'}, '*'); } catch (e) {} }
+          x.textContent = 'Press F11 (or Esc) to leave full screen';         // F11 браузера снять скриптом нельзя
+          setTimeout(function(){ x.textContent = '\u2716 Exit fullscreen (Esc)'; }, 4000);
+        };
         document.body.appendChild(x);
-        var fs = function(){ x.style.display = (document.fullscreenElement || document.webkitFullscreenElement) ? 'block' : 'none'; };
-        document.addEventListener('fullscreenchange', fs); document.addEventListener('webkitfullscreenchange', fs); fs();
+        var fs = function(){ x.style.display = (api() || big()) ? 'block' : 'none'; };
+        document.addEventListener('fullscreenchange', fs); document.addEventListener('webkitfullscreenchange', fs);
+        window.addEventListener('resize', fs); setInterval(fs, 1000); fs();
       }
       var touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
       if (!touch || document.getElementById('wnb-rotate')) return touch ? 'y' : 'n';
