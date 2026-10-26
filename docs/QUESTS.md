@@ -29,7 +29,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Let the remaining air out completely through the valve.  
-   *Tool:* Hands & eyes → *Part:* Valve  
+   *Tool:* Hands and eyes → *Part:* Valve  
    *Hint:* Barty: “The master always let the spirit out of the wheel first. Solemnly.”  
    *After the step:* With the tube deflated, the tire comes off easily.
 2. Pry the tire bead up with a tire lever over a spoke, hook it onto the spoke.  
@@ -41,25 +41,25 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Tire lever → *Part:* Tire  
    *After the step:* Remove only one bead; leave the other on the rim.
 4. Pull the tube out of the tire.  
-   *Tool:* Hands & eyes → *Part:* Inner tube  
+   *Tool:* Hands and eyes → *Part:* Inner tube  
    *After the step:* Carefully, so you don't snag the valve.
 5. Run a finger inside the tire and along the rim — remove glass/splinters.  
-   *Tool:* Hands & eyes → *Part:* Tire (also accepted: Rim)  
+   *Tool:* Hands and eyes → *Part:* Tire (also accepted: Rim)  
    *Hint:* Barty: “Oh, I remember this — he once found a coin in here. Moneybags.”  
    *After the step:* Miss a shard and the new tube will puncture right away.
 6. Pump a little air into the new tube through the valve so it keeps its round shape.  
    *Tool:* Pump → *Part:* Inner tube (also accepted: Valve)  
    *After the step:* A half-inflated tube sits in the tire more easily and evenly.
 7. Guide the valve through the hole in the rim.  
-   *Tool:* Hands & eyes → *Part:* Valve (also accepted: Rim)
+   *Tool:* Hands and eyes → *Part:* Valve (also accepted: Rim)
 8. Lay the tube into the tire all the way around.  
-   *Tool:* Hands & eyes → *Part:* Inner tube (also accepted: Tire)  
+   *Tool:* Hands and eyes → *Part:* Inner tube (also accepted: Tire)  
    *After the step:* The tube should sit evenly, with no twists.
 9. Tuck the tire bead in by hand, working around from the valve.  
-   *Tool:* Hands & eyes → *Part:* Tire  
+   *Tool:* Hands and eyes → *Part:* Tire  
    *After the step:* Push the last section on with your palms; a tire lever is a last resort here — it easily pinches the tube.
 10. Check that the valve stands straight, not at an angle.  
-   *Tool:* Hands & eyes → *Part:* Valve  
+   *Tool:* Hands and eyes → *Part:* Valve  
    *After the step:* A crooked valve will chafe through over time.
 11. Attach the pump to the valve and inflate to the pressure printed on the tire sidewall.  
    *Tool:* Pump → *Part:* Tire (also accepted: Valve)  
@@ -95,25 +95,25 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Remove the caster wheel from the fork (hint: the bolt has a six-sided hole in its head).  
-   *Tool:* Hex key → *Part:* Caster (front)  
+   *Tool:* Hex key (Allen wrench) → *Part:* Caster (front)  
    *After the step:* It's usually held by a single bolt.
 2. Clean hair and dirt out of the caster axle with tweezers/brush.  
    *Tool:* Brush/tweezers → *Part:* Caster (front)  
    *Hint:* Barty: “So much hair — as if someone's been shedding for centuries. Ah yes, that's me.”  
    *After the step:* Wound-up hair is a common reason a caster won't spin freely.
 3. Spin the caster wheel by hand: does it turn freely without wobbling?  
-   *Tool:* Hands & eyes → *Part:* Caster (front)  
+   *Tool:* Hands and eyes → *Part:* Caster (front)  
    *After the step:* If it wobbles, the tread is worn or it won't spin freely, the wheel needs replacing.
 4. Tighten the caster stem bearing assembly until there's slight friction (hint: a hex-shaped nut is holding it in place).  
-   *Tool:* Adjustable wrench → *Part:* Caster stem  
+   *Tool:* Crescent wrench → *Part:* Caster stem  
    *Hint:* Barty: “Tighter! Even tighter! ...actually no, he cursed later when it seized.”  
    *After the step:* A little more friction in the stem damps flutter.  
    *If wrong:* The caster stem assembly is tightened with a socket or crescent wrench.
 5. Bolt the caster wheel back onto the fork (hint: the bolt has a six-sided hole in its head).  
-   *Tool:* Hex key → *Part:* Caster (front)  
+   *Tool:* Hex key (Allen wrench) → *Part:* Caster (front)  
    *After the step:* Overtighten the mount and the wheel will bind.
 6. Spin and rock the caster: it turns freely with no play.  
-   *Tool:* Hands & eyes → *Part:* Caster (front) (also accepted: Caster stem)  
+   *Tool:* Hands and eyes → *Part:* Caster (front) (also accepted: Caster stem)  
    *After the step:* Spins freely with no play — the bolt is tightened just right.
 
 **Test:** A run across the workshop — no flutter, the chair tracks straight.  
@@ -144,14 +144,14 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Rock the caster fork by hand — find the play.  
-   *Tool:* Hands & eyes → *Part:* Caster (front) (also accepted: Caster stem)  
+   *Tool:* Hands and eyes → *Part:* Caster (front) (also accepted: Caster stem)  
    *After the step:* The fork rocks on a sound stem — so it's the mounting.
 2. Tighten the caster fork mounting bolts (hint: the bolts have a six-sided hole in their heads).  
-   *Tool:* Hex key → *Part:* Frame bolts/nuts (also accepted: Caster (front), Caster stem)  
+   *Tool:* Hex key (Allen wrench) → *Part:* Frame bolts/nuts (also accepted: Caster (front), Caster stem)  
    *Hint:* Barty: “Tap it with a hammer, it'll seat itself!” — no. Only the hex key.  
    *After the step:* Use a hex key of exactly the right size: a stripped bolt is a pain to extract.
 3. Roll the caster wheel to ensure it spins freely, has no play.  
-   *Tool:* Hands & eyes → *Part:* Caster (front)  
+   *Tool:* Hands and eyes → *Part:* Caster (front)  
    *After the step:* Too tight and it binds; too loose and it'll shake loose again.
 
 **Test:** A run across the workshop — the front is solid, the shaking is gone.  
@@ -188,23 +188,23 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 2. Top up the tire through the valve to the correct pressure.  
    *Tool:* Pump → *Part:* Tire (also accepted: Rear wheel, Valve)
 3. Tighten the bolts of the wheel lock mechanism (hint: the bolts have a six-sided hole in their head).  
-   *Tool:* Hex key → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
+   *Tool:* Hex key (Allen wrench) → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
    *After the step:* Don't overdo it: overtighten them and the lock gets stiff to engage.
 4. Didn't help? Loosen the two clamp bolts holding the lock to the frame (hint: the bolts have a six-sided hole in their head).  
-   *Tool:* Hex key → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
+   *Tool:* Hex key (Allen wrench) → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
    *After the step:* The clamp lets you slide the whole assembly.
 5. Slide the wheel lock toward the tire: 3–6 mm gap between lock shoe and tire when released.  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *Mini-game:* gap  
    *After the step:* That's 1/8–1/4 inch — the working gap per the manual. Set it while the clamp is loose.
 6. Tighten the clamp bolts, evenly alternating between them (hint: the bolts have a six-sided hole in their head).  
-   *Tool:* Hex key → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
+   *Tool:* Hex key (Allen wrench) → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
    *After the step:* Even tightening keeps the assembly straight.
 7. Engage the wheel lock: the lock shoe presses firmly into the tire.  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *After the step:* The engaged lock shoe holds the wheel — the chair won't roll away.
 8. Release the wheel lock and spin the wheel: the lock shoe doesn't touch the tire.  
-   *Tool:* Hands & eyes → *Part:* Tire (also accepted: Wheel lock, Rear wheel)  
+   *Tool:* Hands and eyes → *Part:* Tire (also accepted: Wheel lock, Rear wheel)  
    *After the step:* The released lock shoe doesn't rub — the wheel spins freely.
 
 **Test:** Wolf engages the lock and leans in with all his weight — the wheel doesn't budge. It holds!  
@@ -240,17 +240,17 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Hint:* Barty: “How musical! He used to play whole tunes this way. Bad ones.”  
    *After the step:* A clear “ping” = fine, a dull sound = a loose spoke.
 2. Squeeze neighboring spokes in pairs — confirm by feel the ones that sounded dull.  
-   *Tool:* Hands & eyes → *Part:* Spokes
+   *Tool:* Hands and eyes → *Part:* Spokes
 3. With the spoke wrench, tighten the nipples of the spokes that sounded dull — a quarter turn each.  
    *Tool:* Spoke wrench → *Part:* Spokes (also accepted: Rim)  
    *Hint:* Barty: “Crank it hard, half a turn at a time... fine, little by little.”  
    *After the step:* Once, a quarter turn each, evenly: overtighten and the rim goes out of true. Exact tensioning is done on a truing stand.
 4. Tighten the loose bolts/nuts on the frame (hint: the bolts have a six-sided hole in their head).  
-   *Tool:* Hex key → *Part:* Frame bolts/nuts  
+   *Tool:* Hex key (Allen wrench) → *Part:* Frame bolts/nuts  
    *After the step:* A stripped bolt is replaced with one of the same strength grade (number on the head).
 
 **Test:** You roll the wheel — the rattle is gone and the rim runs true.  
-**What you learn:** Spoke tension is checked with a ping test. Tension them to a set value and evenly — overtighten and the rim wobbles. Bolts are only replaced with ones of equal strength grade.  
+**What you learn:** Spoke tension is checked with a ping test. Tighten to the right tension and evenly — overtighten and the rim goes out of true. Loose frame fasteners get tightened before everything else starts rattling.  
 **Client says:** Tilly: “So quiet! Now you can hear me buzz. Thank you!”  
 
 ---
@@ -277,14 +277,14 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Remove the rear wheel: press the quick-release axle button and pull.  
-   *Tool:* Hands & eyes → *Part:* Axle (QR) (also accepted: Rear wheel)  
+   *Tool:* Hands and eyes → *Part:* Axle (QR) (also accepted: Rear wheel)  
    *After the step:* Quick-release: the button at the end of the axle frees the wheel.
 2. Clean hair/dirt out of the axle and bearing with tweezers/a brush.  
    *Tool:* Brush/tweezers → *Part:* Bearing (also accepted: Axle (QR))  
    *Hint:* Barty: “With an orc, in there... don't ask. Just clean.”  
    *After the step:* Hair on the axle is a common cause of whining and stiff rolling.
 3. Spin the bearing between your fingers: knocking/whining/sticking = replace it.  
-   *Tool:* Hands & eyes → *Part:* Bearing  
+   *Tool:* Hands and eyes → *Part:* Bearing  
    *After the step:* Noise is the first sign of a dying bearing.
 4. Replace the bearing: drive the old one out of the hub and press in a new one, using a socket that matches the bearing's diameter as a driver.  
    *Tool:* Socket wrench → *Part:* Bearing  
@@ -294,10 +294,10 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Hint:* Barty: “Douse everything in oil!” — no, lubricant only where it's needed.  
    *After the step:* Do NOT pressure-wash the wheelchair — it blasts grease out of sealed bearings and rust follows.
 6. Refit the wheel: press the axle button and push the axle fully home.  
-   *Tool:* Hands & eyes → *Part:* Axle (QR) (also accepted: Rear wheel)  
+   *Tool:* Hands and eyes → *Part:* Axle (QR) (also accepted: Rear wheel)  
    *After the step:* Let go of the button — the axle's locking balls must pop out and lock the wheel.
 7. Pull the wheel away from the frame to ensure the axle is locked and the wheel doesn't come off.  
-   *Tool:* Hands & eyes → *Part:* Rear wheel (also accepted: Axle (QR))  
+   *Tool:* Hands and eyes → *Part:* Rear wheel (also accepted: Axle (QR))  
    *After the step:* A quick-release axle that hasn't clicked home can let the wheel come off while riding.
 
 **Test:** The wheel spins up and turns long and quietly. The orc is pleased.  
@@ -328,21 +328,21 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Loosen the two wheel lock clamp bolts (hint: the bolts have a six-sided hole in their head).  
-   *Tool:* Hex key → *Part:* Wheel lock  
+   *Tool:* Hex key (Allen wrench) → *Part:* Wheel lock  
    *After the step:* The clamp lets you slide the whole unit along the frame.
 2. Slide the wheel lock away from the tire: 3–6 mm gap between lock shoe and tire when released.  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *Mini-game:* gap  
    *Hint:* Barty: “Why not just remove the lock entirely?” — and roll downhill without one? No.  
    *After the step:* Working gap is 3–6 mm: no rubbing, but it grips when engaged. Set it while the clamp is loose.
 3. Tighten the wheel lock clamp bolts, alternating between them (hint: the bolts have a six-sided hole in their head).  
-   *Tool:* Hex key → *Part:* Wheel lock  
+   *Tool:* Hex key (Allen wrench) → *Part:* Wheel lock  
    *After the step:* Even tightening keeps the assembly straight.
 4. Release the wheel lock and spin the wheel: the lock shoe doesn't touch the tire.  
-   *Tool:* Hands & eyes → *Part:* Tire (also accepted: Wheel lock, Rear wheel)  
+   *Tool:* Hands and eyes → *Part:* Tire (also accepted: Wheel lock, Rear wheel)  
    *After the step:* The wheel spins for a long time without a scrape.
 5. Engage the wheel lock: the lock shoe presses firmly into the tire.  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *After the step:* The engaged lock holds — the wheel doesn't turn.
 
 **Test:** The wheel spins long and freely; the lock grips only when asked.  
@@ -391,10 +391,10 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Pump → *Part:* Cushion (also accepted: Valve)  
    *After the step:* ROHO instructions: inflate with extra air first; fine-tune with the person sitting on the cushion.
 7. Bomm sits down. With his permission, slide your hand under his lowest pelvic bone.  
-   *Tool:* Hands & eyes → *Part:* Cushion  
+   *Tool:* Hands and eyes → *Part:* Cushion  
    *After the step:* ROHO hand check: your hand between the cushion and the pelvis tells you how much air is left.
 8. Let air out through the valve until your fingertips under the pelvis can just move.  
-   *Tool:* Hands & eyes → *Part:* Valve (also accepted: Cushion)  
+   *Tool:* Hands and eyes → *Part:* Valve (also accepted: Cushion)  
    *Hint:* Barty: “Pump till it rings!” — no, here it's the opposite: overinflating is harmful.  
    *After the step:* 1.5–2.5 cm of air under the lowest pelvic bone (~1 finger). Bottoming out risks pressure sores; an overinflated cushion is like sitting on a rock.
 
@@ -427,61 +427,61 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Put the wheelchair on the level floor of the workshop: nothing above the seat, clear space next to the scissor mechanism.  
-   *Tool:* Hands & eyes → *Part:* Seat elevator  
+   *Tool:* Hands and eyes → *Part:* Seat elevator  
    *After the step:* Edge 4 manual: move the seat only on a level surface, never under a table or shelf.
 2. Turn on the power chair.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)
 3. Press key 2 to open the seat screen and select “lift”.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Lift mode selected — the joystick controls the seat: forward is up, back is down.
 4. Pull the joystick back.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
    *After the step:* The seat stays at the top. Now read the controller — it will tell you whether it's a lockout or a break.
 5. Check the indicator on the controller against the table in the Q-Logic 3 manual.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Mini-game:* meter  
    *After the step:* The indicator and codes are the first thing you check before digging into the wiring.
 6. Turn off the joystick.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Connectors are only touched with the chair powered down: switch off the joystick first, then the breaker.
 7. Take off the rear battery cover: turn the two yellow clips (no tools).  
-   *Tool:* Hands & eyes → *Part:* Battery  
+   *Tool:* Hands and eyes → *Part:* Battery  
    *After the step:* Under the cover is the battery tray with the main circuit breaker.
 8. Press the yellow circuit breaker button in the battery tray — the batteries are disconnected from the system.  
-   *Tool:* Hands & eyes → *Part:* Battery  
+   *Tool:* Hands and eyes → *Part:* Battery  
    *After the step:* The circuit breaker on the Edge 4 doubles as the battery disconnect.
 9. Inspect the extended lift scissor mechanism from the outside, with a flashlight. Keep hands out of the mechanism.  
-   *Tool:* Hands & eyes → *Part:* Seat elevator  
+   *Tool:* Hands and eyes → *Part:* Seat elevator  
    *Hint:* Barty: “Stick your paw between the scissors and push — the seat will fold on its own!” — no! That's a pinch point: you don't put your hands in the mechanism even on a switched-off wheelchair.  
    *After the step:* The lift scissors are pinch points, even when still. Look with your eyes, not your fingers.
 10. Inspect the actuator connector: is the housing intact, the contacts free of green corrosion?  
-   *Tool:* Hands & eyes → *Part:* Seat lift actuator (also accepted: Connectors/wiring)  
+   *Tool:* Hands and eyes → *Part:* Seat lift actuator (also accepted: Connectors/wiring)  
    *After the step:* Intact and clean — you can plug it in. Cracked or scorched — we don't repair it; it goes to a certified technician.
 11. Push the actuator connector in until the latch clicks.  
-   *Tool:* Hands & eyes → *Part:* Seat lift actuator (also accepted: Connectors/wiring)  
+   *Tool:* Hands and eyes → *Part:* Seat lift actuator (also accepted: Connectors/wiring)  
    *After the step:* The latch clicked — vibration won't pull the connector out any more.
 12. Lift wiring: remove the cup-holder zip ties and route the harness to the factory mounting points, with slack for the lift.  
-   *Tool:* Hands & eyes → *Part:* Connectors/wiring  
+   *Tool:* Hands and eyes → *Part:* Connectors/wiring  
    *After the step:* The lift travels 30 cm up and down: the harness needs free play over the full height. Chafed sheathing isn't taped up — it's replaced by the service center.
 13. Flip the circuit breaker lever down — battery power is back.  
-   *Tool:* Hands & eyes → *Part:* Battery  
+   *Tool:* Hands and eyes → *Part:* Battery  
    *After the step:* The breaker button disconnects the batteries; the lever down reconnects them.
 14. Put the rear cover back and close both yellow clips.  
-   *Tool:* Hands & eyes → *Part:* Battery  
+   *Tool:* Hands and eyes → *Part:* Battery  
    *After the step:* Without the cover, dirt gets into the tray and fingers wander into the wiring.
 15. Turn on the power chair.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)
 16. Press key 2 to open the seat screen and select “lift”.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Lift mode is selected — the joystick now moves the seat.
 17. Pull the joystick back: the seat lowers.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
    *After the step:* The seat is going down — so the command reaches the actuator.
 18. Look at the controller: seat down — the yellow indicator is off, the iLevel icon is gone, full speed is back.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Green — no limits: you can go outside and over the threshold.
 19. Raise the seat fully with the joystick and lower it again, making sure the harness doesn't stretch at the top.  
-   *Tool:* Hands & eyes → *Part:* Seat elevator (also accepted: Joystick (control box), Connectors/wiring)  
+   *Tool:* Hands and eyes → *Part:* Seat elevator (also accepted: Joystick (control box), Connectors/wiring)  
    *After the step:* We check the full travel: at the top the harness must lie loose, or it will happen again.
 
 **Test:** The seat lowers smoothly, the yellow indicator goes out, Zix rolls over the threshold at full speed. He raises it again — at the top the harness lies loose.  
@@ -513,52 +513,52 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Check: the wheelchair is on a level floor, nothing above, the area around the scissors is clear.  
-   *Tool:* Hands & eyes → *Part:* Seat elevator (also accepted: Seat)  
+   *Tool:* Hands and eyes → *Part:* Seat elevator (also accepted: Seat)  
    *After the step:* The seat is about to move — it needs room.
 2. Turn on the power chair.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)
 3. Press key 2 to open the seat screen and select “lift”.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Lift mode is selected — the joystick now moves the seat.
 4. Pull the joystick back.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
    *After the step:* The seat jerked and stopped, the actuator hums. Release the joystick — don't keep the motor under load.
 5. Check the indicator on the controller against the table in the Q-Logic 3 manual.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Mini-game:* meter  
    *After the step:* The indicator color tells a fault, a safety lockout and an obstruction apart.
 6. Turn off the joystick.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Work on the mechanism only with the wheelchair powered down: first the controller, then the breaker.
 7. Take off the rear battery cover and press the yellow circuit breaker button.  
-   *Tool:* Hands & eyes → *Part:* Battery  
+   *Tool:* Hands and eyes → *Part:* Battery  
    *After the step:* Batteries disconnected — the actuator can't start while you're under the seat.
 8. Inspect the scissor mechanism from the outside with a flashlight: what keeps them from folding?  
-   *Tool:* Hands & eyes → *Part:* Seat elevator  
+   *Tool:* Hands and eyes → *Part:* Seat elevator  
    *Hint:* Barty: “Let the seat squash the box once — it's heavy, it'll crush it!” — no! The scissors are pinch points: crushing anything with them is forbidden, you can break the actuator and the frame.  
    *After the step:* The “Zix-Box” sits exactly where the seat frame needs to come down.
 9. Remove the zip ties and pull the box out from under the seat without reaching between the scissor mechanism.  
-   *Tool:* Hands & eyes → *Part:* Seat elevator (also accepted: Seat)  
+   *Tool:* Hands and eyes → *Part:* Seat elevator (also accepted: Seat)  
    *After the step:* The box is beside the mechanism: pull it outward, not through the scissors.
 10. Check that nothing else is left between the seat frame and the base: no nuts, no zip ties.  
-   *Tool:* Hands & eyes → *Part:* Seat elevator (also accepted: Seat)  
+   *Tool:* Hands and eyes → *Part:* Seat elevator (also accepted: Seat)  
    *After the step:* One nut in the scissor mechanism — and it all happens again.
 11. Flip the circuit breaker lever down and put the cover back.  
-   *Tool:* Hands & eyes → *Part:* Battery  
+   *Tool:* Hands and eyes → *Part:* Battery  
    *After the step:* Lever down — batteries connected.
 12. Turn on the power chair.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)
 13. Press key 2 to open the seat screen and select “lift”.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Lift mode is selected — the joystick now moves the seat.
 14. Pull the joystick back: the seat lowers all the way.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
    *After the step:* The scissor mechanism has enough room to fold — the seat moves smoothly.
 15. Look at the controller: seat down — yellow is off, the iLevel icon is gone.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Green — full speed again, you can go outside.
 16. Zix also asks for “siesta mode” with the seat raised. Check the TRU-Balance inhibit matrix.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Mini-game:* meter  
    *After the step:* The matrix in the TRU-Balance 4 manual — what can't be combined with what.
 
@@ -590,40 +590,40 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Turn the chair off with the button on the joystick.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Wet electronics aren't left powered: water + current = short circuit.
 2. Blot the joystick with a dry cloth.  
    *Tool:* Cloth → *Part:* Joystick (control box) (also accepted: Joystick knob (stick))  
    *Hint:* Barty: “Switch it on right away — let's see if it's alive!” — no: wet electronics are dried first.  
    *After the step:* Now the chair dries somewhere warm for ~12 h: a wet chair is never switched on.
 3. Once it's dry, turn on the joystick.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Hint:* Barty: “Turn it off and on again. The great magic of the 21st century, they say.”  
    *After the step:* A restart often “wakes up” the joystick.
 4. Look at the joystick display: what code is it showing?  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* The code tells you where to look: here it's the joystick, not a motor.
 5. Switch the joystick off again — the rest is done with the chair off.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* With the power on, a deflected joystick is a command to drive.
 6. Push the joystick knob over and let go: it should spring back to center by itself.  
-   *Tool:* Hands & eyes → *Part:* Joystick knob (stick)  
+   *Tool:* Hands and eyes → *Part:* Joystick knob (stick)  
    *After the step:* The chair is off, so handling the knob is safe. A bent knob or a weak spring is a job for a technician.
 7. Wipe dirt and dust off the joystick with a dry cloth.  
    *Tool:* Cloth → *Part:* Joystick knob (stick) (also accepted: Joystick boot, Joystick (control box))  
    *After the step:* Dirt at the base dulls the response.
 8. Reseat the joystick cable connector while the power is off.  
-   *Tool:* Hands & eyes → *Part:* Connectors/wiring  
+   *Tool:* Hands and eyes → *Part:* Connectors/wiring  
    *After the step:* A loose cable connector is a common cause of jerking. Connectors are only touched with the chair switched off.
 9. Replace the torn rubber joystick boot right away.  
-   *Tool:* Hands & eyes → *Part:* Joystick boot  
+   *Tool:* Hands and eyes → *Part:* Joystick boot  
    *Hint:* Barty: “Wrap it in tape!” — no, moisture will kill the board; it needs a new boot.  
    *After the step:* A torn boot lets moisture into the electronics — replace it right away, while the chair is off.
 10. Turn on the power chair.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* New boot, tight connector — you can switch on.
 11. Push the joystick gently: drive slowly and check the response.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Joystick knob (stick))  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Joystick knob (stick))  
    *After the step:* If it still jerks, a technician calibrates it with a service programmer — don't reprogram it yourself.
 
 **Test:** The joystick snaps back to center, the wheelchair drives straight, the boot is intact and dry.  
@@ -656,32 +656,32 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Switch the power off with the joystick's power button, even if the screen is dark: the joystick may just be asleep while the chair is still on.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Hint:* Barty: “Pull the levers while it's moving!” — absolutely not; turn off the power first.  
    *After the step:* Freewheel is engaged ONLY with the power off, otherwise the controller throws an error.
 2. On level ground, lower both freewheel levers (yellow tips).  
-   *Tool:* Hands & eyes → *Part:* Freewheel lever  
+   *Tool:* Hands and eyes → *Part:* Freewheel lever  
    *After the step:* Freewheel disengages the motors — and the brakes! Never do this on a slope.
 3. Roll the wheelchair to the workbench, standing to its side.  
-   *Tool:* Hands & eyes → *Part:* Frame  
+   *Tool:* Hands and eyes → *Part:* Frame  
    *After the step:* No brakes in freewheel; stay to the side, not in front or behind.
 4. Clear debris and anything wound up from the wheels and axle.  
    *Tool:* Brush/tweezers → *Part:* Axle (QR)  
    *After the step:* Obstructions in the wheels cause jerking and veering.
 5. Reseat the motor and sensor connectors (refresh the contact).  
-   *Tool:* Hands & eyes → *Part:* Connectors/wiring  
+   *Tool:* Hands and eyes → *Part:* Connectors/wiring  
    *After the step:* A loose motor connector interrupts the signal — hence the whine and veering.
 6. Return the freewheel levers up (drive mode).  
-   *Tool:* Hands & eyes → *Part:* Freewheel lever  
+   *Tool:* Hands and eyes → *Part:* Freewheel lever  
    *After the step:* Always return the motors to drive mode — otherwise the brakes don't work.
 7. Charge the chair with a stock charger.  
    *Tool:* Charger → *Part:* Battery (also accepted: Joystick (control box))  
    *After the step:* The battery is completely drained — that's why it “died”.
 8. After charging, turn on the joystick.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Levers in drive mode — you can switch on.
 9. Push the joystick gently: drive slowly and listen to the motors. Both should sound the same.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Motor)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Motor)  
    *After the step:* Whine/knock = worn bearings or belt → see a certified technician.
 
 **Test:** Battery charged, levers in drive mode, connectors tight. Grund drives a lap — the motors sound even, and the chair no longer pulls to the side.  
@@ -725,28 +725,28 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Hint:* Barty: “Pump, pump... I'm counting out loud. One. Two. Uh... lots.”  
    *After the step:* If you set the lock on a flat tire, it will work wrong after you pump it up.
 3. Loosen, but do NOT unscrew, the two wheel-lock clamp bolts (hint: the bolts have a six-sided hole in their head).  
-   *Tool:* Hex key → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
+   *Tool:* Hex key (Allen wrench) → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
    *Hint:* Barty: “Unscrew them completely so they don't get in the way!”  
    *After the step:* 3/16" hex key (≈4.8 mm). The bolts are loosened so the clamp can be slid along the frame.  
    *If wrong:* The clamp is loosened with a 3/16" hex key, and the bolts are not unscrewed all the way.
 4. Slide the clamp toward the tire so the locked shoe presses into the tire by at least 5 mm (3/16").  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *Mini-game:* gap  
    *After the step:* TiLite: the lock shoe must press into the tire by at least 3/16" (≈5 mm), otherwise the chair may roll.
 5. Tighten both clamp bolts, one at a time (hint: the bolts have a six-sided hole in their head).  
-   *Tool:* Hex key → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
+   *Tool:* Hex key (Allen wrench) → *Part:* Wheel lock (also accepted: Frame bolts/nuts)  
    *After the step:* After any adjustment, all fasteners are tightened securely before riding.
 6. Release the wheel lock.  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *After the step:* The wheel-lock lever goes to the “released” position.
 7. Spin the wheel: the lock shoe must not touch the tire.  
-   *Tool:* Hands & eyes → *Part:* Rear wheel (also accepted: Spokes, Tire)  
+   *Tool:* Hands and eyes → *Part:* Rear wheel (also accepted: Spokes, Tire)  
    *After the step:* TiLite checklist: when released the lock doesn't touch the tire, hinges free of wear and play.
 8. Engage both wheel locks.  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *After the step:* The lock shoe is pressed into the tire — now the push test.
 9. Push the wheelchair hard by the wheels: the wheels under the locks must not turn.  
-   *Tool:* Hands & eyes → *Part:* Tire (also accepted: Wheel lock, Rear wheel)  
+   *Tool:* Hands and eyes → *Part:* Tire (also accepted: Wheel lock, Rear wheel)  
    *Hint:* Barty: “Great, now we can brake on the descent with these locks!” No! Wheel locks are not brakes.  
    *After the step:* The manual requires this test after every wheel lock adjustment.  
    *If wrong:* Simple check: push the chair by hand and watch the wheels.
@@ -780,33 +780,33 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Engage both wheel locks with the chair on a level floor. Ivushka moves over to the bench.  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *Hint:* Barty: “The master always said: first the wheel locks, then philosophy.”  
    *After the step:* We change the post angle on an empty wheelchair: it's safer, and the post moves freely.
 2. Measure the distance from each backrest post to the armrest plate.  
    *Tool:* Tape measure → *Part:* Backrest (posts, upholstery)  
    *After the step:* This is exactly how Etac checks the backrest angle: the post ↔ armrest plate distance must match on both sides.
 3. Loosen the 13 mm hexagonal nut on the inner side of the left wheel mount.  
-   *Tool:* Adjustable wrench → *Part:* Frame bolts/nuts  
+   *Tool:* Crescent wrench → *Part:* Frame bolts/nuts  
    *Hint:* Barty: “Just turn every screw on the backrest one after another, one of them has to be the right one!”  
    *After the step:* This nut holds the backrest angle. The 4 and 8 mm bolts on the posts control the backrest HEIGHT, you don't touch them.  
    *If wrong:* The post angle is held by a 13 mm nut at the wheel mount — loosen it with the crescent or socket wrench.
 4. Set the left post so the distance matches the right side.  
-   *Tool:* Hands & eyes → *Part:* Backrest (posts, upholstery)  
+   *Tool:* Hands and eyes → *Part:* Backrest (posts, upholstery)  
    *Mini-game:* gap  
    *After the step:* Etac: the angle of both posts is the same.
 5. Tighten the 13 mm hexagonal nut on the inner side of the left wheel mount.  
-   *Tool:* Adjustable wrench → *Part:* Frame bolts/nuts  
+   *Tool:* Crescent wrench → *Part:* Frame bolts/nuts  
    *After the step:* The tightened nut won't let the post rotate again under weight.
 6. Ivushka sits back down. Tighten the lower upholstery strap snug to provide pelvic support.  
-   *Tool:* Hands & eyes → *Part:* Backrest (posts, upholstery)  
+   *Tool:* Hands and eyes → *Part:* Backrest (posts, upholstery)  
    *After the step:* Etac: the upholstery is adjusted with the person sitting in the wheelchair — from the bottom up.
 7. Pull snug the upper upholstery straps (without overtightening).  
-   *Tool:* Hands & eyes → *Part:* Backrest (posts, upholstery)  
+   *Tool:* Hands and eyes → *Part:* Backrest (posts, upholstery)  
    *Hint:* Barty: “Tighten everything like a drum!” No: the backrest should follow the curve of the back.  
    *After the step:* Don't overtighten the upper straps: the wheelchair will fold worse.
 8. Check the anti-tippers: lowered, catch snapped shut.  
-   *Tool:* Hands & eyes → *Part:* Anti-tipper  
+   *Tool:* Hands and eyes → *Part:* Anti-tipper  
    *Hint:* Barty: “Take those little wheels off the back, they just get in the way!”  
    *After the step:* Etac: after ANY wheelchair adjustment, check that the anti-tippers work. If they don't work, the wheelchair can tip over.  
    *If wrong:* Anti-tippers aren't removed, they're checked by hand: lowered and snapped shut.
@@ -841,37 +841,37 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Engage both wheel locks with the chair on a level floor. Iskra moves into her mom's arms.  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *Hint:* Barty: “Hi, little one! I'm a ghost, but a kind one. Almost not scary. Well, a little.”  
    *After the step:* On a level surface the measurements are honest. The lock should press into the tire at least 3 mm (1/8").
 2. Measure the gap from the anti-tipper wheels to the floor on both sides.  
    *Tool:* Tape measure → *Part:* Anti-tipper  
    *After the step:* Iris spec: 38–51 mm (1½–2") in the lowered position.
 3. Press the button on the left anti-tipper wheel and move it to the hole below.  
-   *Tool:* Hands & eyes → *Part:* Anti-tipper  
+   *Tool:* Hands and eyes → *Part:* Anti-tipper  
    *Mini-game:* gap  
    *After the step:* Iris: both anti-tipper wheels must be at EXACTLY the same height.
 4. Loosen the hexagonal locknut on the right tilt cable trigger adjuster.  
-   *Tool:* Adjustable wrench → *Part:* Tilt cable (also accepted: Tilt trigger)  
+   *Tool:* Crescent wrench → *Part:* Tilt cable (also accepted: Tilt trigger)  
    *After the step:* The cable adjuster sits at the handle, next to the trigger.
 5. Turn the cable adjuster until the slack is gone.  
-   *Tool:* Hands & eyes → *Part:* Tilt cable (also accepted: Tilt trigger)  
+   *Tool:* Hands and eyes → *Part:* Tilt cable (also accepted: Tilt trigger)  
    *Hint:* Barty: “Drip some oil on the cable, it'll tighten itself!”  
    *After the step:* Don't overtighten: the pin must extend and retract freely.  
    *If wrong:* The Iris tilt mechanism is not lubricated. The slack is taken up with the adjuster, by hand.
 6. Squeeze and release the trigger while watching the plunger pin: squeezed — the pin is fully retracted; released — fully seated in the rocker.  
-   *Tool:* Hands & eyes → *Part:* Tilt lock (rocker/teeth) (also accepted: Tilt trigger)  
+   *Tool:* Hands and eyes → *Part:* Tilt lock (rocker/teeth) (also accepted: Tilt trigger)  
    *After the step:* The main criterion for correct cable tension per the manual.
 7. Tighten the hexagonal locknut on the right tilt cable trigger adjuster.  
-   *Tool:* Adjustable wrench → *Part:* Tilt cable (also accepted: Tilt trigger)  
+   *Tool:* Crescent wrench → *Part:* Tilt cable (also accepted: Tilt trigger)  
    *After the step:* Otherwise the adjuster will unscrew from vibration and the cable will go slack again.
 8. Squeeze both triggers and tilt the seat back.  
-   *Tool:* Hands & eyes → *Part:* Tilt trigger  
+   *Tool:* Hands and eyes → *Part:* Tilt trigger  
    *Hint:* Barty: “Tilt it all the way, let the backrest lie flat, it's more fun!”  
    *After the step:* The mechanism only releases with both triggers. When a child is in the chair, their hands are on the armrests, feet on the footrest.  
    *If wrong:* The tilt is tested with both triggers and by hand. And never past the point where the backrest is parallel to the floor.
 9. Release the triggers: the seat must lock solidly.  
-   *Tool:* Hands & eyes → *Part:* Tilt lock (rocker/teeth) (also accepted: Tilt trigger)  
+   *Tool:* Hands and eyes → *Part:* Tilt lock (rocker/teeth) (also accepted: Tilt trigger)  
    *After the step:* When the triggers are released the rockers lock — the seat stays rock-solid.
 
 **Test:** Iskra is back in the chair: the backward tilt is smooth, without a “clunk”, and the chair locks firmly in any position. On the carpet it no longer rocks: the anti-tippers are at the same height.  
@@ -904,46 +904,46 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Engage the wheel locks with the chair on a level floor. Agatha moves to the armchair by the window.  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *Hint:* Barty: “Madame Agatha! I'm the ghost of this workshop. Yes, the one and only. No, I did not drop your telescope in 1987.”  
    *After the step:* Ki: tilt and recline adjustments are made on a level surface with the wheel locks engaged.
 2. Inspect the tilt cable along its whole length: kinks, sharp bends, incorrect routing.  
-   *Tool:* Hands & eyes → *Part:* Tilt cable  
+   *Tool:* Hands and eyes → *Part:* Tilt cable  
    *After the step:* Ki: cables are checked every week: operation, routing, bends and kinks.
 3. Loosen the six-sided nuts holding the tilt cable fittings, remove the kinked cable, and install a new genuine Ki Mobility cable. Tighten the nuts again to secure it.  
-   *Tool:* Adjustable wrench → *Part:* Tilt cable  
+   *Tool:* Crescent wrench → *Part:* Tilt cable  
    *Hint:* Barty: “Straighten it with pliers, it'll be as good as new!”  
    *After the step:* A cable with a kink or one that can't be adjusted is only replaced. Use only Ki-approved parts.  
    *If wrong:* A kink isn't straightened, the cable is replaced entirely.
 4. Route the new cable along the standard path: smoothly, without sharp bends, and without pinching it with zip ties.  
-   *Tool:* Hands & eyes → *Part:* Tilt cable  
+   *Tool:* Hands and eyes → *Part:* Tilt cable  
    *After the step:* Ki: the cable should have as few bends as possible, that means less friction.
 5. Loosen the six-sided locknut on the tilt cable adjuster (10 mm and 3/8" wrenches). Hold the adjuster body steady so it doesn't turn.  
-   *Tool:* Adjustable wrench → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
+   *Tool:* Crescent wrench → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
    *After the step:* You hold the adjuster body with one wrench and loosen the nut with the other.
 6. Turn the threaded cable adjuster in or out until the slack is gone. The locking tooth must stay fully in the teeth.  
-   *Tool:* Hands & eyes → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
+   *Tool:* Hands and eyes → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
    *After the step:* Rough adjustment done: most of the slack is gone. Checking through the full range will show what fine-tuning is left.
 7. Tilt the seat back and forth through its whole range and listen to the lock tooth: it must not scrape.  
-   *Tool:* Hands & eyes → *Part:* Tilt lock (rocker/teeth) (also accepted: Tilt trigger)  
+   *Tool:* Hands and eyes → *Part:* Tilt lock (rocker/teeth) (also accepted: Tilt trigger)  
    *Mini-game:* meter  
    *After the step:* The tilt must lock in any position, and the tooth must not scrape against the teeth.
 8. Back the adjuster out a little more — until the tooth stops chattering and the trigger has no play.  
-   *Tool:* Hands & eyes → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
+   *Tool:* Hands and eyes → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
    *After the step:* Ki: the locking tooth sits fully in the teeth and doesn't chatter at any tilt position.
 9. Tighten the locknut against the adjuster body to secure your adjustment. Don't let the adjuster turn.  
-   *Tool:* Adjustable wrench → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
+   *Tool:* Crescent wrench → *Part:* Tilt cable (also accepted: Tilt trigger, Tilt lock (rocker/teeth))  
    *After the step:* If you turn the adjuster or the body, you'll ruin the setting you just found.
 10. Return the seat to the tilt position she needs.  
-   *Tool:* Hands & eyes → *Part:* Tilt trigger (also accepted: Tilt lock (rocker/teeth))  
+   *Tool:* Hands and eyes → *Part:* Tilt trigger (also accepted: Tilt lock (rocker/teeth))  
    *After the step:* The tilt is chosen for the task: resting, eating, pressure relief.
 11. Insert the lock pin into the trigger.  
-   *Tool:* Hands & eyes → *Part:* Tilt trigger  
+   *Tool:* Hands and eyes → *Part:* Tilt trigger  
    *Hint:* Barty: “Just lock the trigger OPEN and go have some tea, let it settle itself!”  
    *After the step:* Ki: the trigger is locked with the pin after positioning — so the tilt can't release by accident.  
    *If wrong:* You must never leave a person in the chair with the triggers locked open: they could tip over.
 12. Squeeze the trigger lightly and push the handles: the tilt must not release.  
-   *Tool:* Hands & eyes → *Part:* Tilt trigger (also accepted: Tilt lock (rocker/teeth))  
+   *Tool:* Hands and eyes → *Part:* Tilt trigger (also accepted: Tilt lock (rocker/teeth))  
    *After the step:* The pin holds: the trigger doesn't release the tilt.
 
 **Test:** The grandson presses the trigger: the chair tilts smoothly and locks firmly in any position. Nothing creeps or rustles, and the trigger returns on its own.  
@@ -975,26 +975,26 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Find the code from the joystick display in the WHILL manual's code table.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Mini-game:* meter  
    *After the step:* Codes other than 01–06 are usually handled by the dealer, but the table always comes first.
 2. Make sure the power is off: the display has gone dark.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* A switched-off wheelchair won't jerk from an accidental touch.
 3. Clear off everything pressing on the joystick knob: the map tube, a bag, the edge of a cloak.  
-   *Tool:* Hands & eyes → *Part:* Joystick knob (stick) (also accepted: Joystick (control box))  
+   *Tool:* Hands and eyes → *Part:* Joystick knob (stick) (also accepted: Joystick (control box))  
    *After the step:* It takes just 1 N to move the joystick — the weight of a small apple.
 4. Move the joystick to ensure it moves smoothly and returns to center on its own.  
-   *Tool:* Hands & eyes → *Part:* Joystick knob (stick)  
+   *Tool:* Hands and eyes → *Part:* Joystick knob (stick)  
    *After the step:* A daily inspection item from the manual.
 5. Wipe the joystick with a cloth dampened with 70% alcohol — no water or solvents.  
    *Tool:* Cloth → *Part:* Joystick (control box) (also accepted: Joystick knob (stick))  
    *After the step:* Only the wheels can be washed with water; the joystick and electronics cannot.
 6. Check that the freewheel levers are up (brakes locked).  
-   *Tool:* Hands & eyes → *Part:* Freewheel lever  
+   *Tool:* Hands and eyes → *Part:* Freewheel lever  
    *After the step:* Otherwise code 03 will pop up next.
 7. Turn on the power without touching the joystick knob. Hand on the joystick only afterwards.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Hint:* Barty: “Hold the joystick forward while you turn it on — it'll go faster!” — no: don't touch the joystick at power-on, or you'll get code 02.  
    *After the step:* A one-second pause after power-on — and no codes.
 
@@ -1027,23 +1027,23 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Find the code from the joystick display in the WHILL manual's code table.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Mini-game:* meter
 2. Make sure the power is off: the display has gone dark.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* The armrest is moved only on a switched-off wheelchair.
 3. Inspect the armrest base and the latch lever: what's stopping it from latching?  
-   *Tool:* Hands & eyes → *Part:* Flip-up armrest  
+   *Tool:* Hands and eyes → *Part:* Flip-up armrest  
    *After the step:* Manual: a stiff latch lever = dust and sand in the base.
 4. Brush out the armrest base.  
    *Tool:* Brush/tweezers → *Part:* Flip-up armrest  
    *Hint:* Barty: “Douse the hinge with machine oil, nice and thick!” — no: the manual forbids lubricant and wax on moving parts — sand sticks to them.  
    *After the step:* Dry cleaning only (brush or blower bulb): lubricant is sticky and collects sand.
 5. Rotate the armrest forward until it clicks and check that it's locked.  
-   *Tool:* Hands & eyes → *Part:* Flip-up armrest  
+   *Tool:* Hands and eyes → *Part:* Flip-up armrest  
    *After the step:* Keep your fingers away from the hinge: it's easy to pinch them there.
 6. Turn on the power without touching the joystick.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* No code — the joystick is in the operating position.
 
 **Test:** The armrest sits with a clear click, the display shows the charge. Saira transfers in from the side and back — everything works.  
@@ -1075,38 +1075,38 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Find the code from the joystick display in the WHILL manual's code table.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Mini-game:* meter
 2. Make sure the power is off: the display has gone dark.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* The battery is only removed with the chair switched off.
 3. Press the release button and take the battery out.  
-   *Tool:* Hands & eyes → *Part:* Battery  
+   *Tool:* Hands and eyes → *Part:* Battery  
    *After the step:* The battery weighs 2.7 kg — don't drop it.
 4. After 10 s, push the battery back in until it clicks.  
-   *Tool:* Hands & eyes → *Part:* Battery  
+   *Tool:* Hands and eyes → *Part:* Battery  
    *After the step:* 10 seconds without the battery — the electronics fully restart.
 5. After 5 s, switch the chair on without touching the joystick.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Watch the display: does the code clear?
 6. Look at the display: code 10 is back and the chair has shut off again.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* So it's the seat connector. From here on, disassembly only with the chair off.
 7. Take the battery out again.  
-   *Tool:* Hands & eyes → *Part:* Battery  
+   *Tool:* Hands and eyes → *Part:* Battery  
    *After the step:* The seat is only removed with the battery out.
 8. Check: the floor is level, the freewheel levers are up.  
-   *Tool:* Hands & eyes → *Part:* Freewheel lever  
+   *Tool:* Hands and eyes → *Part:* Freewheel lever  
    *After the step:* Disassembly is done on a level floor, without the battery and with the brakes locked.
 9. Pull the seat release lever.  
-   *Tool:* Hands & eyes → *Part:* Seat  
+   *Tool:* Hands and eyes → *Part:* Seat  
    *After the step:* Lever up — the seat is no longer locked to the post.
 10. Lift the seat straight up by the armrests and set it down cushion side up.  
-   *Tool:* Hands & eyes → *Part:* Seat  
+   *Tool:* Hands and eyes → *Part:* Seat  
    *Hint:* Barty: “Flip the seat upside down — it's easier!” — no: that's how you break the joystick.  
    *After the step:* Set the seat down cushion-up: nothing should press on the joystick.
 11. Inspect the contacts of the connector between the seat and the base.  
-   *Tool:* Hands & eyes → *Part:* Seat connector  
+   *Tool:* Hands and eyes → *Part:* Seat connector  
    *After the step:* Sand and dust on the contacts. The connector is magnetic: keep a pacemaker no closer than 20 cm.
 12. Sweep the sand off the connector contacts with a brush.  
    *Tool:* Brush/tweezers → *Part:* Seat connector  
@@ -1115,15 +1115,15 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Cloth → *Part:* Seat connector  
    *After the step:* Connectors must not get wet — dry cleaning only.
 14. Set the seat straight onto the post, checking through the inspection window.  
-   *Tool:* Hands & eyes → *Part:* Seat  
+   *Tool:* Hands and eyes → *Part:* Seat  
    *After the step:* The seat must sit level, without tilting.
 15. Lower the seat locking lever.  
-   *Tool:* Hands & eyes → *Part:* Seat  
+   *Tool:* Hands and eyes → *Part:* Seat  
    *After the step:* The lever should sit across the seat — that means it's locked.
 16. Push the battery in until it clicks.  
-   *Tool:* Hands & eyes → *Part:* Battery
+   *Tool:* Hands and eyes → *Part:* Battery
 17. After 5 s, switch the chair on without touching the joystick.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* No code — the connection is back. Had the code stayed, the table's next step would be a new joystick or cables — dealer work.
 
 **Test:** The display is clean, no code. Saira drives a figure eight between the workbenches — the connection holds.  
@@ -1156,24 +1156,24 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Set the joystick to “off” with its power button, so the chair doesn't come to life when the breaker is reset. A dark screen proves nothing: the breaker is just cutting the power right now.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Work on the main circuit breaker only with the joystick switched off.
 2. The chair spent the winter in a shed: look at the batteries and compare the shed temperature with the manual.  
-   *Tool:* Hands & eyes → *Part:* Battery (also accepted: Frame)  
+   *Tool:* Hands and eyes → *Part:* Battery (also accepted: Frame)  
    *Mini-game:* meter  
    *After the step:* Cold and damp stop the batteries from charging fully and corrode the contacts.
 3. On a level floor, with a helper, engage freewheel: on the F5, both levers down (wheelchair off).  
-   *Tool:* Hands & eyes → *Part:* Freewheel lever  
+   *Tool:* Hands and eyes → *Part:* Freewheel lever  
    *After the step:* In freewheel the brakes are off — only on level ground and with someone holding the wheelchair. Other wheelchairs may have a single lever, one that goes up, or one that turns — check the manual for your model.
 4. Roll the wheelchair to the dry, warm workshop, holding it from the side.  
-   *Tool:* Hands & eyes → *Part:* Frame  
+   *Tool:* Hands and eyes → *Part:* Frame  
    *Hint:* Barty: “Just charge it in the shed, there's a socket!” — no: below +5 °C the batteries won't take a full charge.  
    *After the step:* The wheelchair weighs 189 kg: roll it slowly and with two people.
 5. Disengage freewheel: levers up, wheelchair off.  
-   *Tool:* Hands & eyes → *Part:* Freewheel lever  
+   *Tool:* Hands and eyes → *Part:* Freewheel lever  
    *After the step:* An F5 can't drive in freewheel — and the brakes don't hold.
 6. Switch on the main circuit breaker with the lever at the back of the wheelchair.  
-   *Tool:* Hands & eyes → *Part:* Main circuit breaker  
+   *Tool:* Hands and eyes → *Part:* Main circuit breaker  
    *After the step:* It's switched off for winter storage, but you need it on to charge. If it trips again — call service.
 7. Connect the charger first to the socket on the front of the joystick, then to the wall outlet.  
    *Tool:* Charger → *Part:* Joystick (control box)  
@@ -1216,42 +1216,42 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Put the chair on level floor: nothing around the lift, nothing above the seat.  
-   *Tool:* Hands & eyes → *Part:* Seat elevator  
+   *Tool:* Hands and eyes → *Part:* Seat elevator  
    *After the step:* Q6 Edge 2.0 manual: move the seat only on a level surface, with the area around it clear.
 2. Check the joystick icon against the Q-Logic 3 table.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Mini-game:* meter  
    *After the step:* Read the indicator before touching the mechanics: it tells you WHAT the controller sees.
 3. Ask the Count to move to the armchair by the fireplace and switch the joystick off.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Nobody looks under the lift with a person in the seat and the power on.
 4. Look under the seat with a torch: the seat hasn't reached the stop, there is a folio under the lift frame.  
-   *Tool:* Hands & eyes → *Part:* Seat elevator  
+   *Tool:* Hands and eyes → *Part:* Seat elevator  
    *Hint:* Barty: "Yank the book out hard — the seat will drop by itself!" — no: fingers never go between the lift frame and the base. Raise the seat a little first.  
    *After the step:* The lift is full of pinch points, even when still. Look with your eyes, hands outside.
 5. Switch the joystick on, open the seat screen with key 2 and select "elevate".  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Lift mode selected — the joystick controls the seat: forward is up, back is down.
 6. Push the joystick forward: raise the seat a hand's width — the book is free.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
    *After the step:* Raise it just enough for the folio to come out freely.
 7. Turn off the joystick.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Hands near the mechanism only with the chair powered off.
 8. Take the folio out from under the lift frame. Hands on the book only, not in the mechanism.  
-   *Tool:* Hands & eyes → *Part:* Seat elevator (also accepted: Seat)  
+   *Tool:* Hands and eyes → *Part:* Seat elevator (also accepted: Seat)  
    *After the step:* A heavy, five-hundred-year-old book. A separate word for the Count: nothing goes under the seat.
 9. Switch the joystick on, open the seat screen with key 2 and select "elevate".  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Elevate mode again — now we lower it.
 10. Pull the joystick back and hold until the seat sits on the stop; once it stops — release at once.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
    *After the step:* Never run the lift motor more than a couple of seconds after the stop — it overheats and strains the mechanism.
 11. Look at the joystick: the yellow icon is gone, the indicator is green — no restrictions.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Green means full speed: cellar and doorsteps allowed.
 12. Check the lift connectors and harness: tight, no corrosion, not pinched anywhere.  
-   *Tool:* Hands & eyes → *Part:* Connectors/wiring (also accepted: Seat elevator)  
+   *Tool:* Hands and eyes → *Part:* Connectors/wiring (also accepted: Seat elevator)  
    *After the step:* A pre-ride check from the manual. A cracked connector is a job for the service centre only.
 
 **Test:** The seat is on its stop, the icon is green. The Count rolls out of the workshop at full speed, cape billowing, the bat barely keeping up.  
@@ -1283,32 +1283,32 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Put the chair on level floor: nothing around the seat.  
-   *Tool:* Hands & eyes → *Part:* Seat elevator  
+   *Tool:* Hands and eyes → *Part:* Seat elevator  
    *After the step:* The seat is moved only on a level surface.
 2. Check the joystick icon against the Q-Logic 3 table.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Mini-game:* meter  
    *After the step:* Red is not a fault but a ban: the controller sees an unsafe posture.
 3. Look at the backrest: reclined well past vertical.  
-   *Tool:* Hands & eyes → *Part:* Backrest (posts, upholstery)  
+   *Tool:* Hands and eyes → *Part:* Backrest (posts, upholstery)  
    *After the step:* More than 20° of recline and TRU-Balance 3 locks out driving. Tip-over protection.
 4. Open the seat screen with key 2 and select "recline".  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* The backrest actuator is selected — the joystick drives it.
 5. Push the joystick forward: raise the backrest until the red icon turns green.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Backrest (posts, upholstery))  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Backrest (posts, upholstery))  
    *After the step:* Under 20° the lockout clears. The controller tells you itself — in green.
 6. Check the seat tilt: also under 20°?  
-   *Tool:* Hands & eyes → *Part:* Seat (also accepted: Seat elevator)  
+   *Tool:* Hands and eyes → *Part:* Seat (also accepted: Seat elevator)  
    *After the step:* Tilt triggers the same lockout. Check both axes.
 7. Check the backrest harness and connectors: tight, no chafing.  
-   *Tool:* Hands & eyes → *Part:* Connectors/wiring  
+   *Tool:* Hands and eyes → *Part:* Connectors/wiring  
    *After the step:* A check from the manual. A chafed harness is for the service centre only.
 8. To test, raise the seat with the joystick — yellow icon; lower it to the stop — green.  
-   *Tool:* Hands & eyes → *Part:* Seat elevator (also accepted: Joystick (control box))  
+   *Tool:* Hands and eyes → *Part:* Seat elevator (also accepted: Joystick (control box))  
    *After the step:* Yellow is a slowdown, red is a ban. The Count must tell them apart himself.
 9. Tell the Count: reading reclined is fine, driving reclined is not. The lockout is never bypassed.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Hint:* Barty: "Have the service centre reprogram the lockout — then ride lying down!" — no: the manual forbids bypassing or reprogramming the inhibits.  
    *After the step:* Factory inhibits are never disabled or reprogrammed — they are tip-over protection.
 
@@ -1326,8 +1326,8 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Inspection clues (what the player sees)**
 
 - *Wheel lock* — The lever is clicked shut, but the lock shoe barely touches the tire: the wheel now sits higher.
-- *Axle (QR)* — The axle plate was moved to holes 3 and 4 — the position for a 530 mm seat.
-- *Caster stem* — The front caster forks stayed in hole A and are tilted, not vertical to the floor.
+- *Axle (QR)* — The axle plate has been moved one hole lower than before — into holes 3 and 4, the 530 mm seat position. The seat is not parallel to the floor.
+- *Caster stem* — The front forks are still in the old, top hole A (the fork holes A, B, C run top to bottom) and sit at an angle instead of vertical to the floor.
 - *Caster (front)* — The casters are intact, but they wobble while moving because the fork is tilted.
 - *Rear wheel* — The quick-release axle button is locked in, the wheel holds firmly.
 - *Tire* — The tires are solid polyurethane: no pumping needed. The tread is clean, no oil or dirt.
@@ -1341,37 +1341,37 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Release the wheel lock and remove the rear wheel: press the button in the center of the hub.  
-   *Tool:* Hands & eyes → *Part:* Rear wheel (also accepted: Axle (QR))  
+   *Tool:* Hands and eyes → *Part:* Rear wheel (also accepted: Axle (QR))  
    *After the step:* Only remove a wheel with the lock released.
-2. See which holes the rear axle and the front forks are in, and compare with the seat height table.  
-   *Tool:* Hands & eyes → *Part:* Axle (QR) (also accepted: Caster stem)  
+2. Look: the axle has been moved one hole lower than before while the forks stayed in the old one — compare with the seat-height table.  
+   *Tool:* Hands and eyes → *Part:* Axle (QR) (also accepted: Caster stem)  
    *Mini-game:* meter  
    *After the step:* On the D100, height is changed by moving the wheels: each height has its own hole, both at the back and at the front.
 3. Firmly tighten the axle bushings (hint: they are shaped like hexagonal nuts).  
    *Tool:* Socket wrench → *Part:* Axle (QR)  
    *After the step:* The D100 manual says to check the bushings after moving the plate.
-4. Unscrew the caster fork bolt, move the front wheel to hole C and tighten (hint: the bolt has a six-sided head).  
+4. Unscrew the caster fork bolt, move the front wheel to the bottom hole C (the fork holes A, B, C run top to bottom) and tighten (hint: the bolt has a six-sided head).  
    *Tool:* Socket wrench → *Part:* Caster stem (also accepted: Caster (front))  
    *Hint:* Barty: “Just leave it, it wobbles — that means it's fun!”  
    *After the step:* The wheel should spin easily, but with no play.  
    *If wrong:* The fork is moved with a socket wrench: unscrew the bolt, move it, tighten.
 5. Look from the side: the fork must be vertical to the floor.  
-   *Tool:* Hands & eyes → *Part:* Caster stem  
+   *Tool:* Hands and eyes → *Part:* Caster stem  
    *After the step:* A tilted fork makes the casters wobble while moving.
 6. Fit the rear wheel: hold the button down, push the axle all the way in, release, and tug the wheel.  
-   *Tool:* Hands & eyes → *Part:* Rear wheel (also accepted: Axle (QR))  
+   *Tool:* Hands and eyes → *Part:* Rear wheel (also accepted: Axle (QR))  
    *After the step:* The wheel must not come off without pressing the button.
 7. Pull the wheel lock lever back and loosen the lock bolts (hint: the bolts have a six-sided hole in their heads).  
-   *Tool:* Hex key → *Part:* Wheel lock  
+   *Tool:* Hex key (Allen wrench) → *Part:* Wheel lock  
    *After the step:* The bolts are loosened so the lock can slide along its rail.
 8. Slide the wheel lock along the rail toward the wheel.  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *After the step:* The wheel is higher now — the lock has to catch up with the tire.
 9. Tighten the wheel lock bolts (hint: the bolts have a six-sided hole in their head).  
-   *Tool:* Hex key → *Part:* Wheel lock  
+   *Tool:* Hex key (Allen wrench) → *Part:* Wheel lock  
    *After the step:* The lock is in its new place; tighten the bolts so it doesn't slide.
 10. Engage the wheel locks and push the wheelchair hard: the wheels must not turn.  
-   *Tool:* Hands & eyes → *Part:* Tire (also accepted: Wheel lock, Rear wheel)  
+   *Tool:* Hands and eyes → *Part:* Tire (also accepted: Wheel lock, Rear wheel)  
    *Hint:* Barty: “Can I use them to slow down on a hill?” No: these are parking locks, not for braking while moving.  
    *After the step:* If a wheel turns — repeat the adjustment.  
    *If wrong:* The test is simple: engage the lock and push the wheelchair.
@@ -1404,7 +1404,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Undo the axle bolt of the front caster wheel with two 4 mm hex keys and take the wheel out (hint: the bolt has a six-sided hole in its head).  
-   *Tool:* Hex key → *Part:* Caster (front)  
+   *Tool:* Hex key (Allen wrench) → *Part:* Caster (front)  
    *After the step:* Hold the bolt from both sides: one key holds, the other turns.
 2. Clean the sand and hair off the spacers between the wheel and the fork.  
    *Tool:* Brush/tweezers → *Part:* Caster stem (also accepted: Caster (front))  
@@ -1418,31 +1418,31 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Lubricant → *Part:* Caster (front)  
    *After the step:* The manual recommends a general-purpose oil like CRC 5-56.
 5. Inspect the bolt thread before reassembly.  
-   *Tool:* Hands & eyes → *Part:* Caster (front)  
+   *Tool:* Hands and eyes → *Part:* Caster (front)  
    *Mini-game:* meter  
    *After the step:* The thread should still have threadlocker glue on it: blue, red or green.
 6. Put the caster back and tighten with the 4 mm hex key: it should spin easily (hint: the bolts have a six-sided hole in their heads).  
-   *Tool:* Hex key → *Part:* Caster (front)  
+   *Tool:* Hex key (Allen wrench) → *Part:* Caster (front)  
    *After the step:* Tightened? Spin it: no crunching and no sticking.
 7. Press the axle button and remove the rear wheel, pulling it straight off.  
-   *Tool:* Hands & eyes → *Part:* Axle (QR)  
+   *Tool:* Hands and eyes → *Part:* Axle (QR)  
    *After the step:* A sticky button means the axle needs lubricant.
 8. Put a few drops of oil on the quick-release mechanism in the axle bushing.  
    *Tool:* Lubricant → *Part:* Axle (QR)  
    *After the step:* After sand, rain and salt water, the axle is lubricated more often than once a month.
 9. Push the wheel on until it clicks: the button should pop out; pull the wheel toward you.  
-   *Tool:* Hands & eyes → *Part:* Axle (QR)  
+   *Tool:* Hands and eyes → *Part:* Axle (QR)  
    *After the step:* The wheel must not come off without pressing the button.
 10. Inflate the tires to the pressure in the manual.  
    *Tool:* Pump → *Part:* Tire (also accepted: Valve)  
    *Mini-game:* pump  
    *After the step:* The lock only holds on a properly inflated tire.
 11. Loosen the lock mount with a 12 mm wrench and set it along the rail.  
-   *Tool:* Adjustable wrench → *Part:* Wheel lock  
+   *Tool:* Crescent wrench → *Part:* Wheel lock  
    *Mini-game:* gap  
    *After the step:* When engaged, the lock shoe should press about 4 mm into the tire.
 12. Tighten the lock mount with the 12 mm wrench and check the second lock the same way.  
-   *Tool:* Adjustable wrench → *Part:* Wheel lock  
+   *Tool:* Crescent wrench → *Part:* Wheel lock  
    *After the step:* Both locks must be set the same.
 
 **Test:** Olga rolls onto the wet pier, engages the locks and waves her tail: she stays put. The caster spins silently, and the rear wheel comes off with one button.  
@@ -1474,12 +1474,12 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Switch the chair off with the joystick's power button and let the motor cool: don't push the joystick if the wheels aren't moving.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *Hint:* Barty: “Push harder, maybe it'll get out!”  
    *After the step:* Never spin the wheels for more than a few seconds: the motor overheats and gets damaged.  
    *If wrong:* First switch the wheelchair off and let the motor cool.
 2. Feel the motor: if it's hot, we wait until it cools.  
-   *Tool:* Hands & eyes → *Part:* Motor  
+   *Tool:* Hands and eyes → *Part:* Motor  
    *After the step:* Overheat protection saves the motor and the controller.
 3. Pull out the grass and twigs around the motors and axles.  
    *Tool:* Brush/tweezers → *Part:* Axle (QR) (also accepted: Motor)  
@@ -1496,10 +1496,10 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Mini-game:* meter  
    *After the step:* Wheel nuts are tightened to the torque in the manual.
 7. Move the freewheel levers to the “drive” position.  
-   *Tool:* Hands & eyes → *Part:* Freewheel lever  
+   *Tool:* Hands and eyes → *Part:* Freewheel lever  
    *After the step:* In freewheel mode there are no brakes.
 8. Switch the chair on with the joystick's power button and push the joystick gently: all the electric brakes should click.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* A weekly check from the manual (§7.17): on a level floor with a metre of clear space around.
 
 **Test:** Leshy rolls out onto a forest path and drives straight, without drifting to the side. The motors hum evenly.  
@@ -1531,22 +1531,22 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Match the hub lights and beeps (the e-motion motor) to the error table in the Alber manual.  
-   *Tool:* Hands & eyes → *Part:* Motor (also accepted: Rear wheel)  
+   *Tool:* Hands and eyes → *Part:* Motor (also accepted: Rear wheel)  
    *Mini-game:* meter  
    *After the step:* On the e-motion, each error has its own pattern of lights and beeps.
 2. Unplug the charger from the wheel, then from the wall outlet.  
-   *Tool:* Hands & eyes → *Part:* Motor (also accepted: Rear wheel)  
+   *Tool:* Hands and eyes → *Part:* Motor (also accepted: Rear wheel)  
    *After the step:* The wheel first, then the wall outlet.
 3. Switch off both wheels with the button on the hub.  
-   *Tool:* Hands & eyes → *Part:* Motor (also accepted: Rear wheel)  
+   *Tool:* Hands and eyes → *Part:* Motor (also accepted: Rear wheel)  
    *After the step:* Both wheels must be switched off before charging.
 4. Push the wheelchair by its wheels into the shade, somewhere cool.  
-   *Tool:* Hands & eyes → *Part:* Rear wheel (also accepted: Frame, Tire)  
+   *Tool:* Hands and eyes → *Part:* Rear wheel (also accepted: Frame, Tire)  
    *Hint:* Barty: “Just wrap the wheels in Seneb's bandages — instant shade!”  
    *After the step:* Charge only at 0…40 °C, and don't leave the wheels in the sun or near heat sources.  
    *If wrong:* The wheelchair is rolled into the shade by hand.
 5. Engage the wheelchair's parking locks.  
-   *Tool:* Hands & eyes → *Part:* Wheel lock  
+   *Tool:* Hands and eyes → *Part:* Wheel lock  
    *After the step:* The e-motion wheels have no brakes of their own. We charge them on the wheelchair with the locks engaged.
 6. Wipe the magnetic charging socket with a dry cloth.  
    *Tool:* Cloth → *Part:* Motor (also accepted: Rear wheel)  
@@ -1555,7 +1555,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Charger → *Part:* Motor (also accepted: Rear wheel)  
    *After the step:* While charging, don't press on the pushrims — charging may stop.
 8. Observe: the charging lights flash green and the wheel gives a short beep.  
-   *Tool:* Hands & eyes → *Part:* Motor (also accepted: Rear wheel)  
+   *Tool:* Hands and eyes → *Part:* Motor (also accepted: Rear wheel)  
    *After the step:* It's charging. A full charge takes up to 6 hours; it can't overcharge — it stops by itself.
 
 **Test:** In the shade of the columns the charge lights run green. Next morning Seneb rolls around the pyramid — the wheels help push with ease.  
@@ -1588,15 +1588,15 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Turn off the joystick.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box)  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Work on the circuit breaker only with the joystick switched off.
 2. Untie the chest from the backrest: cargo counts toward the wheelchair's weight limit too.  
-   *Tool:* Hands & eyes → *Part:* Backrest (posts, upholstery)  
+   *Tool:* Hands and eyes → *Part:* Backrest (posts, upholstery)  
    *Hint:* Barty: “Keep the chest — and put his little dragon nephew on his lap too!”  
    *After the step:* The weight limit covers the rider and everything hanging on the wheelchair.  
    *If wrong:* The chest is removed by hand. And the wheelchair never carries passengers.
 3. Find the weight limit on the wheelchair's label and compare it with Gorynych's weight.  
-   *Tool:* Hands & eyes → *Part:* Frame (also accepted: Backrest (posts, upholstery), Battery, Joystick (control box), Seat)  
+   *Tool:* Hands and eyes → *Part:* Frame (also accepted: Backrest (posts, upholstery), Battery, Joystick (control box), Seat)  
    *Mini-game:* meter  
    *After the step:* Every wheelchair has its own weight limit. It's on the serial number label and in the specifications table.
 4. Inflate the drive tires to the pressure printed on the tire.  
@@ -1604,13 +1604,13 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Mini-game:* pump  
    *After the step:* Soft tires put more load on the motors.
 5. Push the battery harness plugs in until they click.  
-   *Tool:* Hands & eyes → *Part:* Battery (also accepted: Main circuit breaker, Joystick (control box))  
+   *Tool:* Hands and eyes → *Part:* Battery (also accepted: Main circuit breaker, Joystick (control box))  
    *After the step:* A loose connector can also cut the power.
 6. Wait about a minute and press the main circuit breaker button.  
-   *Tool:* Hands & eyes → *Part:* Main circuit breaker  
+   *Tool:* Hands and eyes → *Part:* Main circuit breaker  
    *After the step:* The breaker needs to “rest” for about a minute. If it trips again and again — take it to Pride service.
 7. Switch the joystick on with its power button and look at the battery indicator.  
-   *Tool:* Hands & eyes → *Part:* Joystick (control box) (also accepted: Joystick knob (stick))  
+   *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Joystick knob (stick))  
    *After the step:* The indicator is on — power is back.
 
 **Test:** Without the chest, Gorynych drives uphill to the castle without stopping. All three heads are happy.  
@@ -1623,15 +1623,16 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 ### G1. Truing a wobbly rim
 - **Client:** Aelin the Elf  
+- **Wheelchair:** Progeo Ego (active, rigid frame)  
 - **Symptom:** Guild task: after the tournament, the rim of Aelin's rear wheel wobbles side to side. Correct the runout by the rules: measure before truing, turn nipples a little at a time.
 
 **Repair steps**
 
 1. Remove the rear wheel from the chair (quick-release axle button)  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *After the step:* Press the button in the end of the axle — the wheel comes off whole, axle and all.
 2. Mount the wheel in the truing stand  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 1  
    *Hint:* Barty: “A staaand! The lady master had one just like it. I thought it was a harp.”  
    *After the step:* The stand holds the axle rigidly — runout shows precisely.
@@ -1657,11 +1658,11 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Order: free; must come after:* 5  
    *After the step:* One overtightened spoke means a future wobble or a cracked rim.
 8. Take the wheel out of the truing stand  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 6, 7  
    *After the step:* Runout within tolerance, tension even — the wheel is ready.
 9. Put the wheel back on the chair (quick-release axle)  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 8  
    *Hint:* Barty: “Click! I love that sound. Means nothing fell off.”
 
@@ -1679,64 +1680,64 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Turn off the power at the joystick  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    **SAFETY step**  
    *Hint:* Brenna: “First rule of electrics: kill the power. Second: check that you killed it.”  
    *After the step:* Work only on a powered-down wheelchair.
 2. Check that the freewheel levers are in drive mode  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    **SAFETY step**  
    *After the step:* Drive mode means the motor brakes are on: the chair won't roll while you're in the battery bay.
 3. Remove the front cover by its release handles  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *After the step:* No tools needed: the cover is held by latches.
 4. Remove the rear shroud: turn the two yellow clips  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *After the step:* Under the rear shroud: the battery tray with the main circuit breaker.
 5. Open the battery compartment door  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 3, 4  
    *After the step:* Terminal bolts go in the magnetic tray later, not “somewhere on the workbench”.
 6. Press the yellow button on the main circuit breaker — the batteries are disconnected from the system  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 4  
    **SAFETY step**  
    *After the step:* On the Edge 4 the breaker doubles as the battery isolation switch: the circuit is open before a wrench touches the terminals.
 7. Disconnect the NEGATIVE terminal — always first  
-   *Tool:* Adjustable wrench  
+   *Tool:* Crescent wrench  
    *Order: free; must come after:* 1, 2, 5, 6  
    **SAFETY step**  
    *After the step:* Negative off — the ground circuit is broken; the wrench can no longer cause a short.
 8. Disconnect the positive terminal  
-   *Tool:* Adjustable wrench  
+   *Tool:* Crescent wrench  
    *Order: free; must come after:* 7
 9. Take the old batteries out of the compartment  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 8  
    *Hint:* Barty: “Let me lift it! ...ah, right. Fine, you do it.”  
    *After the step:* Batteries are heavy: lift from a squat and keep them upright.
 10. Fit a new pair from the Guild catalog  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 9  
    *Value from the manual:* Which battery pair are we fitting? — ✅ Two new 12 V AGMs — same capacity, type and age; ❌ One new + last year's of the same capacity (savings!); ❌ A new AGM + a new gel — they're both 12 V  
    *After the step:* Secure the new pair: a loose battery chafes through its wires on the first bump.
 11. Connect the POSITIVE terminal first  
-   *Tool:* Adjustable wrench  
+   *Tool:* Crescent wrench  
    *Order: free; must come after:* 10  
    **SAFETY step**  
    *After the step:* Assembly mirrors disassembly: positive first, negative last.
 12. Connect the negative terminal  
-   *Tool:* Adjustable wrench  
+   *Tool:* Crescent wrench  
    *Order: free; must come after:* 11
 13. Flip the main circuit breaker lever down — battery power is back  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 12  
    *After the step:* The breaker button disconnects the batteries; the lever down reconnects them.
 14. Close the battery compartment door  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 12
 15. Refit the covers  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 14, 13  
    *After the step:* Without the covers, dirt gets into the compartment and fingers wander to the terminals.
 16. Put the new pair on a full first charge  
@@ -1752,6 +1753,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 ### G3. Toe: chair pulls sideways
 - **Client:** Tavr the Centaur (courier)  
+- **Wheelchair:** Invacare 9000 (standard folding)  
 - **Symptom:** The centaur's courier chair: wheels intact, pressure seems fine, but it pulls sideways and “eats” the tires. A classic — the toe is out. Measure, don't guess.
 
 **Repair steps**
@@ -1765,15 +1767,15 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Order: free; must come after:* 1  
    *After the step:* The difference between the front and back measurements is the toe.
 3. Loosen the axle plate bolts  
-   *Tool:* Hex key  
+   *Tool:* Hex key (Allen wrench)  
    *Order: free; must come after:* 2  
    *After the step:* The plate holds the axle: loosen it and you can move the wheel.
 4. Set the wheels parallel (bring the measurement difference to zero)  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 3  
    *Mini-game:* gap
 5. Tighten the plate bolts in a criss-cross pattern  
-   *Tool:* Hex key  
+   *Tool:* Hex key (Allen wrench)  
    *Order: free; must come after:* 4  
    *After the step:* Criss-cross — so the plate doesn't skew while tightening.
 6. Re-measure with the tape, front and back  
@@ -1795,7 +1797,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Decode the VR2 indicator flash using the code table  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Value from the manual:* 2 bars flash quickly. What is it? — ✅ Left motor disconnected (the controller can't see it); ❌ Battery voltage low; ❌ Brake fault (solenoid)  
    *After the step:* Fast flashing of the indicator bars is a fault code, not the charge level.
 2. Check charge: multimeter on the joystick charging socket, contacts 1(+) and 2(−)  
@@ -1804,12 +1806,12 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Mini-game:* meter  
    *After the step:* The Code 2 flowchart starts with battery charge.
 3. Turn off power on the VR2 joystick  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    **SAFETY step**  
    *Hint:* Brenna: “Turned it off? Now check that you turned it off.”  
    *After the step:* Connectors and brushes are only touched with the chair powered off.
 4. Disconnect the left motor's 4-pin connector from the control module  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 3, 1  
    *After the step:* The connector is intact, no signs of overheating, it sat tight. So the problem is deeper.
 5. Measure resistance between the two lower (thick) contacts of the motor connector  
@@ -1823,12 +1825,12 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Hint:* Barty: “Cap tight? Lean on it with all your weight!” — no, the cap's plastic breaks easily.  
    *After the step:* The cap is plastic — no excess force.
 7. Take the brushes out one at a time and assess their wear  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 6  
    *Value from the manual:* The left motor's brush is 4 mm, the end is chipped. Decision? — ✅ Less than 1/4" (≈6 mm) — replace brushes in both motors; ❌ 4 mm will still work — put them back; ❌ Replace just this one brush  
    *After the step:* Remember how the brush sat: the new one goes in the same way round.
 8. Insert the new brushes the same way round as the old ones — in both motors  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 7  
    *After the step:* A brush put in the other way round takes a long time to bed in against the commutator.
 9. Screw the brush holder caps back on with the screwdriver, no force  
@@ -1836,28 +1838,28 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Order: free; must come after:* 8  
    *After the step:* A plastic cap strips easily — snug it down and stop.
 10. Reconnect the left motor's 4-pin connector to the control module  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 9, 3  
    *After the step:* Push the connector in until it clicks; don't pull on the wires.
 11. Disengage both motors' gearboxes: freewheel levers  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 9  
    **SAFETY step**  
    *After the step:* The wheels are no longer connected to the motors: the run-in won't move the wheelchair.
 12. Turn the power on for the break-in  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 10  
    *After the step:* No blinking — the motor is detected again.
 13. Break in the brushes for 20–30 min: joystick alternately forward and reverse  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 12, 11  
    *After the step:* New brushes are broken in first: that beds them in, and a later resistance reading is accurate.
 14. Turn the power off after the break-in  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 13  
    *After the step:* Per the manual, after the work: power off first, then the gears go back into engagement.
 15. Re-engage the gearboxes: levers to drive mode  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 14  
    *After the step:* Check: power off, push from behind — the wheelchair doesn't roll. That means the gears are engaged.
 
@@ -1875,7 +1877,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Find the display code in the Q-Logic table  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Value from the manual:* Display: “#203”. What is it? — ✅ Brake 1 (left motor) isn't detected: connector, wiring, or the brake itself; ❌ Joystick out of range — calibrate; ❌ Battery empty — just charge it  
    *After the step:* Brake 1 is the brake of motor M1, the left one by default.
 2. Check charge: multimeter on the joystick charging socket  
@@ -1884,22 +1886,22 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Mini-game:* meter  
    *After the step:* The flowchart assumes the batteries are charged. Check, don't take it on faith.
 3. Put both freewheel levers into drive mode (up)  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 1  
    **SAFETY step**  
    *Hint:* Barty: “Yank the levers with your foot, it's faster!” — no: the manual forbids it — you'll bend the lever and the brake.  
    *After the step:* Drive mode — the motor brakes are engaged: the chair won't roll away.
 4. Power-cycle the joystick  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 3  
    *After the step:* The code remains — so it's not the levers. We go further along the chart.
 5. Turn off the joystick power  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 4  
    **SAFETY step**  
    *After the step:* The power module and motor connectors are only disconnected with the power off.
 6. Remove the rear shroud: wing knob and clips  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 3  
    *After the step:* The shroud is held by a knob and clips — no tools needed.
 7. Unscrew the power module screws on the rear frame  
@@ -1907,7 +1909,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Order: free; must come after:* 5, 6  
    *After the step:* Don't pull on the wires: the module just swings out to give access to the connectors.
 8. Unplug the left motor harness connector from the power module  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 7, 5  
    *After the step:* Pull on the connector body, not the wires.
 9. Measure the brake resistance: pins 3–4 of the left motor connector  
@@ -1921,7 +1923,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Value from the manual:* Left brake — open circuit. What does the flowchart say? — ✅ Replace the left motor with its brake assembly and test the system; ❌ Replace the power module; ❌ Calibrate the joystick with the programmer  
    *After the step:* The motor and brake are one unit (motor/brake assembly): replaced as a whole.
 11. Connect the new motor's connector to the power module  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 10  
    *After the step:* Don't pull on the wires: the connector should click in without strain on the harness.
 12. Screw the power module back in place  
@@ -1929,14 +1931,14 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Order: free; must come after:* 11  
    *After the step:* Screws all the way in, without stripping the threads.
 13. Refit the rear shroud  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 12
 14. Turn on the joystick power  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 13, 3  
    *After the step:* #203 is gone — the new brake is detected.
 15. Brake test: level ground, low speed, joystick gently forward until the brake clicks, then back, left, right  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 14  
    *After the step:* In each direction the brake should click audibly after a couple of seconds.
 
@@ -1954,55 +1956,55 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 **Repair steps**
 
 1. Turn off the power at the joystick  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    **SAFETY step**  
    *Hint:* Brenna: "Rule one is the same as on the Edge 4: kill the power. Rule two: check that you did."  
    *After the step:* Work only on a powered-down wheelchair.
 2. Check that both freewheel levers are up — drive mode  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    **SAFETY step**  
    *After the step:* Levers up means the motor brakes are engaged: the chair won't roll off while you're in the compartment.
 3. Remove the shroud that covers the batteries  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Value from the manual:* Where are the batteries on the Q6 Edge 2.0? — ✅ Under the FRONT shroud: squeeze the release handles, lift up and away from the base; ❌ Under the rear shroud behind two yellow latches; ❌ Under the seat: take the seat off the base  
    *After the step:* No tools — release handles. But first find in the manual WHICH shroud.
 4. Disconnect the quick-release battery harness connectors  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 1, 2, 3  
    **SAFETY step**  
    *After the step:* Connector apart — the batteries are isolated from the power module. Pull the connector body, not the wire.
 5. Disconnect the NEGATIVE terminal — always first  
-   *Tool:* Adjustable wrench  
+   *Tool:* Crescent wrench  
    *Order: free; must come after:* 4  
    **SAFETY step**  
    *After the step:* Negative off — the ground circuit is broken; the wrench can no longer cause a short.
 6. Disconnect the positive terminal  
-   *Tool:* Adjustable wrench  
+   *Tool:* Crescent wrench  
    *Order: free; must come after:* 5
 7. Lift the old batteries out of the tray: the front one first, then the rear  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 6  
    *Hint:* Barty: "I'll hold it! ...No. Still no. Fine."  
    *After the step:* The batteries weigh 17 kg each: lift from a squat and keep them upright.
 8. Pick the new pair from the Guild catalogue  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 7  
    *Value from the manual:* Which pair goes into the Q6 Edge 2.0? — ✅ Two new 12 V deep-cycle NF-22 AGM batteries — same type, capacity and age; ❌ One NF-22 AGM and one Group 24 gel — more capacity, more range!; ❌ One new NF-22 and last year's identical one (savings!)
 9. Set the batteries in the tray and connect the harness to the terminals per the diagram  
-   *Tool:* Adjustable wrench  
+   *Tool:* Crescent wrench  
    *Order: free; must come after:* 8  
    *Value from the manual:* How do the batteries sit in the Q6 Edge 2.0 tray? — ✅ Flat, terminals facing REARWARD: a front one and a rear one; ❌ Flat, terminals facing forward — closer to the front shroud, handier; ❌ On their side, terminals up — shorter wires that way  
    *After the step:* Red wire to the red (+) post, black wire to the black (−) post. Tighten the fasteners.
 10. Join the quick-release harness connectors until they click  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 9  
    *After the step:* Assembly mirrors disassembly: terminals per the diagram, then the harness connectors.
 11. Check the main breaker on the rear frame: button pushed in, not tripped  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 10  
    *After the step:* On the Q6 Edge 2.0 the breaker is a button on the rear frame. Tripped — rest a minute, then push it in.
 12. Refit the front shroud until the latches click  
-   *Tool:* Hands & eyes  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 10, 11  
    *After the step:* Without the shroud, dirt gets into the tray and hands reach for the terminals.
 13. Put the new pair on a full first charge  

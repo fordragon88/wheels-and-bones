@@ -2,6 +2,8 @@
 
 WHEELS & BONES
 A free game about keeping wheels turning.
+Game by Andrei.
+Testing: Olga, Liz and Yana.
 Made by GOAT — Grassroots Open Assistive Tech
 openassistivetech.org
 
@@ -16,7 +18,8 @@ Based on the Permobil "Seating & Positioning Guide".
 
 ART, MODELS & MUSIC
 Made with AI tools, edited by our human team.
-Images: ComfyUI with Qwen-Image. Music: YuE.
+Wheelchairs: Meshy 3D models from manufacturers' photos, frames rendered in Blender.
+Portraits and backgrounds: ChatGPT (Codex), ComfyUI and Qwen-Image. Music: YuE.
 
 CODE
 Built with a little help from Claude (Anthropic).
@@ -31,6 +34,5 @@ Learn here, then fix with your wheelchair's manual in hand,
 or ask a qualified technician. Brand names belong to their owners.
 
 THANK YOU
-Testing: Olga.
 To our testers, to every volunteer with a wrench,
 and to everyone who keeps wheelchairs rolling.

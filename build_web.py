@@ -127,7 +127,8 @@ SPLASH_CSS = """
   #wnb-splash progress { width: min(460px, 80vw); height: 14px; accent-color: #e8a33d; }
   #wnb-splash .m { font: bold 15px sans-serif; color: #f0b85a; text-shadow: 0 1px 6px #000; margin-top: 10px; min-height: 20px; }
   #infobox { background: rgba(29, 27, 36, .94) !important; color: #f0b85a !important; border: 2px solid #e8a33d; border-radius: 12px;
-    font: bold 18px sans-serif; text-align: center; box-shadow: 0 4px 24px #000; }
+    font: bold 18px sans-serif; text-align: center; box-shadow: 0 4px 24px #000; top: 9vh !important; }
+  @media (max-height: 480px) { #wnb-splash .s { display: none; } #wnb-splash { padding-bottom: 3vh; } #wnb-splash .t { margin-bottom: 4px; } }
 </style>
 """
 SPLASH_HTML = ('<div id="wnb-splash"><div class="t">Wheels &amp; Bones</div>'

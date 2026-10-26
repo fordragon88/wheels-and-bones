@@ -234,7 +234,7 @@ python build_web.py             # build (pygbag → WebAssembly) into web_build/
 python build_web.py --serve     # build and serve locally at http://127.0.0.1:8000
 ```
 
-The browser version is **English only**, has no 3D models (the chair pictures are used instead) and keeps saves
+The browser version is **English only**, shows the chair as Blender turntable frames (no rotating 3D mesh on V) and keeps saves
 in localStorage; speech goes through an aria-live region on the page (plus the browser voice on F2). It is
 **public**: https://fordragon88.github.io/wheels-and-bones-web/ (GitHub Pages; `python build_web.py --deploy` rebuilds and publishes).
 
@@ -298,6 +298,13 @@ technician (especially spoke tensioning and live electronics).
 - [Wheel and Rim Truing — Park Tool](https://www.parktool.com/en-us/blog/repair-help/wheel-and-rim-truing) — truing: gauge/caliper, small nipple steps, which way spokes pull.
 - [Wheelbuilding — Sheldon Brown](https://www.sheldonbrown.com/wheelbuild.html) — spoke tension, tensiometer, why tuning "by ear" is only a rough estimate.
 - Manufacturer service documentation for power wheelchairs (Pride Mobility, Invacare, Permobil, Quantum — public service/owner manuals) — replacing batteries in pairs, terminal order (negative off first, positive on first), first full charge with the original charger, controller codes.
+- Manuals cited by name in the game's footnotes and Guild pages (`# source:` comments in `game.py`): Quantum Q6 Edge 2.0 and Edge 4 owner's manuals, TRU-Balance 3 seating, Q-Logic 3 controller, Pride Jazzy 614 and Pulse 6, Permobil F5, WHILL C2, Zippie Iris, Aero Z, Alber e-motion, Vermeiren D100, ROHO cushion manual, WHO Wheelchair Service Training Package, Permobil Seating & Positioning Guide.
+
+### Licence
+
+Code is MIT, game content (texts, translations, art, 3D models, music) is CC BY-SA 4.0 — see `LICENSE`, `LICENSE-CODE`, `LICENSE-CONTENT`.
+Fonts: DejaVu Sans (DejaVu licence) and Atkinson Hyperlegible (SIL Open Font License), licences in `assets/fonts/`. Art and models were made
+with AI tools (Meshy, ChatGPT/Codex, ComfyUI with Qwen-Image, YuE for music) and edited by the team. Brand names belong to their owners.
 - WHO **Wheelchair Service Training Package** (basic/intermediate) — the real framework for training wheelchair service personnel; the model for the Guild exam.
 - Permobil **Wheelchair Seating & Positioning Guide** — the Seating Clinic.
 
@@ -590,7 +597,7 @@ python build_web.py             # сборка (pygbag → WebAssembly) в web_b
 python build_web.py --serve     # собрать и запустить локально: http://127.0.0.1:8000
 ```
 
-Браузерная версия — **только на английском**, без 3D-моделей (вместо них рисунки колясок), сохранения —
+Браузерная версия — **только на английском**, коляска показывается кадрами поворота из Blender (нет только 3D-сетки по V), сохранения —
 в localStorage; озвучка — через aria-live на странице (плюс голос браузера по F2). Она **опубликована**:
 https://fordragon88.github.io/wheels-and-bones-web/ (GitHub Pages; пересобрать и выложить — `python build_web.py --deploy`).
 
@@ -669,6 +676,13 @@ python art_tests/monkey_test.py      # тысячи случайных дейс�
 - Сервис-документация производителей электроколясок (Pride Mobility, Invacare, Permobil, Quantum — открытые service/owner manuals) — замена батарей парой, порядок клемм (минус снимают первым, плюс подключают первым), первая полная зарядка штатным ЗУ, коды контроллеров.
 - WHO **Wheelchair Service Training Package** (basic/intermediate) — реальная рамка подготовки специалистов по колясочному сервису; ориентир для экзамена Гильдии.
 - Permobil **Wheelchair Seating & Positioning Guide** — Кабинет посадки.
+- Мануалы, на которые игра ссылается по имени в сносках и страницах Гильдии (комментарии `# source:` в `game.py`): Quantum Q6 Edge 2.0 и Edge 4, сиденье TRU-Balance 3, контроллер Q-Logic 3, Pride Jazzy 614 и Pulse 6, Permobil F5, WHILL C2, Zippie Iris, Aero Z, Alber e-motion, Vermeiren D100, подушка ROHO.
+
+### Лицензия
+
+Код — MIT, содержимое игры (тексты, переводы, арт, 3D-модели, музыка) — CC BY-SA 4.0: `LICENSE`, `LICENSE-CODE`, `LICENSE-CONTENT`.
+Шрифты: DejaVu Sans (лицензия DejaVu) и Atkinson Hyperlegible (SIL Open Font License), тексты лицензий — в `assets/fonts/`. Арт и модели
+сделаны ИИ-инструментами (Meshy, ChatGPT/Codex, ComfyUI с Qwen-Image, музыка — YuE) и доработаны командой. Названия марок принадлежат их владельцам.
 
 > Как и в базовой игре: игра учит безопасным процедурам и прямо говорит, где
 > граница — живую электронику (контроллер, проводка под напряжением) чинит

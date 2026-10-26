@@ -102,7 +102,7 @@ IS_WEB = sys.platform == "emscripten"          # браузерная верси
 WEB_RES = {"standard": (1280, 720), "high": (1920, 1080), "ultra": (2560, 1440)}   # холст в браузере
 WEB_LEVELS = ("standard", "high", "ultra")
 WEB_MIN_W = 768                                # «авто» в браузере: холст не меньше (масштаб рендера 0,6)     # «авто» выбирает по размеру окна игры на экране (и скорости ПК)
-GAME_VERSION = "0.3"
+GAME_VERSION = "0.4"
 SUPPORT_URL = "https://www.paypal.com/donate/?hosted_button_id=LFKGMSGCNHYHC"   # PayPal GOAT (кнопка «Donate!» на openassistivetech.org/contribute)
 # Замечания игроков (флажок ⚑, «Я не согласен») уходят в Google-таблицу через веб-приложение Apps Script
 # (docs/feedback/Code.gs, настройка — docs/FEEDBACK_SETUP.md). Пустой адрес — только локальный feedback.json.
@@ -956,6 +956,12 @@ def wrap_lines(text, width, size=16, raw=False):
             if cur:
                 out.append(cur)
             cur = w
+            while f.size(cur)[0] > width and "-" in cur[1:-1]:   # слово шире строки — переносим по дефису (аудит 26.10)
+                cuts = [j for j in range(1, len(cur) - 1) if cur[j] == "-"]
+                fit = [j for j in cuts if f.size(cur[:j + 1])[0] <= width]
+                j = fit[-1] if fit else cuts[0]
+                out.append(cur[:j + 1])
+                cur = cur[j + 1:]
     if cur:
         out.append(cur)
     return out
@@ -983,6 +989,7 @@ def draw_wrapped(surf, text, pos, width, size=16, color=WHITE, center=False, lin
         while last and f.size(last + "…")[0] > width:
             last = last[:-1]
         lines[-1] = last.rstrip(" ,.;:—") + "…"
+    pos = 0                                                 # позиция строки в тексте — для счёта символов «печати»
     for ln in lines:
         r = pygame.Rect((0, 0), f.size(ln))
         if center:
@@ -997,7 +1004,13 @@ def draw_wrapped(surf, text, pos, width, size=16, color=WHITE, center=False, lin
                 surf.blit(img, r.topleft, pygame.Rect(0, 0, f.size(ln[:left])[0], f.get_height()))
             else:
                 surf.blit(img, r.topleft)
-        left -= len(ln) + 1
+        pos = text.find(ln, pos)
+        if pos < 0:                                         # рассинхрон (двойные пробелы) — считаем как раньше
+            pos, step = len(text), len(ln) + 1
+        else:                                               # после переноса по дефису пробела нет (аудит 26.10)
+            pos += len(ln)
+            step = len(ln) + (1 if text[pos:pos + 1] == " " else 0)
+        left -= step
         y += f.get_height() + line_gap
     return y
 
@@ -1600,17 +1613,18 @@ def web_setup_touch():
       document.body.style.overflow = 'hidden';               // в окне игры на сайте (Firefox)
       if (!document.getElementById('wnb-exitfs') && (document.exitFullscreen || document.webkitExitFullscreen)) {
         var x = document.createElement('button'); x.id = 'wnb-exitfs'; x.type = 'button';   // выход из полного экрана
-        x.textContent = '\u2716 Exit fullscreen (Esc)'; x.setAttribute('aria-label', 'Exit fullscreen');   // (владелец 25.10)
+        x.textContent = '\\u2716 Exit fullscreen (Esc)'; x.setAttribute('aria-label', 'Exit fullscreen');   // (владелец 25.10)
         x.style.cssText = 'display:none;position:fixed;left:50%;bottom:4px;transform:translateX(-50%);z-index:9998;' +
           'padding:5px 12px;border:0;border-radius:8px;background:rgba(0,0,0,.55);color:#fff;font:bold 13px sans-serif;opacity:.85;cursor:pointer';
         var api = function(){ return !!(document.fullscreenElement || document.webkitFullscreenElement); };
-        var big = function(){ return innerWidth >= screen.width - 2 && innerHeight >= screen.height - 2; };   // F11 или
+        var isTouch = window.matchMedia && matchMedia('(pointer: coarse)').matches;   // на телефоне окно всегда «с экран»:
+        var big = function(){ return !isTouch && innerWidth >= screen.width - 2 && innerHeight >= screen.height - 2; };   // F11 или
         x.onclick = function(){                                                                                  // iframe
           if (api()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
           if (window.parent && window.parent !== window) {                 // сайт развернул iframe: просим страницу
             try { window.parent.postMessage({wnb: 'exitfs'}, '*'); } catch (e) {} }
           x.textContent = 'Press F11 (or Esc) to leave full screen';         // F11 браузера снять скриптом нельзя
-          setTimeout(function(){ x.textContent = '\u2716 Exit fullscreen (Esc)'; }, 4000);
+          setTimeout(function(){ x.textContent = '\\u2716 Exit fullscreen (Esc)'; }, 4000);
         };
         document.body.appendChild(x);
         var fs = function(){ x.style.display = (api() || big()) ? 'block' : 'none'; };
@@ -1641,8 +1655,8 @@ def web_setup_touch():
       if (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen) {
       var b = document.createElement('button'); b.id = 'wnb-full'; b.type = 'button'; b.textContent = '\\u26F6';
       b.setAttribute('aria-label', 'Fullscreen');
-      b.style.cssText = 'position:fixed;left:6px;top:6px;z-index:9998;width:40px;height:40px;border:0;border-radius:8px;' +
-        'background:rgba(0,0,0,.45);color:#fff;font-size:22px;opacity:.8';
+      b.style.cssText = 'position:fixed;left:6px;top:50%;transform:translateY(-50%);z-index:9998;width:36px;height:36px;border:0;' +
+        'border-radius:8px;background:rgba(0,0,0,.45);color:#fff;font-size:20px;opacity:.6';   // у левого края по центру: не на «◂» и не на инструментах
       b.onclick = function(){ if (document.fullscreenElement) { document.exitFullscreen && document.exitFullscreen(); }
         else full(); };
       document.body.appendChild(b); }
@@ -9402,7 +9416,7 @@ class Game:
     A11Y_KEYS = [
         ("Стрелки", "выбрать пункт; влево-вправо двигают ползунок"),
         ("Tab, Shift+Tab", "следующая или предыдущая группа"),
-        ("Enter, Пробел", "нажать (одна кнопка: нажать — выбрать, держать — назад)"),
+        ("Enter, Пробел", "нажать (одна кнопка: нажать — выбрать, держать — назад)" if SCAN_ENABLED else "нажать"),
         ("Esc", "назад или закрыть окно"),
         ("R", "повторить: где я и что делать"),
         ("T", "прочитать весь экран"),
@@ -10817,6 +10831,8 @@ class Game:
         aa_circle(surf, (30, 28, 40), (cx, cy), 4)
         if not VOL["on"] or VOL["master"] <= 0.001:          # звук выключен: перечёркнутый динамик СЛЕВА от шестерёнки
             sx, sy = r.x - 20, r.centery                      # (владелец 25.10: крестик на самой шестерёнке смотрелся как сбой)
+            if self.scene in ("title", "hub", "guild", "garage") and not IS_WEB:
+                sx = self._lang_rect().x - 20                 # там между шестерёнкой и краем стоит RU/EN (аудит 26.10)
             DR.rect(surf, GHOST, (sx - 9, sy - 4, 6, 8))
             DR.polygon(surf, GHOST, [(sx - 3, sy - 4), (sx + 4, sy - 10), (sx + 4, sy + 10), (sx - 3, sy + 4)])
             DR.line(surf, BAD, (sx - 11, sy - 11), (sx + 9, sy + 11), 3)
@@ -13289,7 +13305,8 @@ class Game:
         n = len(self.cur["diagnosis"])
         top = self._right_col_top() + 30
         gap = 8
-        h = min(68, (712 - top) // n - gap)          # 4 варианта тоже влезают до низа экрана
+        bottom = 668 if self._job_notes() else 712  # над кнопкой «СНОСКИ МАНУАЛА» (y 676; аудит 26.10: aeroz_lock)
+        h = min(68, (bottom - top) // n - gap)       # 4 варианта тоже влезают до низа экрана
         x, y, w = 980, top, 280
         for i in range(len(self.cur["diagnosis"])):
             out.append((i, pygame.Rect(x, y + i * (h + gap), w, h)))
@@ -14715,7 +14732,7 @@ class Game:
 
     def _manual_text_size(self, page, width, height):
         """Наибольший шрифт (17→11), при котором вся страница мануала помещается в height."""
-        key = (page, width, height, LANG["code"])
+        key = (page, width, height, LANG["code"], A11Y.get("text", 0))   # размер текста меняет метрики font()
         cache = self.__dict__.setdefault("_manual_fit", {})
         if key not in cache:
             lines = self._manual_entry(page)[1]
@@ -14962,8 +14979,11 @@ class Game:
         for i, rect in self._mini_meter_rects():
             aa_rect(surf, PANEL, rect, border_radius=8)
             aa_rect(surf, CYAN if rect.collidepoint(mouse) else DIM, rect, 2, border_radius=8)
+            for osz in (15, 14, 13, 12, 11):                   # влезть в карточку и при крупном тексте (аудит 26.10)
+                if len(wrap_lines(cfg["options"][i][0], rect.w - 28, osz)) * (font(osz).get_height() + 2) <= rect.h - 14:
+                    break
             draw_wrapped(surf, cfg["options"][i][0], (rect.x + 14, rect.y + 10),
-                         rect.w - 28, 15, WHITE)
+                         rect.w - 28, osz, WHITE)
 
     # ----- провал tech-задания: разбор ошибки -----
     def _fail_retry_rect(self):
@@ -16402,13 +16422,12 @@ def print_assets():
         ("ghost.png", "любой, прозр.", "Призрак Барти: парит, монокль, бабочка"),
         ("master.png", "любой, прозр.", "Мастерица Бренна — призрак гномки-механика"),
         ("client_<имя>.png", "любой, прозр.", "Клиент, сидящий в своей коляске (вписывается без искажений)"),
-        ("chair_basic/elf/dwarf/fairy/orc/troll.png", "760x600", "Ручная коляска сбоку, нормализована под CHAIR_GEOM"),
-        ("chair_power.png", "760x600", "Электроколяска (средний привод) сбоку, под CHAIR_GEOM"),
+        ("chair_<модель>.png", "760x600", "Коляска сбоку под CHAIR_GEOM — кадр 0 поворота модели Meshy (25 файлов, см. AGENTS §8б)"),
     ]
     print("КОЛЁСА И КОСТИ — картинки для assets/ (нет файла -> встроенный векторный арт):\n")
     for name, size, desc in specs:
         print(f"  {name:42s} {size:10s} {desc}")
-    print("\nИконки инструментов (опц.): tool_<id>.png 64x64. id:", ", ".join(TOOLS))
+    print("\nИконки инструментов: tool_<id>.png 128x128 (предмет вписан в ~112 px). id:", ", ".join(TOOLS))
     print("Промпты для ComfyUI — в PROMPTS.md.")
 
 

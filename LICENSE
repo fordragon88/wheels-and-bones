@@ -12,6 +12,10 @@ in assets/ and docs/): Creative Commons Attribution-ShareAlike 4.0 International
 
 Third-party:
   DejaVu fonts (assets/fonts/DejaVuSans*.ttf) — DejaVu Fonts License, see assets/fonts/LICENSE-DejaVu.txt.
+  Atkinson Hyperlegible font (assets/fonts/AtkinsonHyperlegible*.ttf, Braille Institute) — SIL Open Font License 1.1,
+  see assets/fonts/LICENSE-AtkinsonHyperlegible-OFL.txt.
+  Artwork, 3D models and music were generated with AI tools (Meshy, ChatGPT/Codex, ComfyUI with Qwen-Image, YuE)
+  from the team's own references and prompts, then edited by the team; they are released under CC BY-SA 4.0 as above.
   Repair procedures and facts are based on manufacturers' service and owner's manuals collected by
   BARC — Bay Area Repair Coalition, and on the Permobil "Seating & Positioning Guide". Product and
   brand names belong to their owners and are used only to describe real equipment.
