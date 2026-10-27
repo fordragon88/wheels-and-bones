@@ -519,8 +519,8 @@ python i18n_work/build_lang.py       # перевод полон
 - 2026-10-28 — Claude (Fable 5.1) — **UTM-метки на ссылке Zeffy** (просьба коллеги GOAT, чтобы считать источники пожертвований):
   в игре `SUPPORT_URL` = …/learn-to-fix-wheelchairs**?utm_source=game**, в блоке сайта (`wordpress_embed.html`) —
   `?utm_source=website`. Selftest OK; веб собран и выложен (`build_web.py --deploy`); exe пересобран (selftest 0,
-  sha256 bb59e235…, 123.9 МБ) — **загрузка в Release v0.4 ждёт владельца** (`gh release upload v0.4 dist/WheelsAndBones.exe
-  --clobber`): в этой сессии команду заблокировал классификатор разрешений.
+  sha256 bb59e235…, 123.9 МБ) и **заменён в Release v0.4** (28.10 01:49, по явному разрешению владельца — классификатор
+  разрешений блокировал `gh release upload` до его команды).
 
 - 2026-10-27 — Claude (Fable 5.1) — **кнопка поддержки → Zeffy** (прямая команда владельца в заморозку): `SUPPORT_URL` =
   https://www.zeffy.com/en-US/donation-form/learn-to-fix-wheelchairs, подписи «Поддержать GOAT (откроется Zeffy)» /
