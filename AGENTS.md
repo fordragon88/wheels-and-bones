@@ -516,6 +516,13 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-10-27 — Claude (Fable 5.1) — **кнопка поддержки → Zeffy** (прямая команда владельца в заморозку): `SUPPORT_URL` =
+  https://www.zeffy.com/en-US/donation-form/learn-to-fix-wheelchairs, подписи «Поддержать GOAT (откроется Zeffy)» /
+  «Страница пожертвований GOAT (Zeffy)» (game.py, assets/lang_en.json, i18n_work/en9_fixes14.json); selftest OK,
+  extract_new 3 строки (норма). Веб собран и выложен (`build_web.py --deploy`, Pages c433d60e). `wordpress_embed.html` —
+  две кнопки: «♥ Support GOAT» → Zeffy и «or via PayPal» → старый PayPal; владелец вставляет блок на страницу сам.
+  **exe v0.4 в Releases не пересобирался** — там по-прежнему PayPal (решить при следующем релизе).
+
 - 2026-10-26 — **РЕЛИЗ.** Владелец опубликовал новость на openassistivetech.org («Wheels & Bones — a Halloween repair game»,
   ведёт на /wheels-and-bones/ с блоком `wordpress_embed.html`); игра на сайте — сборка этого дня (коммит dbadb92, Pages
   52a57a1b). В блоке на сайте осталась старая подпись «8 MB» (только текст). По команде владельца: тег `v0.4` (3efac43) и
@@ -1249,8 +1256,8 @@ python i18n_work/build_lang.py       # перевод полон
   Focus CR/F5 убрано обратно. Урок: скан Tripo сверять с прежней моделью с 4 сторон (`views4`) ДО замены.
   Ещё: **кружки деталей и цифры растут с масштабом коляски** (`_m3d_spots`: r × zoom_k, 9–24 px; цифра ≈ 0,95 r);
   **проезд**: портреты, где коляска смотрит влево (`RIDE_FLIP`: Искра, Искра с мамой, Матильда), отражаются —
-  едут лицом вперёд; **«Support GOAT» → PayPal** (`SUPPORT_URL` = paypal.com/donate/?hosted_button_id=LFKGMSGCNHYHC,
-  та же ссылка на странице сайта); **крупный шрифт (Atkinson, 125 %)**: сообщение сверху — правее «◂», с полями;
+  едут лицом вперёд; **«Support GOAT» → Zeffy** (`SUPPORT_URL` = zeffy.com/en-US/donation-form/learn-to-fix-wheelchairs с 27.10;
+  раньше PayPal hosted_button_id=LFKGMSGCNHYHC; на странице сайта обе кнопки); **крупный шрифт (Atkinson, 125 %)**: сообщение сверху — правее «◂», с полями;
   карточки мастерской — имя и поломка над подписью «РУЧНАЯ/ЭЛЕКТРО»; подсказка во вкладке «Доступность»,
   справка F1, шапка мини-игр, финал, шапка Гильдии — подбирают размер/идут друг за другом и не выходят за плашки.
   **Реакции на ошибку**: «висящий» итог хода (sticky) глушит реплики только первые 3 с, отложенная реакция живёт 8 с
@@ -1332,8 +1339,8 @@ python i18n_work/build_lang.py       # перевод полон
   `MUSIC_BED` 18 % (`music_duck`, `MUSIC['duck']` в `_music_level`), на титуле/вступлении/вечеринке/титрах и при смене
   сцены — снова полностью; музыка по умолчанию 45 % (было 55). **«Поддержать GOAT ♥»** — на титуле и вечеринке рядом
   с «Титрами» и в титрах (`_support_btn_rect`, `open_support`: браузер — window.open, компьютер — webbrowser),
-  `SUPPORT_URL` = openassistivetech.org/contribute/ (PayPal + Patreon; ссылки на Zeffy на сайте нет — заменить
-  здесь, когда дадут); кнопка и на странице сайта (wordpress_embed.html). **Тела клиентов в «Рентгене»** (кукла из
+  `SUPPORT_URL` = Zeffy (с 27.10.2026, владелец; до того PayPal); на странице сайта две кнопки — Zeffy основная и
+  «or via PayPal» (wordpress_embed.html). **Тела клиентов в «Рентгене»** (кукла из
   рисунка: art_tests/seat_bodies.py, `_draw_seat_puppet`, `_rot_scale`; рисунки — в работе) выключены
   `SEAT_BODY_ON = False`, ассеты seat_body_* в репозиторий пока не идут. (game.py, wordpress_embed.html,
   art_tests/web_smoke.py, i18n_work/en9_fixes14.json, assets/lang_en.json)

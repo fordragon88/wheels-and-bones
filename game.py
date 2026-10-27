@@ -103,7 +103,7 @@ WEB_RES = {"standard": (1280, 720), "high": (1920, 1080), "ultra": (2560, 1440)}
 WEB_LEVELS = ("standard", "high", "ultra")
 WEB_MIN_W = 768                                # «авто» в браузере: холст не меньше (масштаб рендера 0,6)     # «авто» выбирает по размеру окна игры на экране (и скорости ПК)
 GAME_VERSION = "0.4"
-SUPPORT_URL = "https://www.paypal.com/donate/?hosted_button_id=LFKGMSGCNHYHC"   # PayPal GOAT (кнопка «Donate!» на openassistivetech.org/contribute)
+SUPPORT_URL = "https://www.zeffy.com/en-US/donation-form/learn-to-fix-wheelchairs"   # Zeffy GOAT «Learn to fix wheelchairs» (с 27.10.2026; раньше PayPal hosted_button_id=LFKGMSGCNHYHC)
 # Замечания игроков (флажок ⚑, «Я не согласен») уходят в Google-таблицу через веб-приложение Apps Script
 # (docs/feedback/Code.gs, настройка — docs/FEEDBACK_SETUP.md). Пустой адрес — только локальный feedback.json.
 FEEDBACK_URL = "https://script.google.com/macros/s/AKfycbyJxHpELYNd1CBpUmPLwIuT_hre-Nm-AJVJ9rCYDOrNLKKd26crV2G6omRPzTY6umtr/exec"
@@ -9466,11 +9466,11 @@ class Game:
             add("Меню", tr("Продолжить игру" if self.done else "Начать игру"), act=lambda: self.click_title((0, 0)),
                 key="start")
             add("Меню", tr("Титры"), self._credits_btn_rect(), act=self.open_credits, key="credits")
-            add("Меню", tr("Поддержать GOAT (откроется PayPal)"), self._support_btn_rect(), act=self.open_support,
+            add("Меню", tr("Поддержать GOAT (откроется Zeffy)"), self._support_btn_rect(), act=self.open_support,
                 key="support")
         elif self.scene == "credits":
             add("Меню", tr("Назад"), self._credits_back_rect(), act=self.close_credits, key="cback")
-            add("Меню", tr("Поддержать GOAT (откроется PayPal)"), self._support_btn_rect(), act=self.open_support,
+            add("Меню", tr("Поддержать GOAT (откроется Zeffy)"), self._support_btn_rect(), act=self.open_support,
                 key="support")
         elif self.scene == "intro":
             add("Меню", tr("Далее"), act=self._a11y_intro_next, key="next")
@@ -9489,7 +9489,7 @@ class Game:
         elif self.scene == "ending":
             add("Меню", tr("Посмотреть гараж"), act=lambda: self.click_ending((0, 0)), key="garage")
             add("Меню", tr("Титры"), self._credits_btn_rect(), act=self.open_credits, key="credits")
-            add("Меню", tr("Поддержать GOAT (откроется PayPal)"), self._support_btn_rect(), act=self.open_support,
+            add("Меню", tr("Поддержать GOAT (откроется Zeffy)"), self._support_btn_rect(), act=self.open_support,
                 key="support")
         elif self.scene == "seating" and self.seatc:
             sc = self.seatc
@@ -10334,7 +10334,7 @@ class Game:
                 webbrowser.open(SUPPORT_URL)
             except Exception:
                 pass
-        self.flash("Спасибо! Страница пожертвований GOAT (PayPal) открывается в браузере.", GOOD, 3)
+        self.flash("Спасибо! Страница пожертвований GOAT (Zeffy) открывается в браузере.", GOOD, 3)
 
     def _credits_back_rect(self):
         return pygame.Rect(WIDTH - 200, HEIGHT - 70, 170, 46)
