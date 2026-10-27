@@ -103,7 +103,7 @@ WEB_RES = {"standard": (1280, 720), "high": (1920, 1080), "ultra": (2560, 1440)}
 WEB_LEVELS = ("standard", "high", "ultra")
 WEB_MIN_W = 768                                # «авто» в браузере: холст не меньше (масштаб рендера 0,6)     # «авто» выбирает по размеру окна игры на экране (и скорости ПК)
 GAME_VERSION = "0.4"
-SUPPORT_URL = "https://www.zeffy.com/en-US/donation-form/learn-to-fix-wheelchairs"   # Zeffy GOAT «Learn to fix wheelchairs» (с 27.10.2026; раньше PayPal hosted_button_id=LFKGMSGCNHYHC)
+SUPPORT_URL = "https://www.zeffy.com/en-US/donation-form/learn-to-fix-wheelchairs?utm_source=game"   # Zeffy GOAT (utm_source=game — просьба коллеги 28.10, чтобы считать пожертвования из игры) «Learn to fix wheelchairs» (с 27.10.2026; раньше PayPal hosted_button_id=LFKGMSGCNHYHC)
 # Замечания игроков (флажок ⚑, «Я не согласен») уходят в Google-таблицу через веб-приложение Apps Script
 # (docs/feedback/Code.gs, настройка — docs/FEEDBACK_SETUP.md). Пустой адрес — только локальный feedback.json.
 FEEDBACK_URL = "https://script.google.com/macros/s/AKfycbyJxHpELYNd1CBpUmPLwIuT_hre-Nm-AJVJ9rCYDOrNLKKd26crV2G6omRPzTY6umtr/exec"
