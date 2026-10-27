@@ -522,7 +522,8 @@ python i18n_work/build_lang.py       # перевод полон
   extract_new 3 строки (норма). Веб собран и выложен (`build_web.py --deploy`, Pages c433d60e). `wordpress_embed.html` —
   две кнопки: «♥ Support GOAT» → Zeffy и «or via PayPal» → старый PayPal; владелец вставляет блок на страницу сам.
   Exe пересобран (`build_exe.bat`, selftest 0, sha256 04bb0f07…) и **заменён в Release v0.4** (`gh release upload --clobber`,
-  27.10 18:49). Кнопка «or via PayPal» в блоке сайта — тёмная с оранжевой рамкой (прозрачная была не видна).
+  27.10 18:49). Затем владелец убрал PayPal совсем: в блоке сайта кнопки «♥ Support GOAT» (Zeffy) и «</> Source code»
+  (GitHub) + раздел «Open source» (MIT / CC BY-SA, Releases, Issues, форк). Старая кнопка PayPal нигде не используется.
 
 - 2026-10-26 — **РЕЛИЗ.** Владелец опубликовал новость на openassistivetech.org («Wheels & Bones — a Halloween repair game»,
   ведёт на /wheels-and-bones/ с блоком `wordpress_embed.html`); игра на сайте — сборка этого дня (коммит dbadb92, Pages
