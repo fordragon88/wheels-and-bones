@@ -1341,8 +1341,8 @@ python i18n_work/build_lang.py       # перевод полон
   `MUSIC_BED` 18 % (`music_duck`, `MUSIC['duck']` в `_music_level`), на титуле/вступлении/вечеринке/титрах и при смене
   сцены — снова полностью; музыка по умолчанию 45 % (было 55). **«Поддержать GOAT ♥»** — на титуле и вечеринке рядом
   с «Титрами» и в титрах (`_support_btn_rect`, `open_support`: браузер — window.open, компьютер — webbrowser),
-  `SUPPORT_URL` = Zeffy (с 27.10.2026, владелец; до того PayPal); на странице сайта две кнопки — Zeffy основная и
-  «or via PayPal» (wordpress_embed.html). **Тела клиентов в «Рентгене»** (кукла из
+  `SUPPORT_URL` = Zeffy (с 27.10.2026, владелец; PayPal убран везде); на странице сайта кнопки «♥ Support GOAT» (Zeffy)
+  и «</> Source code» (GitHub), раздел «Open source» (wordpress_embed.html). **Тела клиентов в «Рентгене»** (кукла из
   рисунка: art_tests/seat_bodies.py, `_draw_seat_puppet`, `_rot_scale`; рисунки — в работе) выключены
   `SEAT_BODY_ON = False`, ассеты seat_body_* в репозиторий пока не идут. (game.py, wordpress_embed.html,
   art_tests/web_smoke.py, i18n_work/en9_fixes14.json, assets/lang_en.json)
