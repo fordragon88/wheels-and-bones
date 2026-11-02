@@ -537,8 +537,9 @@ python i18n_work/build_lang.py       # перевод полон
   Проверки: selftest ×3, asset_check, ui/keyboard (ru, en)/switch/pad ПРОЙДЕНО, rs_smoke 2, monkey — 0 падений,
   web_smoke (локально) 20 ok; в Chromium по локальной сборке кадры меняются на титуле, во вступлении и в мастерской,
   заглушек нет. Закоммичено (2687fd6) и **выложено** (Pages 6c46b80a, архив `?v=e83ce0b4ab`); по живому сайту web_smoke
-  20 ok, 0 FAIL, кадры меняются на всех трёх экранах. Блок сайта («about 14 MB») владелец перевставляет сам. Exe не
-  пересобирался.
+  20 ok, 0 FAIL, кадры меняются на всех трёх экранах. Блок сайта («about 14 MB») владелец перевставляет сам. Exe пересобран
+  (кадры anim в `build/exe_assets` — по 72 файла; 128,5 МБ, sha256 467a1e5e…, selftest exe — 0) и по команде владельца
+  **заменён в Release v0.4** (02.11 21:01 UTC, sha256 в релизе совпадает).
 
 - 2026-11-02 — Claude (Opus 5.5) — **GoatCounter включён** (код `wheelsandbones`, аккаунт владельца; доступ «Read only» для
   коллеги Ольги владелец выдаёт сам в Settings → Users): `build_web.GOATCOUNTER_CODE`, сайт выложен (Pages f79d8278), на живом
