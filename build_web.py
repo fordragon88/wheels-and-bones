@@ -147,7 +147,7 @@ SPLASH_HTML = ('<div id="wnb-splash"><div class="t">Wheels &amp; Bones</div>'
 
 # Анонимный счётчик посещений GoatCounter (решение владельца 29.10, «после заморозки»): без cookies и личных данных,
 # баннер согласия не нужен. Код сайта (адрес https://<код>.goatcounter.com) заводит владелец; пусто — счётчика нет.
-GOATCOUNTER_CODE = ""
+GOATCOUNTER_CODE = "wheelsandbones"              # статистика: https://wheelsandbones.goatcounter.com (владелец, 02.11)
 
 
 def goatcounter_tag(code=None):

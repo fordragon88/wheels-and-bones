@@ -476,12 +476,11 @@ python i18n_work/build_lang.py       # перевод полон
 
 - (закончилась 2.11) Заморозка после релиза 26.10–2.11.2026: правки не вносили, только читали фидбэк. `feedback_check.py`
   по-прежнему не запускать без нужды — он шлёт тестовую запись в таблицу отзывов.
-- **Счётчик посещений GoatCounter** (решение владельца 29.10): код готов — `build_web.GOATCOUNTER_CODE` + `goatcounter_tag()`,
-  `polish_index` вставляет скрипт в index.html веб-сборки (не в game.py). Пока код пустой — счётчика нет: сайт на
-  goatcounter.com заводит владелец (аккаунт — его), потом вписать код (`<код>` из `https://<код>.goatcounter.com`), собрать и
-  выложить, проверить, что счёт идёт. Тег уже с `allow_frame: true` — иначе count.js не считает игру в `<iframe>` на сайте
-  (аудит 02.11). При включении счётчика поправить FAQ в `wordpress_embed.html` («no accounts, ads or tracking» → «no accounts
-  or ads; anonymous visit counting by GoatCounter, no cookies») — иначе страница скажет неправду.
+- **Счётчик посещений GoatCounter ВКЛЮЧЁН** (02.11, аккаунт владельца): `build_web.GOATCOUNTER_CODE = "wheelsandbones"`,
+  статистика — https://wheelsandbones.goatcounter.com (смотрит владелец). `polish_index` вставляет скрипт в index.html
+  веб-сборки (не в game.py), тег с `allow_frame: true` — иначе count.js не считает игру в `<iframe>` на сайте. FAQ «Do you
+  collect any data?» в `wordpress_embed.html` переписан (анонимный подсчёт, без cookies) — блок на странице сайта владелец
+  перевставляет сам.
 - **При следующей редактуре текстов — почистить мёртвые ключи словаря** (владелец, 24.10). Названные им 8 — в `i18n_work/en9.json`,
   `en9_fixes8.json`, `en9_fixes14.json` лежат переводы строк, которых в game.py уже нет: «Глаза», «Снять/поставить, нажать,
   проверить рукой», «Посмотреть: индикатор, экран, код ошибки…», «Тут нужно посмотреть, а не трогать: возьми «Глаза».»,
