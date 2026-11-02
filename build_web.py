@@ -93,6 +93,21 @@ def stage():
             mask.putalpha(im.split()[3])                              # (BLEND_RGBA_MULT — быстро и на телефоне)
             mask.save(fp[:-4] + ".a.png", "PNG", optimize=True)
         os.remove(fp)
+    # петли героев (assets/anim, JPEG + маска 560 px; 72 кадра — 4,7 МБ): холсту 1920×1080 хватает 400 px, маске —
+    # половины (игра растягивает её до размера кадра, _load_split) и 32 уровней прозрачности: в пакете ~1,5 МБ вместо 3,2
+    for d, _, names in os.walk(os.path.join(dst, "anim")):
+        for name in names:
+            fp = os.path.join(d, name)
+            im = Image.open(fp)
+            h = 200 if name.endswith(".a.png") else 400
+            im = im.resize((round(im.width * h / im.height), h), Image.LANCZOS)
+            if name.endswith(".jpg"):
+                im.save(fp, "JPEG", quality=80, optimize=True)
+            else:
+                alpha = im.convert("RGBA").split()[3].point(lambda v: round(v / 255 * 31) * 255 // 31)
+                mask = Image.new("RGBA", alpha.size, (255, 255, 255, 0))
+                mask.putalpha(alpha)
+                mask.save(fp, "PNG", optimize=True)
     # значок вкладки
     import pygame
     icon = pygame.image.load(os.path.join(src, "ghost.png"))
@@ -132,7 +147,7 @@ SPLASH_CSS = """
 </style>
 """
 SPLASH_HTML = ('<div id="wnb-splash"><div class="t">Wheels &amp; Bones</div>'
-               '<div class="s">Loading the workshop… about 13 MB, usually 20–40 seconds. '
+               '<div class="s">Loading the workshop… about 14 MB, usually 20–40 seconds. '
                'Nothing to install — the game runs right here in your browser.</div>'
                '<progress id="wnb-sp-bar" max="100" value="0"></progress><div class="m" id="wnb-sp-msg">Downloading…</div></div>'
                '<script>(function(){var sp=document.getElementById("wnb-splash");'

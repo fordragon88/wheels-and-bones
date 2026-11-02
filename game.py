@@ -1091,6 +1091,44 @@ def add_glow(surf, pos, radius, color, level=1.0):
     surf.blit(g, (int(pos[0]) - radius, int(pos[1]) - radius), special_flags=pygame.BLEND_RGB_ADD)
 
 
+ANIM_FPS = 12                     # петли героев из ролика: assets/anim/<имя>/NN.jpg + NN.a.png (3 с, 36 кадров)
+_anim_n = {}
+_anim_cache = {}                  # (имя, размер) -> [мс последнего показа, {кадр: Surf}]; не в _img_cache — там навсегда
+
+
+def anim_frame(name, size, t):
+    """Кадр петли assets/anim/<name> на время t (Мартин и Барти машут, кадры из ролика).
+    None — кадров нет или «Без анимации»: тогда рисуют обычную картинку.
+    Память: кадры размера, который 3 с не показывали (ушли со сцены), выгружаются — 36 кадров ×
+    несколько размеров иначе копились бы десятками МБ (телефон)."""
+    if calm():
+        return None
+    if name not in _anim_n:
+        d = os.path.join(ASSETS_DIR, "anim", name)
+        _anim_n[name] = (len({f.split(".")[0] for f in os.listdir(d) if f.endswith((".jpg", ".png"))})
+                         if os.path.isdir(d) else 0)
+    n = _anim_n[name]
+    if not n:
+        return None
+    now = pygame.time.get_ticks()
+    for k in [k for k, e in _anim_cache.items() if now - e[0] > 3000]:
+        del _anim_cache[k]
+    ent = _anim_cache.setdefault((name, tuple(size)), [now, {}])
+    ent[0] = now
+    i = int(t * ANIM_FPS) % n
+    img = ent[1].get(i)
+    if img is None:
+        fn = f"anim/{name}/{i:02d}.png"               # asset_path найдёт NN.jpg + NN.a.png
+        img = ent[1][i] = load_image(fn, size)
+        _img_cache.pop((fn, size), None)
+    return img
+
+
+def ghost_img(size, t):
+    """Барти: машущий кадр петли, без анимации — обычная картинка ghost.png."""
+    return anim_frame("barty_wave", size, t) or load_image("ghost.png", size, CYAN)
+
+
 def blit_idle(surf, img, pos, t, mode="breathe", phase=0.0, k=1.0, rock=0.0):
     """«Живой» спрайт вместо статичного blit (pos — левый верхний угол, как у blit).
     breathe — дышит верх (торс), низ с коляской стоит на месте; float — парит
@@ -1982,7 +2020,7 @@ def _update_rs():
     new_rs = rs_for(DISPLAY.get("res"), view.h)
     if new_rs != RS or DISPLAY.get("frame") is None:
         RS = new_rs
-        for c in (_img_cache, _font_cache, _AA_CACHE, _glow_cache, _tool_icon_cache):
+        for c in (_img_cache, _font_cache, _AA_CACHE, _glow_cache, _tool_icon_cache, _anim_cache):
             c.clear()
         DISPLAY["frame"] = Surf((WIDTH, HEIGHT))
         DISPLAY["rs_changed"] = True
@@ -11483,11 +11521,15 @@ class Game:
                   (WIDTH // 2, 360), 19, WHITE, center=True, alpha=255 * appear(st, 1.2, 0.6))
         # Мартин въезжает в кадр, Барти парит
         mx = -260 + int(320 * ease_out((st - 0.4) / 1.4))
-        blit_idle(surf, load_image("martin.png", (230, 260), GHOST), (mx, HEIGHT - 300), self.t)
+        wave = anim_frame("martin_wave", (230, 260), self.t)      # машет рукой (кадры из ролика)
+        if wave is not None:
+            surf.blit(wave, (mx, HEIGHT - 300))
+        else:
+            blit_idle(surf, load_image("martin.png", (230, 260), GHOST), (mx, HEIGHT - 300), self.t)
         gk = ease_back((st - 1.4) / 0.6)
         if gk > 0.01:
-            blit_idle(surf, load_image("ghost.png", (190, 240), CYAN), (WIDTH - 250, HEIGHT - 330),
-                      self.t, "float", k=gk)
+            img = ghost_img((190, 240), self.t)
+            blit_idle(surf, img, (WIDTH - 250, HEIGHT - 330), self.t, "float", k=gk)
         if st > 1.6:
             label = ("[ тап — продолжить ]" if self.done else "[ тап — начать ]") if TOUCH["on"] else                 ("[ клик — продолжить ]" if self.done else "[ клик — начать ]")
             pulse = 0.5 + 0.5 * wsin(self.t * 3.2)
@@ -11514,8 +11556,8 @@ class Game:
         st = self.st
         mx = 120 - int(300 * (1 - ease_out(st / 0.9)))
         blit_idle(surf, load_image("martin.png", (200, 280), GHOST), (mx, 230), self.t)
-        blit_idle(surf, load_image("ghost.png", (200, 280), CYAN), (WIDTH - 320, 230), self.t,
-                  "float", k=ease_back((st - 0.3) / 0.6))
+        blit_idle(surf, ghost_img((200, 280), self.t),
+                  (WIDTH - 320, 230), self.t, "float", k=ease_back((st - 0.3) / 0.6))
         if idx == 1:
             draw_leg_gag(surf, "hop", self.t - self._typing.get("intro", ("", self.t))[1],
                          pygame.Rect(0, 560, WIDTH, 150))
@@ -11650,8 +11692,8 @@ class Game:
                 aa_circle(surf, AMBER if k == page else DIM, (cx + (k - (pages - 1) / 2) * 22, 657), 6)
         # призрак-наставник в углу
         if barty_on():
-            blit_idle(surf, load_image("ghost.png", (150, 200), CYAN), (WIDTH - 220, 120), self.t,
-                      "float", k=ease_back((self.st - 0.3) / 0.5))
+            blit_idle(surf, ghost_img((150, 200), self.t),
+                      (WIDTH - 220, 120), self.t, "float", k=ease_back((self.st - 0.3) / 0.5))
         seat_ok = self.tutorial_ok()
         Button(self._hub_seat_rect(), "КАБИНЕТ ПОСАДКИ", GOOD,
                sub=((f"примерки {len(self.seat_done)}/{len(SEAT_CASES)}" + (" · зачёт ✔" if self.seat_quiz_ok else ""))
@@ -14616,7 +14658,7 @@ class Game:
             s.fill((24, 30, 36, 220))
             surf.blit(s, bubble)
             aa_rect(surf, CYAN, bubble, 2, border_radius=8)
-            blit_idle(surf, load_image(img, (46, 56), CYAN), (bubble.x + 6, bubble.y + 6), self.t, "float", phase=1.3)
+            blit_idle(surf, (ghost_img((46, 56), self.t) if img == "ghost.png" else load_image(img, (46, 56), CYAN)), (bubble.x + 6, bubble.y + 6), self.t, "float", phase=1.3)
             tw = bubble.w - 70
             for size in (15, 14, 13, 12):
                 if len(wrap_lines(tr(line), tw, size)) * (font(size).get_height() + 2) <= bubble.h - 16:
@@ -14624,7 +14666,7 @@ class Game:
             draw_wrapped(surf, line, (bubble.x + 60, bubble.y + 8), tw, size, GHOST,
                          limit=self.typed("ghost", line, cps=90))
             return
-        blit_idle(surf, load_image(img, (90, 110), CYAN), (24, y), self.t, "float", phase=1.3)
+        blit_idle(surf, (ghost_img((90, 110), self.t) if img == "ghost.png" else load_image(img, (90, 110), CYAN)), (24, y), self.t, "float", phase=1.3)
         bubble = pygame.Rect(120, y, 740, 86)
         s = Surf(bubble.size, pygame.SRCALPHA)
         s.fill((24, 30, 36, 220))
@@ -15209,7 +15251,7 @@ class Game:
                     "...Она меня не помнит. Обидно.»")
         if barty_on() or not line.startswith("Барти"):       # «Призрак Барти: выкл» — его реплик нет и тут
             if line.startswith("Барти"):                         # кто говорит — видно (отзыв 99: «будто Бренна»)
-                blit_idle(surf, load_image("ghost.png", (64, 78), CYAN), (WIDTH - 540, 446), self.t, "float", phase=1.3)
+                blit_idle(surf, ghost_img((64, 78), self.t), (WIDTH - 540, 446), self.t, "float", phase=1.3)
             draw_wrapped(surf, line, (WIDTH - 470, 452), 420, 15, GHOST, max_lines=5, plate=True)   # под Бренной
         Button(self._guild_back_rect(), "НАЗАД", AMBER).draw(surf, mouse)
 
@@ -15226,7 +15268,7 @@ class Game:
         hop = int(18 * abs(wsin(st * 6)) * max(0.0, 1 - st / 1.6))
         blit_idle(surf, cimg, (24, 300 - hop), self.t)
         if barty_on():
-            blit_idle(surf, load_image("ghost.png", (150, 200), CYAN), (WIDTH - 200, 290), self.t, "float",
+            blit_idle(surf, ghost_img((150, 200), self.t), (WIDTH - 200, 290), self.t, "float",
                       k=ease_back((st - 0.5) / 0.5))
         gk = ease_back(st / 0.5)
         if gk > 0.01:
@@ -15391,7 +15433,7 @@ class Game:
         blit_idle(surf, load_image("martin.png", (240, 270), GHOST), (mx, HEIGHT - 290 - bounce), self.t,
                   rock=rock)
         if barty_on():                                # «Призрак Барти: выкл» — без призрака и его реплики
-            blit_idle(surf, load_image("ghost.png", (170, 220), CYAN), (WIDTH - 230, HEIGHT - 300), self.t,
+            blit_idle(surf, ghost_img((170, 220), self.t), (WIDTH - 230, HEIGHT - 300), self.t,
                       "float", rock=8 * wsin(self.t * 2.1), k=ease_back((st - 0.6) / 0.6))
         draw_confetti(surf, self.t)
         story = ("Мартин докатил до друзей на отремонтированной коляске. Левая нога снова "

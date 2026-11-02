@@ -84,6 +84,7 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 | `build_web.py`, `web_build/`, `web_deploy/` | сборка pygbag и выкладка на GitHub Pages (§10а п. 5); `web_smoke.py` проверяет |
 | `build_exe.bat`, `exe_assets.py`, `WheelsAndBones.spec` | один exe (PyInstaller); `exe_assets.py` — копия assets без полных моделей и тел |
 | `assets/turntable/` | кадры поворота колясок `chair_<k>_NN.jpg` + `.a.png`, `index.json`/`index_folk.json` (центры деталей) |
+| `assets/anim/martin_wave/`, `barty_wave/` | петли «машет рукой» из ролика (36 кадров, 12 к/с, `NN.jpg` + маска `NN.a.png`, 560 px); исходники — `tools/hyperframes/trailer/assets/*_wave.webm`, кадры 45–80 и 30–65 (стык почти незаметен) |
 | `assets/fonts/` | шрифты и их лицензии |
 | `tools/` | portable Blender, `render_in/`/`render_out/` кадров; не в git |
 | `CLAUDE.md`, `GEMINI.md`, `MUSE_3D_TASK.md` | указатели для агентов (читать AGENTS.md); задание для Muse по 3D (архив) |
@@ -96,6 +97,10 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 3. **Шрифты/текст**: `font(size,bold)` → `LFont`; `draw_text`, `fit_text` (ужимает/обрезает), `wrap_lines`, `draw_wrapped`.
 4. **Язык**: `tr()` переводит на выводе; `set_lang`, `system_lang`, словарь `assets/lang_en.json`; шаблоны `{0}`.
 5. **Анимация** (без состояния, от времени): `ease_out/ease_back/appear`, `add_glow`, `blit_idle`, `draw_ambient`, конфетти.
+   Петли героев: `anim_frame(имя, размер, t)` — кадр из `assets/anim/<имя>` (None при «Без анимации» или без кадров —
+   тогда обычная картинка); `ghost_img(размер, t)` — Барти везде, где он есть (титул, вступление, мастерская, пузырь
+   подсказок, итог, финал); Мартин машет только на титуле. Свой кэш `_anim_cache`: кадры размера, не показанного 3 с,
+   выгружаются (иначе 36 кадров × размеры копились бы в памяти телефона; при RS 1 титул ≈ 14 МБ).
 6. **Ассеты**: `load_image(name, size)` (PNG в пикселях экрана, иначе `VECTOR_ART`, иначе заглушка), `tool_icon`.
 7. **Визуализация действий**: анимация инструментов (`draw_tool_action`: верный ход — замах, удар и миг паузы на детали
    `TOOL_WINDUP/STRIKE/HOLD`, потом работа; длительность `TOOL_OK_SECS`), тест-драйв, шутки про ногу Мартина (`LEG_GAGS`).
@@ -419,7 +424,8 @@ python i18n_work/build_lang.py       # перевод полон
   не отдаёт /cdn/… и игра не стартует); вкладка в фоне не грузится. В браузере pygame НЕ читает/пишет картинки
   через память (`BytesIO` → «can't access resource on platform») — только через временный файл (`tempfile`).
   Вывод `print` виден не в консоли браузера, а в `#terminal` на странице.
-- **Вес веб-архива.** После каждой сборки смотреть размер `wheels_and_bones.apk` (норма ~12 МБ: музыка 3,7 + остальное).
+- **Вес веб-архива.** После каждой сборки смотреть размер `wheels_and_bones.apk` (норма ~14 МБ с 02.11: музыка 3,7 + петли героев `assets/anim` ~1,5 МБ + остальное; `build_web.stage` ужимает кадры
+  петель до 400 px, маски — до 200 px и 32 уровней прозрачности, без этого +3 МБ).
   Кадры поворота в пакет НЕ кладутся (браузер качает их с сайта из `turntable/`), исключение по расширениям в
   `build_web.stage()` — при смене формата кадров проверять (23.10 jpg-кадры прошли мимо фильтра `.png`: +27 МБ).
 - **Веб-выкладка.** `build_web.py --deploy` ставит в index.html метку `?v=<хэш>` на архив игры (`stamp_archives`):
@@ -522,6 +528,15 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-11-02 — Claude (Opus 5.5) — **Мартин и Барти машут** (кадры из ролика; владелец посмотрел локальную версию и дал
+  добро): `assets/anim/martin_wave`, `barty_wave` — петли по 3 с (36 кадров, JPEG + маска, 560 px; 4,7 МБ); `anim_frame`,
+  `ghost_img`, кэш `_anim_cache` с выгрузкой (§4 п. 5). Мартин — на титуле; Барти — титул, вступление, мастерская, пузырь
+  подсказок в задании, итог, финал. «Без анимации» — прежние неподвижные картинки. Веб: `build_web.stage` ужимает кадры
+  (400 px, маски 200 px / 32 уровня) — пакет 12,7 → 14,3 МБ; подписи «about 13 MB» → «about 14 MB» (заставка, блок сайта).
+  Проверки: selftest ×3, asset_check, ui/keyboard (ru, en)/switch/pad ПРОЙДЕНО, rs_smoke 2, monkey — 0 падений,
+  web_smoke (локально) 20 ok; в Chromium по локальной сборке кадры меняются на титуле, во вступлении и в мастерской,
+  заглушек нет. Exe не пересобирался.
 
 - 2026-11-02 — Claude (Opus 5.5) — **GoatCounter включён** (код `wheelsandbones`, аккаунт владельца; доступ «Read only» для
   коллеги Ольги владелец выдаёт сам в Settings → Users): `build_web.GOATCOUNTER_CODE`, сайт выложен (Pages f79d8278), на живом
