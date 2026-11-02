@@ -132,7 +132,7 @@ SPLASH_CSS = """
 </style>
 """
 SPLASH_HTML = ('<div id="wnb-splash"><div class="t">Wheels &amp; Bones</div>'
-               '<div class="s">Loading the workshop… about 12 MB, usually 20–40 seconds. '
+               '<div class="s">Loading the workshop… about 13 MB, usually 20–40 seconds. '
                'Nothing to install — the game runs right here in your browser.</div>'
                '<progress id="wnb-sp-bar" max="100" value="0"></progress><div class="m" id="wnb-sp-msg">Downloading…</div></div>'
                '<script>(function(){var sp=document.getElementById("wnb-splash");'
@@ -154,8 +154,9 @@ def goatcounter_tag(code=None):
     code = GOATCOUNTER_CODE if code is None else code
     if not code:
         return ""
+    # allow_frame: на сайте игра открыта в <iframe> (wordpress_embed.html), а count.js фреймы по умолчанию не считает
     return (f'<script id="wnb-goatcounter" data-goatcounter="https://{code}.goatcounter.com/count" '
-            'async src="//gc.zgo.at/count.js"></script>')
+            'data-goatcounter-settings=\'{"allow_frame": true}\' async src="//gc.zgo.at/count.js"></script>')
 
 
 def polish_index(web):

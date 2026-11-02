@@ -1517,8 +1517,8 @@ def draw_tool_action(surf, tid, pos, u, ok=True, zap=False):
         surf.blit(ic, ic.get_rect(center=(int(x + 30 * off * amp), int(y - 4 - 34 * off * amp))))
         return
     u = (u - TOOL_PRE) / (1 - TOOL_PRE)      # дальше — прежняя анимация работы, инструмент уже на месте
-    appear_k = 1.0
-    ang, dx, dy, sc = 0.0, 0.0, 0.0, appear_k
+    appear_k = ease_out(u / 0.12)            # поза работы (сдвиг, наклон, масштаб) вводится плавно — без скачка после удара
+    ang, dx, dy, sc = 0.0, 0.0, 0.0, 1.0
     if tid in ROT_TOOLS:                     # крутим: ключ ходит дугой, вокруг стрелка
         ang = 80 * math.sin(u * math.pi * 3)
         rr = 26
@@ -1550,7 +1550,7 @@ def draw_tool_action(surf, tid, pos, u, ok=True, zap=False):
             dyy = ((u * 3 + i / 3) % 1.0) * 30
             aa_circle(surf, (226, 180, 70), (int(x - 6), int(y + 4 + dyy)), 3)
     elif tid == "patch":
-        sc = appear_k * (1.6 - 0.6 * ease_out(u / 0.4))
+        sc = 1.6 - 0.6 * ease_out(u / 0.4)
         if u > 0.4:
             add_glow(surf, (x, y), 30, (120, 200, 140), 1 - (u - 0.4) / 0.6)
     elif tid == "bucket":
@@ -1573,6 +1573,7 @@ def draw_tool_action(surf, tid, pos, u, ok=True, zap=False):
         add_glow(surf, (x, y), 34, (120, 200, 255), 0.5 + 0.5 * math.sin(u * 30))
     else:                                    # руки и прочее: ухватить и потрясти
         dx = 6 * math.sin(u * 30) * (1 - u)
+    ang, dx, dy, sc = ang * appear_k, dx * appear_k, dy * appear_k, 1.0 + (sc - 1.0) * appear_k
     ic = TF.rotozoom(tool_icon(tid, 46), ang, max(0.01, sc))
     if u > 0.8:
         ic.set_alpha(int(255 * (1 - (u - 0.8) / 0.2)))
@@ -14339,7 +14340,7 @@ class Game:
                        GOOD).draw(surf, mouse)
             else:
                 self._draw_ride(surf)
-        if self.v3d is None:
+        if self.v3d is None and self.ride_t0 is None:     # поверх проезда клиента инструмент не рисуем (аудит 02.11)
             self._draw_action(surf)
         nb = self._notes_btn_rect()
         if nb:                                        # все сноски задания одним окном (отзыв 93), внизу справа
@@ -14510,6 +14511,7 @@ class Game:
             self._miss_t = self.t                    # ошибка — выбранный инструмент вздрогнет
         self._miss_seen = self.mistakes
         hover_tid = None
+        tut_rect = None                               # рамка обучения рисуется после всех плиток (поверх соседних)
         for i, (tid, rect) in enumerate(self._tool_rects()):
             active = self.sel_tool == tid
             hov = rect.collidepoint(mouse)
@@ -14539,7 +14541,9 @@ class Game:
             ic = TF.rotozoom(ic, ang, enter * (1 + 0.16 * h))
             surf.blit(ic, ic.get_rect(center=r.center))
             if want and want[0] == "tool" and tid == self._tutor_step()["tool"] and enter >= 1:
-                self._draw_tutor_ring(surf, rect=r)
+                tut_rect = r
+        if tut_rect is not None:
+            self._draw_tutor_ring(surf, rect=tut_rect)
         # карточка: что за инструмент (наведённый важнее выбранного)
         info = self._tool_info_rect()
         card = Surf(info.size, pygame.SRCALPHA)

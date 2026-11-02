@@ -298,15 +298,15 @@ technician (especially spoke tensioning and live electronics).
 - [Wheel and Rim Truing — Park Tool](https://www.parktool.com/en-us/blog/repair-help/wheel-and-rim-truing) — truing: gauge/caliper, small nipple steps, which way spokes pull.
 - [Wheelbuilding — Sheldon Brown](https://www.sheldonbrown.com/wheelbuild.html) — spoke tension, tensiometer, why tuning "by ear" is only a rough estimate.
 - Manufacturer service documentation for power wheelchairs (Pride Mobility, Invacare, Permobil, Quantum — public service/owner manuals) — replacing batteries in pairs, terminal order (negative off first, positive on first), first full charge with the original charger, controller codes.
-- Manuals cited by name in the game's footnotes and Guild pages (`# source:` comments in `game.py`): Quantum Q6 Edge 2.0 and Edge 4 owner's manuals, TRU-Balance 3 seating, Q-Logic 3 controller, Pride Jazzy 614 and Pulse 6, Permobil F5, WHILL C2, Zippie Iris, Aero Z, Alber e-motion, Vermeiren D100, ROHO cushion manual, WHO Wheelchair Service Training Package, Permobil Seating & Positioning Guide.
+- Manuals cited by name in the game's footnotes and Guild pages (`# source:` comments in `game.py`): Quantum Q6 Edge 2.0 and Edge 4 owner's manuals, TRU-Balance 3 seating, Q-Logic 3 controller, Pride Jazzy 614, Quickie Pulse 6, Permobil F5, WHILL C2, Zippie Iris, Aero Z, Alber e-motion, Vermeiren D100, ROHO cushion manual, WHO Wheelchair Service Training Package, Permobil Seating & Positioning Guide.
+- WHO **Wheelchair Service Training Package** (basic/intermediate) — the real framework for training wheelchair service personnel; the model for the Guild exam.
+- Permobil **Wheelchair Seating & Positioning Guide** — the Seating Clinic.
 
 ### Licence
 
 Code is MIT, game content (texts, translations, art, 3D models, music) is CC BY-SA 4.0 — see `LICENSE`, `LICENSE-CODE`, `LICENSE-CONTENT`.
 Fonts: DejaVu Sans (DejaVu licence) and Atkinson Hyperlegible (SIL Open Font License), licences in `assets/fonts/`. Art and models were made
 with AI tools (Meshy, ChatGPT/Codex, ComfyUI with Qwen-Image, YuE for music) and edited by the team. Brand names belong to their owners.
-- WHO **Wheelchair Service Training Package** (basic/intermediate) — the real framework for training wheelchair service personnel; the model for the Guild exam.
-- Permobil **Wheelchair Seating & Positioning Guide** — the Seating Clinic.
 
 > As in the base game: the game teaches safe procedures and says clearly where the line is — live electronics
 > (controller, powered wiring) are fixed by a certified technician, not by a player after the tutorial.
@@ -676,7 +676,7 @@ python art_tests/monkey_test.py      # тысячи случайных дейс�
 - Сервис-документация производителей электроколясок (Pride Mobility, Invacare, Permobil, Quantum — открытые service/owner manuals) — замена батарей парой, порядок клемм (минус снимают первым, плюс подключают первым), первая полная зарядка штатным ЗУ, коды контроллеров.
 - WHO **Wheelchair Service Training Package** (basic/intermediate) — реальная рамка подготовки специалистов по колясочному сервису; ориентир для экзамена Гильдии.
 - Permobil **Wheelchair Seating & Positioning Guide** — Кабинет посадки.
-- Мануалы, на которые игра ссылается по имени в сносках и страницах Гильдии (комментарии `# source:` в `game.py`): Quantum Q6 Edge 2.0 и Edge 4, сиденье TRU-Balance 3, контроллер Q-Logic 3, Pride Jazzy 614 и Pulse 6, Permobil F5, WHILL C2, Zippie Iris, Aero Z, Alber e-motion, Vermeiren D100, подушка ROHO.
+- Мануалы, на которые игра ссылается по имени в сносках и страницах Гильдии (комментарии `# source:` в `game.py`): Quantum Q6 Edge 2.0 и Edge 4, сиденье TRU-Balance 3, контроллер Q-Logic 3, Pride Jazzy 614, Quickie Pulse 6, Permobil F5, WHILL C2, Zippie Iris, Aero Z, Alber e-motion, Vermeiren D100, подушка ROHO.
 
 ### Лицензия
 
