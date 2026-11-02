@@ -523,6 +523,13 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-02 — Claude (Opus 5.5) — **GoatCounter включён** (код `wheelsandbones`, аккаунт владельца; доступ «Read only» для
+  коллеги Ольги владелец выдаёт сам в Settings → Users): `build_web.GOATCOUNTER_CODE`, сайт выложен (Pages f79d8278), на живом
+  сайте count.js отправил посещение на wheelsandbones.goatcounter.com. FAQ «Do you collect any data?» в `wordpress_embed.html`
+  — про анонимный подсчёт. Кнопка «♥ Support GOAT» в блоке сайта — теперь `?utm_source=game`, как в игре (владелец: кнопка
+  стоит на странице игры; источники «игра» и «страница сайта» в Zeffy больше не различаются). Блок на сайт владелец
+  перевставляет сам (весь `wordpress_embed.html` — в буфер обмена).
+
 - 2026-11-02 — Claude (Fable 5.1) — **аудит 5 после правок форка** (просьба владельца: «ошибки, баги, глюки»). Прогнан весь
   чек-лист §10а на коммите 20a1949: selftest ×3, asset_check, ui/keyboard (ru, en)/switch/pad playthrough, rs_smoke 2,
   build_lang (кириллица 0), extract_new (3 строки, норма), monkey_test, web_smoke по сайту — всё OK; два агента (код и
