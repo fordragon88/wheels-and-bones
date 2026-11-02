@@ -538,7 +538,8 @@ python i18n_work/build_lang.py       # перевод полон
   extract_new — 3 строки (норма), web_smoke (локальная сборка, apk 12,7 МБ) — 20 ok, 0 FAIL. По команде владельца закоммичено
   (0855704) и **выложено** (`build_web.py --deploy`, Pages 70943590, архив `?v=40e54be235`); web_smoke по выложенному сайту —
   20 ok, 0 FAIL. Exe пересобран (`build_exe.bat`, 02.11 04:38, 123,9 МБ, sha256 fb819a57…, selftest exe — код 0) и лежит в
-  `dist/`; в Release v0.4 по-прежнему старый exe (заменять — только по команде владельца).
+  `dist/`; по команде владельца **заменён в Release v0.4** (`gh release upload --clobber`, 02.11 02:40 UTC; sha256 в релизе
+  совпадает).
 
 - 2026-10-28 — Claude (Fable 5.1) — **UTM-метки на ссылке Zeffy** (просьба коллеги GOAT, чтобы считать источники пожертвований):
   в игре `SUPPORT_URL` = …/learn-to-fix-wheelchairs**?utm_source=game**, в блоке сайта (`wordpress_embed.html`) —
