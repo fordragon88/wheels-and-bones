@@ -111,6 +111,7 @@ if os.environ.get("SDL_VIDEODRIVER") == "dummy" or "--selftest" in sys.argv:
     FEEDBACK_URL = ""                          # тесты и боты (без экрана) никогда не шлют замечания в таблицу
 FEEDBACK_KEY = "wnb-feedback-1"
 SAVE_PATH = os.path.join(DATA_DIR, "save.json")
+BAK_PATH = os.path.join(DATA_DIR, "save.bak.json")       # прогресс до загрузки кода/ссылки («Вернуть прежний прогресс»)
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 FEEDBACK_PATH = os.path.join(DATA_DIR, "feedback.json")   # «Я не согласен»: замечания игроков к заданиям   # громкость и язык (не сбрасываются --reset)
 GUILD_REQ = 5                   # починенных колясок для доступа в Гильдию
@@ -1649,7 +1650,7 @@ def web_js(code):
 
 def web_restore():
     """Браузер: файлы сохранений живут в localStorage — перед стартом кладём их обратно в память."""
-    for path in (SAVE_PATH, SETTINGS_PATH, FEEDBACK_PATH):
+    for path in (SAVE_PATH, SETTINGS_PATH, FEEDBACK_PATH, BAK_PATH):
         text = web_js(f"localStorage.getItem({json.dumps('wnb:' + os.path.basename(path))})")
         if text:
             try:
@@ -1943,6 +1944,372 @@ def feedback_flush_outbox():
             ok = False
         if ok:
             _outbox(lambda q, u=item["uid"]: [x for x in q if x.get("uid") != u])
+
+
+# ----------------------------------------------------------------------------- #
+#  Ссылки и коды (docs/SHARE_LINKS.md): код прогресса, ссылка-задание, код результата.
+#  Код = «вид.тело.crc»: вид P (прогресс) / J (задание) / R (результат), тело — base64url(zlib(JSON)),
+#  crc — 6 hex от crc32 (у результата — с «солью» RESULT_SALT). Обычный игрок без ссылки и кнопок сюда не попадает.
+# ----------------------------------------------------------------------------- #
+import base64
+import zlib
+import urllib.parse
+
+SHARE_BASE_URL = "https://www.openassistivetech.org/wheels-and-bones/"   # страница сайта: игра в iframe, параметры
+SHARE_DIRECT_URL = "https://fordragon88.github.io/wheels-and-bones-web/"  # пробрасывает wordpress_embed.html
+RESULT_SALT = "wnb-result-2026"       # «соль» кода результата: поправить цифры руками незаметно не выйдет (не шифр)
+SHARE_KINDS = {"P": "", "J": "", "R": RESULT_SALT}
+SHARE_PARAMS = ("load", "jobs", "seat", "from", "title")
+SHARE_MAX = 8000                      # длиннее кодов не бывает (защита от мусора и «zip-бомб»)
+
+
+def _b64u(raw):
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _share_crc(kind, body):
+    salt = SHARE_KINDS.get(kind, "")
+    return format(zlib.crc32((salt + kind + "." + body + salt).encode("ascii")) & 0xFFFFFF, "06x")
+
+
+def share_encode(kind, data):
+    """dict → код вида «P.тело.crc» (чистая функция)."""
+    raw = json.dumps(data, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    body = _b64u(zlib.compress(raw, 9))
+    return f"{kind}.{body}.{_share_crc(kind, body)}"
+
+
+def share_decode(code):
+    """Код → (вид, dict) или None: битый код, чужая контрольная сумма, неизвестный вид или версия (v≠1)."""
+    try:
+        code = re.sub(r"\s+", "", str(code or "")).strip("\"'<>«»")
+        if not code or len(code) > SHARE_MAX:
+            return None
+        kind, body, crc = code.split(".")
+        if kind not in SHARE_KINDS or not re.fullmatch(r"[A-Za-z0-9_-]+", body) or crc.lower() != _share_crc(kind, body):
+            return None
+        d = zlib.decompressobj()
+        raw = d.decompress(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)), 200000)
+        if d.unconsumed_tail:
+            return None
+        data = json.loads(raw.decode("utf-8"))
+        if not isinstance(data, dict) or data.get("v") != 1:
+            return None
+        return kind, data
+    except Exception:
+        return None
+
+
+def _clean_line(s, n):
+    """Имя/заголовок из ссылки: одна строка печатных символов, не длиннее n."""
+    s = "".join(ch for ch in str(s or "") if ch.isprintable() and ch not in "​‌‍⁠﻿")
+    return re.sub(r"\s+", " ", s).strip()[:n]
+
+
+def progress_pack(g):
+    """Прогресс игры → данные кода прогресса (только то, что в save.json; настройки не входят)."""
+    return {"v": 1, "d": sorted(g.done), "g": [[j, s] for j, s in g.garage], "e": bool(g.exam_passed),
+            "s": sorted(g.seat_done), "q": bool(g.seat_quiz_ok), "t": bool(g.tutorial_skipped)}
+
+
+def progress_unpack(d):
+    """Данные кода прогресса → проверенные поля (как load_progress: неизвестное и битое — мимо) или None."""
+    if not isinstance(d, dict):
+        return None
+    valid = {j["id"] for j in ALL_JOBS} | {j["id"] for j in FOLK_JOBS}
+    lst = lambda k: d.get(k) if isinstance(d.get(k), list) else []
+    garage = []
+    for e in lst("g"):
+        try:
+            j, st_ = e
+            if isinstance(j, str) and j in valid and j not in [x[0] for x in garage]:
+                garage.append((j, max(1, min(3, int(st_)))))
+        except Exception:
+            continue
+    seat_ids = {c["id"] for c in SEAT_CASES}
+    return dict(done={j for j in lst("d") if isinstance(j, str) and j in valid}, garage=garage,
+                exam_passed=d.get("e") is True, seat_done={c for c in lst("s") if isinstance(c, str) and c in seat_ids},
+                seat_quiz_ok=d.get("q") is True, tutorial_skipped=d.get("t") is True)
+
+
+def assign_id(jobs, seat, frm, title):
+    """Номер задания — хэш его параметров: та же ссылка продолжает задание, другая начинает новое."""
+    key = json.dumps([list(jobs), list(seat), frm or "", title or ""], ensure_ascii=False, separators=(",", ":"))
+    return format(zlib.crc32(key.encode("utf-8")), "08x")
+
+
+def assign_parse(params):
+    """Параметры ссылки-задания {jobs, seat, from, title} → задание или None (нет ни одного известного id).
+    Неизвестные id и повторы отбрасываются, порядок — как в ссылке."""
+    if not isinstance(params, dict):
+        return None
+
+    def ids(key, valid):
+        v = params.get(key) or ""
+        v = ",".join(str(x) for x in v) if isinstance(v, (list, tuple)) else str(v)
+        out = []
+        for x in re.split(r"[,;\s]+", v):
+            if x in valid and x not in out:
+                out.append(x)
+        return out
+    jobs = ids("jobs", [j["id"] for j in JOBS])
+    seat = ids("seat", [c["id"] for c in SEAT_CASES])
+    if not jobs and not seat:
+        return None
+    frm, title = _clean_line(params.get("from"), 40), _clean_line(params.get("title"), 80)
+    return {"id": assign_id(jobs, seat, frm, title), "jobs": jobs, "seat": seat, "from": frm, "title": title}
+
+
+def assign_code(a):
+    """Задание → код «J…» (десктоп: вместо ссылки)."""
+    return share_encode("J", {"v": 1, "j": a["jobs"], "s": a["seat"], "f": a.get("from", ""), "ti": a.get("title", "")})
+
+
+def assign_params(a):
+    """Задание → параметры адреса (в порядке jobs, seat, from, title; пустые — без них)."""
+    p = {"jobs": ",".join(a["jobs"]), "seat": ",".join(a["seat"]), "from": a.get("from", ""), "title": a.get("title", "")}
+    return {k: v for k, v in p.items() if v}
+
+
+def share_link(params, base=SHARE_BASE_URL):
+    """Ссылка на игру с параметрами (запятые в списках не кодируются — ссылку можно читать глазами)."""
+    q = "&".join(f"{k}={urllib.parse.quote(str(v), safe=',')}" for k, v in params.items() if v)
+    return base + ("?" + q if q else "")
+
+
+def parse_link(text):
+    """Адрес целиком, «?a=b&…» или «a=b&…» → {параметр: значение} только для SHARE_PARAMS."""
+    s = str(text or "").strip()
+    if "?" in s:
+        s = s.split("?", 1)[1]
+    s = s.split("#", 1)[0]
+    if "=" not in s:
+        return {}
+    try:
+        q = urllib.parse.parse_qs(s, keep_blank_values=False)
+    except Exception:
+        return {}
+    return {k: v[-1] for k, v in q.items() if k in SHARE_PARAMS and v}
+
+
+def assign_items(a):
+    """Все пункты задания по порядку: сначала поломки, потом примерки (id примерок начинаются с seat_)."""
+    return list(a.get("jobs", [])) + list(a.get("seat", []))
+
+
+def result_pack(a):
+    """Состояние задания → данные кода результата."""
+    rows = [[k, int(a["errors"].get(k, 0)), int(a["secs"].get(k, 0))] for k in assign_items(a) if k in a["done"]]
+    return {"v": 1, "a": a["id"], "f": a.get("from", ""), "ti": a.get("title", ""), "it": assign_items(a), "r": rows,
+            "gv": GAME_VERSION}
+
+
+def result_code(a):
+    return share_encode("R", result_pack(a))
+
+
+def result_unpack(d):
+    """Данные кода результата → {id, from, title, rows: [(пункт, сделано, ошибок, секунд)]} или None."""
+    try:
+        items = [str(x) for x in d["it"]][:60]
+        got = {str(k): (int(e), int(s)) for k, e, s in d["r"]}
+        return {"id": str(d.get("a", "")), "from": _clean_line(d.get("f"), 40), "title": _clean_line(d.get("ti"), 80),
+                "version": str(d.get("gv", "")),
+                "rows": [(k, k in got, got.get(k, (0, 0))[0], got.get(k, (0, 0))[1]) for k in items]}
+    except Exception:
+        return None
+
+
+def share_item_label(k):
+    """Подпись пункта задания, как в очереди: «Клиент — поломка» или «Посадка: клиент»."""
+    j = next((x for x in JOBS if x["id"] == k), None)
+    if j:
+        return tr(j["client"]) + " — " + tr(j["title"])
+    c = next((x for x in SEAT_CASES if x["id"] == k), None)
+    if c:
+        return tr("Посадка") + ": " + tr(c["client"])
+    return k
+
+
+def fmt_secs(s):
+    s = max(0, int(s))
+    return f"{s // 60}:{s % 60:02d}"
+
+
+def result_summary(rows):
+    """«3/3, ошибок 2» — общая строка итога."""
+    done = [r for r in rows if r[1]]
+    return tr(f"{len(done)}/{len(rows)}, ошибок {sum(r[2] for r in done)}")
+
+
+def assign_head(frm, title):
+    """«Задание от Имя: «Тема»» (на языке игры)."""
+    if frm and title:
+        return tr(f"Задание от {frm}: «{title}»")
+    if frm:
+        return tr(f"Задание от {frm}")
+    return tr(f"Задание: «{title}»") if title else tr("Задание")
+
+
+def result_text(res, code=""):
+    """Итог задания читаемым текстом (для мессенджера) на языке игры."""
+    lines = [tr("Колёса и Кости — итог задания") + ". " + assign_head(res.get("from"), res.get("title")),
+             result_summary(res["rows"])]
+    for k, ok, err, secs in res["rows"]:
+        lines.append(("✔ " if ok else "— ") + share_item_label(k)
+                     + (" · " + tr(f"ошибок {err}") + " · " + fmt_secs(secs) if ok else " · " + tr("не сделано")))
+    if code:
+        lines.append(tr("Код результата") + ": " + code)
+    return "\n".join(lines)
+
+
+CLIP = {"mem": None}                      # тесты и headless: «буфер обмена» в памяти
+
+
+def _sdl_lib():
+    """SDL2 из пакета pygame (буфер обмена с Юникодом там, где у pygame нет scrap.put_text)."""
+    import ctypes
+    import ctypes.util
+    names = [os.path.join(os.path.dirname(pygame.__file__), n) for n in ("SDL2.dll", "libSDL2-2.0.so.0", "libSDL2.dylib")]
+    for n in names + [ctypes.util.find_library("SDL2") or ""]:
+        if n and (os.path.exists(n) or not os.path.dirname(n)):
+            try:
+                return ctypes.CDLL(n)
+            except Exception:
+                continue
+    return None
+
+
+def clipboard_get():
+    """Текст из буфера обмена (десктоп) или ""."""
+    if IS_WEB:
+        return ""
+    if os.environ.get("SDL_VIDEODRIVER") == "dummy":
+        return CLIP["mem"] or ""
+    try:
+        if hasattr(pygame.scrap, "get_text"):            # pygame-ce
+            return pygame.scrap.get_text() or ""
+    except Exception:
+        pass
+    try:
+        import ctypes
+        lib = _sdl_lib()
+        if lib is not None:
+            lib.SDL_GetClipboardText.restype = ctypes.c_void_p
+            p = lib.SDL_GetClipboardText()
+            if p:
+                s = ctypes.string_at(p).decode("utf-8", "replace")
+                lib.SDL_free(ctypes.c_void_p(p))
+                return s
+    except Exception:
+        pass
+    try:
+        if not pygame.scrap.get_init():
+            pygame.scrap.init()
+        b = pygame.scrap.get(pygame.SCRAP_TEXT)
+        if b:
+            return b.decode("utf-8", "replace").rstrip("\x00")
+    except Exception:
+        pass
+    return ""
+
+
+def clipboard_put(text):
+    """Текст в буфер обмена. Десктоп: True/False (проверяем, что он там). Браузер: None — ответ позже (web_copy_state)."""
+    text = str(text)
+    if IS_WEB:
+        web_js(f"window.wnbCopy && wnbCopy({json.dumps(text)})")
+        return None
+    if os.environ.get("SDL_VIDEODRIVER") == "dummy":     # тесты: системный буфер владельца не трогаем
+        CLIP["mem"] = text
+        return True
+    try:
+        if hasattr(pygame.scrap, "put_text"):            # pygame-ce
+            pygame.scrap.put_text(text)
+            if clipboard_get() == text:
+                return True
+    except Exception:
+        pass
+    try:
+        lib = _sdl_lib()
+        if lib is not None and lib.SDL_SetClipboardText(text.encode("utf-8")) == 0 and clipboard_get() == text:
+            return True
+    except Exception:
+        pass
+    try:
+        import importlib                                # tkinter — запасной путь (в exe его может не быть)
+        tk = importlib.import_module("tkinter").Tk()
+        tk.withdraw()
+        tk.clipboard_clear()
+        tk.clipboard_append(text)
+        tk.update()
+        tk.destroy()
+        return True
+    except Exception:
+        return False
+
+
+def web_copy_state():
+    """Браузер: 1 — скопировано, -1 — не вышло, 0 — ещё ждём ответа."""
+    try:
+        return int(web_js("window.wnbCopied|0") or 0)
+    except Exception:
+        return 0
+
+
+def web_setup_share():
+    """Браузер: копирование в буфер (navigator.clipboard, запасной путь — execCommand) и поле ввода кода поверх
+    холста (настоящее поле страницы: вставка Ctrl+V, экранная клавиатура)."""
+    web_js("""(function(){
+      if (window.wnbCopy) return;
+      window.wnbCopy = function(t){
+        window.wnbCopied = 0;
+        function old(){
+          try { var a = document.createElement('textarea'); a.value = t; a.setAttribute('readonly', '');
+            a.style.cssText = 'position:fixed;left:-9999px;top:0'; document.body.appendChild(a); a.select();
+            var ok = document.execCommand('copy'); a.remove(); window.wnbCopied = ok ? 1 : -1; }
+          catch (e) { window.wnbCopied = -1; }
+          var c = document.getElementById('canvas'); if (c) try { c.focus(); } catch (e) {}
+        }
+        try { if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(t).then(function(){ window.wnbCopied = 1; }, old); return; } } catch (e) {}
+        old();
+      };
+      window.wnbFieldKey = '';
+      window.wnbField = function(x, y, w, h, fs, show, init, ro, label){
+        var t = document.getElementById('wnb-field'), c = document.getElementById('canvas');
+        if (!show) { if (t && t.style.display !== 'none') { t.style.display = 'none'; t.blur();
+          if (c) try { c.focus(); } catch (e) {} } return ''; }
+        if (!t) { t = document.createElement('input'); t.id = 'wnb-field'; t.type = 'text'; t.maxLength = 8000;
+          t.autocomplete = 'off'; t.spellcheck = false;
+          t.style.cssText = 'position:fixed;z-index:9997;box-sizing:border-box;border:2px solid #6fd3e0;border-radius:6px;' +
+            'background:#15131c;color:#fff;padding:2px 8px;font-family:sans-serif;outline:none';
+          ['keydown', 'keyup', 'keypress'].forEach(function(n){
+            t.addEventListener(n, function(e){ e.stopPropagation();
+              if (n === 'keydown' && (e.key === 'Enter' || e.key === 'Escape')) { window.wnbFieldKey = e.key; e.preventDefault(); } }); });
+          document.body.appendChild(t); }
+        if (init !== null && init !== undefined) t.value = init;
+        t.readOnly = !!ro; t.setAttribute('aria-label', label || 'Code');
+        var r = c ? c.getBoundingClientRect() : {left: 0, top: 0, width: 1280, height: 720};
+        var kx = r.width / 1280, ky = r.height / 720;
+        t.style.left = (r.left + x * kx) + 'px'; t.style.top = (r.top + y * ky) + 'px';
+        t.style.width = (w * kx) + 'px'; t.style.height = (h * ky) + 'px';
+        t.style.fontSize = Math.max(13, fs * ky) + 'px';
+        if (t.style.display !== 'block') { t.style.display = 'block';
+          setTimeout(function(){ try { t.focus(); if (ro) t.select(); } catch (e) {} }, 0); }
+        return t.value;
+      };
+      window.wnbFieldTake = function(){ var k = window.wnbFieldKey || ''; window.wnbFieldKey = ''; return k; };
+    })()""")
+
+
+def web_link_query():
+    """Браузер: параметры адреса страницы игры (?jobs=…, ?load=…) — строкой; на десктопе — из --link."""
+    if IS_WEB:
+        return str(web_js("window.location.search || ''") or "")
+    if "--link" in sys.argv[:-1]:
+        return sys.argv[sys.argv.index("--link") + 1]
+    return ""
 
 
 def dpi_aware():
@@ -8350,6 +8717,9 @@ class Game:
         self.ride_t0 = None               # тест-драйв: клиент проезжает через экран
         self.ride_done = False            # проезд закончился — ждём «ГОТОВО» (успеть дочитать — отзыв игрока)
         self._vol_drag = None
+        self.assign = None                # задание по ссылке (jobs=…, seat=…): свой прогресс, обычный не меняется
+        self.share_ui = None              # окно кодов и ссылок (копировать, вставить, задание, итог)
+        self._bak_mem = None              # headless: копия прогресса до загрузки кода (вместо save.bak.json)
         if not headless:
             self.load_progress()
             self.load_settings()
@@ -8772,23 +9142,28 @@ class Game:
             pass
         web_persist(SETTINGS_PATH)
 
-    def load_progress(self):
-        if not os.path.exists(SAVE_PATH):
+    def load_progress(self, path=None):
+        """path — другой файл (save.bak.json для «Вернуть прежний прогресс»); задание по ссылке — только из save.json."""
+        main = path is None
+        path = SAVE_PATH if main else path
+        if not os.path.exists(path):
             return
         try:
-            with open(SAVE_PATH, "r", encoding="utf-8-sig") as f:
+            with open(path, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
         except Exception as e:
             data = None
             print(f"[wnb] save.json не читается: {e!r}", flush=True)
         if not isinstance(data, dict):
             try:                                    # битый файл — отложить копию, прежде чем перезаписать
-                with open(SAVE_PATH, "rb") as f, open(SAVE_PATH + ".bad", "wb") as g:
+                with open(path, "rb") as f, open(path + ".bad", "wb") as g:
                     g.write(f.read())
             except Exception:
                 pass
             return
+        self._apply_save_dict(data, main)
 
+    def _apply_save_dict(self, data, main=True):
         def lst(key):
             v = data.get(key, [])
             return v if isinstance(v, list) else []
@@ -8812,29 +9187,730 @@ class Game:
         self.seat_quiz_ok = data.get("seat_quiz_ok") is True
         self.tutorial_skipped = data.get("tutorial_skipped") is True
         self.ending_seen = data.get("ending_seen") is True
+        if main:                                    # ключа "assign" нет у обычного игрока — задания нет
+            self.assign = self._assign_state(data.get("assign"))
+
+    def _progress_dict(self):
+        """Содержимое save.json (формат прежний; "assign" — только если открывали ссылку-задание)."""
+        d = {"done": sorted(self.done), "garage": [[j, s] for j, s in self.garage], "exam_passed": self.exam_passed,
+             "seat_done": sorted(self.seat_done), "seat_quiz_ok": self.seat_quiz_ok,
+             "tutorial_skipped": self.tutorial_skipped, "ending_seen": self.ending_seen}
+        if self.assign:
+            d["assign"] = {k: self.assign[k] for k in ("id", "jobs", "seat", "from", "title", "done", "errors", "secs",
+                                                       "active", "sent")}
+        return d
 
     def save_progress(self):
         if self.headless or self.no_save:
             return
         try:
             with _atomic_open(SAVE_PATH) as f:
-                json.dump({"done": sorted(self.done),
-                           "garage": [[j, s] for j, s in self.garage],
-                           "exam_passed": self.exam_passed,
-                           "seat_done": sorted(self.seat_done), "seat_quiz_ok": self.seat_quiz_ok,
-                           "tutorial_skipped": self.tutorial_skipped, "ending_seen": self.ending_seen},
-                          f, ensure_ascii=False, indent=2)
+                json.dump(self._progress_dict(), f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"[wnb] save.json не записан: {e!r}", flush=True)
             self.flash("Прогресс не сохранился: нет доступа к папке сохранений.", BAD, 4.0)
         web_persist(SAVE_PATH)
 
+    # ---------- ссылки и коды: прогресс, задание по ссылке, итог (docs/SHARE_LINKS.md) ----------
+    def assign_on(self):
+        """Идёт задание по ссылке (иначе — обычная игра, всё как раньше)."""
+        return bool(self.assign and self.assign.get("active"))
+
+    @staticmethod
+    def _assign_state(d):
+        """Задание из save.json → проверенное состояние или None (неизвестные id и битые числа — мимо)."""
+        if not isinstance(d, dict):
+            return None
+        a = assign_parse({"jobs": d.get("jobs") or [], "seat": d.get("seat") or [], "from": d.get("from"),
+                          "title": d.get("title")})
+        if a is None:
+            return None
+        items = assign_items(a)
+
+        def num(key):
+            v, out = d.get(key), {}
+            if isinstance(v, dict):
+                for k, x in v.items():
+                    if k in items and isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x):
+                        out[k] = max(0, min(10 ** 6, int(x)))
+            return out
+        done = d.get("done")
+        a.update(done={k: 1 for k in (done if isinstance(done, (dict, list)) else []) if k in items},
+                 errors=num("errors"), secs=num("secs"), active=d.get("active") is not False, sent=d.get("sent") is True)
+        return a
+
+    def start_assignment(self, a):
+        """Войти в задание: тот же id (та же ссылка) — продолжить с места, другой — начать заново."""
+        if self.assign and self.assign.get("id") == a["id"]:
+            self.assign["active"] = True
+        else:
+            self.assign = dict(a, done={}, errors={}, secs={}, active=True, sent=False)
+        self.hub_page = 0
+        self._summary_seen = None
+        self.save_progress()
+        n = len(assign_items(self.assign))
+        frm = self.assign.get("from")
+        self.flash(f"Задание от {frm}: пунктов {n}. Выйти в обычную игру — кнопка «Выйти из задания» в мастерской."
+                   if frm else f"Задание: пунктов {n}. Выйти в обычную игру — кнопка «Выйти из задания» в мастерской.",
+                   GOOD, 6)
+
+    def exit_assignment(self):
+        """«Выйти из задания»: обычная игра, обычный прогресс на месте (прогресс задания сохранён до той же ссылки)."""
+        if self.assign:
+            self.assign["active"] = False
+        self.save_progress()
+        self.share_ui = None
+        self.show_sound = False
+        self.hub_page = 0
+        if self.scene in ("hub", "seating", "result"):
+            self.scene = "hub"
+        snd("whoosh")
+        self.flash("Ты вышел из задания. Твой обычный прогресс — на месте.", GOOD, 4)
+
+    def assign_complete(self):
+        a = self.assign
+        return bool(a) and all(k in a["done"] for k in assign_items(a))
+
+    def assign_record(self, key, errors, secs):
+        """Пункт задания выполнен. В итог идёт первая попытка: переигрывание его не меняет."""
+        a = self.assign
+        if not self.assign_on() or key not in assign_items(a):
+            return
+        if key not in a["done"]:
+            a["done"][key] = 1
+            a["errors"][key] = max(0, int(errors))
+            a["secs"][key] = max(0, int(secs))
+        self.save_progress()
+
+    def assign_result(self):
+        """Итог текущего задания — в том же виде, что из кода результата (карточка, текст, таблица)."""
+        return result_unpack(result_pack(self.assign))
+
+    def _assign_maybe_summary(self, again=False):
+        """Всё выполнено — показать итог (сам — один раз; again — и повторно, после итога задания «К итогу»)."""
+        if not (self.assign_on() and self.assign_complete()):
+            return
+        first = getattr(self, "_summary_seen", None) != self.assign["id"]
+        if first or again:
+            self._summary_seen = self.assign["id"]
+            self.open_share("summary")
+            if first:
+                snd("fanfare")
+
+    def is_done(self, jid):
+        """Отметка ✔ у пункта: в задании — по прогрессу задания, иначе — по обычному."""
+        if self.assign_on():
+            return jid in self.assign["done"]
+        return jid in self.done or jid in self.seat_done
+
+    def _seat_idx(self):
+        """Примерки Кабинета посадки по порядку (в задании — только назначенные)."""
+        if self.assign_on() and self.assign["seat"]:
+            ids = [c["id"] for c in SEAT_CASES]
+            return [ids.index(k) for k in self.assign["seat"] if k in ids]
+        return list(range(len(SEAT_CASES)))
+
+    def has_backup(self):
+        return self._bak_mem is not None if self.headless else os.path.exists(BAK_PATH)
+
+    def backup_progress(self):
+        """Копия прогресса перед заменой (save.bak.json + localStorage wnb:save.bak.json в браузере)."""
+        d = self._progress_dict()
+        d.pop("assign", None)
+        if self.headless:
+            self._bak_mem = d
+            return
+        try:
+            with _atomic_open(BAK_PATH) as f:
+                json.dump(d, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[wnb] save.bak.json не записан: {e!r}", flush=True)
+        web_persist(BAK_PATH)
+
+    def _progress_reset_scene(self):
+        """Прогресс заменили — окна задания закрыть, вернуться в мастерскую (с титула — остаться на титуле)."""
+        self.mini_pending = self.spec_pending = None
+        self.show_manual = False
+        self.v3d = self.m3d = None
+        self.act = self.ride_t0 = None
+        self.ride_done = False
+        self.dispute = self.seatc = None
+        self.cur = None
+        self.exam_mode = False
+        self.hub_page = 0
+        self.show_sound = False
+        if self.scene != "title":
+            self.scene = "hub"
+
+    def apply_progress(self, p):
+        """Заменить прогресс проверенными полями из кода (progress_unpack); старый — в копию."""
+        self.backup_progress()
+        self.done, self.garage = set(p["done"]), list(p["garage"])
+        self.exam_passed, self.seat_done = p["exam_passed"], set(p["seat_done"])
+        self.seat_quiz_ok, self.tutorial_skipped = p["seat_quiz_ok"], p["tutorial_skipped"]
+        if self.assign:
+            self.assign["active"] = False                     # загрузили свой прогресс — обычная игра
+        self._progress_reset_scene()
+        self.save_progress()
+        snd("fanfare")
+        self.flash("Прогресс загружен. Прежний можно вернуть: Настройки → Игра.", GOOD, 5)
+
+    def restore_backup(self):
+        """«Вернуть прежний прогресс»: копия до загрузки кода → текущий прогресс; копия удаляется."""
+        if not self.has_backup():
+            return
+        if self.headless:
+            d, self._bak_mem = self._bak_mem, None
+            self._apply_save_dict(d, main=False)
+        else:
+            self.load_progress(BAK_PATH)
+            try:
+                os.remove(BAK_PATH)
+            except Exception:
+                pass
+            web_js("localStorage.removeItem('wnb:save.bak.json')")
+        self._progress_reset_scene()
+        self.save_progress()
+        snd("whoosh")
+        self.flash("Прежний прогресс возвращён.", GOOD, 4)
+
+    def apply_code(self, text):
+        """«Вставить код»: код прогресса, задания, результата или ссылка с ними. False — не распознан."""
+        text = str(text or "").strip()
+        params = parse_link(text)
+        if params.get("load"):
+            text = params["load"]
+        elif params:
+            a = assign_parse(params)
+            if a is None:
+                return False
+            self._ask_assignment(a)
+            return True
+        got = share_decode(text)
+        if not got:
+            return False
+        kind, data = got
+        if kind == "P":
+            p = progress_unpack(data)
+            if p is None:
+                return False
+            self._ask_load(p)
+        elif kind == "J":
+            a = assign_parse({"jobs": data.get("j"), "seat": data.get("s"), "from": data.get("f"), "title": data.get("ti")})
+            if a is None:
+                return False
+            self._ask_assignment(a)
+        else:
+            res = result_unpack(data)
+            if res is None:
+                return False
+            self.open_share("result", res=res)
+        return True
+
+    def apply_link(self, query):
+        """Запуск со ссылкой: ?jobs=…&seat=… — задание (сразу), ?load=код — спросить, загрузить ли прогресс."""
+        params = parse_link(query)
+        if not params:
+            return
+        a = assign_parse(params)
+        if a is not None:
+            self.start_assignment(a)
+        code = params.get("load")
+        if not code:
+            return
+        got = share_decode(code)
+        p = progress_unpack(got[1]) if got and got[0] == "P" else None
+        if p is None:
+            self.flash("Код в ссылке не распознан — прогресс не тронут.", BAD, 6)
+            return
+        seen = web_js("localStorage.getItem('wnb:load_seen') || ''")
+        if IS_WEB and str(seen) == code[-6:]:
+            return                                             # на эту ссылку уже ответили (перезагрузка страницы)
+        self._ask_load(p, link=code[-6:])
+
+    def _ask_load(self, p, link=None):
+        n = len([j for j in JOBS if j["id"] in p["done"]])
+        self.open_share("confirm", q=("Загрузить прогресс из ссылки? Текущий прогресс будет заменён." if link else
+                                      "Загрузить прогресс из кода? Текущий прогресс будет заменён."),
+                        sub=f"В коде: починено {n} из {len(JOBS)}, примерки {len(p['seat_done'])}/{len(SEAT_CASES)}. "
+                            f"Прежний прогресс сохранится — его можно вернуть в настройках.",
+                        yes=("load", p), link=link)
+
+    def _ask_assignment(self, a):
+        n = len(assign_items(a))
+        self.open_share("confirm", q=(f"Начать задание от {a['from']}?" if a.get("from") else "Начать задание?"),
+                        sub=f"Пунктов: {n}. Твой обычный прогресс не изменится.", yes=("assign", a))
+
+    def _result_payload(self):
+        """Итог задания для таблицы — те же поля, что у замечания (старый Apps Script их понимает) + type="result"."""
+        import datetime
+        a, res = self.assign, self.assign_result()
+        old = LANG["code"]
+        try:                                                    # таблица — на английском
+            LANG["code"] = "en"
+            if not _TR:
+                load_lang()
+            text, got = result_text(res, result_code(a)), result_summary(res["rows"])
+        finally:
+            LANG["code"] = old
+        return dict(key=FEEDBACK_KEY, type="result", time=datetime.datetime.now().isoformat(timespec="seconds"),
+                    lang=LANG["code"], scene="assignment", job=a["id"], title=a.get("title", ""), phase="", step="",
+                    kind="result", reason=("From: " + a["from"]) if a.get("from") else "", expected="", got=got,
+                    game_message="", comment=text, assignment=a["id"], **{"from": a.get("from", "")},
+                    jobs={k: {"done": ok, "errors": e, "secs": s} for k, ok, e, s in res["rows"]},
+                    version=GAME_VERSION, platform="web" if IS_WEB else ("exe" if getattr(sys, "frozen", False) else "source"))
+
+    def send_result(self):
+        """«Отправить в таблицу»: тот же канал, что у замечаний (очередь, досылка при следующем запуске)."""
+        if not self.assign or not FEEDBACK_URL or self.assign.get("sent"):
+            return
+        payload = self._result_payload()
+        if self.headless:
+            self.feedback_mem.append(payload)
+            ok = True
+        else:
+            ok = feedback_send(payload)
+        self.assign["sent"] = True
+        self.save_progress()
+        snd("ok")
+        self.flash("Итог отправлен в таблицу." if ok else "Не отправилось — нет связи. Скопируй код результата.",
+                   GOOD if ok else AMBER, 4)
+
+    # --- окно кодов и ссылок (share_ui): show / paste / confirm / result / summary / builder ---
+    def open_share(self, mode, **kw):
+        self.share_ui = dict(dict(mode=mode, err=""), **kw)
+        if mode == "paste":
+            self.share_ui.setdefault("text", "")
+        if mode == "builder":
+            self.share_ui.setdefault("sel", [])
+            self.share_ui.setdefault("name", "")
+        if self._share_field_key() and not IS_WEB:
+            try:
+                pygame.key.start_text_input()
+            except Exception:
+                pass
+        snd("tick")
+
+    def close_share(self):
+        """Закрыть окно; окно «скопировано» возвращает к тому, откуда копировали (итог, конструктор)."""
+        back = (self.share_ui or {}).get("back")
+        self.share_ui = back if isinstance(back, dict) else None
+        if not self._share_field_key():
+            try:
+                pygame.key.stop_text_input()
+            except Exception:
+                pass
+        snd("tick")
+
+    def _share_field_key(self):
+        ui = self.share_ui
+        return {"paste": "text", "builder": "name"}.get(ui["mode"]) if ui else None
+
+    def share_copy(self, text, title, note="", kind="code"):
+        """Скопировать и показать то же самое в окне (буфер недоступен — выделить и скопировать или переписать)."""
+        ok = clipboard_put(text)
+        self.open_share("show", text=text, title=title, note=note, kind=kind, ok=ok, back=self.share_ui)
+        if ok:
+            snd("ok")
+
+    def copy_progress_code(self):
+        self.share_copy(share_encode("P", progress_pack(self)), "КОД ПРОГРЕССА",
+                        "Вставь его в игре на другом устройстве: Настройки → Игра → «Вставить код».")
+
+    def copy_progress_link(self):
+        self.share_copy(share_link({"load": share_encode("P", progress_pack(self))}), "ССЫЛКА С ПРОГРЕССОМ",
+                        "Открой ссылку на другом устройстве — игра предложит загрузить прогресс.", kind="link")
+
+    def _share_enter(self):
+        """Enter в поле окна: «Применить» (вставка кода) или «Скопировать ссылку» (конструктор)."""
+        ui = self.share_ui
+        if ui and ui["mode"] == "paste":
+            self._share_action("apply")
+        elif ui and ui["mode"] == "builder":
+            self._share_action("make")
+
+    def _builder_assign(self):
+        ui = self.share_ui
+        jobs = [k for k in ui["sel"] if not k.startswith("seat_")]
+        seat = [k for k in ui["sel"] if k.startswith("seat_")]
+        return assign_parse({"jobs": jobs, "seat": seat, "from": ui.get("name", "")})
+
+    def _share_action(self, key):
+        ui = self.share_ui
+        if ui is None:
+            return
+        mode = ui["mode"]
+        if key in ("close", "cancel", "no"):
+            if mode == "confirm" and ui.get("link") and IS_WEB:
+                web_js(f"localStorage.setItem('wnb:load_seen', {json.dumps(ui['link'])})")
+            self.close_share()
+        elif key == "copy":
+            ok = clipboard_put(ui["text"])
+            ui["ok"] = ok
+            if ok:
+                snd("ok")
+        elif key == "clip":
+            ui["text"] = clipboard_get().strip()[:SHARE_MAX]
+            ui["err"] = "" if ui["text"] else "Буфер обмена пуст."
+            snd("tick")
+        elif key == "apply":
+            text = ui.get("text", "")
+            self.share_ui = None
+            if not self.apply_code(text):
+                self.open_share("paste", text=text, err="Код не распознан — прогресс не тронут.")
+                snd("bad")
+        elif key == "yes":
+            what, val = ui["yes"]
+            if ui.get("link") and IS_WEB:
+                web_js(f"localStorage.setItem('wnb:load_seen', {json.dumps(ui['link'])})")
+            self.share_ui = None
+            if what == "load":
+                self.apply_progress(val)
+            else:
+                self.show_sound = False
+                self.start_assignment(val)
+                if self.scene != "title":
+                    self._progress_reset_scene()
+        elif key == "rcode":
+            self.share_copy(result_code(self.assign), "КОД РЕЗУЛЬТАТА",
+                            "Отправь его тому, кто дал задание: он вставит код в игре (Настройки → Игра → «Вставить код»).")
+        elif key == "rtext":
+            res = ui.get("res") or self.assign_result()
+            self.share_copy(result_text(res, result_code(self.assign) if mode == "summary" else ""), "ИТОГ ТЕКСТОМ",
+                            "Вставь в мессенджер или письмо.", kind="text")
+        elif key == "send":
+            self.send_result()
+        elif key == "exit":
+            self.exit_assignment()
+        elif key == "clear":
+            ui["sel"] = []
+            snd("tick")
+        elif key == "make":
+            a = self._builder_assign()
+            if a is None:
+                ui["err"] = "Отметь хотя бы одно задание."
+                snd("bad")
+                return
+            if IS_WEB:
+                self.share_copy(share_link(assign_params(a)), "ССЫЛКА-ЗАДАНИЕ",
+                                "Отправь ссылку ученику: игра откроется сразу с этими заданиями.", kind="link")
+            else:
+                self.share_copy(assign_code(a), "КОД ЗАДАНИЯ",
+                                "Ученик вставит его в игре: Настройки → Игра → «Вставить код». В браузерной версии "
+                                "игры ту же подборку можно отправить ссылкой.")
+        elif isinstance(key, tuple) and key[0] == "pick":
+            k = key[1]
+            if k in ui["sel"]:
+                ui["sel"].remove(k)
+            else:
+                ui["sel"].append(k)
+            ui["err"] = ""
+            snd("tick")
+
+    def _share_rect(self):
+        ui = self.share_ui
+        mode = ui["mode"] if ui else ""
+        if mode == "builder":
+            return pygame.Rect(40, 12, WIDTH - 80, HEIGHT - 24)
+        if mode in ("summary", "result"):
+            return pygame.Rect(WIDTH // 2 - 430, 34, 860, HEIGHT - 68)
+        if mode == "show" and ui.get("kind") == "text":
+            return pygame.Rect(WIDTH // 2 - 430, 60, 860, HEIGHT - 120)
+        if mode == "confirm":
+            return pygame.Rect(WIDTH // 2 - 390, HEIGHT // 2 - 160, 780, 320)
+        return pygame.Rect(WIDTH // 2 - 390, HEIGHT // 2 - 210, 780, 420)
+
+    def _share_field_rect(self):
+        ui = self.share_ui
+        if not ui:
+            return None
+        p = self._share_rect()
+        if ui["mode"] == "paste":
+            return pygame.Rect(p.x + 28, p.y + 104, p.w - 56, 44)
+        if ui["mode"] == "builder":
+            return pygame.Rect(p.x + 300, p.bottom - 124, 420, 40)
+        if ui["mode"] == "show" and ui.get("kind") != "text":
+            return pygame.Rect(p.x + 28, p.y + 76, p.w - 56, 40)
+        return None
+
+    def _share_pick_rects(self):
+        """Конструктор: (id, рамка) — 21 поломка в три столбца, ниже примерки Кабинета посадки."""
+        ui = self.share_ui
+        if not ui or ui["mode"] != "builder":
+            return []
+        p = self._share_rect()
+        cw, out = (p.w - 56 - 24) // 3, []
+        for i, j in enumerate(JOBS):
+            out.append((j["id"], pygame.Rect(p.x + 28 + (i // 7) * (cw + 12), p.y + 86 + (i % 7) * 42, cw, 38)))
+        y0 = p.y + 86 + 7 * 42 + 30
+        for i, c in enumerate(SEAT_CASES):
+            out.append((c["id"], pygame.Rect(p.x + 28 + (i % 3) * (cw + 12), y0 + (i // 3) * 37, cw, 32)))
+        return out
+
+    def _share_btn_rects(self):
+        """Кнопки окна: (ключ, рамка, подпись, цвет) — по нижнему краю, слева направо."""
+        ui = self.share_ui
+        if not ui:
+            return []
+        p, mode = self._share_rect(), ui["mode"]
+        if mode == "show":
+            specs = [("copy", "СКОПИРОВАТЬ ЕЩЁ РАЗ", CYAN), ("close", "ГОТОВО", AMBER)]
+        elif mode == "paste":
+            specs = ([] if IS_WEB else [("clip", "ИЗ БУФЕРА (Ctrl+V)", CYAN)]) + [("cancel", "ОТМЕНА", GREY),
+                                                                              ("apply", "ПРИМЕНИТЬ", GOOD)]
+        elif mode == "confirm":
+            specs = [("no", "НЕТ", GREY), ("yes", "ДА", GOOD)]
+        elif mode == "result":
+            specs = [("rtext", "СКОПИРОВАТЬ ТЕКСТОМ", CYAN), ("close", "ГОТОВО", AMBER)]
+        elif mode == "summary":
+            specs = [("rcode", "СКОПИРОВАТЬ КОД РЕЗУЛЬТАТА", CYAN), ("rtext", "СКОПИРОВАТЬ ТЕКСТОМ", CYAN)]
+            if FEEDBACK_URL:
+                specs.append(("send", "УЖЕ ОТПРАВЛЕНО" if self.assign.get("sent") else "ОТПРАВИТЬ В ТАБЛИЦУ", GOOD))
+            rows2 = [("exit", "ВЫЙТИ ИЗ ЗАДАНИЯ", PURPLE), ("close", "В МАСТЕРСКУЮ", AMBER)]
+            out = self._btn_row(p, specs, p.bottom - 124)
+            return out + self._btn_row(p, rows2, p.bottom - 66)
+        elif mode == "builder":
+            specs = [("clear", "СНЯТЬ ВСЁ", GREY), ("cancel", "ОТМЕНА", GREY),
+                     ("make", "СКОПИРОВАТЬ ССЫЛКУ" if IS_WEB else "ПОКАЗАТЬ КОД ЗАДАНИЯ", GOOD)]
+        else:
+            specs = [("close", "ГОТОВО", AMBER)]
+        return self._btn_row(p, specs, p.bottom - 66)
+
+    @staticmethod
+    def _btn_row(p, specs, y):
+        n = len(specs)
+        w = min(300, (p.w - 56 - 16 * (n - 1)) // max(1, n))
+        x0 = p.right - 28 - n * w - 16 * (n - 1)
+        return [(k, pygame.Rect(x0 + i * (w + 16), y, w, 46), lab, col) for i, (k, lab, col) in enumerate(specs)]
+
+    def handle_share_event(self, event):
+        ui = self.share_ui
+        fld = self._share_field_key()
+        if event.type == pygame.TEXTINPUT:
+            if fld and not IS_WEB:
+                txt = "".join(ch for ch in event.text if ch.isprintable() and ch not in "​‌‍⁠﻿")
+                if ui.pop("kd_space", False) and txt.startswith(" "):
+                    txt = txt[1:]                              # этот пробел уже добавлен по нажатию клавиши
+                ui[fld] = (ui[fld] + txt)[:SHARE_MAX if fld == "text" else 40]
+                ui["err"] = ""
+            return
+        if event.type == pygame.KEYDOWN:
+            mod = getattr(event, "mod", 0)
+            if event.key == pygame.K_ESCAPE:
+                self._share_action("no" if ui["mode"] == "confirm" else "close")
+            elif fld and not IS_WEB:
+                if event.key == pygame.K_v and mod & pygame.KMOD_CTRL:
+                    ui[fld] = (ui[fld] + clipboard_get().strip())[:SHARE_MAX if fld == "text" else 40]
+                    ui["err"] = ""
+                elif event.key == pygame.K_BACKSPACE:
+                    ui[fld] = ui[fld][:-1]
+                elif event.key == pygame.K_SPACE and not (mod & (pygame.KMOD_CTRL | pygame.KMOD_ALT)):
+                    ui[fld] += " "
+                    ui["kd_space"] = True
+                elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                    self._share_enter()
+            return
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for k, r in self._share_pick_rects():
+                if r.collidepoint(event.pos):
+                    self._share_action(("pick", k))
+                    return
+            for k, r, _lab, _col in self._share_btn_rects():
+                if r.collidepoint(event.pos):
+                    self._share_action(k)
+                    return
+
+    def _share_web_tick(self):
+        """Браузер: поле страницы поверх холста — ввод кода/имени (вставка Ctrl+V) или код для выделения."""
+        if not IS_WEB:
+            return
+        ui = self.share_ui
+        fld = self._share_field_key()
+        r = self._share_field_rect() if ui and not self.kb["help"] else None
+        if r is None:
+            if getattr(self, "_wfield", None):
+                web_js("wnbField(0, 0, 0, 0, 0, 0)")
+                self._wfield = None
+            return
+        ro = fld is None
+        sig = (id(ui), ui["mode"])
+        init = None
+        if getattr(self, "_wfield", None) != sig:               # новое окно — поле с его текстом
+            init = ui.get(fld or "text", "")
+            self._wfield = sig
+        v = web_js(f"wnbField({r.x}, {r.y}, {r.w}, {r.h}, 17, 1, {json.dumps(init)}, {1 if ro else 0}, "
+                   f"{json.dumps(tr('Код или ссылка') if fld == 'text' else (tr('Имя') if fld else tr('Код')))})")
+        if fld and v is not None and str(v) != ui.get(fld):
+            ui[fld] = str(v)[:SHARE_MAX if fld == "text" else 40]
+            ui["err"] = ""
+        k = str(web_js("wnbFieldTake()") or "")
+        if k == "Enter" and fld:
+            self._share_enter()
+        elif k == "Escape":
+            self._share_action("no" if ui["mode"] == "confirm" else "close")
+        if ui["mode"] == "show" and ui.get("ok") is None:
+            st = web_copy_state()
+            if st:
+                ui["ok"] = st > 0
+
+    def _draw_share_field(self, surf, r, text, ph=""):
+        aa_rect(surf, (12, 12, 18), r, border_radius=8)
+        aa_rect(surf, CYAN, r, 2, border_radius=8)
+        f = font(16)
+        if not text and ph:
+            draw_text(surf, ph, (r.x + 10, r.centery - f.get_height() // 2), 16, DIM)
+            return
+        caret = "|" if int(self.t * 2) % 2 == 0 else " "
+        s = text + caret
+        while len(s) > 1 and f.size(s)[0] > r.w - 20:          # длинный код — видно конец (куда печатаешь)
+            s = s[1:]
+        img = f.render(s, True, WHITE)
+        surf.blit(img, (r.x + 10, r.centery - img.get_height() // 2))
+
+    def _draw_code_block(self, surf, rect, text, size=17):
+        """Код крупно, группами по 6 знаков (пробелы при вставке не мешают) — чтобы переписать руками."""
+        groups = [text[i:i + 6] for i in range(0, len(text), 6)]
+        f = font(size, True)
+        lines, cur = [], ""
+        for g_ in groups:
+            t = (cur + " " + g_).strip()
+            if f.size(t)[0] <= rect.w and cur:
+                cur = t
+            elif not cur:
+                cur = g_
+            else:
+                lines.append(cur)
+                cur = g_
+        if cur:
+            lines.append(cur)
+        y = rect.y
+        for ln in lines:
+            if y + f.get_height() > rect.bottom:
+                break
+            img = f.render(ln, True, WHITE)
+            surf.blit(img, (rect.x, y))
+            y += f.get_height() + 3
+
+    def _draw_result_rows(self, surf, rect, res):
+        rows = res["rows"]
+        per = max(1, rect.h // 26)
+        cols = 1 if len(rows) <= per else 2
+        cw = (rect.w - 16 * (cols - 1)) // cols
+        for i, (k, ok, err, secs) in enumerate(rows[:per * cols]):
+            x, y = rect.x + (i // per) * (cw + 16), rect.y + (i % per) * 26
+            fit_text(surf, ("✔ " if ok else "○ ") + share_item_label(k), (x, y), cw - (150 if cols == 1 else 96), 15,
+                     GOOD if ok else GREY)
+            if ok:
+                draw_text(surf, f"ошибок {err} · {fmt_secs(secs)}", (x + cw, y + 1), 14 if cols == 1 else 13,
+                          WHITE if err == 0 else AMBER, right=True)
+            else:
+                draw_text(surf, "не сделано", (x + cw, y + 1), 13, DIM, right=True)
+
+    def _draw_share(self, surf):
+        _cap_modal()
+        ui = self.share_ui
+        dim = _img_cache.get(("v3d_dim", 176, RS))
+        if dim is None:
+            dim = _img_cache[("v3d_dim", 176, RS)] = Surf((WIDTH, HEIGHT), pygame.SRCALPHA)
+            dim.fill((8, 8, 12, 176))
+        surf.blit(dim, (0, 0))
+        p = self._share_rect()
+        mouse = mouse_pos()
+        mode = ui["mode"]
+        aa_rect(surf, (20, 18, 28), p, border_radius=14)
+        aa_rect(surf, CYAN, p, 2, border_radius=14)
+        x, w = p.x + 28, p.w - 56
+        if mode == "show":
+            draw_text(surf, ui.get("title", ""), (x, p.y + 20), 22, CYAN, bold=True)
+            if ui.get("kind") == "text":
+                draw_wrapped(surf, ui["text"].replace("\n", "  ·  "), (x, p.y + 64), w, 15, WHITE, raw=True,
+                             max_lines=16)
+                y = p.bottom - 150
+            else:
+                fr = self._share_field_rect()
+                aa_rect(surf, (12, 12, 18), fr, border_radius=8)
+                aa_rect(surf, DIM, fr, 1, border_radius=8)
+                f = font(15)
+                s = ui["text"]
+                while len(s) > 1 and f.size(s + "…")[0] > fr.w - 20:
+                    s = s[:-1]
+                img = f.render(s + ("…" if s != ui["text"] else ""), True, GREY)
+                surf.blit(img, (fr.x + 10, fr.centery - img.get_height() // 2))
+                if ui.get("ok") is False and ui.get("kind") == "code":
+                    draw_text(surf, "Перепиши код (заглавные и строчные буквы различаются):", (x, fr.bottom + 12), 14, GREY)
+                    self._draw_code_block(surf, pygame.Rect(x, fr.bottom + 36, w, 150), ui["text"])
+                y = p.bottom - 128
+            ok = ui.get("ok")
+            st = ("Скопировано в буфер обмена ✔" if ok else
+                  ("Копирую…" if ok is None else
+                   ("Не удалось скопировать — выдели строку выше и нажми Ctrl+C." if IS_WEB else
+                    "Буфер обмена недоступен — перепиши или сфотографируй код.")))
+            draw_text(surf, st, (x, y), 16, GOOD if ok else (GREY if ok is None else AMBER), bold=True)
+            if ui.get("note"):
+                draw_wrapped(surf, ui["note"], (x, y + 26), w, 14, GREY, max_lines=2)
+        elif mode == "paste":
+            draw_text(surf, "ВСТАВИТЬ КОД", (x, p.y + 20), 22, CYAN, bold=True)
+            draw_text(surf, "Код прогресса, задания или результата — или ссылка с ним:", (x, p.y + 72), 15, WHITE)
+            self._draw_share_field(surf, self._share_field_rect(), "" if IS_WEB else ui["text"],
+                                   "" if IS_WEB else "Ctrl+V — вставить")
+            if ui.get("err"):
+                draw_text(surf, ui["err"], (x, p.y + 162), 16, BAD, bold=True)
+            draw_wrapped(surf, "Код прогресса заменит твой прогресс (после вопроса; прежний можно вернуть). Код задания "
+                               "откроет задание, код результата покажет итог ученика.", (x, p.y + 196), w, 14, GREY)
+        elif mode == "confirm":
+            draw_text(surf, "ПОДТВЕРДИ", (x, p.y + 20), 22, CYAN, bold=True)
+            y = draw_wrapped(surf, ui.get("q", ""), (x, p.y + 70), w, 20, WHITE, max_lines=3)
+            draw_wrapped(surf, ui.get("sub", ""), (x, y + 12), w, 15, GREY, max_lines=4)
+        elif mode in ("summary", "result"):
+            res = ui.get("res") if mode == "result" else self.assign_result()
+            draw_text(surf, "ИТОГ ЗАДАНИЯ" if mode == "summary" else "РЕЗУЛЬТАТ УЧЕНИКА", (x, p.y + 18), 22, CYAN, bold=True)
+            fit_text(surf, assign_head(res.get("from"), res.get("title")), (x, p.y + 52), w, 16, WHITE)
+            draw_text(surf, result_summary(res["rows"]), (p.right - 28, p.y + 20), 20, GOOD, bold=True, right=True)
+            bottom = p.bottom - (138 if mode == "summary" else 80)
+            self._draw_result_rows(surf, pygame.Rect(x, p.y + 86, w, bottom - p.y - 86 - 26), res)
+            if mode == "summary":
+                draw_text(surf, "Код результата защищён: если поправить в нём цифры, игра его не примет.",
+                          (x, bottom - 22), 13, GREY)
+            elif res.get("version"):
+                draw_text(surf, f"Версия игры: {res['version']}", (x, bottom - 22), 13, GREY)
+        elif mode == "builder":
+            draw_text(surf, "ССЫЛКА-ЗАДАНИЕ", (x, p.y + 16), 22, CYAN, bold=True)
+            draw_text(surf, "Отметь задания по порядку — ученик увидит только их, без обучения и замков.",
+                      (x, p.y + 52), 15, WHITE)
+            sel = ui["sel"]
+            for k, r in self._share_pick_rects():
+                on = k in sel
+                Button(r, "", GOOD if on else CYAN).draw(surf, mouse, active=on)
+                mark = f"{sel.index(k) + 1}." if on else "○"
+                draw_text(surf, mark, (r.x + 10, r.centery - 9), 14, GOOD if on else DIM, bold=True)
+                j = next((x for x in JOBS if x["id"] == k), None)
+                if j:                                              # как в очереди: клиент, под ним — поломка
+                    fit_text(surf, j["client"], (r.x + 38, r.y + 3), r.w - 46, 14, WHITE)
+                    fit_text(surf, j["title"], (r.x + 38, r.y + 20), r.w - 46, 12, GREY)
+                else:
+                    fit_text(surf, share_item_label(k), (r.x + 38, r.centery - 9), r.w - 46, 14, WHITE if on else GREY)
+            seat_y = self._share_pick_rects()[len(JOBS)][1].y
+            draw_text(surf, "Кабинет посадки (примерки):", (x, seat_y - 26), 15, WHITE, bold=True)
+            fr = self._share_field_rect()
+            draw_text(surf, "От кого (можно не писать):", (x, fr.centery - 10), 15, WHITE)
+            self._draw_share_field(surf, fr, "" if IS_WEB else ui.get("name", ""), "" if IS_WEB else "Имя учителя")
+            n = len(sel)
+            info = ui.get("err") or (f"Выбрано: {n}" if n else "Ничего не выбрано")
+            draw_text(surf, info, (fr.right + 24, fr.centery - 10), 15, BAD if ui.get("err") else (GOOD if n else GREY),
+                      bold=True)
+        for k, r, lab, col in self._share_btn_rects():
+            enabled = not (k == "send" and self.assign and self.assign.get("sent"))
+            Button(r, lab, col).draw(surf, mouse, enabled=enabled)
+
     def tutorial_ok(self):
-        """Обучение пройдено (первый ремонт) или пропущено кнопкой."""
-        return "flat" in self.done or self.tutorial_skipped
+        """Обучение пройдено (первый ремонт) или пропущено кнопкой. В задании по ссылке обучения нет — всё открыто."""
+        return "flat" in self.done or self.tutorial_skipped or self.assign_on()
 
     def available_jobs(self):
-        """Туториал (flat) первым; остальные открыты после него (или после «Пропустить обучение»)."""
+        """Туториал (flat) первым; остальные открыты после него (или после «Пропустить обучение»).
+        В задании по ссылке — только назначенные поломки, в порядке ссылки."""
+        if self.assign_on():
+            return list(self.assign["jobs"])
         if not self.tutorial_ok():
             return ["flat"]
         return [j["id"] for j in JOBS]
@@ -8873,6 +9949,7 @@ class Game:
     # ---------- запуск задания ----------
     def start_job(self, jid, variant=None):
         self.cur = resolve_job(self.job_by_id(jid), variant)
+        self._job_t0 = self.t                    # время на задание (итог задания по ссылке)
         shuffle_answers(self.cur)
         self._fail_zap = False
         tech = self.cur.get("track") == "tech"
@@ -9285,12 +10362,15 @@ class Game:
             self.scene = "exam_result"
             return
         stars = max(1, 3 - self.mistakes // 2)
-        self.done.add(self.cur["id"])
-        old = next((i for i, g in enumerate(self.garage) if g[0] == self.cur["id"]), None)
-        if old is None:
-            self.garage.append((self.cur["id"], stars))
-        elif stars > self.garage[old][1]:          # переигрывание: в гараже — лучшая оценка
-            self.garage[old] = (self.cur["id"], stars)
+        if self.assign_on():                       # задание по ссылке: свой прогресс, обычный (done, гараж) не трогаем
+            self.assign_record(self.cur["id"], self.mistakes, self.t - getattr(self, "_job_t0", self.t))
+        else:
+            self.done.add(self.cur["id"])
+            old = next((i for i, g in enumerate(self.garage) if g[0] == self.cur["id"]), None)
+            if old is None:
+                self.garage.append((self.cur["id"], stars))
+            elif stars > self.garage[old][1]:          # переигрывание: в гараже — лучшая оценка
+                self.garage[old] = (self.cur["id"], stars)
         self.cur_stars = stars
         if random.random() < 0.5:                  # то нога отвалится, то Мартин сам себя похвалит/подколет
             self.result_gag = random.choice([g_ for g_ in LEG_GAGS if barty_on() or not g_.startswith("Бартоломью")])
@@ -9537,6 +10617,19 @@ class Game:
             add("Кнопки", tr("Отправить"), self._dispute_send_rect(), act=self.send_dispute, key="dsend")
             add("Кнопки", tr("Отмена"), self._dispute_cancel_rect(), act=self.close_dispute, key="dcancel")
             return items
+        if self.share_ui is not None:
+            fld = self._share_field_key()
+            if fld:
+                val = self.share_ui.get(fld, "")
+                add("Поле", tr("Поле кода: печатай или Ctrl+V, Enter — применить" if fld == "text"
+                               else "Имя: печатай, Enter — скопировать") + (". " + val if val else ""),
+                    self._share_field_rect(), act=self._share_enter, key="sfield", raw=True)
+            for k, r in self._share_pick_rects():
+                on = k in self.share_ui["sel"]
+                add("Задания", share_item_label(k) + (", " + tr("выбрано") if on else ""), r,
+                    act=lambda k=k: self._share_action(("pick", k)), key=("pick", k))
+            self._a11y_generic(items, add)
+            return items
         if self.show_sound:
             self._a11y_settings_items(add)
         elif self.scene == "job" and self.cur:
@@ -9559,8 +10652,8 @@ class Game:
                 note = (CLIENT_TALK.get(jid, {}).get("intro") or [""])[0]
                 lab = (f"{tr(job['client'])}. {tr(job['title'])}. "
                        + tr("Электроколяска" if job.get("kind") == "power" else "Ручная коляска")
-                       + (". " + tr("Уже починено") if jid in self.done else "")
-                       + (". " + tr(note) if note and jid not in self.done else ""))
+                       + (". " + tr("Уже починено") if self.is_done(jid) else "")
+                       + (". " + tr(note) if note and not self.is_done(jid) else ""))
                 add("Клиенты", lab, r, key=("job", jid))
             for d, r in self._hub_arrow_rects():
                 add("Клиенты", tr("Следующая страница очереди" if d > 0 else "Предыдущая страница очереди"), r,
@@ -9779,7 +10872,7 @@ class Game:
             if k in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
                 self.toggle_help()
             return True
-        typing = self.dispute_ui is not None              # в окне замечания буквы — это текст
+        typing = self.dispute_ui is not None or bool(self._share_field_key())   # в окне замечания/кода буквы — текст
         v3d = self.v3d is not None and self.scene == "job"
         shift = mod & pygame.KMOD_SHIFT
         if not typing and not (mod & (pygame.KMOD_CTRL | pygame.KMOD_ALT)):
@@ -9816,7 +10909,7 @@ class Game:
             return True
         if k in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
             if cur is None and typing:
-                self.send_dispute()
+                self.send_dispute() if self.dispute_ui is not None else self._share_enter()
                 return True
             if cur is None and self.scene in ("intro", "title", "ending"):
                 cur = items[0]                             # Enter: «далее» / «начать» / «гараж»; пропуск и титры — стрелкой
@@ -9851,6 +10944,8 @@ class Game:
                     seat_tab=sc.get("tab"), focus=str(self.kb["key"]) if self.kb["key"] is not None else None,
                     res=list(DISPLAY.get("res") or ()), rs=round(RS, 3), touch=TOUCH["on"], lang=LANG["code"],
                     missing=sorted(ASSET_MISS)[:30], done=len(self.done), version=GAME_VERSION,
+                    queue=self.available_jobs(), assign=self.assign["id"] if self.assign_on() else None,
+                    share=self.share_ui["mode"] if self.share_ui else None,
                     last_click=str(getattr(self, "_last_click", None)),
                     tt_frames=sum(len(t.frames) + len(t.scaled) for t in _TT_CACHE.values() if isinstance(t, Turntable)))
 
@@ -9889,7 +10984,7 @@ class Game:
         elif act == "start":
             if self.show_sound:
                 self._pad_key(pygame.K_ESCAPE)
-            elif self.dispute_ui is None and not self.kb["help"]:
+            elif self.dispute_ui is None and self.share_ui is None and not self.kb["help"]:
                 self._a11y_open_settings()
 
     def pad_tick(self):
@@ -10080,6 +11175,18 @@ class Game:
                 extra = f" {tr('Игра ожидала')}: {tr(d['expected'])}. {tr('Ты выбрал')}: {tr(d['got'])}."
             return (head + extra + " " + tr("Стрелки — выбрать причину, печатай комментарий, "
                                             "Enter — отправить, Esc — отмена."))
+        if self.share_ui is not None:
+            ui = self.share_ui
+            t = {"show": ui.get("title", ""), "paste": "Вставить код.", "confirm": ui.get("q", ""),
+                 "summary": "Итог задания.", "result": "Результат ученика.", "builder": "Ссылка-задание."}[ui["mode"]]
+            extra = ""
+            if ui["mode"] in ("summary", "result"):
+                extra = result_summary((ui.get("res") or self.assign_result())["rows"]) + "."
+            elif ui["mode"] == "confirm":
+                extra = tr(ui.get("sub", ""))
+            elif ui["mode"] == "show" and ui.get("kind") != "text":
+                extra = tr("Скопировано в буфер обмена." if ui.get("ok") else "")
+            return (tr(t) + " " + extra + " " + tr("Стрелки — пункты, Enter — выбрать, Esc — закрыть.")).replace("  ", " ")
         if self.show_sound:
             tab = getattr(self, "settings_tab", "sound")
             if tab == "game":
@@ -10098,6 +11205,9 @@ class Game:
         if sc == "credits":
             return (tr("Титры.") + " " + " ".join(tr(h) + ". " + " ".join(tr(x) for x in lines) for h, lines in CREDITS)
                     + " " + tr("Esc — назад."))
+        if sc == "hub" and self.assign_on():
+            return (f"{tr('Мастерская.')} {tr(self._hub_assign_label())}. "
+                    + tr("Стрелки — выбрать клиента, Enter — взять заказ, Tab — другие разделы."))
         if sc == "hub":
             return (f"{tr('Мастерская.')} {tr('Починено')}: {_of(self.user_done_count(), len(JOBS))}. "
                     + tr("Стрелки — выбрать клиента, Enter — взять заказ, Tab — другие разделы."))
@@ -10296,6 +11406,9 @@ class Game:
             return                                       # буквы при открытой справке в комментарий не идут
         if self.dispute_ui is not None:                  # окно замечания модально (и ловит ввод текста):
             self.handle_dispute_event(event)             # буквы, в т.ч. «m»/«ь», — это текст, а не горячие клавиши
+            return
+        if self.share_ui is not None:                    # окно кодов и ссылок — модально (поле кода/имени — текст)
+            self.handle_share_event(event)
             return
         if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
             on = toggle_sound()
@@ -10506,7 +11619,7 @@ class Game:
         if sb is not None and sb.collidepoint(m) and self.st > 1.6:
             self.open_support()
             return
-        self.scene = "hub" if (self.done or self.tutorial_skipped) else "intro"
+        self.scene = "hub" if (self.done or self.tutorial_skipped or self.assign_on()) else "intro"
         if self.scene == "intro":                  # после сброса прогресса вступление — снова с первого слайда
             self.intro_idx = 0
             self._typing.pop("intro", None)
@@ -10530,6 +11643,14 @@ class Game:
                 self.scene_t0 = self.t                 # карточки въезжают заново
                 snd("tick")
                 return
+        if self.assign_on():                       # задание по ссылке: примерки (если назначены), итог, выход
+            if self.assign["seat"] and self._hub_seat_rect().collidepoint(m):
+                self.open_seating()
+            elif self._hub_guild_rect().collidepoint(m):
+                self.open_share("summary")
+            elif self._hub_garage_rect().collidepoint(m):
+                self.exit_assignment()
+            return
         if self._hub_seat_rect().collidepoint(m):
             if self.tutorial_ok():
                 self.open_seating()
@@ -10630,6 +11751,9 @@ class Game:
         """Куда ведёт итог задания (кнопка и Esc): Гильдия, вечеринка после последнего ремонта или мастерская."""
         if self.cur and self.cur.get("track") == "tech":
             return "guild"
+        if self.assign_on():                       # задание по ссылке: вечеринки и Гильдии нет, всё выполнено — итог
+            self._assign_maybe_summary(again=True)
+            return "hub"
         if self._party_next():
             self.ending_seen = True
             self.save_progress()
@@ -10763,6 +11887,7 @@ class Game:
     def update(self, dt):
         self.t += dt
         self._touch_text()
+        self._share_web_tick()
         self.scan_tick()
         self.pad_tick()
         self._settings_help_say()
@@ -10851,6 +11976,8 @@ class Game:
             self._draw_dispute_panel(surf, mouse_pos())
         if self.show_sound:
             self._draw_sound_panel(surf)
+        if self.share_ui is not None:
+            self._draw_share(surf)
         if self.kb["help"]:
             self._draw_help(surf)
         self.a11y_frame(surf)
@@ -10926,16 +12053,44 @@ class Game:
 
     def _reset_btn_rect(self):
         p = self._sound_panel_rect()
-        return pygame.Rect(p.x + 32, p.y + 300, p.w - 64, 46)
+        return pygame.Rect(p.x + 32, p.y + 352, p.w - 64, 42)
 
     def _reset_yes_rect(self):
         p = self._sound_panel_rect()
-        return pygame.Rect(p.x + 32, p.y + 300, (p.w - 80) // 2, 46)
+        return pygame.Rect(p.x + 32, p.y + 352, (p.w - 80) // 2, 42)
 
     def _reset_no_rect(self):
         p = self._sound_panel_rect()
         w = (p.w - 80) // 2
-        return pygame.Rect(p.right - 32 - w, p.y + 300, w, 46)
+        return pygame.Rect(p.right - 32 - w, p.y + 352, w, 42)
+
+    def _share_set_rects(self):
+        """Вкладка «ИГРА», блок кодов и ссылок: (ключ, рамка) — по два в ряд; «вернуть прежний» — пока есть копия."""
+        p = self._sound_panel_rect()
+        w = (p.w - 64 - 12) // 2
+        col = lambda i: p.x + 32 + i * (w + 12)
+        out = [("share_code", pygame.Rect(col(0), p.y + 212, w, 40)), ("share_paste", pygame.Rect(col(1), p.y + 212, w, 40)),
+               ("share_build", pygame.Rect(col(0), p.y + 258, w, 40))]
+        if IS_WEB:
+            out.append(("share_link", pygame.Rect(col(1), p.y + 258, w, 40)))
+        if self.has_backup() and not getattr(self, "_reset_ask", False):
+            out.append(("share_restore", pygame.Rect(col(0), p.y + 304, p.w - 64, 40)))
+        return out
+
+    SHARE_SET_LABELS = {"share_code": "СКОПИРОВАТЬ КОД", "share_paste": "ВСТАВИТЬ КОД", "share_build": "ССЫЛКА-ЗАДАНИЕ",
+                        "share_link": "ССЫЛКА С ПРОГРЕССОМ", "share_restore": "ВЕРНУТЬ ПРЕЖНИЙ ПРОГРЕСС"}
+
+    def _share_set_action(self, k):
+        if k == "share_code":
+            self.copy_progress_code()
+        elif k == "share_paste":
+            self.open_share("paste")
+        elif k == "share_build":
+            self.open_share("builder")
+        elif k == "share_link":
+            self.copy_progress_link()
+        elif k == "share_restore":
+            self.restore_backup()
 
     def progress_summary(self):
         """Что сейчас пройдено — для вкладки «ИГРА» и озвучки."""
@@ -10976,19 +12131,21 @@ class Game:
         self.say("Сбросить весь прогресс? Это нельзя отменить. Да или нет." if on else "Сброс отменён.", True)
 
     def _draw_game_tab(self, surf, p, mouse):
-        draw_text(surf, "Прогресс", (p.x + 32, p.y + 124), 19, WHITE, bold=True)
-        y = p.y + 156
+        draw_text(surf, "Прогресс", (p.x + 32, p.y + 114), 19, WHITE, bold=True)
+        y = p.y + 142
         for line in self.progress_summary():
-            draw_text(surf, line, (p.x + 32, y), 16, GREY)
-            y += 28
+            draw_text(surf, line, (p.x + 32, y), 15, GREY)
+            y += 22
+        for k, r in self._share_set_rects():
+            Button(r, self.SHARE_SET_LABELS[k], PURPLE if k == "share_restore" else CYAN).draw(surf, mouse)
         if getattr(self, "_reset_ask", False):
-            draw_text(surf, "Сбросить весь прогресс? Это нельзя отменить.", (p.x + 32, p.y + 268), 16, BAD, bold=True)
+            draw_text(surf, "Сбросить весь прогресс? Это нельзя отменить.", (p.x + 32, p.y + 318), 16, BAD, bold=True)
             Button(self._reset_yes_rect(), "ДА, СБРОСИТЬ", BAD).draw(surf, mouse)
             Button(self._reset_no_rect(), "НЕТ", GOOD).draw(surf, mouse)
         else:
             Button(self._reset_btn_rect(), "СБРОСИТЬ ПРОГРЕСС", BAD).draw(surf, mouse)
         draw_wrapped(surf, "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и "
-                           "доступность останутся.", (p.x + 32, p.y + 356), p.w - 64, 13, GREY)
+                           "доступность останутся.", (p.x + 32, p.y + 402), p.w - 64 - 210, 12, GREY, max_lines=3)
 
     ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "calm", "quiet", "barty", "text", "font") + (("scan",) if SCAN_ENABLED else ())
 
@@ -11154,6 +12311,11 @@ class Game:
                         return
                 return
             if tab == "game":
+                for k, r in self._share_set_rects():
+                    if r.collidepoint(event.pos):
+                        self._reset_ask = False
+                        self._share_set_action(k)
+                        return
                 if getattr(self, "_reset_ask", False):
                     if self._reset_yes_rect().collidepoint(event.pos):
                         self.reset_progress()
@@ -11278,6 +12440,14 @@ class Game:
                     "Число — сколько секунд на пункт.",
         "reset": "Стирает починенные коляски, гараж, Гильдию и Кабинет посадки — игра начнётся заново. Звук, графика, "
                  "язык и доступность останутся.",
+        "share_code": "Короткий код твоего прогресса: перенеси игру на другой компьютер или в другой браузер — вставь код "
+                      "там через «Вставить код».",
+        "share_paste": "Вставь код прогресса (заменит твой прогресс — после вопроса, прежний можно вернуть), код задания "
+                       "от учителя или код результата ученика.",
+        "share_link": "Ссылка, которая сама предложит загрузить твой прогресс, — открой её на другом устройстве.",
+        "share_build": "Учителю: выбери задания и примерки — получится ссылка (в игре на компьютере — код), по которой "
+                       "ученик пройдёт только их. Итог ученик пришлёт кодом или текстом.",
+        "share_restore": "Вернуть прогресс, который был до загрузки кода или ссылки.",
     }
 
     def _settings_help_zones(self):
@@ -11293,7 +12463,7 @@ class Game:
             return [("acc_" + k, pygame.Rect(p.x + 24, r.y - 1, r.right - p.x - 24, r.h + 2))
                     for k, r in self._access_rects()]
         if tab == "game":
-            return [("reset", row(self._reset_btn_rect()))]
+            return [("reset", row(self._reset_btn_rect()))] + [(k, r) for k, r in self._share_set_rects()]
         if IS_WEB:
             return [("web_quality", row(*[r for _, r in self._webq_rects()])), ("web_fs", row(self._web_fs_rect())),
                     ("glow", row(self._glow_btn_rect()))]
@@ -11651,15 +12821,44 @@ class Game:
     def _hub_seat_rect(self):
         return pygame.Rect(WIDTH - 360, HEIGHT - 290, 300, 54)
 
+    def _hub_assign_label(self):
+        """Плашка задания по ссылке: «Задание от Имя: 1/3»."""
+        a = self.assign
+        n, k = len(assign_items(a)), len(a["done"])
+        return f"Задание от {a['from']}: {k}/{n}" if a.get("from") else f"Задание: {k}/{n}"
+
+    def _draw_hub_assign(self, surf, mouse):
+        """Мастерская в задании по ссылке: плашка сверху, справа — примерки (если есть), итог и выход."""
+        a = self.assign
+        plate = pygame.Rect(56, 62, 4 * 214 - 10, 54)
+        aa_rect(surf, (24, 20, 30, 235), plate, border_radius=10)
+        aa_rect(surf, GOOD, plate, 2, border_radius=10)
+        fit_text(surf, self._hub_assign_label(), (plate.x + 16, plate.y + 6), plate.w - 32, 20, GOOD, bold=True)
+        sub = (f"«{a['title']}» · Только эти задания, по порядку. Обычный прогресс не меняется." if a.get("title")
+               else "Только эти задания, по порядку. Обычный прогресс не меняется.")
+        fit_text(surf, sub, (plate.x + 16, plate.y + 32), plate.w - 32, 13, GREY)
+        if not a["jobs"]:
+            draw_wrapped(surf, "Поломок в задании нет — задание в Кабинете посадки (кнопка справа).", (60, 160),
+                         4 * 214 - 40, 18, WHITE)
+        if a["seat"]:
+            k = len([s for s in a["seat"] if s in a["done"]])
+            Button(self._hub_seat_rect(), "КАБИНЕТ ПОСАДКИ", GOOD, sub=f"примерки {k}/{len(a['seat'])}").draw(surf, mouse)
+        Button(self._hub_guild_rect(), "ИТОГ ЗАДАНИЯ", CYAN,
+               sub="всё выполнено ✔" if self.assign_complete() else "что уже сделано").draw(surf, mouse)
+        Button(self._hub_garage_rect(), "ВЫЙТИ ИЗ ЗАДАНИЯ", PURPLE, sub="в обычную игру").draw(surf, mouse)
+        draw_text(surf, self._hub_assign_label() + "   ·   Esc — на титул/выход", (60, HEIGHT - 40), 16, GHOST)
+
     def draw_hub(self, surf):
         self._bg(surf, "bg_workshop.png", WOOD)
         self._topbar(surf, "Мастерская")
-        draw_text(surf, "Кто сегодня в очереди на ремонт:", (60, 86), 20, WHITE, bold=True)
+        asg = self.assign_on()
+        if not asg:
+            draw_text(surf, "Кто сегодня в очереди на ремонт:", (60, 86), 20, WHITE, bold=True)
         mouse = mouse_pos()
         note = None
         for i, (jid, rect) in enumerate(self._hub_job_rects()):
             job = self.job_by_id(jid)
-            done = jid in self.done
+            done = self.is_done(jid)
             dy = int(60 * (1 - appear(self.st, 0.05 * i, 0.4)))
             b = Button(rect, "", GOOD if done else AMBER)
             r = b.draw(surf, mouse, enabled=True, active=done, offset=(0, dy))
@@ -11698,6 +12897,11 @@ class Game:
         if barty_on():
             blit_idle(surf, ghost_img((150, 200), self.t),
                       (WIDTH - 220, 120), self.t, "float", k=ease_back((self.st - 0.3) / 0.5))
+        if asg:
+            self._draw_hub_assign(surf, mouse)
+            if note:
+                self._draw_hub_note(surf, *note)
+            return
         seat_ok = self.tutorial_ok()
         Button(self._hub_seat_rect(), "КАБИНЕТ ПОСАДКИ", GOOD,
                sub=((f"примерки {len(self.seat_done)}/{len(SEAT_CASES)}" + (" · зачёт ✔" if self.seat_quiz_ok else ""))
@@ -11728,7 +12932,7 @@ class Game:
         self.seatc = dict(tab="lessons", lesson=0, case=0, cfg=None, drag=None,
                           quiz=0, picked=None, score=0, quiz_done=False, solved=False,
                           demo_good=False, demo_k=0.0, xray=True)
-        self._seat_load_case(0)
+        self._seat_load_case(self._seat_idx()[0])
         self.seatc["say"] = SEAT_MENTOR["intro"]
         self.scene = "seating"
 
@@ -11736,7 +12940,7 @@ class Game:
         c = SEAT_CASES[i]
         cfg = dict(c["start"])
         cfg.setdefault("tilt", 0)
-        self.seatc.update(case=i, cfg=cfg, solved=False, view=c.get("view", "side"), focus=None)
+        self.seatc.update(case=i, cfg=cfg, solved=False, view=c.get("view", "side"), focus=None, fails=0, t0=self.t)
         if c.get("view"):                                   # перекос/поворот: сбоку не видно — Мортимер подсказывает
             self.seatc["say"] = SEAT_MENTOR["view_" + c["view"]]
         else:
@@ -11971,9 +13175,9 @@ class Game:
         if self.seatc["tab"] == "lessons":
             items = SEAT_LESSONS
             return [(i, pygame.Rect(780 + (i % 2) * 238, 112 + (i // 2) * 44, 230, 38)) for i in range(len(items))]
-        elif self.seatc["tab"] == "fit":
-            items = SEAT_CASES
-            return [(i, pygame.Rect(780 + (i % 2) * 238, 112 + (i // 2) * 40, 230, 35)) for i in range(len(items))]
+        elif self.seatc["tab"] == "fit":                       # в задании по ссылке — только назначенные примерки
+            return [(i, pygame.Rect(780 + (n % 2) * 238, 112 + (n // 2) * 40, 230, 35))
+                    for n, i in enumerate(self._seat_idx())]
         return []
 
     def _seat_quiz_rects(self):
@@ -12063,22 +13267,28 @@ class Game:
             if self._seat_btn_rect().collidepoint(m):
                 case = SEAT_CASES[sc["case"]]
                 if sc["solved"]:
-                    nxt = (sc["case"] + 1) % len(SEAT_CASES)
+                    idx = self._seat_idx()
+                    nxt = idx[(idx.index(sc["case"]) + 1) % len(idx)] if sc["case"] in idx else idx[0]
                     self._seat_load_case(nxt)
                     return
                 checks, _ = self.seat_eval(case, sc["cfg"])
                 bad = [t for k, ok, t in checks if not ok]
                 if bad:
                     snd("bad")
+                    sc["fails"] = sc.get("fails", 0) + 1
                     sc["say"] = SEAT_MENTOR["fail"]
                     self.flash("Ещё не так: " + bad[0], BAD, 3)
                 else:
                     sc["solved"] = True
                     sc["say"] = SEAT_MENTOR["solved"]
-                    self.seat_done.add(case["id"])
-                    self.save_progress()
+                    if self.assign_on():                    # задание по ссылке: обычный прогресс не трогаем
+                        self.assign_record(case["id"], sc.get("fails", 0), self.t - sc.get("t0", self.t))
+                    else:
+                        self.seat_done.add(case["id"])
+                        self.save_progress()
                     snd("fanfare")
                     self.flash(case["fact"], GOOD, 6)
+                    self._assign_maybe_summary()
         elif sc["tab"] == "quiz":
             if sc["quiz_done"]:
                 if self._seat_btn_rect().collidepoint(m):
@@ -12102,8 +13312,9 @@ class Game:
                     sc["quiz_done"] = True
                     sc["say"] = SEAT_MENTOR["pass" if sc["score"] >= SEAT_QUIZ_PASS else "nopass"]
                     if sc["score"] >= SEAT_QUIZ_PASS:
-                        self.seat_quiz_ok = True
-                        self.save_progress()
+                        if not self.assign_on():
+                            self.seat_quiz_ok = True
+                            self.save_progress()
                         snd("fanfare")
 
     # ---------- художественная отрисовка костей, черепа и магии Мортимера ----------
@@ -13271,7 +14482,7 @@ class Game:
                 Button(tbtn, "ТЕЛО: ВИДНО" if xray else "ТЕЛО: СКРЫТО",
                        PURPLE if xray else CYAN).draw(surf, mouse, active=xray)
             for i, r in self._seat_list_rects():
-                done = SEAT_CASES[i]["id"] in self.seat_done
+                done = self.is_done(SEAT_CASES[i]["id"])
                 Button(r, "", GOOD if done else CYAN).draw(surf, mouse, active=i == sc["case"])
                 fit_text(surf, ("✔ " if done else "") + SEAT_CASES[i]["client"], (r.x + 10, r.y + 8), r.w - 20, 14, WHITE)
             b = case["body"]
@@ -15316,6 +16527,8 @@ class Game:
             draw_leg_gag(surf, kind, st - 1.4, pygame.Rect(260, top, 760, max(60, HEIGHT - 114 - top)))
         if self.cur.get("track") == "tech":
             nxt = "В ГИЛЬДИЮ"
+        elif self.assign_on():
+            nxt = "К ИТОГУ ЗАДАНИЯ" if self.assign_complete() else "В МАСТЕРСКУЮ"
         elif self._party_next():
             nxt = "НА ВЕЧЕРИНКУ"
         else:
@@ -16486,6 +17699,115 @@ def run_selftest():
     gk.done.add("flat")
     if gk._tutor_want() is not None:
         failures.append("обучение: подсветка осталась после первого ремонта")
+    # --- ссылки и коды (docs/SHARE_LINKS.md): прогресс туда-обратно, битая сумма, задание, результат с солью ---
+    gp = Game(headless=True)
+    gp.done, gp.garage = {"flat", "caster", "yaga_d100"}, [("flat", 3), ("caster", 1)]
+    gp.seat_done, gp.seat_quiz_ok, gp.exam_passed, gp.tutorial_skipped = {"seat_troll"}, True, False, True
+    pcode = share_encode("P", progress_pack(gp))
+    got = share_decode(pcode)
+    pu = progress_unpack(got[1]) if got and got[0] == "P" else None
+    if not pu or pu["done"] != gp.done or pu["garage"] != gp.garage or pu["seat_done"] != gp.seat_done \
+            or not pu["seat_quiz_ok"] or pu["exam_passed"] or not pu["tutorial_skipped"]:
+        failures.append(f"код прогресса: туда-обратно не сошлось ({pu})")
+    kd, bd, cr = pcode.split(".")
+    bad_codes = [f"{kd}.{bd}.{cr[:-1]}{'0' if cr[-1] != '0' else '1'}",              # чужая контрольная сумма
+                 f"{kd}.{bd[:-2]}{'AB' if bd[-2:] != 'AB' else 'CD'}.{cr}",           # поправили тело
+                 "J." + bd + "." + cr, "", "мусор", "P..", pcode + ".x",
+                 share_encode("P", {"v": 2, "d": ["flat"]}), share_encode("X", {"v": 1})]
+    for bc in bad_codes:
+        if share_decode(bc) is not None:
+            failures.append(f"код прогресса: битый код принят: {bc[:30]}")
+    if share_decode("  " + pcode[:20] + "\n" + pcode[20:] + " ") is None:
+        failures.append("код прогресса: пробелы/перенос строки при вставке не должны мешать")
+    gq = Game(headless=True)
+    gq.done = {"brake"}
+    if gq.apply_code("P.абв.123456") or gq.done != {"brake"} or gq.has_backup():
+        failures.append("«Вставить код»: битый код должен дать «не распознан» и не трогать прогресс")
+    if not gq.apply_code(pcode) or not gq.share_ui or gq.share_ui["mode"] != "confirm" or gq.done != {"brake"}:
+        failures.append("«Вставить код»: код прогресса должен сначала спросить «да/нет»")
+    gq._share_action("yes")
+    if gq.done != gp.done or not gq.has_backup():
+        failures.append("«Вставить код» → «Да»: прогресс не заменён или нет копии прежнего")
+    gq.restore_backup()
+    if gq.done != {"brake"} or gq.has_backup():
+        failures.append("«Вернуть прежний прогресс» не вернул прогресс")
+    a = assign_parse(parse_link(SHARE_BASE_URL + "?jobs=caster,nojob,flat,caster&seat=seat_elf,xx&from=%D0%90%D0%BD%D0%BD%D0%B0"
+                                                 "&title=" + "x" * 200 + "&evil=1"))
+    if not a or a["jobs"] != ["caster", "flat"] or a["seat"] != ["seat_elf"] or a["from"] != "Анна" or len(a["title"]) != 80:
+        failures.append(f"ссылка-задание: неизвестные id/повторы не отброшены или порядок не тот ({a})")
+    if assign_parse({"jobs": "nojob,,", "seat": "zz"}) is not None or assign_parse(parse_link("?jobs=")) is not None:
+        failures.append("ссылка-задание без известных id должна игнорироваться")
+    if a and (assign_parse(parse_link(share_link(assign_params(a)))) != a
+              or assign_parse(dict(assign_params(a), title="другое"))["id"] == a["id"]):
+        failures.append("ссылка-задание: id не сохраняется по ссылке или не меняется от параметров")
+    ga = Game(headless=True)
+    ga.done = {"brake"}
+    ga.apply_link("?jobs=flat,caster&seat=seat_elf&from=T")
+    if not ga.assign_on() or ga.available_jobs() != ["flat", "caster"] or not ga.tutorial_ok() \
+            or [SEAT_CASES[i]["id"] for i in ga._seat_idx()] != ["seat_elf"]:
+        failures.append("режим задания: очередь/примерки не из ссылки или обучение мешает")
+    for jid in ("flat", "caster"):
+        ga.start_job(jid)
+        ga.mistakes = 1
+        ga.finish_test()
+        ga.scene = ga._result_next()
+    if ga.done != {"brake"} or ga.garage or set(ga.assign["done"]) != {"flat", "caster"}:
+        failures.append("режим задания: обычный прогресс изменился или задание не записалось")
+    ga.scene = "hub"
+    ga.draw(scr)
+    ga.open_seating()
+    if ga.seatc["case"] != [c["id"] for c in SEAT_CASES].index("seat_elf"):
+        failures.append("режим задания: Кабинет посадки открылся не на назначенной примерке")
+    ga.assign_record("seat_elf", 2, 61)
+    ga._assign_maybe_summary()
+    if not ga.share_ui or ga.share_ui["mode"] != "summary" or ga.seat_done:
+        failures.append("режим задания: после всех пунктов нет итога (или тронут обычный seat_done)")
+    ga.draw(scr)
+    res = ga.assign_result()
+    if result_summary(res["rows"]).replace(" ", "") not in ("3/3,ошибок4", "3/3,mistakes4"):
+        failures.append(f"итог задания: неверная строка «{result_summary(res['rows'])}»")
+    rcode = result_code(ga.assign)
+    got = share_decode(rcode)
+    if not got or got[0] != "R" or result_unpack(got[1]) != res:
+        failures.append("код результата: туда-обратно не сошлось")
+    kr, br_, _cr = rcode.split(".")
+    forged = f"R.{br_}.{format(zlib.crc32(('R.' + br_).encode('ascii')) & 0xFFFFFF, '06x')}"
+    if share_decode(forged) is not None:
+        failures.append("код результата: принят без «соли» RESULT_SALT")
+    raw = json.loads(zlib.decompress(base64.urlsafe_b64decode(br_ + "=" * (-len(br_) % 4))))
+    raw["r"][0][1] = 0                                     # «исправили» ошибки руками и пересобрали тело
+    body2 = _b64u(zlib.compress(json.dumps(raw).encode("utf-8")))
+    if share_decode(f"R.{body2}.{_cr}") is not None:
+        failures.append("код результата: правка тела руками не замечена")
+    pl = ga._result_payload()
+    if pl["type"] != "result" or pl["key"] != FEEDBACK_KEY or pl["assignment"] != ga.assign["id"] or not pl["comment"]:
+        failures.append("итог в таблицу: не те поля")
+    gv = Game(headless=True)
+    gv.apply_code(rcode)
+    if not gv.share_ui or gv.share_ui["mode"] != "result" or gv.assign:
+        failures.append("«Вставить код»: код результата должен показать карточку (только чтение)")
+    gv.draw(scr)
+    ga.share_ui = None
+    ga.exit_assignment()
+    if ga.assign_on() or ga.available_jobs() != ["flat"] or ga.done != {"brake"}:     # обычная игра: обучение на месте
+        failures.append("«Выйти из задания»: не вернулась обычная игра")
+    ga.apply_link("?jobs=flat,caster&seat=seat_elf&from=T")
+    if not ga.assign_on() or set(ga.assign["done"]) != {"flat", "caster", "seat_elf"}:
+        failures.append("та же ссылка после выхода должна продолжить задание с места")
+    ga.apply_link("?jobs=spokes")
+    if ga.assign["done"] or ga.available_jobs() != ["spokes"]:
+        failures.append("ссылка с другим id должна начать новое задание")
+    gb = Game(headless=True)
+    gb.open_share("builder")
+    for k in ("brake", "seat_owl", "flat"):
+        gb._share_action(("pick", k))
+    gb.share_ui["name"] = "Учитель"
+    ab = gb._builder_assign()
+    gb._share_action("make")
+    got = share_decode(gb.share_ui.get("text", "")) if gb.share_ui else None
+    if not ab or ab["jobs"] != ["brake", "flat"] or ab["seat"] != ["seat_owl"] or not got or got[0] != "J":
+        failures.append("конструктор ссылки: не тот порядок или нет кода задания")
+    gb.draw(scr)
     gm.show_sound = True                                       # ⚑ при открытых настройках не открывает окно под ними
     gm.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gm._feedback_rect().center))
     if gm.dispute_ui is not None:
@@ -16543,7 +17865,7 @@ def run_selftest():
     print(f"SELFTEST OK — {len(JOBS)} заданий ({n_var} вариантов поломок) + "
           f"{len(TECH_JOBS)} про-заданий + экзамен Гильдии.")
     print("Проверены: целостность данных, обязательный осмотр, диагностика, шаги ремонта, "
-          "мини-интеракции, свободный порядок, спеки, safety-провалы, экзамен, кабинет посадки.")
+          "мини-интеракции, свободный порядок, спеки, safety-провалы, экзамен, кабинет посадки, ссылки и коды.")
 
 
 def print_assets():
@@ -16625,6 +17947,7 @@ async def main():
         web_restore()
         web_setup_page()
         web_setup_touch()
+        web_setup_share()
         DISPLAY["web_px"] = web_measure()             # «авто»: холст сразу под окно игры на странице
         try:
             with open(SETTINGS_PATH, encoding="utf-8-sig") as f:
@@ -16712,6 +18035,7 @@ async def main():
         game.done.update(j["id"] for j in JOBS)
         game.no_save = True
         print("[wnb] --unlock: прогресс не сохраняется", flush=True)
+    game.apply_link(web_link_query())     # ?jobs=…/?load=… (браузер) или --link "<адрес>" (десктоп); без них — ничего
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0
