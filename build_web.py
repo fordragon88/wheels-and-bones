@@ -145,6 +145,19 @@ SPLASH_HTML = ('<div id="wnb-splash"><div class="t">Wheels &amp; Bones</div>'
                'if(txt)msg.textContent=txt;setTimeout(tick,250);}tick();})();</script>')
 
 
+# Анонимный счётчик посещений GoatCounter (решение владельца 29.10, «после заморозки»): без cookies и личных данных,
+# баннер согласия не нужен. Код сайта (адрес https://<код>.goatcounter.com) заводит владелец; пусто — счётчика нет.
+GOATCOUNTER_CODE = ""
+
+
+def goatcounter_tag(code=None):
+    code = GOATCOUNTER_CODE if code is None else code
+    if not code:
+        return ""
+    return (f'<script id="wnb-goatcounter" data-goatcounter="https://{code}.goatcounter.com/count" '
+            'async src="//gc.zgo.at/count.js"></script>')
+
+
 def polish_index(web):
     """Заставка загрузки (владелец 25.10): pygbag прячет свой #transfer почти сразу и 20–40 с показывает серую страницу с
     «Loading, please wait». Свой оверлей #wnb-splash: фон splash.jpg (art_tests/web_splash.jpg), заголовок, подпись,
@@ -153,10 +166,11 @@ def polish_index(web):
     shutil.copy2(os.path.join(ROOT, "art_tests", "web_splash.jpg"), os.path.join(web, "splash.jpg"))
     index = os.path.join(web, "index.html")
     html = open(index, encoding="utf-8").read()
-    if "wnb-splash-css" in html:
-        return
-    html = html.replace("</head>", SPLASH_CSS + "</head>", 1)
-    html = html.replace("<body>", "<body>" + SPLASH_HTML, 1)
+    if "wnb-splash-css" not in html:
+        html = html.replace("</head>", SPLASH_CSS + "</head>", 1)
+        html = html.replace("<body>", "<body>" + SPLASH_HTML, 1)
+    if goatcounter_tag() and "wnb-goatcounter" not in html:
+        html = html.replace("</head>", goatcounter_tag() + "</head>", 1)
     open(index, "w", encoding="utf-8").write(html)
 
 

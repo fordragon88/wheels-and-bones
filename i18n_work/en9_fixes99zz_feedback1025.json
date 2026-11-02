@@ -24,5 +24,7 @@
  "Режим одной кнопки выключен.": "Switch mode is off.",
  "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши. Одна кнопка: пункты выделяются сами, нажми — выбрать, держи — назад; выключить — F3 или держать 4 с.": "The whole game can be played from the keyboard: arrows, Tab, Enter. F1 lists all keys. Switch mode: items are highlighted one by one, press — select, hold — back; turn off with F3 or by holding for 4 s.",
  "Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши.": "The whole game can be played from the keyboard: arrows, Tab, Enter. F1 lists all keys.",
- "Звук выключен": "Sound is off"
+ "Звук выключен": "Sound is off",
+ "Вставь монтажку между ободом и покрышкой, выведи борт через край обода и зацепи монтажку за спицу.": "Slide a tire lever between the rim and the tire, lever the bead over the rim, and hook the lever onto a spoke.",
+ "Обучение: нужный инструмент обведён зелёным — возьми его, потом кликни деталь в зелёном кружке.": "Tutorial: the tool you need has a green frame. Pick it up, then click the part in the green circle."
 }

@@ -1424,6 +1424,10 @@ def draw_leg_gag(surf, kind, t, rect):
 LEG_GAG_KIND = ["drop", "peek", "roll", "hop"]        # сценка к каждой шутке LEG_GAGS
 
 ROT_TOOLS = {"allen", "socket", "wrench", "spoke_key", "screw"}
+# верный ход: доли анимации на замах, удар и паузу при касании (вместе — TOOL_PRE), остальное — работа инструмента
+TOOL_WINDUP, TOOL_STRIKE, TOOL_HOLD = 0.13, 0.05, 0.07
+TOOL_PRE = TOOL_WINDUP + TOOL_STRIKE + TOOL_HOLD
+TOOL_OK_SECS = 1.25                                    # было 0.95 — работа после замаха идёт столько же, сколько раньше
 READ_TOOLS = {"gauge", "multimeter", "tensiometer", "dial", "tape"}
 
 
@@ -1491,7 +1495,29 @@ def draw_tool_action(surf, tid, pos, u, ok=True, zap=False):
         ic.set_alpha(int(255 * (1 - u)))
         surf.blit(ic, ic.get_rect(center=(x + 30, y - 30 - 20 * u)))
         return
-    appear_k = ease_back(u / 0.15)
+    if u < TOOL_PRE:                         # замах → удар → миг паузы на детали, потом работа (идея из pixelfx)
+        soft = tid in READ_TOOLS or tid in ("hands", "pencil")    # приборы и руки: подносят, а не бьют
+        amp = 0.45 if soft else 1.0
+        w_, s_ = TOOL_WINDUP / TOOL_PRE, (TOOL_WINDUP + TOOL_STRIKE) / TOOL_PRE
+        k = u / TOOL_PRE
+        if k < w_:                           # замах: отводит назад-вверх, чуть поворачивается
+            b = ease_out(k / w_)
+            off, rot, sc = b, 22 * b, 0.6 + 0.5 * ease_back(k / w_)
+        elif k < s_:                         # удар: быстро к детали
+            b = (k - w_) / (s_ - w_)
+            off, rot, sc = 1 - b * b, 22 * (1 - b * b) - 10 * b, 1.1
+        else:                                # пауза в момент касания: сжался, вспышка
+            b = (k - s_) / (1 - s_)
+            off, rot, sc = 0.0, -10 * (1 - b), 1.0 - 0.1 * (1 - b)
+            if not soft:
+                aa_circle(surf, (255, 240, 200), (int(x), int(y)), int(8 + 14 * b), 2)
+                if DISPLAY.get("glow", True):
+                    add_glow(surf, (x, y), 26, (255, 220, 150), 0.7 * (1 - b))
+        ic = TF.rotozoom(tool_icon(tid, 46), rot * amp, max(0.01, sc))
+        surf.blit(ic, ic.get_rect(center=(int(x + 30 * off * amp), int(y - 4 - 34 * off * amp))))
+        return
+    u = (u - TOOL_PRE) / (1 - TOOL_PRE)      # дальше — прежняя анимация работы, инструмент уже на месте
+    appear_k = 1.0
     ang, dx, dy, sc = 0.0, 0.0, 0.0, appear_k
     if tid in ROT_TOOLS:                     # крутим: ключ ходит дугой, вокруг стрелка
         ang = 80 * math.sin(u * math.pi * 3)
@@ -4435,7 +4461,8 @@ JOBS = [
             S("Полностью спусти остатки воздуха через ниппель.", "hands", "valve",
               "Со спущенной камерой покрышку снять легко.",
               "Барти: «Мастер всегда сначала выпускал дух из колеса. Торжественно.»"),
-            S("Поддень борт покрышки монтажкой над спицей, зацепи крючок за спицу.", "lever", "tire",
+            S("Вставь монтажку между ободом и покрышкой, выведи борт через край обода и зацепи монтажку за спицу.",
+              "lever", "tire",                       # отзыв 108: прежняя формулировка была непонятной
               "Монтажки пластиковые — держи у конца, легко ломаются.",
               "Барти: «Двумя ложками для обуви он это делал! ...или нет.»", ghost_wrong=True,
               wrongmsg="Борт покрышки поддевают монтажкой — между ободом и покрышкой.", alt=("rim",)),
@@ -8778,6 +8805,15 @@ class Game:
             return pygame.Rect(WIDTH - 390, 9, 210, 36)
         return None
 
+    def _tutor_step(self):
+        """Обучение (первый ремонт Мартина, пока «flat» не пройден): текущий шаг, чей инструмент и деталь
+        подсвечиваются (просьба владельца, 02.11). None — подсветки нет."""
+        if (self.scene != "job" or not self.cur or self.cur.get("id") != "flat" or "flat" in self.done
+                or self.phase != "repair" or self.mini_pending or self.v3d is not None):
+            return None
+        steps = self.cur["steps"]
+        return steps[self.step_idx] if self.step_idx < len(steps) else None
+
     def skip_tutorial(self):
         self.tutorial_skipped = True
         self.v3d = None
@@ -9069,13 +9105,13 @@ class Game:
         if not a or calm():
             self.act = None
             return
-        dur = 0.95 if a["ok"] else (0.75 if a.get("zap") else 0.6)
+        dur = TOOL_OK_SECS if a["ok"] else (0.75 if a.get("zap") else 0.6)
         u = (self.t - a["t0"]) / dur
         if u >= 1:
             self.act = None
             return
-        if a["ok"]:                                # звук работы инструмента по ходу анимации
-            n = int(u * 6)
+        if a["ok"] and u >= TOOL_PRE:              # звук работы инструмента — после замаха, по ходу работы
+            n = int((u - TOOL_PRE) / (1 - TOOL_PRE) * 6)
             if n > a["ticks"]:
                 a["ticks"] = n
                 if a["tool"] in ROT_TOOLS:
@@ -14196,6 +14232,11 @@ class Game:
                           bold=True, center=True)
             if (mouse[0] - x) ** 2 + (mouse[1] - y) ** 2 <= r * r:
                 hover = (pid, x, y, r)
+        want = self._tutor_want()
+        if want and want[0] == "part":                # обучение: нужная деталь в зелёном кружке
+            for pid, x, y, r in self._chair_hotspots():
+                if pid == self._tutor_step()["part"]:
+                    self._draw_tutor_ring(surf, center=(x, y), radius=r)
         if hover:
             pid, x, y, r = hover
             aa_circle(surf, WHITE, (x, y), r + 3, 2)
@@ -14363,11 +14404,14 @@ class Game:
 
     def _draw_parts(self, surf, mouse, header):
         draw_text(surf, header, (980, 70), 16, AMBER, bold=True)
+        want = self._tutor_want()
+        tut_pid = self._tutor_step()["part"] if want and want[0] == "part" else None
         for i, (pid, rect) in enumerate(self._part_rects()):
             hov = rect.collidepoint(mouse)
             rect = rect.move(int(160 * (1 - appear(self.st, 0.05 * i, 0.35))), 0)
             aa_rect(surf, PANEL2 if hov else PANEL, rect, border_radius=6)
-            aa_rect(surf, AMBER if hov else DIM, rect, 2, border_radius=6)
+            aa_rect(surf, GOOD if pid == tut_pid else (AMBER if hov else DIM), rect, 3 if pid == tut_pid else 2,
+                    border_radius=6)
             nc = (rect.x + 17, rect.centery)                         # номер детали — как в кружке на коляске
             aa_circle(surf, (14, 12, 20), nc, 11)
             aa_circle(surf, GOOD if (self.phase == "diagnose" and pid in self.inspected) else AMBER, nc, 11, 2)
@@ -14433,9 +14477,35 @@ class Game:
             note = self._part_note(pid)
             self.say(tr(self._note_head(note)) + ". " + tr(note[2]), False)
 
+    def _tutor_want(self):
+        """Обучение: что подсветить сейчас — ("tool", {инструменты}) пока нужный не в руке, потом ("part", {детали})."""
+        step = self._tutor_step()
+        if not step:
+            return None
+        tools = {step["tool"], *step.get("alt_tools", ())}
+        if self.sel_tool not in tools:
+            return "tool", tools
+        return "part", {step["part"], *step.get("alt", ())}
+
+    def _draw_tutor_ring(self, surf, rect=None, center=None, radius=0):
+        """Зелёная пульсирующая рамка «вот это» (обучение); без анимации — неподвижная."""
+        k = 0.5 + 0.5 * wsin(self.t * 4.5)
+        grow = int(3 + 5 * k)
+        if rect is not None:
+            r = rect.inflate(grow * 2, grow * 2)
+            if DISPLAY["glow"] and not calm():
+                add_glow(surf, rect.center, rect.w // 2 + 18, (60, 170, 90), 0.35 + 0.35 * k)
+            aa_rect(surf, (14, 12, 20), r.inflate(4, 4), 5, border_radius=16)     # тёмная подложка: видно на любом фоне
+            aa_rect(surf, GOOD, r, 3, border_radius=14)
+        else:
+            rr = radius + grow + 2
+            aa_circle(surf, (14, 12, 20), center, rr + 2, 5)
+            aa_circle(surf, GOOD, center, rr, 3)
+
     def _draw_tools(self, surf, mouse):
         """Минималистичная панель: иконки без текста, описание — в карточке справа."""
         tech = self.cur and self.cur.get("track") == "tech"
+        want = self._tutor_want()
         if self.mistakes != getattr(self, "_miss_seen", self.mistakes):
             self._miss_t = self.t                    # ошибка — выбранный инструмент вздрогнет
         self._miss_seen = self.mistakes
@@ -14468,6 +14538,8 @@ class Game:
             ic = tool_icon(tid, 38)
             ic = TF.rotozoom(ic, ang, enter * (1 + 0.16 * h))
             surf.blit(ic, ic.get_rect(center=r.center))
+            if want and want[0] == "tool" and tid == self._tutor_step()["tool"] and enter >= 1:
+                self._draw_tutor_ring(surf, rect=r)
         # карточка: что за инструмент (наведённый важнее выбранного)
         info = self._tool_info_rect()
         card = Surf(info.size, pygame.SRCALPHA)
@@ -14487,6 +14559,9 @@ class Game:
                       AMBER if in_hand else WHITE, bold=True)
             draw_wrapped(surf, TOOLS[tid][1], (info.x + isz + 22, info.y + (27 if low else 36)),
                          info.w - isz - 34, 13 if low else 15, GREY)
+        elif want:                                    # обучение: куда смотреть
+            draw_wrapped(surf, "Обучение: нужный инструмент обведён зелёным — возьми его, потом кликни деталь в "
+                         "зелёном кружке.", (info.x + 16, info.y + 12), info.w - 32, 15, GOOD)
         else:
             hint = ("Выбери инструмент, потом кликни шаг" if tech else
                     "Выбери инструмент, потом кликни деталь на коляске или в списке")
@@ -16351,6 +16426,16 @@ def run_selftest():
     gk.start_job("flat")
     if gk._skip_tut_rect() is None:
         failures.append("нет кнопки «Пропустить обучение» в первом задании")
+    gk.phase, gk.step_idx, gk.sel_tool = "repair", 1, None          # обучение: подсветка инструмента, потом детали
+    st1 = gk.cur["steps"][1]
+    if gk._tutor_want() != ("tool", {st1["tool"], *st1.get("alt_tools", ())}):
+        failures.append(f"обучение: не подсвечен инструмент шага ({gk._tutor_want()})")
+    gk.sel_tool = st1["tool"]
+    if not gk._tutor_want() or gk._tutor_want()[0] != "part" or st1["part"] not in gk._tutor_want()[1]:
+        failures.append(f"обучение: с инструментом в руке не подсвечена деталь ({gk._tutor_want()})")
+    gk.done.add("flat")
+    if gk._tutor_want() is not None:
+        failures.append("обучение: подсветка осталась после первого ремонта")
     gm.show_sound = True                                       # ⚑ при открытых настройках не открывает окно под ними
     gm.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gm._feedback_rect().center))
     if gm.dispute_ui is not None:

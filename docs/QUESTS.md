@@ -32,7 +32,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Hands and eyes → *Part:* Valve  
    *Hint:* Barty: “The master always let the spirit out of the wheel first. Solemnly.”  
    *After the step:* With the tube deflated, the tire comes off easily.
-2. Pry the tire bead up with a tire lever over a spoke, hook it onto the spoke.  
+2. Slide a tire lever between the rim and the tire, lever the bead over the rim, and hook the lever onto a spoke.  
    *Tool:* Tire lever → *Part:* Tire (also accepted: Rim)  
    *Hint:* Barty: “He did it with two shoehorns! ...or not.”  
    *After the step:* Tire levers are plastic — hold them at the end; they break easily.  
