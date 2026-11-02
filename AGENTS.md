@@ -16,7 +16,7 @@
 ## 1. Что это за игра
 
 Обучающий **симулятор ремонта инвалидных колясок** в уютном фэнтези-мире. Python + pygame, один основной файл
-`game.py` (~16,5 тыс. строк), управление мышью и клавиатурой, русский язык + английский перевод.
+`game.py` (~18 тыс. строк), управление мышью и клавиатурой, русский язык + английский перевод.
 
 - **Сюжет.** Мартин — добродушный зомби, вечно теряющий левую ногу. Взял коляску напрокат, она сломалась.
   Ему помогает призрак **Бартоломью (Барти)** — «видел, как делали мастера», подсказывает то дельно, то мимо
@@ -80,7 +80,7 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 | `art_tests/new_jobs_*.py`, `new_job_lift.py` | черновики заданий с `source:`-страницами |
 | `i18n_work/` | перевод: `GUIDE.md` (глоссарий, имена), `en*.json`, `chunk*.json`, `build_lang.py`, `extract_new.py` |
 | `README.md`, `PROMPTS.md` | описание для людей, промпты/таблица арта (`CHATGPT_PROMPTS.md` устарел) |
-| `docs/` | `QUESTS.md`/`QUESTS_ru.md` (генерирует `export_quests.py`), `FEEDBACK_STATUS.md`, `FEEDBACK_SETUP.md`, `feedback/` |
+| `docs/` | `QUESTS.md`/`QUESTS_ru.md` (генерирует `export_quests.py`), `FEEDBACK_STATUS.md`, `FEEDBACK_SETUP.md`, `feedback/`, `SHARE_LINKS.md` (ссылки и коды) |
 | `build_web.py`, `web_build/`, `web_deploy/` | сборка pygbag и выкладка на GitHub Pages (§10а п. 5); `web_smoke.py` проверяет |
 | `build_exe.bat`, `exe_assets.py`, `WheelsAndBones.spec` | один exe (PyInstaller); `exe_assets.py` — копия assets без полных моделей и тел |
 | `assets/turntable/` | кадры поворота колясок `chair_<k>_NN.jpg` + `.a.png`, `index.json`/`index_folk.json` (центры деталей) |
@@ -249,6 +249,29 @@ Windswept, 2017) и таблица Lange & Presperin Pedersen «Positioning Char
   примерку и настройки одними клавишами (в en — ловит кириллицу в озвучке). Короткая версия — в селфтесте.
 - Esc — назад (двойной Esc в задании — выйти), **F11 / Alt+Enter** — полный экран, M — звук, RU/EN — справа вверху.
 
+### 6в. Ссылки и коды: перенос прогресса, задания для учеников (подробно — `docs/SHARE_LINKS.md`)
+- **Главное правило:** без параметров в адресе и без кнопок «Настройки → ИГРА» игрок идёт прежним путём; формат
+  `save.json` прежний, ключ `"assign"` пишется только после ссылки-задания (`Game._progress_dict`).
+- **Коды** `вид.тело.crc`: `P` прогресс, `J` задание, `R` результат; тело — base64url(zlib(JSON)), crc — 6 hex от crc32,
+  у `R` — с солью `RESULT_SALT` (защита от правки руками, не шифр). Чистые функции — блок «Ссылки и коды» после
+  `feedback_flush_outbox`: `share_encode/share_decode`, `progress_pack/unpack`, `assign_parse`, `result_pack/unpack`,
+  `result_text`, `share_link/parse_link`; буфер обмена `clipboard_put/get` (десктоп: SDL через ctypes / `scrap.put_text`
+  у pygame-ce / tkinter; при `SDL_VIDEODRIVER=dummy` — только память `CLIP`, буфер владельца тесты не трогают; браузер —
+  `wnbCopy` из `web_setup_share`, ответ — `window.wnbCopied`).
+- **Ссылки:** `SHARE_BASE_URL` (страница сайта; `wordpress_embed.html` пробрасывает `load/jobs/seat/from/title` в src
+  iframe) или прямо github.io. `?load=код` — вопрос «загрузить прогресс?» (копия прежнего — `save.bak.json` /
+  `wnb:save.bak.json`, «ВЕРНУТЬ ПРЕЖНИЙ ПРОГРЕСС» в настройках); `?jobs=…&seat=…&from=…&title=…` — режим задания сразу.
+  Читает `web_link_query()` в `main()` → `Game.apply_link`; на десктопе для проверки — `python game.py --link "?jobs=flat"`.
+- **Режим задания** (`Game.assign_on()`): `available_jobs` = назначенные поломки, `_seat_idx` = назначенные примерки,
+  `tutorial_ok` = True, в мастерской плашка и кнопки «ИТОГ ЗАДАНИЯ»/«ВЫЙТИ ИЗ ЗАДАНИЯ» вместо Гильдии/гаража/вечеринки.
+  `finish_test` и примерка пишут в `assign_record` (первая попытка: ошибки, секунды), обычный прогресс не трогают.
+  Новые места, где меняется `done/garage/seat_done`, должны проверять `assign_on()`.
+- **Окно `share_ui`** (модальное, рисуется поверх настроек): режимы `show/paste/confirm/result/summary/builder`; кнопки —
+  `_share_btn_rects`, отметки конструктора — `_share_pick_rects`, поле — `_share_field_rect` (в браузере — настоящее поле
+  страницы `wnbField`, вставка Ctrl+V и экранная клавиатура). Буквы в поле — текст (`a11y_key`: `typing`).
+- «Отправить в таблицу» — тот же `feedback_send`, поля как у замечания + `type="result"`; Apps Script не менялся
+  (фрагмент для отдельного листа «Results» — в `docs/SHARE_LINKS.md`, вставляет владелец).
+
 ## 7. Рендер в разрешении экрана (читай перед правками графики!)
 Вся раскладка в **логических** координатах 1280×720, пиксели — ×`RS` (выбранное разрешение / 720; в режиме АВТО — высота области игры / 720, не больше 2).
 - Создавай поверхности через **`Surf(size, flags)`**, а не `pygame.Surface`. Рисуй через **`DR.*`** (обёртка `pygame.draw`),
@@ -384,7 +407,7 @@ python i18n_work/build_lang.py       # перевод полон
 | `python art_tests/rs_smoke.py 2` | `RS 2.0 — все сцены отрисованы без ошибок` |
 | `python i18n_work/build_lang.py`; `python i18n_work/extract_new.py` | `строк с кириллицей на экране: 0`; `3 строк -> …_new_strings.json` (3 — консольные `[wnb] …`, их не переводим) |
 | `python art_tests/monkey_test.py` (долго) | `уникальных падений: 0` |
-| `WNB_URL=https://fordragon88.github.io/wheels-and-bones-web/ python art_tests/web_smoke.py --no-build` | `WEB SMOKE: 20 ok, 0 FAIL` (выложенный сайт; без `WNB_URL` — локальная сборка) |
+| `WNB_URL=https://fordragon88.github.io/wheels-and-bones-web/ python art_tests/web_smoke.py --no-build` | `WEB SMOKE: 26 ok, 0 FAIL` (с 03.11 — со сценарием `links`: `?jobs=flat,caster`, «Скопировать код», `?load=`; на сайте до выкладки ссылок `links` не пройдёт; без `WNB_URL` — локальная сборка на :8000) |
 
 **2. Глазами** (снимки ботов + свои): `art_tests/layout_shots.py <job…>` — диагноз/ремонт без наложений;
 `audit_shots/` — мастерская, задание, проезд и «ГОТОВО», итог, гараж, Гильдия, экзамен, финал; Кабинет посадки — все
@@ -474,6 +497,12 @@ python i18n_work/build_lang.py       # перевод полон
   переходит в режим `mute` — голос Windows (SAPI) не говорит, журнал `SPEECH.log` ведётся (keyboard_playthrough читает его).
   Без этого владелец слышал в наушниках и музыку, и озвучку тестов (24.10). Новый тест — начинай с этих двух env.
 
+- **web_smoke и занятый :8000.** Если на :8000 уже висит старый `pygbag` (другой checkout/сессия), новый сервер
+  тоже «слушает», но запросы уходят к старому — проверка идёт по чужой сборке (03.11 так «провалился» `links`: в
+  `wnbState` не было новых ключей). Теперь web_smoke предупреждает, а сервер гасит вместе с дочерним pygbag
+  (`taskkill /T`). Обход: свой порт — `python -m pygbag --port 8011 … web_build/wheels_and_bones` и
+  `WNB_URL=http://localhost:8011/ … --no-build`.
+
 - **Порядок файлов словаря** — `build_lang.py` сливает `i18n_work/en*.json` по алфавиту: `en9_fixes10…14` сортируются РАНЬШЕ
   `en9_fixes2…9`, так что «более поздний» файл с номером ≥10 не перекроет ранний. Коллизий сейчас нет (аудит 24.10), но новые
   файлы правок называй так, чтобы они сортировались последними (`en9_fixes99…`, редактор — `en9_fixes99z_editor.json`).
@@ -528,6 +557,25 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-11-03 — Claude (Opus 5.5), ветка `feature/share-links` (не слита, не выложена) — **ссылки и коды** (§6в,
+  `docs/SHARE_LINKS.md`). Код прогресса (`P.тело.crc`, base64url сжатого JSON + crc32) — «Настройки → ИГРА»: «Скопировать
+  код», «Вставить код» (поле; десктоп — Ctrl+V через SDL/pygame-ce, браузер — поле страницы), «Ссылка с прогрессом»
+  (веб, `?load=`), «Вернуть прежний прогресс» (копия `save.bak.json` / `wnb:save.bak.json` перед любой заменой). Ссылка-
+  задание `?jobs=…&seat=…&from=…&title=…`: в мастерской плашка «Задание от …: 0/3», только назначенные поломки/примерки,
+  без обучения/замков/Гильдии/вечеринки; прогресс — `save.json["assign"]` (обычный не меняется), та же ссылка продолжает,
+  другая начинает новое; «Выйти из задания»; итог (✔, ошибки, время, «3/3, ошибок 2») — код результата `R` с солью
+  `RESULT_SALT`, текст для мессенджера, «Отправить в таблицу» (тот же `feedback_send`, поля замечания + `type="result"`;
+  Apps Script НЕ менялся, фрагмент для листа «Results» — в docs). Конструктор ссылки (21 поломка + 9 примерок, порядок —
+  порядок отметок, «От кого»); на десктопе вместо ссылки — код задания `J`. «Вставить код» принимает P/J/R и ссылки.
+  `wordpress_embed.html`: скрипт пробрасывает параметры страницы сайта в src iframe, `allow="clipboard-write"`, FAQ —
+  **владельцу перевставить блок на сайте**. Перевод — `i18n_work/en9_fixes99zzz_share.json`; `build_lang.py` рисует и
+  экраны ссылок. `--selftest`: коды туда-обратно, битая сумма/тело/версия, разбор параметров, режим задания, соль
+  результата, конструктор. `web_smoke.py`: сценарий `links`, сервер гасится с дочерним pygbag. Проверки 03.11:
+  SELFTEST OK ×3 (python, WNB_TT=0, py), АССЕТЫ OK, ui/keyboard ru+en (кириллица 0)/switch/pad ПРОЙДЕНО, RS 2.0 OK,
+  build_lang «кириллицей на экране: 0», extract_new 3 строки, monkey «уникальных падений: 0», web_smoke (локальная
+  сборка на :8011) 26 ok, 0 FAIL. (game.py, AGENTS.md, docs/SHARE_LINKS.md, wordpress_embed.html, art_tests/web_smoke.py,
+  i18n_work/build_lang.py, i18n_work/en9_fixes99zzz_share.json, assets/lang_en.json)
 
 - 2026-11-03 — Claude (Fable 5.1) — **аудит 6 после анимаций героев** (просьба владельца). Чек-лист §10а на 2e2c74a + агент
   по коду петель + снимки титула/мастерской/пузыря/финала: падений нет, заглушек нет, сайт (Pages, `?v=e83ce0b4ab`,

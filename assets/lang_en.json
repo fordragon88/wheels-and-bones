@@ -3110,6 +3110,7 @@
  "Перепиши код (заглавные и строчные буквы различаются):": "Write the code down (capital and small letters are different):",
  "Скопировано в буфер обмена ✔": "Copied to the clipboard ✔",
  "Копирую…": "Copying…",
+ "Не удалось скопировать — перепиши итог с экрана.": "Could not copy — write the results down from the screen.",
  "Не удалось скопировать — выдели строку выше и нажми Ctrl+C.": "Could not copy — select the line above and press Ctrl+C.",
  "Буфер обмена недоступен — перепиши или сфотографируй код.": "Clipboard unavailable — write the code down or take a photo of it.",
  "ВСТАВИТЬ КОД": "PASTE CODE",
