@@ -16,6 +16,8 @@ from scipy.spatial import cKDTree
 import fast_simplification
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from attach_glb import ROHO_XDT, attach_matrix, edit_numpy, glb_path, in_box   # пристёгнутые GLB (подушка ROHO)
 
 INF = 1e9
 SPECS = {
@@ -277,16 +279,15 @@ SPECS = {
                ("backrest", (-440, -240), (500, 915), (0, 255)),
                ("seat", (-215, 160), (430, 500), (0, 235))]),
     # Тролль Бомм — та же модель Invacare 9000, крупнее (height=985, ×1.07 — 9000 XDT шире и выше); подушка ROHO —
-    # верх сиденья, её ниппель — передний угол сиденья, «seat» — спинка
-    "inv9000xdt": dict(art="chair_troll", spokes=0, wheels=[
+    # отдельная модель владельца (art_tests/cushion_ref/cushion_model.glb), пристёгнута на сиденье (attach, как в кадрах
+    # blender_frames): «cushion» — подушка, «valve» — её ниппель у правого переднего угла; «seat» — спинка
+    "inv9000xdt": dict(art="chair_troll", spokes=0, attach=[dict(ROHO_XDT, faces=3000)], wheels=[
         dict(c=(-270, 327), R=321, z=(284, 353), kind="spoked"),       # «ниппель» Бомма — у подушки, не у колеса
         dict(c=(147, 105), R=91, z=(225, 300), kind="caster")],
         boxes=[("caster_stem", (118, 219), (182, 348), (219, 300)),
                ("brake", (11, 123), (412, 519), (214, 310)),
                ("footrest", (396, 600), (59, 161), (0, INF)),
                ("armrest", (-332, 0), (685, 771), (161, 310)),
-               ("valve", (118, 173), (460, 541), (161, 252)),
-               ("cushion", (-230, 173), (460, 541), (0, 252)),
                ("seat", (-471, -257), (535, 980), (0, 273))]),
     # Фея Тилли — Progeo Exelle Junior, Meshy (meshy_models/progeo_exelle_junior.glb), height=760: детская активная, рама
     # в кадрах перекрашена салатовый -> розовый; болты — пластина оси на раме внутри колеса, камера — низ шины
@@ -607,6 +608,37 @@ def add_antitips(V, F, C, lab, names, ats):
     return V, F, C, lab, names
 
 
+def add_attach(V, F, C, lab, names, a):
+    """Пристёгнутая модель GLB (подушка ROHO на XDT): те же правки и перенос, что в кадрах (attach_glb.py), облегчение
+    до a["faces"] граней; деталь a["part"], грани с центром в коробках a["parts"] (оси glTF) — свои детали."""
+    from tripo_convert import read_glb
+    V0, F0, C0 = read_glb(glb_path(a))
+    V0, F0, C0 = edit_numpy(V0, F0, C0, a.get("edit"))
+    _, first, inv = np.unique(np.round(V0, 5), axis=0, return_index=True, return_inverse=True)   # сварить швы UV,
+    V0, C0, F0 = V0[first], C0[first], inv.ravel()[F0]                                             # иначе не облегчить
+    F0 = F0[(F0[:, 0] != F0[:, 1]) & (F0[:, 1] != F0[:, 2]) & (F0[:, 0] != F0[:, 2])]
+    P0 = V0[F0].mean(1)
+    Vs, Fs = fast_simplification.simplify(V0.astype(np.float32), F0.astype(np.int32),
+                                          target_reduction=1 - a.get("faces", 3000) / len(F0))
+    Vs, Fs = Vs.astype(float), Fs.astype(np.int64)
+    _, fi = cKDTree(P0).query(Vs[Fs].mean(1))           # деталь — по ближайшей грани исходника
+    _, vi = cKDTree(V0).query(Vs, k=8)
+    Cs = C0[vi].mean(1)
+    Ls = np.full(len(Fs), -1)
+    for part, box in a.get("parts", ()):
+        if part not in names:
+            names.append(part)
+        Ls[(Ls < 0) & in_box(P0[fi], box)] = names.index(part)
+    if a.get("part", "frame") not in names:
+        names.append(a.get("part", "frame"))
+    Ls[Ls < 0] = names.index(a.get("part", "frame"))
+    M = attach_matrix(a)
+    Vg = Vs @ M[:3, :3].T + M[:3, 3]
+    print(f"  пристёгнуто: {os.path.basename(a['glb'])} {len(Fs)} граней, габарит",
+          np.round(Vg.min(0)).tolist(), np.round(Vg.max(0)).tolist())
+    return (np.vstack([V, Vg]), np.vstack([F, Fs + len(V)]), np.vstack([C, Cs]), np.r_[lab, Ls], names)
+
+
 def add_hubs(V, F, C, lab, names, wheels):
     """Ступица с мотором и батареей (как у e-motion): толстый диск на каждом заднем колесе."""
     for cx, cy, R, w in wheels:
@@ -703,6 +735,8 @@ if __name__ == "__main__":
         for fi in np.nonzero(m)[0]:
             k = lum[fi] / 170.0
             C[F[fi]] = np.clip(tgt * k, 0, 255)
+    for a in spec.get("attach") or []:                    # отдельная модель на коляске (подушка ROHO) — после облегчения
+        V, F, C, lab, names = add_attach(V, F, C, lab, names, a)
     V, F, C, lab, names = add_hubs(V, F, C, lab, names, wheels)
     # антиопрокидыватели, которых нет в модели, — после облегчения (как спицы): мелкую деталь облегчение «съедает»
     AV, AF, AC, AL, names = add_antitips(np.zeros((0, 3)), np.zeros((0, 3), np.int64), np.zeros((0, 3), np.float32),

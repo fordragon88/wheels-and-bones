@@ -431,6 +431,69 @@ def add_antitip(a):
         bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35))
 
 
+def attach_glb(a):
+    """Отдельная модель GLB, пристёгнутая к коляске (подушка ROHO на сиденье XDT): правки edit в осях glTF, затем
+    перенос в оси игры (origin -> pos, scale, rot) — параметры и общий код в attach_glb.py (тот же перенос делает
+    tripo_label.py для модели игры)."""
+    import bmesh
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from attach_glb import attach_matrix, glb_path, in_box
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=glb_path(a))
+    new = [o for o in set(bpy.data.objects) - before]
+    B2G = Matrix(((1, 0, 0, 0), (0, 0, 1, 0), (0, -1, 0, 0), (0, 0, 0, 1)))           # Blender -> glTF
+    for o in [o for o in new if o.type == "MESH"]:
+        Mg = B2G @ o.matrix_world                                                     # локальные -> glTF
+        Mgi = Mg.inverted()
+        for e in a.get("edit") or []:
+            bm = bmesh.new()
+            bm.from_mesh(o.data)
+            P = np.array([tuple(Mg @ v.co) for v in bm.verts])
+            sel = in_box(P, e["box"])
+            if e.get("clone") is not None:                # копия граней коробки со сдвигом (UV — те же)
+                src = [f for f in bm.faces if all(sel[v.index] for v in f.verts)]
+                ret = bmesh.ops.duplicate(bm, geom=src)
+                dv = Vector(e["clone"])
+                for v in [g for g in ret["geom"] if isinstance(g, bmesh.types.BMVert)]:
+                    v.co = Mgi @ (Mg @ v.co + dv)
+                print("пристёгнутая модель: скопировано граней", len(src), o.name)
+            elif e.get("flat") is not None:               # прижать вершины коробки к плоскости (лишний ниппель)
+                ax, val = e["flat"]
+                bm.verts.ensure_lookup_table()
+                for i in np.nonzero(sel)[0]:
+                    g = Mg @ bm.verts[i].co
+                    g[int(ax)] = val
+                    bm.verts[i].co = Mgi @ g
+                if e.get("col") is not None:
+                    m = bpy.data.materials.new("attach_flat")
+                    m.use_nodes = True
+                    b = m.node_tree.nodes["Principled BSDF"]
+                    b.inputs["Base Color"].default_value = (*e["col"], 1)
+                    b.inputs["Roughness"].default_value = 0.8
+                    o.data.materials.append(m)
+                    mi = len(o.data.materials) - 1
+                    for f in bm.faces:
+                        if all(sel[v.index] for v in f.verts):
+                            f.material_index = mi
+                print("пристёгнутая модель: прижато вершин", int(sel.sum()), o.name)
+            bm.to_mesh(o.data)
+            bm.free()
+            o.data.update()
+        if a.get("mat"):                                  # свой матовый материал вместо текстуры модели
+            m = bpy.data.materials.new("attach")
+            m.use_nodes = True
+            b = m.node_tree.nodes["Principled BSDF"]
+            b.inputs["Base Color"].default_value = (*a["mat"].get("col", (0.06, 0.06, 0.065)), 1)
+            b.inputs["Roughness"].default_value = a["mat"].get("rough", 0.8)
+            o.data.materials.clear()
+            o.data.materials.append(m)
+    G2B = Matrix(((1, 0, 0, 0), (0, 0, -1, 0), (0, 1, 0, 0), (0, 0, 0, 1))) @ Matrix.Scale(0.001, 4)
+    T = G2B @ Matrix(attach_matrix(a).tolist()) @ B2G
+    for o in new:
+        if o.parent is None:
+            o.matrix_world = T @ o.matrix_world
+
+
 # ---------- модель ----------
 if d.get("glb"):
     import_glb(d["glb"], d["glb_matrix"], d.get("recolor"))
@@ -451,6 +514,8 @@ if d.get("glb"):
         add_tube(t)
     for h in d.get("hubs") or []:
         add_hub(h)
+    for a in d.get("attach") or []:
+        attach_glb(a)
     if os.environ.get("WB_EXPORT"):                    # исправленная копия модели (glb_fixed.py): без рендера
         bpy.ops.object.select_all(action="DESELECT")
         for o in sc.objects:

@@ -62,3 +62,6 @@ meshy_models/*.glb
 .claude/skills/media-use/
 skills-lock.json
 i18n_work/_new_strings.json
+
+# копии exe релиза (страховка), не для git
+backups/
