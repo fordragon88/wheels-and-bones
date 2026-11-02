@@ -9324,7 +9324,7 @@ class Game:
             with _atomic_open(BAK_PATH) as f:
                 json.dump(d, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"[wnb] save.bak.json не записан: {e!r}", flush=True)
+            print(f"[wnb] save.bak.json write failed: {e!r}", flush=True)
         web_persist(BAK_PATH)
 
     def _progress_reset_scene(self):

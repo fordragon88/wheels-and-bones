@@ -82,6 +82,53 @@ for pg in getattr(game, "MANUAL", {}).values():
         for t in (v if isinstance(v, list) else [v]):
             if isinstance(t, str):
                 game.draw_wrapped(S, t, (0, 0), 600)
+# ссылки и коды: настройки «Игра», окна кода, конструктор, задание в мастерской и в Кабинете, итог, карточка результата
+gs = game.Game(headless=True)
+gs.scene, gs.show_sound, gs.settings_tab = "hub", True, "game"
+gs._bak_mem = {}
+gs.draw(S)
+for k, r in gs._share_set_rects():
+    gs.settings_tab = "game"
+    game.mouse_pos = (lambda r=r: r.center)
+    gs.draw(S)
+game.mouse_pos = lambda: (0, 0)
+for mode, kw in (("paste", dict(err="Код не распознан — прогресс не тронут.")), ("builder", dict(sel=["flat", "seat_elf"])),
+                 ("builder", dict(err="Отметь хотя бы одно задание.")),
+                 ("show", dict(text="P.x.y", title="КОД ПРОГРЕССА", ok=False, kind="code",
+                               note="Вставь его в игре на другом устройстве: Настройки → Игра → «Вставить код».")),
+                 ("show", dict(text="P.x.y", title="ССЫЛКА С ПРОГРЕССОМ", ok=True, kind="link")),
+                 ("show", dict(text="P.x.y", title="КОД ЗАДАНИЯ", ok=None, kind="code"))):
+    gs.open_share(mode, **kw)
+    gs.draw(S)
+    gs.a11y_summary()
+gs.share_ui = None
+gs.show_sound = False
+for q in ("?jobs=flat,caster&seat=seat_elf&from=Ann&title=Unit 1", "?seat=seat_troll", "?jobs=spokes"):
+    gs.apply_link(q)
+    gs.scene = "hub"
+    gs.draw(S)
+    game.draw_wrapped(S, gs.toast, (0, 0), 600)
+    gs.a11y_summary()
+gs.apply_link("?jobs=flat&seat=seat_elf&from=Ann")
+gs.apply_link("?load=bad")
+game.draw_wrapped(S, gs.toast, (0, 0), 600)
+gs.start_job("flat"); gs.finish_test(); gs.draw(S); gs.scene = gs._result_next()
+gs.open_seating(); gs.assign_record("seat_elf", 1, 30); gs._assign_maybe_summary(); gs.draw(S); gs.a11y_summary()
+for t in game.result_text(gs.assign_result(), "R.x.y").split(chr(10)):
+    game.draw_wrapped(S, t, (0, 0), 600)
+for k in ("rcode", "rtext"):
+    gs._share_action(k); gs.draw(S); gs.close_share()
+gs.exit_assignment(); game.draw_wrapped(S, gs.toast, (0, 0), 600)
+gs._ask_load(game.progress_unpack({"v": 1, "d": ["flat"]})); gs.draw(S)
+gs._ask_assignment(game.assign_parse({"jobs": "flat", "from": "Ann"})); gs.draw(S)
+gs._ask_assignment(game.assign_parse({"jobs": "flat"})); gs.draw(S)
+gs.open_share("result", res=game.result_unpack(game.result_pack(dict(gs.assign or {}, id="x", jobs=["flat"], seat=[],
+                                                                      done={"flat": 1}, errors={}, secs={})))); gs.draw(S)
+for msg in ("Прогресс загружен. Прежний можно вернуть: Настройки → Игра.", "Прежний прогресс возвращён.",
+            "Итог отправлен в таблицу.", "Не отправилось — нет связи. Скопируй код результата.", "Буфер обмена пуст."):
+    game.draw_wrapped(S, msg, (0, 0), 600)
+for k in game.Game.SETTING_HELP:
+    game.draw_wrapped(S, game.Game.SETTING_HELP[k], (0, 0), 600)
 print(f"строк с кириллицей на экране: {len(leaks)}")
 for t, n in sorted(leaks.items(), key=lambda x: -x[1])[:60]:
     print("   ", repr(t[:100]))
