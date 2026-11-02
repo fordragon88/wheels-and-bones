@@ -119,7 +119,7 @@ class Page:
 
     async def check_art(self):
         st = await self.state()
-        miss = [m for m in st.get("missing", []) if m in ASSETS or m[:-4] + ".jpg" in ASSETS]
+        miss = [m for m in st.get("missing", []) if m in ASSETS or m[:-4] + ".jpg" in ASSETS or "/" in m]   # "/" — кадры anim/
         check(not miss, f"{self.name}: весь арт загрузился" + (f" (заглушки: {miss})" if miss else ""))
 
     def check_console(self):

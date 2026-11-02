@@ -1092,6 +1092,7 @@ def add_glow(surf, pos, radius, color, level=1.0):
 
 
 ANIM_FPS = 12                     # петли героев из ролика: assets/anim/<имя>/NN.jpg + NN.a.png (3 с, 36 кадров)
+ANIM_KEEP_MS = 30000              # кадры размера, который столько не показывали, выгружаются из памяти
 _anim_n = {}
 _anim_cache = {}                  # (имя, размер) -> [мс последнего показа, {кадр: Surf}]; не в _img_cache — там навсегда
 
@@ -1099,29 +1100,32 @@ _anim_cache = {}                  # (имя, размер) -> [мс послед
 def anim_frame(name, size, t):
     """Кадр петли assets/anim/<name> на время t (Мартин и Барти машут, кадры из ролика).
     None — кадров нет или «Без анимации»: тогда рисуют обычную картинку.
-    Память: кадры размера, который 3 с не показывали (ушли со сцены), выгружаются — 36 кадров ×
-    несколько размеров иначе копились бы десятками МБ (телефон)."""
+    Память: кадры размера, который ANIM_KEEP_MS не показывали (ушли со сцены), выгружаются — 36 кадров ×
+    несколько размеров иначе копились бы десятками МБ (телефон). Срок не короткий: в браузере каждая
+    загрузка кадра — десятки мс, и после возврата в сцену петля заикалась бы первые 3 с (аудит 02.11)."""
+    now = pygame.time.get_ticks()
+    for k in [k for k, e in _anim_cache.items() if now - e[0] > ANIM_KEEP_MS]:   # и при «Без анимации» тоже
+        del _anim_cache[k]
     if calm():
         return None
     if name not in _anim_n:
         d = os.path.join(ASSETS_DIR, "anim", name)
-        _anim_n[name] = (len({f.split(".")[0] for f in os.listdir(d) if f.endswith((".jpg", ".png"))})
-                         if os.path.isdir(d) else 0)
+        n = 0                                          # кадры — подряд 00.jpg, 01.jpg, …; лишние файлы не считаются
+        while os.path.isdir(d) and os.path.exists(os.path.join(d, f"{n:02d}.jpg")):
+            n += 1
+        _anim_n[name] = n
     n = _anim_n[name]
     if not n:
         return None
-    now = pygame.time.get_ticks()
-    for k in [k for k, e in _anim_cache.items() if now - e[0] > 3000]:
-        del _anim_cache[k]
     ent = _anim_cache.setdefault((name, tuple(size)), [now, {}])
     ent[0] = now
     i = int(t * ANIM_FPS) % n
-    img = ent[1].get(i)
-    if img is None:
+    if i not in ent[1]:
         fn = f"anim/{name}/{i:02d}.png"               # asset_path найдёт NN.jpg + NN.a.png
-        img = ent[1][i] = load_image(fn, size)
+        img = load_image(fn, size)
         _img_cache.pop((fn, size), None)
-    return img
+        ent[1][i] = None if fn in ASSET_MISS else img  # битый кадр — лучше статичная картинка, чем мигающая заглушка
+    return ent[1][i]
 
 
 def ghost_img(size, t):
@@ -11521,9 +11525,9 @@ class Game:
                   (WIDTH // 2, 360), 19, WHITE, center=True, alpha=255 * appear(st, 1.2, 0.6))
         # Мартин въезжает в кадр, Барти парит
         mx = -260 + int(320 * ease_out((st - 0.4) / 1.4))
-        wave = anim_frame("martin_wave", (230, 260), self.t)      # машет рукой (кадры из ролика)
-        if wave is not None:
-            surf.blit(wave, (mx, HEIGHT - 300))
+        wave = anim_frame("martin_wave", (230, 290), self.t)      # машет рукой (кадры из ролика)
+        if wave is not None:                                       # в кадрах 385×560 поля: при (230, 260) Мартин был в 1,7 раза
+            surf.blit(wave, (mx, HEIGHT - 330))                    # мельче статичного; (230, 290) — тот же рост, ступни на той же линии
         else:
             blit_idle(surf, load_image("martin.png", (230, 260), GHOST), (mx, HEIGHT - 300), self.t)
         gk = ease_back((st - 1.4) / 0.6)

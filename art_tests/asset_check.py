@@ -11,6 +11,7 @@ g = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(g)
 
 TT = "assets/turntable"
+ANIM = "assets/anim"                       # петли героев: <имя>/NN.jpg + NN.a.png одного размера, подряд с 00
 idx = json.load(open(f"{TT}/index.json", encoding="utf-8"))
 folk = json.load(open(f"{TT}/index_folk.json", encoding="utf-8"))
 files = os.listdir(TT)
@@ -42,5 +43,28 @@ for j in g.ALL_JOBS:
         bad.append(f"{jid}: нет модели assets/models/{k}_ai.json")
     if not tech and cm and cm not in g.CHAIR_HOTSPOTS:
         bad.append(f"{jid}: нет хотспотов CHAIR_HOTSPOTS['{cm}']")
-print("\n".join(bad) if bad else f"АССЕТЫ OK — {len(g.ALL_JOBS)} заданий: портреты, арт, модели, кадры, хотспоты")
+# петли героев (Мартин и Барти машут): кадры подряд с 00, у каждого маска .a.png того же размера, что JPEG
+import pygame
+pygame.display.init()
+anims = sorted(os.listdir(ANIM)) if os.path.isdir(ANIM) else []
+for name in anims:
+    d = f"{ANIM}/{name}"
+    jp = sorted(f for f in os.listdir(d) if f.endswith(".jpg"))
+    n = len(jp)
+    if n < 2:
+        bad.append(f"anim/{name}: кадров {n}")
+        continue
+    if jp != [f"{i:02d}.jpg" for i in range(n)]:
+        bad.append(f"anim/{name}: кадры не подряд с 00 ({jp[0]}…{jp[-1]})")
+    extra = [f for f in os.listdir(d) if not (f.endswith(".jpg") or f.endswith(".a.png"))]
+    if extra:
+        bad.append(f"anim/{name}: лишние файлы {extra[:3]}")
+    for f in jp:
+        a = f"{d}/{f[:-4]}.a.png"
+        if not os.path.exists(a):
+            bad.append(f"anim/{name}: нет маски {os.path.basename(a)}")
+        elif pygame.image.load(a).get_size() != pygame.image.load(f"{d}/{f}").get_size():
+            bad.append(f"anim/{name}: маска {os.path.basename(a)} не того размера")
+print("\n".join(bad) if bad else f"АССЕТЫ OK — {len(g.ALL_JOBS)} заданий: портреты, арт, модели, кадры, хотспоты; "
+      f"петли anim: {', '.join(anims) or 'нет'}")
 sys.exit(1 if bad else 0)
