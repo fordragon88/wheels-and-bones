@@ -28,6 +28,12 @@ def check(ok, what):
 def serve():
     """Собрать и запустить локальный сервер pygbag; дождаться свежего пакета."""
     t0 = time.time()
+    try:                                              # на :8000 уже кто-то отвечает (старый сервер) — проверка ушла бы к нему
+        urllib.request.urlopen(URL, timeout=2)
+        print(f"  ..   ВНИМАНИЕ: {URL} уже отвечает до сборки — возможно, старый сервер; закрой его или задай WNB_URL "
+              "на свой порт и --no-build", flush=True)
+    except Exception:
+        pass
     proc = subprocess.Popen([sys.executable, "build_web.py", "--serve"], cwd=ROOT,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     for _ in range(600):
@@ -94,9 +100,9 @@ class Page:
         except Exception as e:
             print(f"  ..   {self.name}: снимок {tag} не снят ({type(e).__name__})", flush=True)
 
-    async def boot(self, touch=False):
+    async def boot(self, touch=False, query=""):
         await self.pg.route("**/script.google.com/**", lambda r: r.abort())
-        await self.pg.goto(URL)
+        await self.pg.goto(URL + query)
         await self.pg.wait_for_timeout(6000)
         vw = await self.pg.evaluate("[innerWidth, innerHeight]")
         if touch:
@@ -106,7 +112,7 @@ class Page:
         st = await self.wait(lambda s: s.get("scene") in ("title", "intro"), "игра запустилась", 90)
         await self.pg.wait_for_timeout(2500)                     # «авто» подстраивает холст
         for _ in range(3):                                       # первое касание прошло в игру — на титул (Esc,
-            if (await self.state()).get("scene") != "intro":     # нажатый ровно во время смены размера холста,
+            if (await self.state()).get("scene") not in ("intro", "hub"):   # нажатый во время смены размера холста,
                 break                                            # может потеряться — повтор)
             await self.key("Escape", 1500)
         return await self.wait(lambda s: s.get("scene") == "title", "титул")
@@ -253,13 +259,64 @@ async def gamepad(b):
     await ctx.close()
 
 
+def progress_code(done):
+    """Код прогресса из самой игры (game.share_encode) — для проверки ?load=."""
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+    sys.path.insert(0, ROOT)
+    import game
+
+    class P:
+        pass
+    g = P()
+    g.done, g.garage, g.exam_passed, g.seat_done, g.seat_quiz_ok, g.tutorial_skipped = set(done), [], False, set(), False, True
+    return game.share_encode("P", game.progress_pack(g))
+
+
+async def links(b):
+    """Ссылки: ?jobs=flat,caster — в очереди ровно два задания; «Скопировать код»; ?load=<код> — вопрос и загрузка."""
+    ctx = await b.new_context(viewport={"width": 1280, "height": 720})
+    await ctx.grant_permissions(["clipboard-read", "clipboard-write"])
+    p = Page(await ctx.new_page(), "links")
+    await p.boot(query="?jobs=flat,caster&from=Smoke")
+    st = await p.wait(lambda s: s.get("assign") and s.get("queue") == ["flat", "caster"], "?jobs=flat,caster: задание")
+    check(st.get("queue") == ["flat", "caster"], f"{p.name}: в очереди два задания из ссылки ({st.get('queue')})")
+    await p.click(640, 470, 1500)                                # с титула — сразу в мастерскую (без вступления)
+    await p.wait(lambda s: s["scene"] == "hub", "задание: мастерская")
+    await p.shot("1_hub_assign")
+    await p.click(1249, 27)                                      # шестерёнка
+    await p.wait(lambda s: s["settings"], "настройки")
+    await p.click(833, 192)                                      # вкладка «ИГРА»
+    await p.click(508, 342, 1500)                                # «СКОПИРОВАТЬ КОД»
+    await p.wait(lambda s: s.get("share") == "show", "окно кода")
+    code = await p.pg.evaluate("(document.getElementById('wnb-field')||{}).value || ''")
+    copied = await p.pg.evaluate("window.wnbCopied|0")
+    check(code.startswith("P.") and copied == 1, f"{p.name}: код прогресса скопирован ({code[:12]}…, wnbCopied={copied})")
+    await p.shot("2_code")
+    await p.key("Escape"); await p.key("Escape")
+    p.check_console()
+    await ctx.close()
+    ctx = await b.new_context(viewport={"width": 1280, "height": 720})
+    p = Page(await ctx.new_page(), "links_load")
+    await p.boot(query="?load=" + progress_code({"flat", "caster", "brake"}))
+    await p.wait(lambda s: s.get("share") == "confirm", "?load=: вопрос «загрузить прогресс?»")
+    await p.shot("3_confirm")
+    await p.click(852, 477, 1500)                                # «ДА»
+    st = await p.wait(lambda s: s.get("share") is None and s.get("done") == 3, "?load=: прогресс загружен")
+    check(st.get("done") == 3, f"{p.name}: прогресс из ссылки загружен ({st.get('done')} починено)")
+    bak = await p.pg.evaluate("!!localStorage.getItem('wnb:save.bak.json')")
+    check(bak, f"{p.name}: прежний прогресс сохранён (wnb:save.bak.json)")
+    p.check_console()
+    await ctx.close()
+
+
 async def main():
     os.makedirs(SHOTS, exist_ok=True)
     for f in os.listdir(SHOTS):
         os.remove(os.path.join(SHOTS, f))
     async with async_playwright() as pw:
         for fn, args in ((desktop, ("site", 1100, 620, 1.0)), (desktop, ("full", 1920, 1080, 1.0)),
-                         (desktop, ("laptop125", 1366, 768, 1.25)), (phone, ()), (gamepad, ())):
+                         (desktop, ("laptop125", 1366, 768, 1.25)), (phone, ()), (gamepad, ()), (links, ())):
             print(f"— {fn.__name__} {args[0] if args else ''}", flush=True)
             b = await pw.chromium.launch(args=["--autoplay-policy=no-user-gesture-required", "--mute-audio"])   # свой браузер на
             try:                                                                                # сценарий
@@ -275,8 +332,11 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     finally:
-        if proc:
-            proc.kill()
+        if proc:                                      # вместе с дочерним pygbag (иначе он остаётся слушать :8000)
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+            else:
+                proc.kill()
     print(f"\nWEB SMOKE: {len(notes)} ok, {len(fails)} FAIL. Скриншоты: art_tests/web_shots/ — открой и посмотри.")
     for f in fails:
         print("  ", f)

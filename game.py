@@ -9726,6 +9726,10 @@ class Game:
             return
         ui = self.share_ui
         fld = self._share_field_key()
+        if ui and ui["mode"] == "show" and ui.get("ok") is None:      # ответ navigator.clipboard приходит позже
+            st = web_copy_state()
+            if st:
+                ui["ok"] = st > 0
         r = self._share_field_rect() if ui and not self.kb["help"] else None
         if r is None:
             if getattr(self, "_wfield", None):
@@ -9748,10 +9752,6 @@ class Game:
             self._share_enter()
         elif k == "Escape":
             self._share_action("no" if ui["mode"] == "confirm" else "close")
-        if ui["mode"] == "show" and ui.get("ok") is None:
-            st = web_copy_state()
-            if st:
-                ui["ok"] = st > 0
 
     def _draw_share_field(self, surf, r, text, ph=""):
         aa_rect(surf, (12, 12, 18), r, border_radius=8)
@@ -9843,8 +9843,9 @@ class Game:
             ok = ui.get("ok")
             st = ("Скопировано в буфер обмена ✔" if ok else
                   ("Копирую…" if ok is None else
-                   ("Не удалось скопировать — выдели строку выше и нажми Ctrl+C." if IS_WEB else
-                    "Буфер обмена недоступен — перепиши или сфотографируй код.")))
+                   ("Не удалось скопировать — перепиши итог с экрана." if ui.get("kind") == "text" else
+                    ("Не удалось скопировать — выдели строку выше и нажми Ctrl+C." if IS_WEB else
+                     "Буфер обмена недоступен — перепиши или сфотографируй код."))))
             draw_text(surf, st, (x, y), 16, GOOD if ok else (GREY if ok is None else AMBER), bold=True)
             if ui.get("note"):
                 draw_wrapped(surf, ui["note"], (x, y + 26), w, 14, GREY, max_lines=2)

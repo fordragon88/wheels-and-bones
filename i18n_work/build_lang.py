@@ -97,7 +97,9 @@ for mode, kw in (("paste", dict(err="Код не распознан — прог
                  ("show", dict(text="P.x.y", title="КОД ПРОГРЕССА", ok=False, kind="code",
                                note="Вставь его в игре на другом устройстве: Настройки → Игра → «Вставить код».")),
                  ("show", dict(text="P.x.y", title="ССЫЛКА С ПРОГРЕССОМ", ok=True, kind="link")),
-                 ("show", dict(text="P.x.y", title="КОД ЗАДАНИЯ", ok=None, kind="code"))):
+                 ("show", dict(text="P.x.y", title="КОД ЗАДАНИЯ", ok=None, kind="code")),
+                 ("show", dict(text="a" + chr(10) + "b", title="ИТОГ ТЕКСТОМ", ok=False, kind="text",
+                               note="Вставь в мессенджер или письмо."))):
     gs.open_share(mode, **kw)
     gs.draw(S)
     gs.a11y_summary()
