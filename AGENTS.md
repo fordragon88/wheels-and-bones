@@ -535,8 +535,9 @@ python i18n_work/build_lang.py       # перевод полон
   `GOATCOUNTER_CODE` (пусто — счётчика нет) и `goatcounter_tag()`, `polish_index` вставляет скрипт; нужен код сайта от
   владельца. Бэкап — `art_tests/game.py.bak_before_tutorial_1102`. Проверки: selftest ×3 (python, WNB_TT=0, py) OK,
   asset_check OK, ui/keyboard (ru, en: кириллица 0)/switch/pad playthrough ПРОЙДЕНО, rs_smoke 2 OK, build_lang — кириллица 0,
-  extract_new — 3 строки (норма), web_smoke (локальная сборка, apk 12,7 МБ) — 20 ok, 0 FAIL. Не выложено и не закоммичено —
-  ждёт владельца.
+  extract_new — 3 строки (норма), web_smoke (локальная сборка, apk 12,7 МБ) — 20 ok, 0 FAIL. По команде владельца закоммичено
+  (0855704) и **выложено** (`build_web.py --deploy`, Pages 70943590, архив `?v=40e54be235`); web_smoke по выложенному сайту —
+  20 ok, 0 FAIL. Exe и Release не пересобирались (v0.4 — прежний).
 
 - 2026-10-28 — Claude (Fable 5.1) — **UTM-метки на ссылке Zeffy** (просьба коллеги GOAT, чтобы считать источники пожертвований):
   в игре `SUPPORT_URL` = …/learn-to-fix-wheelchairs**?utm_source=game**, в блоке сайта (`wordpress_embed.html`) —
