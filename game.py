@@ -9250,8 +9250,8 @@ class Game:
         self.save_progress()
         n = len(assign_items(self.assign))
         frm = self.assign.get("from")
-        self.flash(f"Задание от {frm}: пунктов {n}. Выйти в обычную игру — кнопка «Выйти из задания» в мастерской."
-                   if frm else f"Задание: пунктов {n}. Выйти в обычную игру — кнопка «Выйти из задания» в мастерской.",
+        self.flash(f"Задание от {frm}, пунктов в нём: {n}. Выйти в обычную игру — кнопка «Выйти из задания» в мастерской."
+                   if frm else f"Задание, пунктов в нём: {n}. Выйти в обычную игру — кнопка «Выйти из задания» в мастерской.",
                    GOOD, 6)
 
     def exit_assignment(self):
@@ -12146,7 +12146,7 @@ class Game:
         else:
             Button(self._reset_btn_rect(), "СБРОСИТЬ ПРОГРЕСС", BAD).draw(surf, mouse)
         draw_wrapped(surf, "Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и "
-                           "доступность останутся.", (p.x + 32, p.y + 402), p.w - 64 - 210, 12, GREY, max_lines=3)
+                           "доступность останутся.", (p.x + 32, p.y + 402), p.w - 64 - 210, 12, GREY, max_lines=4)   # 125 %: 4 строки
 
     ACCESS_ROWS = ("on", "voices", "rate", "contrast", "instant", "calm", "quiet", "barty", "text", "font") + (("scan",) if SCAN_ENABLED else ())
 
