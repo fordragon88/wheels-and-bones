@@ -3779,7 +3779,7 @@ for _k, _v in {"chair_aeroz": "chair_basic", "chair_cross6": "chair_basic", "cha
     VECTOR_ART.setdefault(_k, VECTOR_ART[_v])
 # точки клика реальных колясок — по их арту (art_tests/hotspots_<модель>.json)
 CHAIR_HOTSPOTS["inv9000"] = {"tire": (90, 262, 12), "rim": (55, 150, 11), "spokes": (112, 202, 12), "tube": (132, 240, 10), "valve": (90, 128, 9), "brake": (150, 160, 10)}
-CHAIR_HOTSPOTS["xdt"] = {"cushion": (190, 120, 14), "seat": (225, 150, 10), "frame": (200, 195, 11), "valve": (258, 128, 8)}
+CHAIR_HOTSPOTS["xdt"] = {"cushion": (180, 115, 14), "seat": (225, 150, 10), "frame": (200, 195, 11), "valve": (197, 149, 8)}   # подушка ROHO и её ниппель — по кадру поворота (03.11)
 CHAIR_HOTSPOTS["ego"] = {"caster": (225, 265, 12), "caster_stem": (225, 228, 9), "bearing": (322, 232, 9), "bolts": (340, 182, 8), "brake": (215, 110, 9), "tire": (55, 240, 12)}
 CHAIR_HOTSPOTS["quickie2"] = CHAIR_HOTSPOTS["tekna"] = {"tire": (30, 200, 11), "rear_wheel": (95, 205, 13), "brake": (175, 140, 10), "bolts": (205, 172, 8), "frame": (300, 130, 12)}
 CHAIR_HOTSPOTS["exelle_jr"] = {"rim": (55, 140, 11), "spokes": (142, 202, 12), "bearing": (107, 175, 8), "tube": (140, 262, 10), "bolts": (275, 145, 8)}
