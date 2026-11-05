@@ -18097,10 +18097,12 @@ async def main():
                     fps = clock.get_fps()
                     print(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} scene {game.scene}", flush=True)
                     web_js("console.log(" + json.dumps(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} "
-                                                      f"scene {game.scene} slow {DISPLAY.get('_slow', 0)}") + ")")
+                                                      f"scene {game.scene} slow {DISPLAY.get('_slow', 0)} t {game.t:.0f}") + ")")
                     dragged = game.t - getattr(game, "_drag_t", -9) < 3.5      # в этом окне крутили коляску —
-                    slow = fps < 20 and game.scene in ("job", "hub", "seating", "guild") and not dragged   # замер не в счёт
-                    DISPLAY["_slow"] = DISPLAY.get("_slow", 0) + 1 if slow else (DISPLAY.get("_slow", 0) if dragged else 0)
+                    warm = game.t < 20 or game.st < 6                            # разогрев: грузятся кадры анимаций и
+                    skip = dragged or warm                                      # поворота — разовая работа, не слабый ПК
+                    slow = fps < 20 and game.scene in ("job", "hub", "seating", "guild") and not skip
+                    DISPLAY["_slow"] = DISPLAY.get("_slow", 0) + 1 if slow else (DISPLAY.get("_slow", 0) if skip else 0)
                     cw = (DISPLAY.get("res") or WEB_RES["standard"])[0]
                     lower = [i for i, k in enumerate(WEB_LEVELS) if WEB_RES[k][0] < cw]   # ступени меньше нынешнего холста
                     if DISPLAY["_slow"] >= 3 and DISPLAY.get("web_quality", "auto") == "auto" and lower:   # 3 окна подряд (было 2)
