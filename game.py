@@ -2002,6 +2002,10 @@ def _set_window(fullscreen):
     """Создать/переключить окно. Масштабирование кадра делает игра сама (present), без SCALED у SDL."""
     if IS_WEB:                                        # браузер: холст под окно игры (размер — web_target_res)
         res = web_target_res()
+        old = DISPLAY.get("res")
+        if old is not None:                           # пересоздание холста = короткое «моргание»: пишем в консоль
+            web_js("console.log(" + json.dumps(f"[wnb] canvas {old[0]}x{old[1]} -> {res[0]}x{res[1]} "
+                                              f"({DISPLAY.pop('_why', '?')}) t={pygame.time.get_ticks() / 1000:.1f}s") + ")")
         DISPLAY["res"] = res
         screen = pygame.display.set_mode(res)
         DISPLAY["fullscreen"] = False
@@ -2089,6 +2093,7 @@ def set_web_quality(q, by_user=True):
     if DISPLAY.get("res") == web_target_res():
         return True
     try:
+        DISPLAY["_why"] = f"quality {q}" + ("" if by_user else " (auto)")
         apply_display()
     except Exception:
         return False
@@ -2112,6 +2117,7 @@ def web_auto_resize(px):
         DISPLAY["web_px"] = old
         return False
     DISPLAY.pop("_want", None)
+    DISPLAY["_why"] = f"auto-resize px {old} -> {px}"
     apply_display()
     return True
 
@@ -16764,6 +16770,8 @@ async def main():
                     DISPLAY["_fps_t"] = 0
                     fps = clock.get_fps()
                     print(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} scene {game.scene}", flush=True)
+                    web_js("console.log(" + json.dumps(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} "
+                                                      f"scene {game.scene} slow {DISPLAY.get('_slow', 0)}") + ")")
                     dragged = game.t - getattr(game, "_drag_t", -9) < 3.5      # в этом окне крутили коляску —
                     slow = fps < 20 and game.scene in ("job", "hub", "seating", "guild") and not dragged   # замер не в счёт
                     DISPLAY["_slow"] = DISPLAY.get("_slow", 0) + 1 if slow else (DISPLAY.get("_slow", 0) if dragged else 0)
@@ -16772,6 +16780,7 @@ async def main():
                     if DISPLAY["_slow"] >= 3 and DISPLAY.get("web_quality", "auto") == "auto" and lower:   # 3 окна подряд (было 2)
                         DISPLAY["web_cap"] = lower[-1]         # слабый ПК: холст не больше этой ступени
                         DISPLAY["_slow"] = 0
+                        DISPLAY["_why"] = f"fps-cap {fps:.0f}"
                         apply_display()
                         game.flash("Качество снижено для плавности. Настройки → Графика.", AMBER, 5)
         except Exception:
