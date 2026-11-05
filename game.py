@@ -10273,6 +10273,9 @@ class Game:
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
             self._last_click = (tuple(int(v) for v in event.pos), self.scene, round(self.st, 2))
+        if event.type == pygame.MOUSEMOTION and any((st or {}).get("drag") for st in (
+                getattr(self, "m3d", None), getattr(self, "tt_show", None), getattr(self, "v3d", None))):
+            self._drag_t = self.t                    # крутит коляску: кадры масштабируются — fps падает не из-за слабого ПК
         self._toast_input(event)
         if event.type in PAD_EVENTS:
             for act, down in pad_actions(event) or ():
@@ -16761,11 +16764,12 @@ async def main():
                     DISPLAY["_fps_t"] = 0
                     fps = clock.get_fps()
                     print(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} scene {game.scene}", flush=True)
-                    slow = fps < 20 and game.scene in ("job", "hub", "seating", "guild")
-                    DISPLAY["_slow"] = DISPLAY.get("_slow", 0) + 1 if slow else 0
+                    dragged = game.t - getattr(game, "_drag_t", -9) < 3.5      # в этом окне крутили коляску —
+                    slow = fps < 20 and game.scene in ("job", "hub", "seating", "guild") and not dragged   # замер не в счёт
+                    DISPLAY["_slow"] = DISPLAY.get("_slow", 0) + 1 if slow else (DISPLAY.get("_slow", 0) if dragged else 0)
                     cw = (DISPLAY.get("res") or WEB_RES["standard"])[0]
                     lower = [i for i, k in enumerate(WEB_LEVELS) if WEB_RES[k][0] < cw]   # ступени меньше нынешнего холста
-                    if DISPLAY["_slow"] >= 2 and DISPLAY.get("web_quality", "auto") == "auto" and lower:
+                    if DISPLAY["_slow"] >= 3 and DISPLAY.get("web_quality", "auto") == "auto" and lower:   # 3 окна подряд (было 2)
                         DISPLAY["web_cap"] = lower[-1]         # слабый ПК: холст не больше этой ступени
                         DISPLAY["_slow"] = 0
                         apply_display()
