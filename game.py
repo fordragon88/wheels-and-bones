@@ -2075,7 +2075,8 @@ def web_target_res():
 def web_measure():
     """Сколько реальных пикселей занимает окно игры (по ширине, область 16:9). 0 — ещё не известно."""
     v = web_js("(function(){var c=document.getElementById('canvas');if(!c)return 0;var r=c.getBoundingClientRect();"
-               "return Math.round(Math.min(r.width,r.height*16/9)*(window.devicePixelRatio||1));})()")
+               "var w=r.width,h=r.height;if(Math.abs(w/h-16/9)>0.05){w=innerWidth;h=innerHeight;}"   # холст ещё заготовка
+               "return Math.round(Math.min(w,h*16/9)*(window.devicePixelRatio||1));})()")             # pygbag (квадрат) — по окну
     try:
         return int(v or 0)
     except (TypeError, ValueError):
@@ -16780,9 +16781,13 @@ async def main():
                     if DISPLAY["_slow"] >= 3 and DISPLAY.get("web_quality", "auto") == "auto" and lower:   # 3 окна подряд (было 2)
                         DISPLAY["web_cap"] = lower[-1]         # слабый ПК: холст не больше этой ступени
                         DISPLAY["_slow"] = 0
-                        DISPLAY["_why"] = f"fps-cap {fps:.0f}"
-                        apply_display()
-                        game.flash("Качество снижено для плавности. Настройки → Графика.", AMBER, 5)
+                        DISPLAY["_cap_due"] = (game.scene, game.t, f"fps-cap {fps:.0f}")   # применить при смене экрана
+                due = DISPLAY.get("_cap_due")                 # пересоздание холста — «моргание»: делаем его на смене
+                if due and (game.scene != due[0] or game.t - due[1] > 45):   # экрана (или через 45 с, если игрок засел)
+                    DISPLAY.pop("_cap_due", None)
+                    DISPLAY["_why"] = due[2]
+                    apply_display()
+                    game.flash("Качество снижено для плавности. Настройки → Графика.", AMBER, 5)
         except Exception:
             _loop_error(game, _crash_log)
         await asyncio.sleep(0)                        # браузеру — нарисовать кадр и принять ввод
