@@ -1696,7 +1696,11 @@ def web_setup_touch():
           setTimeout(function(){ x.textContent = '\\u2716 Exit fullscreen (Esc)'; }, 4000);
         };
         document.body.appendChild(x);
-        var fs = function(){ x.style.display = (api() || big()) ? 'block' : 'none'; };
+        // Во фрейме сайта (wordpress_embed.html) «Play fullscreen» разворачивает обёртку на странице, и страница
+        // показывает СВОЮ кнопку #wnb-exit — наша рядом давала «двоение» текста (владелец 09.11). Поэтому во фрейме
+        // кнопку показываем только при полном экране самого документа игры (api()); вне фрейма — и при F11 (big()).
+        var inFrame = false; try { inFrame = window.parent !== window; } catch (e) { inFrame = true; }
+        var fs = function(){ x.style.display = (api() || (!inFrame && big())) ? 'block' : 'none'; };
         document.addEventListener('fullscreenchange', fs); document.addEventListener('webkitfullscreenchange', fs);
         window.addEventListener('resize', fs); setInterval(fs, 1000); fs();
       }
