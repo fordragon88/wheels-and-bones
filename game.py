@@ -1697,7 +1697,11 @@ def web_setup_touch():
           setTimeout(function(){ x.textContent = '\\u2716 Exit fullscreen (Esc)'; }, 4000);
         };
         document.body.appendChild(x);
-        var fs = function(){ x.style.display = (api() || big()) ? 'block' : 'none'; };
+        // Во фрейме сайта (wordpress_embed.html) «Play fullscreen» разворачивает обёртку на странице, и страница
+        // показывает СВОЮ кнопку #wnb-exit — наша рядом давала «двоение» текста (владелец 09.11). Поэтому во фрейме
+        // кнопку показываем только при полном экране самого документа игры (api()); вне фрейма — и при F11 (big()).
+        var inFrame = false; try { inFrame = window.parent !== window; } catch (e) { inFrame = true; }
+        var fs = function(){ x.style.display = (api() || (!inFrame && big())) ? 'block' : 'none'; };
         document.addEventListener('fullscreenchange', fs); document.addEventListener('webkitfullscreenchange', fs);
         window.addEventListener('resize', fs); setInterval(fs, 1000); fs();
       }
@@ -4779,41 +4783,50 @@ SEAT_LESSONS = [
          pose=dict(tilt=45)),
 ]
 
+# fix — подпись «Так правильно: …» после ответа (рисунок плавно переходит к исправленной позе: вид сбоку —
+# _seat_demo_pose(force_good=True), спереди — fix_front: "wedge" подкладка без выпрямления, "pads" три упора);
+# у pose=None (три скелета) и tilt (рисунок и так верный) — только подпись.
 SEAT_QUIZ = [
-    dict(pose=dict(knee_up=True), q="Что не так в посадке?",
+    dict(pose=dict(knee_up=True), q="Что не так в посадке?", fix="подножка ниже — бёдра лежат на сиденье",
          desc="На рисунке: колени задраны выше бёдер, бёдра почти не касаются сиденья.",
          options=[("Подножка слишком высоко: колени выше бёдер", True, ""),
                   ("Сиденье слишком глубокое", False, "Глубина тут ни при чём — смотри на колени и бёдра."),
                   ("Спинка слишком низкая", False, "Спинка держит корпус, а проблема — в коленях.")]),
     dict(pose=dict(p=20, slide=7, deep=True), q="Почему клиент сползает и сидит на крестце?",
+         fix="сиденье короче — зазор 5 см под коленом, таз у спинки",
          desc="На рисунке: таз уехал к переднему краю, спина колесом, край сиденья упирается под колени.",
          options=[("Сиденье глубже нормы: край давит под колени", True, ""),
-                  ("Слишком мягкий подголовник", False, "Подголовник не тянет таз вперёд."),
+                  ("Сиденье слишком узкое", False, "Узкое сиденье давит на бёдра с боков, но таз вперёд не тянет."),
                   ("Подножка слишком короткая", False, "Тогда колени ушли бы вверх.")]),
     dict(pose=dict(dangle=True, slide=4, p=8), q="Стопы не достают до подножки. Что поправить?",
+         fix="подножка выше — стопы стоят",
          desc="На рисунке: стопы висят над подножкой, тело немного сползает вперёд.",
          options=[("Поднять подножку (укоротить) — стопы должны стоять", True, ""),
                   ("Откинуть спинку", False, "Откинутая спинка сползание только усилит."),
                   ("Сузить сиденье", False, "Ширина не влияет на опору стоп.")]),
     dict(pose=None, q="Можно ли посадить всех по правилу «90-90-90» (бёдра, колени и голеностопы под 90°)?",
+         fix="у каждого своя посадка — по осмотру и цели",
          desc="На рисунке: три скелета в разных посадках — активный толчок, комфорт и опора, разгрузка наклоном 45°.",
          options=[("Нет: универсального рецепта нет, решают по осмотру и цели", True, ""),
                   ("Да, это стандарт для всех", False, "Руководство прямо говорит: готового рецепта нет."),
                   ("Да, но только детей", False, "Для детей тоже решают индивидуально.")]),
     dict(pose=dict(tilt=45), q="Клиент не может сам перенести вес. Как разгрузить таз?",
+         fix="наклон 45° — вес с таза уходит на спинку",
          desc="На рисунке: клиент сидит в электроколяске с механизмом наклона сиденья.",
          options=[("Наклонить сиденье (tilt) не меньше чем на 45°", True, ""),
                   ("Только откинуть спинку", False, "Откидывание без наклона усиливает сдвиг тканей."),
                   ("Поднять подъёмные подножки — ноги вперёд", False,
                    "Подъёмные подножки тянут таз назад, на крестец, и вес с таза не снимают.")]),
-    dict(pose=dict(front=True), q="Перекос таза неисправимый. Куда положить подкладку?",
+    dict(pose=dict(front=True), q="Перекос таза неисправимый. Куда положить подкладку?", fix_front="wedge",
+         fix="подкладка под высокую сторону — таз не выпрямляют",
          desc="На рисунке: вид спереди, одна сторона таза ниже, позвоночник изогнут.",
          options=[("Под высокую сторону: заполнить зазор и разгрузить нижнюю седалищную кость", True, ""),
                   ("Под нижнюю сторону — выровнять таз", False,
                    "Так выравнивают только исправимый перекос. Неисправимый выпрямлять нельзя: боль и давление."),
                   ("Никуда: неисправимый перекос не трогают", False,
                    "«Учесть» — значит подстроить коляску: заполнить высокую сторону.")]),
-    dict(pose=dict(front=True), q="Где ставят боковые упоры при сколиозе?",
+    dict(pose=dict(front=True), q="Где ставят боковые упоры при сколиозе?", fix_front="pads",
+         fix="три упора: вершина изгиба, под мышкой с зазором, низко у таза",
          desc="На рисунке: вид спереди, позвоночник изогнут дугой вбок.",
          options=[("В три точки: вершина изгиба, под мышкой с зазором, низко у таза", True, ""),
                   ("Вплотную в подмышку — так надёжнее", False, "Под мышкой оставляют зазор: там нервы."),
@@ -13310,11 +13323,7 @@ class Game:
             if sc["picked"] is None:
                 for i, r in self._seat_quiz_rects():
                     if r.collidepoint(m):
-                        sc["picked"] = i
-                        ok = SEAT_QUIZ[sc["quiz"]]["options"][i][1]
-                        sc["score"] += 1 if ok else 0
-                        sc["say"] = SEAT_MENTOR["right" if ok else "wrong"]
-                        snd("ok" if ok else "bad")
+                        self._seat_quiz_pick(i)
                         return
             elif self._seat_btn_rect().collidepoint(m):
                 if sc["quiz"] + 1 < len(SEAT_QUIZ):
@@ -13327,6 +13336,81 @@ class Game:
                             self.seat_quiz_ok = True
                             self.save_progress()
                         snd("fanfare")
+
+    SEAT_FIX_DUR = 0.7      # с: рисунок зачёта переходит от ошибочной позы к исправленной
+    SEAT_FIX_WAIT = 1.2     # с: после неверного ответа сначала видна ошибка (красное пояснение), потом переход
+
+    def _seat_quiz_pick(self, i):
+        """Ответ в зачёте: счёт, реплика Мортимера и переход рисунка к правильной посадке (владелец 09.11).
+        Верно — переход сразу, подпись «Так правильно: …»; неверно — пауза с ошибочной позой, потом тот же переход,
+        подпись «Правильно так: …». «Без анимации» — сразу итог. Подпись — и в озвучку."""
+        sc = self.seatc
+        q = SEAT_QUIZ[sc["quiz"]]
+        sc["picked"] = i
+        ok = q["options"][i][1]
+        sc["score"] += 1 if ok else 0
+        sc["say"] = SEAT_MENTOR["right" if ok else "wrong"]
+        sc["fix_t0"] = self.t - 99.0 if calm() else self.t + (0.0 if ok else self.SEAT_FIX_WAIT)
+        snd("ok" if ok else "bad")
+        if q.get("fix"):
+            self.say(f"{tr('Так правильно' if ok else 'Правильно так')}: {tr(q['fix'])}", raw=True)
+
+    def _seat_fix_t(self):
+        """Доля перехода к исправленной позе 0..1 (плавно), None — ответа ещё нет."""
+        sc = self.seatc
+        if sc.get("picked") is None:
+            return None
+        u = max(0.0, min(1.0, (self.t - sc.get("fix_t0", -99.0)) / self.SEAT_FIX_DUR))
+        return u * u * (3.0 - 2.0 * u)
+
+    @staticmethod
+    def _seat_fix_kind(q):
+        """Как показать исправление: "side" — поза сбоку, "wedge"/"pads" — вид спереди, None — рисунок не меняется."""
+        qp = q.get("pose")
+        if not qp or qp.get("tilt"):
+            return None
+        if qp.get("front"):
+            return q.get("fix_front")
+        return "side"
+
+    def _seat_fix_pose(self, rect, qpose, t):
+        """Кадр перехода ошибочная поза -> норма: числа (глубина, подножка, высота, наклон таза, сползание)
+        плавно; флаги ошибок (красные зоны) — до середины перехода, дальше — как у нормы."""
+        case_b, cfg_b, pose_b = self._seat_demo_pose(rect, qpose)
+        if t <= 0.0:
+            return case_b, cfg_b, pose_b
+        case_g, cfg_g, pose_g = self._seat_demo_pose(rect, qpose, force_good=True)
+        if t >= 1.0:
+            return case_g, cfg_g, pose_g
+        lerp = lambda a, b: a + (b - a) * t                                    # noqa: E731
+        case = dict(case_g, seat_h=lerp(case_b["seat_h"], case_g["seat_h"]))
+        cfg = {k: lerp(cfg_b[k], cfg_g[k]) if isinstance(cfg_g.get(k), (int, float)) and k in cfg_b else cfg_g[k]
+               for k in cfg_g}
+        pose = dict(pose_b if t < 0.5 else pose_g)
+        for k in ("p", "slide"):
+            pose[k] = lerp(pose_b.get(k, 0), pose_g.get(k, 0))
+        return case, cfg, pose
+
+    def _draw_seat_fix_caption(self, surf, cv, text, top=False):
+        """Зелёная плашка «Так правильно: …» на рисунке зачёта: внизу (вид сбоку — там пол) или, top=True,
+        в правом верхнем углу (вид спереди: внизу таз и подкладка)."""
+        w = 244 if top else cv.w - 170                    # левее — Мортимер; сверху — правее черепа
+        sz = 15
+        while sz > 12 and len(wrap_lines(text, w, sz, raw=True)) > (2 if top else 1):
+            sz -= 1
+        nmax = 4 if top else 2                            # 125 % и английский: до 4 строк, без обрезки «…»
+        lines = wrap_lines(text, w, sz, raw=True)[:nmax]
+        lh = font(sz).get_height() + 2
+        bw = max(font(sz).size(ln)[0] for ln in lines) + 24
+        box = pygame.Rect(0, 0, bw, len(lines) * lh + 10)
+        if top:
+            box.topright = (cv.right - 8, cv.y + 8)
+        else:
+            box.midbottom = (cv.centerx + 40, cv.bottom - 8)
+            box.x = max(cv.x + 150, min(box.x, cv.right - 8 - box.w))
+        aa_rect(surf, (18, 46, 30, 236), box, border_radius=8)
+        aa_rect(surf, GOOD, box, 2, border_radius=8)
+        draw_wrapped(surf, text, (box.centerx, box.y + 5), w, sz, GOOD, center=True, raw=True, max_lines=nmax)
 
     # ---------- художественная отрисовка костей, черепа и магии Мортимера ----------
     def _draw_bone_seg(self, surf, p0, p1, r0, r1=None, col=(232, 224, 204), outline=(36, 30, 42), joint=True):
@@ -14182,15 +14266,20 @@ class Game:
                 ox, oy = -dy_ / ln_ * 5, dx_ / ln_ * 5
                 for q in (q0, q1):
                     DR.line(surf, col, (q[0] - ox, q[1] - oy), (q[0] + ox, q[1] + oy), 2)
-                draw_text(surf, label, T(*lp), 12, col, bold=True, plate=True, **kw)
+                m_labels.append((label, T(*lp), col, kw))     # подписи — после всех линий: плашка не перечёркнута
 
+            m_labels = []
+            # «спинка» — у верхнего конца мерки (уровень лопатки), а не посередине: в переводе и при крупном
+            # тексте середина налезала на «до подколенной ямки» (владелец 09.11)
+            dim((-15.0, 0.0), (-15.0, scap_bot[1]), MC, "спинка", (-16.5, scap_bot[1] + 3.0), right=True)
             pop_x = knee[0] - 3.0                # подколенная ямка — сзади колена
             y_th = hip[1] + 8.0
             dim((0.0, y_th), (pop_x, y_th), MC, "до подколенной ямки", (pop_x, y_th + 7.5), right=True)
             dim((depth, -7.0), (pop_x, -7.0), MG, "−5 см", (pop_x + 2.0, -5.0))
-            dim((-15.0, 0.0), (-15.0, scap_bot[1]), MC, "спинка", (-16.5, scap_bot[1] * 0.5 + 2), right=True)
             dim((hand[0] + 3.0, 2.0), (hand[0] + 3.0, elbow[1] - 1.5), MC, "локоть 90°", (hand[0] + 5.0, elbow[1] + 4.0))
             dim((knee[0] + 9.0, knee[1] - 3.0), (knee[0] + 9.0, -leg), MC, "голень", (knee[0] + 11.0, (knee[1] - leg) * 0.5))
+            for label, lp_, col, kw in m_labels:
+                draw_text(surf, label, lp_, 12, col, bold=True, plate=True, **kw)
 
         if not highlight:
             return
@@ -14225,9 +14314,11 @@ class Game:
             aa_rect(surf, (16, 12, 24, 235), (lx - tw // 2, ly - lab_h // 2, tw, lab_h), border_radius=4)   # текст — по центру ly
             draw_text(surf, label, (lx, ly), 12, col, bold=True, center=True)
 
-    def _seat_front(self, surf, rect, corrected=False, show_pads=True):
+    def _seat_front(self, surf, rect, corrected=False, show_pads=True, obl=None, wedge=0.0):
         """Схема спереди: перекос таза, сколиотическая дуга позвоночника, грудная клетка, череп,
-        три точки боковой поддержки и некромант Мортимер, выправляющий скелет нитями."""
+        три точки боковой поддержки и некромант Мортимер, выправляющий скелет нитями.
+        obl — перекос 0..1 (None — по corrected), для плавного перехода в зачёте; wedge 0..1 — подкладка под
+        высокую (правую) сторону без выпрямления таза: неисправимый перекос учитывают (зачёт, вопрос о подкладке)."""
         for gx in range(rect.x + 20, rect.right - 10, 36):
             DR.line(surf, (26, 29, 40), (gx, rect.y + 8), (gx, rect.bottom - 26), 1)
         for gy in range(rect.y + 16, rect.bottom - 26, 36):
@@ -14249,7 +14340,15 @@ class Game:
         aa_rect(surf, (58, 66, 112), (cx - 106 * k, by - 14 * k, 212 * k, 22 * k), border_radius=7)
         aa_rect(surf, (98, 110, 168), (cx - 106 * k, by - 14 * k, 212 * k, 22 * k), 2, border_radius=7)
 
-        obl = 0.12 if corrected else 1.0
+        if obl is None:
+            obl = 0.12 if corrected else 1.0
+        if wedge > 0.0:                                    # подкладка растёт снизу под высокой стороной таза
+            wh = 13.0 * wedge
+            wpoly = [(cx + 4 * k, by - 14 * k), (cx + 100 * k, by - 14 * k), (cx + 100 * k, by - (14 + wh) * k),
+                     (cx + 4 * k, by - (14 + 2.0 * wedge) * k)]
+            DR.polygon(surf, (70, 150, 110), wpoly)
+            DR.polygon(surf, (150, 230, 180), wpoly, 2)
+        accom = wedge >= 0.5                               # перекос учтён: таз не выпрямляли, но он «в норме»
         pl = (cx - 58 * k, by - (36 - 8 * (1 - obl)) * k)
         pr = (cx + 58 * k, by - (36 + 14 * obl) * k)
         pel_cx, pel_cy = (pl[0] + pr[0]) * 0.5, (pl[1] + pr[1]) * 0.5 + 8 * k
@@ -14269,7 +14368,7 @@ class Game:
                (pel_cx, pel_cy + 14 * k)]
         DR.polygon(surf, BONE_D, sac)
         DR.polygon(surf, BONE_OUT, sac, 2)
-        p_col = GOOD if corrected else AMBER
+        p_col = GOOD if (corrected or accom) else AMBER
         DR.line(surf, p_col, pl, pr, max(3, int(4 * k)))
         aa_circle(surf, p_col, (int(pl[0]), int(pl[1])), 4)
         aa_circle(surf, p_col, (int(pr[0]), int(pr[1])), 4)
@@ -14348,13 +14447,16 @@ class Game:
             (pl[0], pl[1], p_col, not corrected),
             (sh_l[0], sh_l[1], CYAN, False),
         ]
-        self._draw_necro_puppeteer(surf, rect, targets, bad_flag=not corrected)
+        self._draw_necro_puppeteer(surf, rect, targets, bad_flag=not (corrected or accom))
+        if accom:                                          # подпись подкладки — справа от неё, над колесом
+            labels.append((cx + 104 * k, by - 30 * k, font(12, True).size(tr("Подкладка"))[0], "Подкладка", -1))
         for tx, py, lw_, lab, dir_s in labels:
             x0_ = tx - lw_ if dir_s > 0 else tx
             aa_rect(surf, (16, 12, 24, 215), (x0_ - 4, py - 9, lw_ + 8, 20), border_radius=4)
             draw_text(surf, lab, (tx, py - 7), 12, CYAN, bold=True, right=dir_s > 0)
-        status = "Три точки держат ось позвоночника" if corrected else "Таз перекошен → дуга сколиоза"
-        draw_text(surf, status, (rect.x + 140, rect.y + 12), 12, GOOD if corrected else AMBER, bold=True)
+        status = ("Три точки держат ось позвоночника" if corrected else
+                  "Подкладка заполнила зазор" if accom else "Таз перекошен → дуга сколиоза")
+        draw_text(surf, status, (rect.x + 140, rect.y + 12), 12, GOOD if (corrected or accom) else AMBER, bold=True)
 
     def _draw_seat_909090_myth(self, surf, rect):
         """Иллюстрация к вопросу о мифе «90-90-90»: Мортимер и три скелета с разной целью посадки."""
@@ -14546,14 +14648,24 @@ class Game:
                 return
             q = SEAT_QUIZ[sc["quiz"]]
             qpose = q.get("pose")
-            if qpose and qpose.get("front"):
-                self._seat_front(surf, cv, corrected=False, show_pads=False)   # без подписей упоров — не подсказка
+            ft = self._seat_fix_t()                         # после ответа — переход к правильной посадке
+            kind = self._seat_fix_kind(q)
+            tt = ft if (ft is not None and kind) else 0.0
+            if qpose and qpose.get("front"):              # до ответа — без упоров и подписей: не подсказка
+                if kind == "wedge":
+                    self._seat_front(surf, cv, corrected=False, show_pads=False, wedge=tt)
+                else:
+                    self._seat_front(surf, cv, corrected=tt >= 0.5, show_pads=tt >= 0.5, obl=1.0 - 0.88 * tt)
             elif qpose:
-                case, cfg, pose = self._seat_demo_pose(cv, qpose)
+                case, cfg, pose = self._seat_fix_pose(cv, qpose, tt)
                 self._draw_seat_scene(surf, cv.inflate(-16, -24), case, cfg, pose,
                                       highlight=sc["picked"] is not None, show_necro=True)
             else:
                 self._draw_seat_909090_myth(surf, cv)
+            if ft is not None and q.get("fix") and (not kind or ft >= 1.0):
+                right = q["options"][sc["picked"]][1]
+                self._draw_seat_fix_caption(surf, cv, f"{tr('Так правильно' if right else 'Правильно так')}: {tr(q['fix'])}",
+                                            top=bool(qpose and qpose.get("front")))
             draw_text(surf, f"Вопрос {sc['quiz'] + 1} из {len(SEAT_QUIZ)}", (780, 120), 15, GREY, plate=True)
             draw_wrapped(surf, q["q"], (780, 146), 476, 20, WHITE, plate=True)
             for i, r in self._seat_quiz_rects():
@@ -17410,6 +17522,26 @@ def run_selftest():
             else:
                 gs.seatc.update(quiz=i, picked=0)
             gs.draw(scr)                                     # все экраны кабинета рисуются без падений
+    # зачёт: после верного ответа — исправленная поза (или явно «не нужна»), кадры перехода рисуются (владелец 09.11)
+    gs.seatc.update(tab="quiz", quiz_done=False)
+    for i, q in enumerate(SEAT_QUIZ):
+        if not q.get("fix"):
+            failures.append(f"вопрос посадки {i + 1}: нет подписи «Так правильно» (fix)")
+        kind = Game._seat_fix_kind(q)
+        qp = q.get("pose") or {}
+        if qp.get("front") and kind not in ("wedge", "pads"):
+            failures.append(f"вопрос посадки {i + 1}: вид спереди без fix_front (wedge/pads)")
+        if kind == "side":
+            _, cfg_b, pose_b = gs._seat_demo_pose(gs._seat_canvas(), qp)
+            _, cfg_g, pose_g = gs._seat_demo_pose(gs._seat_canvas(), qp, force_good=True)
+            if (cfg_b, pose_b.get("p"), pose_b.get("slide")) == (cfg_g, pose_g.get("p"), pose_g.get("slide")):
+                failures.append(f"вопрос посадки {i + 1}: исправленная поза не отличается от ошибочной")
+        gs.seatc.update(quiz=i, picked=None)
+        gs._seat_quiz_pick(next(j for j, o in enumerate(q["options"]) if o[1]))
+        for back in (Game.SEAT_FIX_DUR * 0.5, 99.0):        # середина перехода и конец
+            gs.seatc["fix_t0"] = gs.t - back
+            gs.draw(scr)
+    gs.seatc.update(quiz=0, picked=None, score=0)
 
     # насос к ниппелю засчитывается в шагах накачки; «Я не согласен» сохраняет замечание и снимает ошибку
     gd = Game(headless=True)
