@@ -564,6 +564,17 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+
+- 2026-11-10 — Claude (Fable 5.2) — **тест переехал в отдельный репозиторий** (решение владельца 09.11): `fordragon88/wheels-and-bones-test`
+  → https://fordragon88.github.io/wheels-and-bones-test/ (локальный клон `D:\wheels_and_bones\web_deploy_test`, в `.git/info/exclude`
+  основного checkout). Сборка из `test-build` (share-links + cushion-roho + web-quality-cap + seat-fixes), в копии game.py для веба
+  `SHARE_BASE_URL` = адрес теста; web_smoke по новому адресу — 26 ok, 0 FAIL. Старая подпапка `test/` в `wheels-and-bones-web`
+  осталась и больше не обновляется. **Грабли Pages:** «Page build failed» через ~10 мин — шаг deploy висит в `syncing_files` на
+  стороне GitHub (`gh run view <id> --repo … --log-failed`), статус-страница зелёная; лечится повтором
+  `gh api -X POST repos/<repo>/pages/builds`. Размер репозитория выкладки (2,5 ГБ, 122 сборки) причиной не был — моя первая
+  версия оказалась неверной. Перед этим в `test-build` влита `feature/seat-fixes` (Кабинет посадки: двойная кнопка Exit
+  fullscreen во фрейме, подписи мерок, вариант про подголовник, правильная посадка после ответа; мной после агента —
+  плашка вопроса 6 короче, верхние плашки до 4 строк): selftest, asset_check, ui/keyboard(en) playthrough, monkey — OK.
 - 2026-11-05 — Claude (Fable 5.1), ветка `feature/web-quality-cap` (влита в `test-build`, в main НЕТ) — **«моргание» экрана при
   вращении коляски в браузере** (владелец ловил дважды в тесте): это авто-снижение качества — два замера fps < 20 подряд в сцене
   задания → `apply_display()` пересоздаёт холст (чёрный кадр + надпись «Качество снижено…»). Вращение кадров поворота
