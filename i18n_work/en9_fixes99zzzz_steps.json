@@ -41,5 +41,6 @@
  "Разъёмы трогаем только на обесточенной коляске: сначала пульт, потом автомат. Крышка снимается без инструментов, автомат на Edge 4 — он же выключатель батарей.": "Connectors are only touched with the chair powered down: switch off the joystick first, then the breaker. The cover comes off without tools; the circuit breaker on the Edge 4 doubles as the battery disconnect.",
  "Срежь стяжки, вытащи ящик вбок, не суя рук в ножницы, и проверь: под рамой ни гаек, ни стяжек.": "Cut the zip ties, slide the box out sideways, hands clear of the scissors; check no nuts or ties remain.",
  "Кнопкой key 2 выбери «откидывание спинки» и джойстиком вперёд поднимай её, пока значок не станет зелёным.": "Select \"recline\" with key 2 and push the joystick forward to raise the backrest until the icon turns green.",
- "Актуатором спинки управляет джойстик. Меньше 20° — блокировка снята: контроллер сам сменит красный значок на зелёный.": "The joystick drives the backrest actuator. Under 20° the lockout clears: the controller itself switches the red icon to green."
+ "Актуатором спинки управляет джойстик. Меньше 20° — блокировка снята: контроллер сам сменит красный значок на зелёный.": "The joystick drives the backrest actuator. Under 20° the lockout clears: the controller itself switches the red icon to green.",
+ "Батарея вставлена, заряд полный. Питание уже сбрасывали (батарею вынимали на 10 с) — код 10 вернулся.": "The battery is in and fully charged. The power has already been reset (battery out for 10 s) — code 10 came back."
 }

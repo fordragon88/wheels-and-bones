@@ -1000,7 +1000,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 - *Joystick (control box)* — Joystick display: a red “10”, a beep, the wheelchair shuts off.
 - *Seat* — The seat sits on the post, but Saira recently removed it for a trip in a cart.
 - *Seat connector* — There's sand and fine dust on the connector contacts between the seat and the base.
-- *Battery* — The battery is inserted, charge full.
+- *Battery* — The battery is in and fully charged. The power has already been reset (battery out for 10 s) — code 10 came back.
 - *Freewheel lever* — The freewheel levers are up — the brakes are locked.
 - *Joystick knob (stick)* — The joystick is centered and moves smoothly.
 
