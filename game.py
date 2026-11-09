@@ -12964,15 +12964,20 @@ class Game:
                 ox, oy = -dy_ / ln_ * 5, dx_ / ln_ * 5
                 for q in (q0, q1):
                     DR.line(surf, col, (q[0] - ox, q[1] - oy), (q[0] + ox, q[1] + oy), 2)
-                draw_text(surf, label, T(*lp), 12, col, bold=True, plate=True, **kw)
+                m_labels.append((label, T(*lp), col, kw))     # подписи — после всех линий: плашка не перечёркнута
 
+            m_labels = []
+            # «спинка» — у верхнего конца мерки (уровень лопатки), а не посередине: в переводе и при крупном
+            # тексте середина налезала на «до подколенной ямки» (владелец 09.11)
+            dim((-15.0, 0.0), (-15.0, scap_bot[1]), MC, "спинка", (-16.5, scap_bot[1] + 3.0), right=True)
             pop_x = knee[0] - 3.0                # подколенная ямка — сзади колена
             y_th = hip[1] + 8.0
             dim((0.0, y_th), (pop_x, y_th), MC, "до подколенной ямки", (pop_x, y_th + 7.5), right=True)
             dim((depth, -7.0), (pop_x, -7.0), MG, "−5 см", (pop_x + 2.0, -5.0))
-            dim((-15.0, 0.0), (-15.0, scap_bot[1]), MC, "спинка", (-16.5, scap_bot[1] * 0.5 + 2), right=True)
             dim((hand[0] + 3.0, 2.0), (hand[0] + 3.0, elbow[1] - 1.5), MC, "локоть 90°", (hand[0] + 5.0, elbow[1] + 4.0))
             dim((knee[0] + 9.0, knee[1] - 3.0), (knee[0] + 9.0, -leg), MC, "голень", (knee[0] + 11.0, (knee[1] - leg) * 0.5))
+            for label, lp_, col, kw in m_labels:
+                draw_text(surf, label, lp_, 12, col, bold=True, plate=True, **kw)
 
         if not highlight:
             return
