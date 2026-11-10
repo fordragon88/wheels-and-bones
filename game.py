@@ -101,6 +101,7 @@ else:
 IS_WEB = sys.platform == "emscripten"          # браузерная версия (pygbag, WebAssembly)
 WEB_RES = {"standard": (1280, 720), "high": (1920, 1080), "ultra": (2560, 1440)}   # холст в браузере
 WEB_LEVELS = ("standard", "high", "ultra")
+WEB_LOW_W = 960                                # запасная ступень «авто» после замедления, когда холст уже 720p (rs 0,75)
 WEB_MIN_W = 768                                # «авто» в браузере: холст не меньше (масштаб рендера 0,6)     # «авто» выбирает по размеру окна игры на экране (и скорости ПК)
 GAME_VERSION = "0.4"
 SUPPORT_URL = "https://www.zeffy.com/en-US/donation-form/learn-to-fix-wheelchairs?utm_source=game"   # Zeffy GOAT (utm_source=game — просьба коллеги 28.10, чтобы считать пожертвования из игры) «Learn to fix wheelchairs» (с 27.10.2026; раньше PayPal hosted_button_id=LFKGMSGCNHYHC)
@@ -2510,11 +2511,16 @@ def web_target_res():
     q = DISPLAY.get("web_quality", "auto")
     if q in WEB_RES:
         return WEB_RES[q]
+    if DISPLAY.get("web_force_w"):                     # отладка: ?px=960 — холст заданной ширины (замеры на телефоне)
+        w = DISPLAY["web_force_w"]
+        return (w, w * 9 // 16)
     px = DISPLAY.get("web_px") or 1920
     cap = DISPLAY.get("web_cap", len(WEB_LEVELS) - 1)
     top = WEB_RES[WEB_LEVELS[max(0, min(cap, len(WEB_LEVELS) - 1))]][0]
-    if TOUCH["on"]:                                    # телефон/планшет: плотный экран, мало памяти — не шире 1080p
-        top = min(top, WEB_RES["high"][0])
+    if TOUCH["on"]:                                    # телефон/планшет: рисуем программно, а экран плотный (dpr 3–4):
+        top = min(top, WEB_RES["standard"][0])         # 1080p давал 14 fps на телефоне владельца (10.11) — не шире 720p
+    if DISPLAY.get("web_low"):                         # и после замедления на 720p — ещё ступень вниз
+        top = min(top, WEB_LOW_W)
     # холст ровно с окно игры (пиксель в пиксель): браузеру нечего ужимать — кружки и линии не рвутся
     w = int(max(WEB_MIN_W, min(top, round(px / 16) * 16)))
     return (w, w * 9 // 16)
@@ -2539,6 +2545,7 @@ def set_web_quality(q, by_user=True):
     if by_user:
         DISPLAY["web_quality_user"] = q != "auto"
         DISPLAY.pop("web_cap", None)                  # игрок выбрал сам — потолок от замедления сбрасываем
+        DISPLAY.pop("web_low", None)
     if DISPLAY.get("res") == web_target_res():
         return True
     try:
@@ -2611,7 +2618,8 @@ def present(frame):
         screen.blit(buf, view.topleft)
 
 
-FPS_HUD = dict(on=False, n=0, t=0.0, hist=[], text="", font=None)   # плашка fps (?fps=1 / --fps), по умолчанию выкл
+from time import perf_counter as _perf_counter      # замер частей кадра для плашки fps
+FPS_HUD = dict(on=False, n=0, t=0.0, hist=[], text="", font=None, ms=[0.0, 0.0, 0.0, 0.0])   # плашка fps (?fps=1 / --fps), по умолчанию выкл
 
 
 def fps_hud_wanted(query=""):
@@ -2638,8 +2646,11 @@ def fps_hud_tick(dt):
     h["hist"] = (h["hist"] + [fps])[-10:]
     scr = pygame.display.get_surface()
     cw, ch = scr.get_size() if scr else (0, 0)
+    fr = max(1, round(fps * 1.0))                              # кадров в прошедшей секунде
+    u, d, p, fl = (1000 * v / fr for v in h["ms"])             # мс на кадр: логика, отрисовка, вывод кадра, flip
+    h["ms"] = [0.0, 0.0, 0.0, 0.0]
     h["text"] = (f"fps {fps:.0f} · min10s {min(h['hist']):.0f} · " + tr("холст") + f" {cw}×{ch} · rs {RS:g}"
-                 + (" · touch" if TOUCH["on"] else ""))
+                 + (" · touch" if TOUCH["on"] else "") + f" · upd {u:.0f} draw {d:.0f} pres {p:.0f} flip {fl:.0f} ms")
 
 
 def fps_hud_draw(screen):
@@ -14892,6 +14903,13 @@ def run_selftest():
         assert web_target_res() == _want, f"холст для {_px} px: {web_target_res()} вместо {_want}"
     DISPLAY["web_px"], DISPLAY["web_cap"] = 2000, 0
     assert web_target_res()[0] <= WEB_RES["standard"][0], "после замедления холст не больше 720p"
+    DISPLAY.pop("web_cap", None); DISPLAY["web_px"] = 2600          # телефон: плотный экран, но холст не шире 720p
+    _t0 = TOUCH["on"]; TOUCH["on"] = True
+    assert web_target_res() == WEB_RES["standard"], f"сенсорный экран: холст {web_target_res()} вместо 720p"
+    DISPLAY["web_low"] = True
+    assert web_target_res() == (WEB_LOW_W, WEB_LOW_W * 9 // 16), f"после замедления на 720p: {web_target_res()}"
+    DISPLAY.pop("web_low", None); TOUCH["on"] = _t0
+    assert web_target_res()[0] == 2560, "с мышью холст по-прежнему по окну (до 1440p)"
     for _k, _v in _d0.items():
         if _v is None:
             DISPLAY.pop(_k, None)
@@ -15797,6 +15815,12 @@ async def main():
     _q = web_link_query()
     game.apply_link(_q)                   # ?jobs=…/?load=… (браузер) или --link "<адрес>" (десктоп); без них — ничего
     FPS_HUD["on"] = fps_hud_wanted(_q)    # ?fps=1 / --fps — плашка fps в углу (снять цифры с телефона)
+    try:                                  # ?px=960 — отладка: ширина холста 768…2560 (вместе с ?fps=1)
+        _pxw = int(urllib.parse.parse_qs(str(_q or "").split("?", 1)[-1].split("#", 1)[0]).get("px", ["0"])[-1])
+        if _pxw:
+            DISPLAY["web_force_w"] = max(WEB_MIN_W, min(2560, _pxw // 16 * 16))
+    except Exception:
+        pass
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0
@@ -15828,13 +15852,21 @@ async def main():
             if DISPLAY.pop("rs_changed", False):
                 game.m3d = None
                 game._fade_from = game._last_frame = None
+            _pc = _perf_counter if FPS_HUD["on"] else None           # замер по частям — только с плашкой fps
+            _t0 = _pc() if _pc else 0
             game.update(dt)
+            _t1 = _pc() if _pc else 0
             game.draw(DISPLAY["frame"])                    # кадр пересоздаётся при смене разрешения
+            _t2 = _pc() if _pc else 0
             present(DISPLAY["frame"])
+            _t3 = _pc() if _pc else 0
             if FPS_HUD["on"]:
                 fps_hud_tick(dt)
                 fps_hud_draw(pygame.display.get_surface())
             pygame.display.flip()
+            if _pc:
+                _m = FPS_HUD["ms"]
+                _m[0] += _t1 - _t0; _m[1] += _t2 - _t1; _m[2] += _t3 - _t2; _m[3] += _pc() - _t3
             if IS_WEB:
                 DISPLAY["_px_t"] = DISPLAY.get("_px_t", 0) + dt
                 if DISPLAY["_px_t"] > 1 and DISPLAY.get("web_quality", "auto") == "auto":   # окно игры поменялось?
@@ -15862,6 +15894,11 @@ async def main():
                         DISPLAY["web_cap"] = lower[-1]         # слабый ПК: холст не больше этой ступени
                         DISPLAY["_slow"] = 0
                         DISPLAY["_cap_due"] = (game.scene, game.t, f"fps-cap {fps:.0f}")   # применить при смене экрана
+                    elif (DISPLAY["_slow"] >= 3 and DISPLAY.get("web_quality", "auto") == "auto" and cw > WEB_LOW_W
+                          and not DISPLAY.get("web_low")):      # уже 720p и всё равно медленно (телефон): холст 960×540
+                        DISPLAY["web_low"] = True
+                        DISPLAY["_slow"] = 0
+                        DISPLAY["_cap_due"] = (game.scene, game.t, f"fps-low {fps:.0f}")
                 due = DISPLAY.get("_cap_due")                 # пересоздание холста — «моргание»: делаем его на смене
                 if due and (game.scene != due[0] or game.t - due[1] > 45):   # экрана (или через 45 с, если игрок засел)
                     DISPLAY.pop("_cap_due", None)
