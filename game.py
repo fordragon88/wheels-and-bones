@@ -7806,14 +7806,20 @@ class Game:
     RIDE_SECS = 4.0                       # проезд после ремонта: успеть разглядеть клиента (было 2,3 с — «слишком быстро»)
     # Герои с петлёй проезда (боковой вид из клипа H3, едут вправо; art_tests/ride_loop.py): вместо портрета — петля.
     RIDE_ANIM = {"martin.png": "ride_martin", "client_dwarf.png": "ride_wolf", "client_sorceress.png": "ride_mora",
-                 "client_elf.png": "ride_aelin"}
+                 "client_elf.png": "ride_aelin", "client_orc.png": "ride_gra", "client_troll.png": "ride_bomm",
+                 "client_aeroz.png": "ride_yuki", "client_fairy.png": "ride_tilly"}
     # петля: (кадров/с, путь колеса по полу за 1 с петли в высотах кадра, предел ускорения петли) — замер
     # art_tests/ride_loop.py (ride_shots/*_info.json). Петля идёт не по часам, а по пройденному пути: колёса не
     # проскальзывают, при торможении и руки замедляются. Предел — чтобы руки не «мельтешили» (у Моры рук в кадре нет);
     # выше предела колесо чуть проскальзывает. Мартин — 19 к/с: в клипе H3 каждый 4-й кадр повтор, повторы выброшены.
     # Аэлин: в клипе колесо почти не вращается (спицы «приклеены» к раме) — путь по толчкам, предел 2,4.
     RIDE_LOOP = {"ride_martin": (19, 0.28, 2.4), "ride_wolf": (12, 0.23, 2.4), "ride_mora": (12, 0.21, 4.0),
-                 "ride_aelin": (12, 0.026, 2.4)}
+                 "ride_aelin": (12, 0.026, 2.4),
+                 # вторая партия. Тонкие частые спицы (Гра, Юки, Тилли — как у Аэлин): поворот колеса не измерить и глазом
+                 # не видно, путь условный, а предел подобран под толчок ~0,7 с на полном ходу (в петле один толчок:
+                 # Гра 1,67 с, Юки 1,08 с, Тилли 1,5 с). Бомм — восемь толстых спиц, путь по замеру колеса.
+                 "ride_gra": (12, 0.03, 2.4), "ride_bomm": (12, 0.27, 2.4), "ride_yuki": (12, 0.03, 1.6),
+                 "ride_tilly": (12, 0.03, 2.1)}
     RIDE_ANIM_SECS = 4.6                  # проезд с петлёй: въезд слева, торможение и остановка в центре
     RIDE_ANIM_H = 330                     # высота кадра петли (портрет — 250): колёса на той же линии пола
     RIDE_FLOOR = 534                      # низ кадра петли (в кадре поле ~4 px под колёсами — пол на y≈530, как у портрета)
@@ -7835,8 +7841,11 @@ class Game:
 
     RIDE_FLIP = {"client_iris.png", "client_iris_mom.png", "client_f5.png"}   # портреты, где коляска смотрит влево
 
-    def _ride_anim_size(self):
-        return (round(self.RIDE_ANIM_H * 1.05), self.RIDE_ANIM_H)   # кадры уже 1,05 высоты — вписаны по высоте
+    RIDE_SCALE = {"ride_tilly": 0.8}      # Тилли — ребёнок в детской коляске: рядом с орком и троллем мельче
+
+    def _ride_anim_size(self, name=None):
+        h = round(self.RIDE_ANIM_H * self.RIDE_SCALE.get(name, 1.0))
+        return (round(h * 1.05), h)       # кадры уже 1,05 высоты — вписаны по высоте
 
     def _draw_ride_anim(self, surf, name):
         """Проезд петлёй: въезд из-за левого края, полный ход, плавная остановка в центре мастерской (там после
@@ -7849,7 +7858,7 @@ class Game:
         else:
             u = (k - p) / (1 - p)
             e, v = (p + (1 - p) * 2 / math.pi * math.sin(math.pi / 2 * u)) / dist, math.cos(math.pi / 2 * u)
-        size = self._ride_anim_size()
+        size = self._ride_anim_size(name)
         x0, x1 = -size[0] / 2, self._chair_rect().centerx
         P = x1 - x0
         fps, roll, rate = self.RIDE_LOOP.get(name, (ANIM_FPS, 0.25, 2.4))
@@ -13321,7 +13330,7 @@ class Game:
             draw_wrapped(surf, job["test"], (360, 100), 560, 19, WHITE)
             if self.ride_t0 is None:
                 if not self.ride_done and self.ride_anim():   # пока читают — подгрузить кадры петли проезда
-                    anim_prefetch(self.ride_anim(), self._ride_anim_size())
+                    anim_prefetch(self.ride_anim(), self._ride_anim_size(self.ride_anim()))
                 self._draw_ride_done(surf)
                 Button(self._test_btn_rect(), "ГОТОВО ▸" if self.ride_done else "ПРОКАТИТЬ И ПРОВЕРИТЬ",
                        GOOD).draw(surf, mouse)

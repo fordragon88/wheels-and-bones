@@ -46,6 +46,32 @@ def bg_color(f):
     return np.median(b, 0).astype(np.float32)
 
 
+def stabilize(fr, bgs, mode):
+    """Герой «уплывает» в кадре (Тилли: 80 px вправо за клип — петля не замыкается). Сдвиг — по жёсткой части
+    коляски: левый и правый край силуэта в нижней трети (колёса, подножка; руки и крылья выше). Края сглажены
+    кубической кривой по времени (дрейф плавный, край даёт шум ±1 px), сдвиг дробный, поле — цветом фона."""
+    xs = []
+    for f, b in zip(fr, bgs):
+        c = f.astype(np.int16)
+        r, g, bl = c[..., 0], c[..., 1], c[..., 2]
+        kv = (g - np.maximum(r, bl)) if mode == "green" else (np.minimum(r, bl) - g)
+        on = kv < 40
+        rows = np.where(on.any(1))[0]
+        cols = np.where(on[int(rows.min() + 0.66 * (rows.max() - rows.min())):].any(0))[0]
+        xs.append((cols.min() + cols.max()) / 2)
+    xs = np.array(xs, np.float64)
+    t = np.arange(len(xs))
+    fit = np.polyval(np.polyfit(t[1:], xs[1:], 3), t)                 # кадр 0 — исходная картинка
+    fit[0] = xs[0]
+    dx = fit - np.median(fit)
+    out = np.empty_like(fr)
+    for i, f in enumerate(fr):
+        M = np.float32([[1, 0, -dx[i]], [0, 1, 0]])
+        out[i] = cv2.warpAffine(f, M, (f.shape[1], f.shape[0]), flags=cv2.INTER_LINEAR,
+                                borderMode=cv2.BORDER_CONSTANT, borderValue=[float(v) for v in bgs[i]])
+    return out, float(dx.max() - dx.min()), float(np.abs(xs[1:] - fit[1:]).max())
+
+
 # ---------- петля ----------
 def dedup(fr, bgs):
     """Повторы кадров: H3 иногда даёт 18 к/с, растянутые до 24 повтором каждого 3-го (у Мартина шаг 0 через
@@ -93,7 +119,7 @@ def pick_loop(fr, bgs, lmin=18, lmax=72, step=1):
 
 
 # ---------- ключ ----------
-def key_frame(f, bg, mode, lo, hi, choke=0.15):
+def key_frame(f, bg, mode, lo, hi, choke=0.15, thin=0):
     c = f.astype(np.float32)
     r, g, b = c[..., 0], c[..., 1], c[..., 2]
     if mode == "green":                                                  # «экранность»: насколько канал фона
@@ -102,6 +128,13 @@ def key_frame(f, bg, mode, lo, hi, choke=0.15):
         kv, kb = np.minimum(r, b) - g, min(bg[0], bg[2]) - bg[1]
     kv = kv / kb                                                         # 1 — как фон, 0 и меньше — не фон
     a = np.clip((hi - kv) / (hi - lo), 0, 1)
+    if thin:
+        # тонкие светлые спицы (1 px поверх фона: Гра, Юки, Тилли): H3 жмёт цвет 4:2:0, оттенок спицы — почти фон,
+        # «экранность» даёт рваную полупрозрачную линию, и её куски уходят как островки. Яркость же у спицы заметно
+        # выше фона (фон ровный): светлее фона на thin…thin+45 — непрозрачность 0…1
+        y = c @ np.float32([0.299, 0.587, 0.114])
+        yb = float(bg @ np.float32([0.299, 0.587, 0.114]))
+        a = np.maximum(a, np.clip((y - yb - thin) / 45.0, 0, 1))
     clear = (a <= 0.02).astype(np.uint8)
     near = cv2.dilate(clear, np.ones((7, 7), np.uint8)) > 0             # кромка: ≤ 3 px от прозрачного
     semi = (a > 0.02) & (a < 0.98)
@@ -293,6 +326,8 @@ def main():
     ap.add_argument("--wheel", default="", help="cx,cy,r колеса в кадре петли (если круг Хафа ошибся)")
     ap.add_argument("--amax", type=float, default=25, help="поиск поворота колеса за кадр, ± градусов")
     ap.add_argument("--margin", type=int, default=6)
+    ap.add_argument("--thin", type=float, default=0, help="сохранять тонкие светлые детали: порог «светлее фона» (14)")
+    ap.add_argument("--stab", action="store_true", help="снять плавный дрейф героя по горизонтали (Тилли)")
     ap.add_argument("--out", default=os.path.join(ROOT, "assets", "anim"))
     args = ap.parse_args()
     lo = args.lo if args.lo is not None else 0.2
@@ -300,6 +335,9 @@ def main():
 
     fr = read_frames(args.mp4)
     bgs = [bg_color(f) for f in fr]
+    if args.stab:
+        fr, drift, resid = stabilize(fr, bgs, args.key)
+        print(f"{args.name}: выравнивание — дрейф {drift:.0f} px снят, остаток края ±{resid:.1f} px")
     keep, src_fps = dedup(fr, bgs)
     if len(keep) < len(fr):
         src_fps = round(src_fps)
@@ -317,7 +355,7 @@ def main():
 
     rgbs, alphas = [], []
     for i in idx:
-        rgb, a = key_frame(fr[i], bgs[i], args.key, lo, hi, args.choke)
+        rgb, a = key_frame(fr[i], bgs[i], args.key, lo, hi, args.choke, args.thin)
         rgbs.append(rgb)
         alphas.append(a)
     if args.fade and len(idx) > 2 * args.fade and args.step == 1:                           # шов: последние кадры плавно в кадры до начала
@@ -325,7 +363,7 @@ def main():
             j = s - args.fade + k                                        # кадр, который шёл бы перед первым
             if j < 1:
                 break
-            rp, ap_ = key_frame(fr[j], bgs[j], args.key, lo, hi, args.choke)
+            rp, ap_ = key_frame(fr[j], bgs[j], args.key, lo, hi, args.choke, args.thin)
             t = (k + 1) / (args.fade + 1)
             p = len(idx) - args.fade + k
             rgbs[p] = rgbs[p] * (1 - t) + rp * t

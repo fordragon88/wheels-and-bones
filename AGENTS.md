@@ -89,7 +89,7 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 | `build_exe.bat`, `exe_assets.py`, `WheelsAndBones.spec` | один exe (PyInstaller); `exe_assets.py` — копия assets без полных моделей и тел |
 | `assets/turntable/` | кадры поворота колясок `chair_<k>_NN.jpg` + `.a.png`, `index.json`/`index_folk.json` (центры деталей) |
 | `assets/anim/martin_wave/`, `barty_wave/` | петли «машет рукой» из ролика (36 кадров, 12 к/с, `NN.jpg` + маска `NN.a.png`, 560 px); исходники — `tools/hyperframes/trailer/assets/*_wave.webm`, кадры 45–80 и 30–65 (стык почти незаметен) |
-| `assets/anim/ride_martin/`, `ride_wolf/`, `ride_mora/`, `ride_aelin/` | петли **проезда** (боковой вид, едут вправо) для тест-драйва: `NN.jpg` + `NN.a.png`, 440 px; Мартин 31 кадр 19 к/с, Вольф 13 и Мора 12 кадров 12 к/с, Аэлин 21 кадр 12 к/с. Делает `python art_tests/ride_loop.py <имя> <mp4> --key green\|magenta [--step 2] [--wheel cx,cy,r]` из клипов MiniMax H3 `art_tests/codex_ride/<герой>/h3_v*/…mp4` (промпты — `tools/trailer/make_ride_prompts.py` в основной папке, не в git); листы проверки ключа и шва, замер колеса — `art_tests/ride_shots/` (не в git) |
+| `assets/anim/ride_martin/`, `ride_wolf/`, `ride_mora/`, `ride_aelin/`, `ride_gra/`, `ride_bomm/`, `ride_yuki/`, `ride_tilly/` | петли **проезда** (боковой вид, едут вправо) для тест-драйва: `NN.jpg` + `NN.a.png`, 440 px; Мартин 31 кадр 19 к/с, Вольф 13 и Мора 12 кадров 12 к/с, Аэлин 21 кадр 12 к/с; вторая партия (12 к/с): Гра 20, Бомм 21, Юки 13, Тилли 18 кадров. Ключи `ride_loop.py`: `--thin 14` — сохранять тонкие светлые спицы (Аэлин, Гра, Юки, Тилли: без него колесо выходит пустым), `--stab` — снять плавный дрейф героя в кадре (Тилли). Делает `python art_tests/ride_loop.py <имя> <mp4> --key green\|magenta [--step 2] [--wheel cx,cy,r]` из клипов MiniMax H3 `art_tests/codex_ride/<герой>/h3_v*/…mp4` (промпты — `tools/trailer/make_ride_prompts.py` в основной папке, не в git); листы проверки ключа и шва, замер колеса — `art_tests/ride_shots/` (не в git) |
 | `assets/fonts/` | шрифты и их лицензии |
 | `tools/` | portable Blender, `render_in/`/`render_out/` кадров; не в git |
 | `CLAUDE.md`, `GEMINI.md`, `MUSE_3D_TASK.md` | указатели для агентов (читать AGENTS.md); задание для Muse по 3D (архив) |
@@ -109,9 +109,10 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
    `anim_frame(…, fps)` — у петли своя частота (по умолчанию `ANIM_FPS` 12); `anim_count(имя)` — число кадров;
    `anim_prefetch(имя, размер)` — подгрузить ещё один кадр в кэш (браузер: не заикаться при первом показе).
    **Проезд в тест-драйве** (`Game._draw_ride`): если портрет клиента есть в `Game.RIDE_ANIM` (`martin.png`, `client_dwarf.png`,
-   `client_sorceress.png`, `client_elf.png` → `ride_*`) и кадры есть — вместо скользящего портрета 3/4 едет петля бокового
+   `client_sorceress.png`, `client_elf.png`, `client_orc.png`, `client_troll.png`, `client_aeroz.png`, `client_fairy.png` → `ride_*`) и кадры есть — вместо скользящего портрета 3/4 едет петля бокового
    вида (`_draw_ride_anim`): въезд из-за левого края, полный ход 60 % времени, плавное торможение до центра мастерской
-   (`CHAIR_CX`, там после проезда стоит портрет), `RIDE_ANIM_SECS` = 4,6 с, высота кадра `RIDE_ANIM_H` 330, низ кадра
+   (`CHAIR_CX`, там после проезда стоит портрет), `RIDE_ANIM_SECS` = 4,6 с, высота кадра `RIDE_ANIM_H` 330 (× `RIDE_SCALE[имя]`:
+   Тилли 0,8 — ребёнок), низ кадра
    `RIDE_FLOOR` 534 (колёса на y≈530, как у портрета), `RIDE_FLIP` не применяется. Кадр петли — по пройденному пути, не по
    часам: `RIDE_LOOP[имя] = (к/с, путь колеса за 1 с петли в высотах кадра, предел ускорения)` — замер `ride_loop.py`
    (`*_info.json`); колёса не проскальзывают, при торможении и руки замедляются; выше предела (руки не «мельтешат»)
@@ -636,6 +637,15 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-11-10 — Claude (Fable 5.2), ветка `feature/ride-anim` (только тестовая сборка) — **проезд: вторая партия героев**
+  (выбор владельца): Гра (`bearing`), Бомм (`cushion`), Юки (`aeroz_lock`), Тилли (`spokes`) — `assets/anim/ride_gra`,
+  `ride_bomm`, `ride_yuki`, `ride_tilly`; `RIDE_ANIM`, `RIDE_LOOP` (у героев с тонкими спицами путь колеса не измерить —
+  предел подобран под толчок ~0,7 с на полном ходу), `RIDE_SCALE` (Тилли 0,8). Клип Юки пересчитан (v3): владелец —
+  «как будто не движется вперёд»; в сцене длинный толчок, наклон корпуса, хвост и шнурки по ветру.
+  `art_tests/ride_loop.py`: `--thin` (ключ по яркости для тонких светлых спиц — раньше рвались на куски и уходили как
+  «островки», колесо было пустым; Аэлин перерезана с тем же отрезком петли) и `--stab` (Тилли в клипе уезжала вправо на
+  88 px — петля не замыкалась, шов 5,2 шага → 0,8). Проверки §10а зелёные.
 
 - 2026-11-10 — Claude (Opus 5.5), ветка `feature/ride-anim` (от `origin/test-build`; НЕ слита, только для тестовой сборки) —
   **тест-драйв: герой едет «натурально»**. Для Мартина, Вольфа, Моры и Аэлин вместо скользящего портрета 3/4 — петля бокового
