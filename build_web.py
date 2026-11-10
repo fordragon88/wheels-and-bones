@@ -2,13 +2,14 @@
 
 Собирает папку web_build/wheels_and_bones (main.py + game.py + assets, музыка в .ogg),
 затем pygbag кладёт готовый сайт в web_build/wheels_and_bones/build/web/:
-  index.html + wheels_and_bones.apk + favicon.png — эти файлы и выкладываются на сервер.
+  index.html + wheels_and_bones.apk + favicon.png + папки turntable/ и anim/ (кадры поворота колясок и петли
+  проезда героев — браузер качает их по мере надобности) — всё это и выкладывается на сервер.
 --serve — после сборки запустить локальный сервер (проверять через http://127.0.0.1:8000).
 --deploy — выложить сборку на GitHub Pages: https://fordragon88.github.io/wheels-and-bones-web/
            (публичный репозиторий только со сборкой; клон — в web_deploy/).
 --off — скрыть всё: выключить GitHub Pages и сделать репозиторий приватным.
 --on  — открыть: репозиторий публичный + GitHub Pages включены (сайт оживает через ~1 мин)."""
-import re, os, sys, shutil, subprocess
+import re, os, sys, json, shutil, subprocess
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 APP = os.path.join(ROOT, "web_build", "wheels_and_bones")
@@ -48,6 +49,41 @@ def _bleed(im):
     return Image.fromarray(np.uint8(np.clip(out, 0, 255)))
 
 
+def ride_loops():
+    """Петли проезда героев assets/anim/ride_<имя>/ (NN.jpg + NN.a.png подряд с 00) -> {имя: кадров}.
+    В пакет игры не кладутся: build() выкладывает их рядом с игрой (build/web/anim/), браузер качает петлю героя,
+    когда открыто его задание (game.AnimWeb); в пакете — только этот список (assets/anim/ride_index.json)."""
+    out = {}
+    base = os.path.join(ROOT, "assets", "anim")
+    for name in sorted(os.listdir(base)):
+        d = os.path.join(base, name)
+        if name.startswith("ride_") and os.path.isdir(d):
+            n = 0
+            while os.path.exists(os.path.join(d, f"{n:02d}.jpg")) and os.path.exists(os.path.join(d, f"{n:02d}.a.png")):
+                n += 1
+            if n:
+                out[name] = n
+    return out
+
+
+def shrink_anim(fp, out=None):
+    """Кадр петли героя (JPEG + маска 560 px) для браузера: холсту 1920×1080 хватает 400 px, маске — половины (игра
+    растягивает её до размера кадра, _load_split) и 32 уровней прозрачности — втрое легче."""
+    from PIL import Image
+    out = out or fp
+    name = os.path.basename(fp)
+    im = Image.open(fp)
+    h = 200 if name.endswith(".a.png") else 400
+    im = im.resize((round(im.width * h / im.height), h), Image.LANCZOS)
+    if name.endswith(".jpg"):
+        im.save(out, "JPEG", quality=80, optimize=True)
+    else:
+        alpha = im.convert("RGBA").split()[3].point(lambda v: round(v / 255 * 31) * 255 // 31)
+        mask = Image.new("RGBA", alpha.size, (255, 255, 255, 0))
+        mask.putalpha(alpha)
+        mask.save(out, "PNG", optimize=True)
+
+
 def stage():
     if os.path.isdir(APP):
         shutil.rmtree(APP)
@@ -63,8 +99,12 @@ def stage():
         out = set(skip(d, names))
         if os.path.basename(d) == "turntable":                # кадры поворота — не в пакет, а рядом на сайт:
             out |= {n for n in names if n.endswith((".png", ".jpg"))}   # и png, и jpg+маски (в пакете — только index*.json;
+        if d == os.path.join(src, "anim"):                    # петли проезда героев — тоже рядом на сайт (build: anim/),
+            out |= set(ride_loops())                          # браузер качает петлю героя, когда открыто его задание
         return out                                            # браузер качает кадры с сайта, 23.10 jpg весили 27 МБ в архиве)
     shutil.copytree(src, dst, ignore=ignore)
+    with open(os.path.join(dst, "anim", "ride_index.json"), "w", encoding="utf-8") as f:   # манифест: имя -> кадров
+        json.dump(ride_loops(), f, ensure_ascii=False, sort_keys=True)
     # 3D-модели (*_ai.json, 12 МБ) не берём: без numpy в браузере их не отрисовать. В окне диагностики
     # коляску показывают кадры поворота (assets/turntable): игра скачивает их с сайта, когда коляска на экране
     # музыка: браузер надёжно играет .ogg
@@ -97,17 +137,8 @@ def stage():
     # половины (игра растягивает её до размера кадра, _load_split) и 32 уровней прозрачности: в пакете ~1,5 МБ вместо 3,2
     for d, _, names in os.walk(os.path.join(dst, "anim")):
         for name in names:
-            fp = os.path.join(d, name)
-            im = Image.open(fp)
-            h = 200 if name.endswith(".a.png") else 400
-            im = im.resize((round(im.width * h / im.height), h), Image.LANCZOS)
-            if name.endswith(".jpg"):
-                im.save(fp, "JPEG", quality=80, optimize=True)
-            else:
-                alpha = im.convert("RGBA").split()[3].point(lambda v: round(v / 255 * 31) * 255 // 31)
-                mask = Image.new("RGBA", alpha.size, (255, 255, 255, 0))
-                mask.putalpha(alpha)
-                mask.save(fp, "PNG", optimize=True)
+            if name.endswith((".jpg", ".png")):
+                shrink_anim(os.path.join(d, name))
     # значок вкладки
     import pygame
     icon = pygame.image.load(os.path.join(src, "ghost.png"))
@@ -125,8 +156,35 @@ def build(serve=False):
     shutil.rmtree(tt, ignore_errors=True)
     shutil.copytree(os.path.join(ROOT, "assets", "turntable"), tt,
                     ignore=lambda d, names: [n for n in names if not n.endswith((".png", ".jpg"))])
-    subprocess.run(cmd, check=True, cwd=ROOT)
-    polish_index(os.path.join(APP, "build", "web"))
+    anim = os.path.join(APP, "build", "web", "anim")          # петли проезда героев — тоже файлами рядом с игрой,
+    shutil.rmtree(anim, ignore_errors=True)                   # ужатые как петли в пакете (shrink_anim)
+    for name, n in ride_loops().items():
+        os.makedirs(os.path.join(anim, name))
+        for i in range(n):
+            for f in (f"{i:02d}.jpg", f"{i:02d}.a.png"):
+                shrink_anim(os.path.join(ROOT, "assets", "anim", name, f), os.path.join(anim, name, f))
+    web = os.path.join(APP, "build", "web")
+    if not serve:
+        subprocess.run(cmd, check=True, cwd=ROOT)
+        polish_index(web)
+        return
+    # --serve: pygbag собирает и сразу раздаёт (не возвращается) — страницу дополняем, как только он её записал;
+    # раньше локальный сервер отдавал index.html без заставки, сторожа #wnb-fit и user-select (web_smoke phone)
+    import time
+    index, t0 = os.path.join(web, "index.html"), time.time()
+    proc = subprocess.Popen(cmd, cwd=ROOT)
+    try:
+        while proc.poll() is None and not (os.path.exists(index) and os.path.getmtime(index) >= t0
+                                           and os.path.exists(os.path.join(web, "wheels_and_bones.apk"))):
+            time.sleep(0.5)
+        if proc.poll() is None:
+            time.sleep(1)                                     # дописать файл
+            polish_index(web)
+            print("страница дополнена (заставка, сторож холста) — сервер работает", flush=True)
+        proc.wait()
+    finally:
+        if proc.poll() is None:
+            proc.kill()
 
 
 SPLASH_CSS = """

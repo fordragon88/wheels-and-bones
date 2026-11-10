@@ -85,11 +85,11 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 | `i18n_work/` | перевод: `GUIDE.md` (глоссарий, имена), `en*.json`, `chunk*.json`, `build_lang.py`, `extract_new.py` |
 | `README.md`, `PROMPTS.md` | описание для людей, промпты/таблица арта (`CHATGPT_PROMPTS.md` устарел) |
 | `docs/` | `QUESTS.md`/`QUESTS_ru.md` (генерирует `export_quests.py`), `FEEDBACK_STATUS.md`, `FEEDBACK_SETUP.md`, `feedback/`, `SHARE_LINKS.md` (ссылки и коды) |
-| `build_web.py`, `web_build/`, `web_deploy/` | сборка pygbag и выкладка на GitHub Pages (§10а п. 5); `web_smoke.py` проверяет |
+| `build_web.py`, `web_build/`, `web_deploy/` | сборка pygbag и выкладка на GitHub Pages (§10а п. 5); `web_smoke.py` проверяет. На сайт рядом с игрой кладутся папки `turntable/` (кадры поворота колясок) и `anim/ride_*` (петли проезда, ужатые `shrink_anim`) — браузер качает их по мере надобности, в пакете их нет |
 | `build_exe.bat`, `exe_assets.py`, `WheelsAndBones.spec` | один exe (PyInstaller); `exe_assets.py` — копия assets без полных моделей и тел |
 | `assets/turntable/` | кадры поворота колясок `chair_<k>_NN.jpg` + `.a.png`, `index.json`/`index_folk.json` (центры деталей) |
 | `assets/anim/martin_wave/`, `barty_wave/` | петли «машет рукой» из ролика (36 кадров, 12 к/с, `NN.jpg` + маска `NN.a.png`, 560 px); исходники — `tools/hyperframes/trailer/assets/*_wave.webm`, кадры 45–80 и 30–65 (стык почти незаметен) |
-| `assets/anim/ride_martin/`, `ride_wolf/`, `ride_mora/`, `ride_aelin/`, `ride_gra/`, `ride_bomm/`, `ride_yuki/`, `ride_tilly/` | петли **проезда** (боковой вид, едут вправо) для тест-драйва: `NN.jpg` + `NN.a.png`, 440 px; Мартин 31 кадр 19 к/с, Вольф 13 и Мора 12 кадров 12 к/с, Аэлин 21 кадр 12 к/с; вторая партия (12 к/с): Гра 20, Бомм 21, Юки 13, Тилли 18 кадров. Ключи `ride_loop.py`: `--thin 14` — сохранять тонкие светлые спицы (Аэлин, Гра, Юки, Тилли: без него колесо выходит пустым), `--stab` — снять плавный дрейф героя в кадре (Тилли). Делает `python art_tests/ride_loop.py <имя> <mp4> --key green\|magenta [--step 2] [--wheel cx,cy,r]` из клипов MiniMax H3 `art_tests/codex_ride/<герой>/h3_v*/…mp4` (промпты — `tools/trailer/make_ride_prompts.py` в основной папке, не в git); листы проверки ключа и шва, замер колеса — `art_tests/ride_shots/` (не в git) |
+| `assets/anim/ride_martin/`, `ride_wolf/`, `ride_mora/`, `ride_aelin/`, `ride_gra/`, `ride_bomm/`, `ride_yuki/`, `ride_tilly/` | петли **проезда** (в браузерный пакет НЕ кладутся: лежат на сайте в `anim/ride_*`, игра качает петлю героя, когда открыто его задание — `AnimWeb`; в пакете только манифест `assets/anim/ride_index.json` «имя → кадров», его пишет `build_web.stage`) (боковой вид, едут вправо) для тест-драйва: `NN.jpg` + `NN.a.png`, 440 px; Мартин 31 кадр 19 к/с, Вольф 13 и Мора 12 кадров 12 к/с, Аэлин 21 кадр 12 к/с; вторая партия (12 к/с): Гра 20, Бомм 21, Юки 13, Тилли 18 кадров. Ключи `ride_loop.py`: `--thin 14` — сохранять тонкие светлые спицы (Аэлин, Гра, Юки, Тилли: без него колесо выходит пустым), `--stab` — снять плавный дрейф героя в кадре (Тилли). Делает `python art_tests/ride_loop.py <имя> <mp4> --key green\|magenta [--step 2] [--wheel cx,cy,r]` из клипов MiniMax H3 `art_tests/codex_ride/<герой>/h3_v*/…mp4` (промпты — `tools/trailer/make_ride_prompts.py` в основной папке, не в git); листы проверки ключа и шва, замер колеса — `art_tests/ride_shots/` (не в git) |
 | `assets/fonts/` | шрифты и их лицензии |
 | `tools/` | portable Blender, `render_in/`/`render_out/` кадров; не в git |
 | `CLAUDE.md`, `GEMINI.md`, `MUSE_3D_TASK.md` | указатели для агентов (читать AGENTS.md); задание для Muse по 3D (архив) |
@@ -118,6 +118,16 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
    (`*_info.json`); колёса не проскальзывают, при торможении и руки замедляются; выше предела (руки не «мельтешат»)
    колесо чуть проскальзывает. Пока читают «Тест-драйв», кадры подгружаются (`anim_prefetch`). `ride_secs()` — 4,6 с
    с петлёй, иначе `RIDE_SECS` 4,0 (боты ждут `g.ride_secs()`). Гильдия (tech), «Без анимации» — как раньше.
+   Выбор «петля или портрет» фиксируется в `start_ride` (`_ride_name`): пока идёт проезд, `ride_anim()`/`ride_secs()`
+   отвечают одно и то же, даже если петля докачалась посреди проезда.
+   **Браузер (11.11):** петель проезда нет в пакете. Пока открыто задание героя из `RIDE_ANIM` (и не «Без анимации»),
+   `Game.update` зовёт `anim_web_want(имя)` → `AnimWeb`: `web_fetch` (тот же JS, что у `Turntable`: base64 в
+   `window.wnbTT`) качает `anim/<имя>/NN.jpg` + `NN.a.png` (число кадров — из `ride_index.json`), `web_take` забирает по 6
+   за кадр игры, файлы пишутся в `assets/anim/.<имя>.part/`; когда пришли ВСЕ — папка переименовывается в
+   `assets/anim/<имя>/` (ФС pygbag в памяти, писать можно), `_anim_n` сбрасывается — дальше `anim_count`/`anim_frame` как
+   на компьютере. `anim_web_ready(имя)` — True на компьютере и для петель из пакета; в браузере — когда петля скачана.
+   Не скачалась (3 попытки на файл) или игрок нажал «Прокатить» раньше — едет скользящий портрет (`RIDE_SECS`), качаются
+   только петли героев, чьи задания открывали (в ФС остаются до перезагрузки страницы, ~0,3–0,5 МБ на героя).
 6. **Ассеты**: `load_image(name, size)` (PNG в пикселях экрана, иначе `VECTOR_ART`, иначе заглушка), `tool_icon`.
 7. **Визуализация действий**: анимация инструментов (`draw_tool_action`: верный ход — замах, удар и миг паузы на детали
    `TOOL_WINDUP/STRIKE/HOLD`, потом работа; длительность `TOOL_OK_SECS`), тест-драйв, шутки про ногу Мартина (`LEG_GAGS`).
@@ -486,7 +496,7 @@ python i18n_work/build_lang.py       # перевод полон
 | `python art_tests/rs_smoke.py 2` | `RS 2.0 — все сцены отрисованы без ошибок` |
 | `python i18n_work/build_lang.py`; `python i18n_work/extract_new.py` | `строк с кириллицей на экране: 0`; `3 строк -> …_new_strings.json` (3 — консольные `[wnb] …`, их не переводим) |
 | `python art_tests/monkey_test.py` (долго) | `уникальных падений: 0` |
-| `WNB_URL=https://fordragon88.github.io/wheels-and-bones-web/ python art_tests/web_smoke.py --no-build` | `WEB SMOKE: 26 ok, 0 FAIL` (с 03.11 — со сценарием `links`: `?jobs=flat,caster`, «Скопировать код», `?load=`; на сайте до выкладки ссылок `links` не пройдёт; без `WNB_URL` — локальная сборка на :8000; с 10.11 в ветке `feature/mobile-pack1` — ещё `tablet` и `fps` и проверки касаний в `phone`: локально `WEB SMOKE: 42 ok, 0 FAIL`; на сайте до выкладки они не пройдут) |
+| `WNB_URL=https://fordragon88.github.io/wheels-and-bones-web/ python art_tests/web_smoke.py --no-build` | `WEB SMOKE: 26 ok, 0 FAIL` (с 03.11 — со сценарием `links`: `?jobs=flat,caster`, «Скопировать код», `?load=`; на сайте до выкладки ссылок `links` не пройдёт; без `WNB_URL` — локальная сборка на :8000; с 10.11 в ветке `feature/mobile-pack1` — ещё `tablet` и `fps` и проверки касаний в `phone`: локально `WEB SMOKE: 42 ok, 0 FAIL`; на сайте до выкладки они не пройдут; с 11.11 в ветке `feature/ride-anim` — ещё `ride ok` и `ride 404` (петля проезда качается с сайта только для открытого героя и рисуется; при 404 на `anim/` — проезд портретом без ошибок): локально `WEB SMOKE: 54 ok, 0 FAIL`) |
 
 **2. Глазами** (снимки ботов + свои): `art_tests/layout_shots.py <job…>` — диагноз/ремонт без наложений;
 `audit_shots/` — мастерская, задание, проезд и «ГОТОВО», итог, гараж, Гильдия, экзамен, финал; Кабинет посадки — все
@@ -523,12 +533,16 @@ python i18n_work/build_lang.py       # перевод полон
   озвучки язык выбирается в коде (`_of`, `speech_clean`).
 - Браузер (pygbag): `import pygame` должен быть в main.py; окно создавать сразу в async-функции main.py;
   `import numpy` ломает дисплей («video driver did not add any displays»); на localhost шаблон ищет пакеты на
-  локальном сервере — проверять через `python build_web.py --serve` (http://127.0.0.1:8000; простой `http.server`
+  локальном сервере — проверять через `python build_web.py --serve` (http://127.0.0.1:8000 — порт менять нельзя: шаблон
+  pygbag качает pygame с `localhost:8000/cdn/…` при любом `--port`; с 11.11 `--serve` тоже дополняет index.html заставкой и
+  сторожем `#wnb-fit` — раньше не дополнял, и web_smoke phone падал на `user-select`/стороже; простой `http.server`
   не отдаёт /cdn/… и игра не стартует); вкладка в фоне не грузится. В браузере pygame НЕ читает/пишет картинки
   через память (`BytesIO` → «can't access resource on platform») — только через временный файл (`tempfile`).
   Вывод `print` виден не в консоли браузера, а в `#terminal` на странице.
-- **Вес веб-архива.** После каждой сборки смотреть размер `wheels_and_bones.apk` (норма ~14 МБ с 02.11: музыка 3,7 + петли героев `assets/anim` ~1,5 МБ + остальное; в ветке `feature/ride-anim` петли проезда `ride_*` +2,4 МБ → 16,8 МБ; `build_web.stage` ужимает кадры
-  петель до 400 px, маски — до 200 px и 32 уровней прозрачности, без этого +3 МБ).
+- **Вес веб-архива.** После каждой сборки смотреть размер `wheels_and_bones.apk` (норма ~14 МБ с 02.11: музыка 3,7 + петли героев `assets/anim` ~1,5 МБ + остальное; `build_web.shrink_anim` ужимает кадры
+  петель до 400 px, маски — до 200 px и 32 уровней прозрачности, без этого +3 МБ). Петли проезда `ride_*` (ветка
+  `feature/ride-anim`) в пакет не кладутся с 11.11 (было 19,3 МБ с восемью героями): `stage()` их пропускает,
+  `build()` кладёт ужатые кадры в `build/web/anim/` рядом с игрой — apk 14,45 МБ, на сайте `anim/` 5,2 МБ (Мартин ~1 МБ, Мора 0,4 МБ); при 22 героях пакет не растёт.
   Кадры поворота в пакет НЕ кладутся (браузер качает их с сайта из `turntable/`), исключение по расширениям в
   `build_web.stage()` — при смене формата кадров проверять (23.10 jpg-кадры прошли мимо фильтра `.png`: +27 МБ).
 - **Веб-выкладка.** `build_web.py --deploy` ставит в index.html метку `?v=<хэш>` на архив игры (`stamp_archives`):
@@ -638,6 +652,17 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-11 — Claude (Opus 5.5), ветка `feature/ride-anim` (только тестовая сборка; не выложено, не влито) — **петли
+  проезда в браузере качаются с сайта по герою, а не лежат в пакете** (решение владельца: телефоны; героев будет 22).
+  `build_web.py`: `ride_loops()` (имя → кадров), `shrink_anim()` (бывшее ужатие кадров в `stage`, общее), `stage()` не
+  кладёт `assets/anim/ride_*` в пакет и пишет манифест `assets/anim/ride_index.json`, `build()` кладёт ужатые кадры в
+  `build/web/anim/ride_*` (`--deploy` и тестовая выкладка копируют весь `build/web` — папка `anim` уходит сама);
+  `--serve` теперь тоже дополняет index.html (`polish_index`). `game.py`: `web_fetch`/`web_take` (JS-загрузка из
+  `Turntable` вынесена и переиспользуется), `AnimWeb`, `anim_web_want`, `anim_web_ready`, `ANIM_WEB`; `Game.update` качает
+  петлю героя, пока открыто его задание; `_ride_hero`, `ride_anim` (в браузере — только скачанная петля), выбор петли
+  фиксируется в `start_ride` (`_ride_name`), `_ride_drawn` и поля `ride_web`/`ride`/`ride_on`/`ride_done`/`ride_drawn` в
+  `debug_state`. Компьютер и exe — без изменений (`ride_shots.py --md5 flat bearing spokes lift` до и после совпали).
+  `web_smoke.py`: сценарии `ride ok`/`ride 404`. apk 19,3 → 14,45 МБ. WEB SMOKE 54 ok, 0 FAIL.
 - 2026-11-10 — Claude (Fable 5.2), ветка `feature/ride-anim` (только тестовая сборка) — **проезд: вторая партия героев**
   (выбор владельца): Гра (`bearing`), Бомм (`cushion`), Юки (`aeroz_lock`), Тилли (`spokes`) — `assets/anim/ride_gra`,
   `ride_bomm`, `ride_yuki`, `ride_tilly`; `RIDE_ANIM`, `RIDE_LOOP` (у героев с тонкими спицами путь колеса не измерить —

@@ -412,6 +412,59 @@ async def links(b):
     await ctx.close()
 
 
+async def ride(b, mode):
+    """Петля проезда героя качается с сайта (anim/ride_*), когда открыто его задание (не лежит в пакете игры).
+    ok — кадры Мартина скачались (и только его), на тест-драйве выбрана петля и её кадры рисуются;
+    404 — сайт кадры не отдаёт: тест-драйв по-старому (скользящий портрет), без ошибок в консоли."""
+    ctx = await b.new_context(viewport={"width": 1280, "height": 720})
+    p = Page(await ctx.new_page(), "ride_" + mode)
+    asked = []
+    p.pg.on("request", lambda r: asked.append(r.url) if "/anim/" in r.url else None)
+    if mode == "404":
+        await p.pg.route("**/anim/ride_*/**", lambda r: r.fulfill(status=404, body="no"))
+    await p.boot()
+    await p.click(640, 470)                                      # начать
+    await p.wait(lambda s: s["scene"] == "intro", "вступление")
+    await p.click(1125, 667, 2000)                               # пропустить обучение
+    await p.wait(lambda s: s["scene"] == "hub", "мастерская")
+    check(not asked, f"{p.name}: до задания петли проезда не качаются ({len(asked)} запросов)")
+    await p.click(160, 250, 1500)                                # Мартин
+    await p.wait(lambda s: s["scene"] == "job" and s["job"] == "flat", "задание Мартина")
+    want = "ready" if mode == "ok" else "failed"
+    st = await p.wait(lambda s: s.get("ride_web", {}).get("ride_martin") == want, f"петля Мартина: {want}", 60)
+    check(st.get("ride_web", {}).get("ride_martin") == want, f"{p.name}: петля Мартина с сайта — {want} ({st.get('ride_web')})")
+    other = sorted({u.split("/anim/")[1].split("/")[0] for u in asked} - {"ride_martin"})
+    check(list(st.get("ride_web", {})) == ["ride_martin"] and not other,
+          f"{p.name}: качается только петля открытого героя ({list(st.get('ride_web', {}))}, другие запросы: {other})")
+    for y in (114, 156):                                         # осмотр: две строки списка деталей
+        await p.click(1120, y, 700)
+    for i in range(3):                                           # диагноз: варианты по очереди, пока не ремонт
+        if (await p.state()).get("phase") == "repair":
+            break
+        await p.click(1120, 378 + i * 76 + 34, 1200)
+    await p.wait(lambda s: s.get("phase") == "repair", "ремонт")
+    for _ in range(12):                                          # «ШАГ ▸» — игра делает шаги сама
+        if (await p.state()).get("phase") == "test":
+            break
+        await p.click(926, 73, 900)
+    await p.wait(lambda s: s.get("phase") == "test", "тест-драйв")
+    await p.pg.wait_for_timeout(2500)                            # читают «Тест-драйв» — кадры петли в память
+    await p.click(640, 592, 300)                                 # «ПРОКАТИТЬ И ПРОВЕРИТЬ»
+    st = await p.wait(lambda s: s.get("ride_on"), "проезд начался", 10)
+    await p.pg.wait_for_timeout(1200)
+    await p.shot("1_ride")
+    st = await p.wait(lambda s: s.get("ride_done"), "проезд закончился — «ГОТОВО»", 15)
+    if mode == "ok":
+        check(st.get("ride") == "ride_martin" and st.get("ride_drawn", 0) > 10,
+              f"{p.name}: проезд петлёй ride_martin, кадров нарисовано {st.get('ride_drawn')} (ride={st.get('ride')})")
+    else:
+        check(st.get("ride") is None and st.get("ride_drawn") == 0,
+              f"{p.name}: без кадров — проезд скользящим портретом (ride={st.get('ride')}, кадров {st.get('ride_drawn')})")
+    await p.shot("2_done")
+    p.check_console()
+    await ctx.close()
+
+
 async def main():
     os.makedirs(SHOTS, exist_ok=True)
     for f in os.listdir(SHOTS):
@@ -419,7 +472,7 @@ async def main():
     async with async_playwright() as pw:
         for fn, args in ((desktop, ("site", 1100, 620, 1.0)), (desktop, ("full", 1920, 1080, 1.0)),
                          (desktop, ("laptop125", 1366, 768, 1.25)), (phone, ()), (tablet, ()), (fps, ()),
-                         (gamepad, ()), (links, ())):
+                         (gamepad, ()), (links, ()), (ride, ("ok",)), (ride, ("404",))):
             print(f"— {fn.__name__} {args[0] if args else ''}", flush=True)
             b = await pw.chromium.launch(args=["--autoplay-policy=no-user-gesture-required", "--mute-audio"])   # свой браузер на
             try:                                                                                # сценарий

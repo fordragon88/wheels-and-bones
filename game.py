@@ -1700,6 +1700,114 @@ def web_js(code):
         return None
 
 
+def web_fetch(urls):
+    """Браузер: скачать файлы с сайта (пути от страницы игры) в window.wnbTT — base64, '!' — не скачался.
+    Общий для кадров поворота колясок (Turntable) и петель проезда героев (AnimWeb)."""
+    web_js("(function(L){var T=window.wnbTT=window.wnbTT||{};L.forEach(function(u){if(u in T)return;"
+           "T[u]=null;fetch(u).then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then(function(b){"
+           "var a=new Uint8Array(b),s='';for(var i=0;i<a.length;i+=8192)s+=String.fromCharCode.apply(null,"
+           "a.subarray(i,i+8192));T[u]=btoa(s);}).catch(function(){T[u]='!';});});})(" + json.dumps(urls) + ")")
+
+
+def web_take(urls, k=6):
+    """Браузер: забрать до k пришедших файлов из window.wnbTT -> {url: bytes или None (не скачался)}."""
+    got = web_js("(function(L){var T=window.wnbTT||{},o={},k=0;for(var j=0;j<L.length&&k<" + str(int(k)) + ";j++){"
+                 "var v=T[L[j]];if(v){o[L[j]]=v;delete T[L[j]];k++;}}return JSON.stringify(o);})(" + json.dumps(urls) + ")")
+    try:
+        got = json.loads(str(got)) if got else {}
+    except Exception:
+        got = {}
+    import base64
+    return {u: (None if v == "!" else base64.b64decode(v)) for u, v in got.items()}
+
+
+ANIM_WEB = {}                          # браузер: имя петли проезда -> AnimWeb (только герои, чьё задание открывали)
+
+
+def anim_web_index():
+    """Браузер: манифест петель проезда, которые НЕ лежат в пакете игры (assets/anim/ride_index.json: имя -> кадров;
+    собирает build_web.stage). На компьютере — пусто: все кадры в assets/anim."""
+    if "index" not in ANIM_WEB:
+        idx = {}
+        if IS_WEB:
+            try:
+                with open(os.path.join(ASSETS_DIR, "anim", "ride_index.json"), encoding="utf-8") as f:
+                    idx = json.load(f)
+            except Exception:
+                idx = {}
+        ANIM_WEB["index"] = idx
+    return ANIM_WEB["index"]
+
+
+class AnimWeb:
+    """Браузер: петля проезда героя качается с сайта (anim/<имя>/NN.jpg + NN.a.png рядом с игрой, не в пакете),
+    когда открыто задание этого героя. Файлы пишутся в assets/anim/.<имя>.part/, а когда пришли ВСЕ кадры (число —
+    из манифеста), папка переименовывается в assets/anim/<имя>/ — дальше anim_count/anim_frame как на компьютере.
+    Частично скачанная петля не видна; сеть подвела (3 попытки на файл, как у Turntable) — failed, герой едет портретом."""
+
+    def __init__(self, name, n):
+        self.name, self.n = name, n
+        self.urls = [f"anim/{name}/{i:02d}{ext}" for i in range(n) for ext in (".jpg", ".a.png")]
+        self.part = os.path.join(ASSETS_DIR, "anim", "." + name + ".part")
+        self.saved, self.tries = set(), {}
+        self.asked = self.ready = self.failed = False
+        self._poll = -1000
+
+    def update(self):
+        """Запросить файлы (раз) и записать пришедшие. True — петля готова."""
+        if self.ready or self.failed:
+            return self.ready
+        if not self.asked:
+            self.asked = True
+            web_fetch(self.urls)
+        now = pygame.time.get_ticks()
+        if now - self._poll < 40:                             # забираем пришедшее не чаще раза за кадр
+            return False
+        self._poll = now
+        try:
+            for u, data in web_take([u for u in self.urls if u not in self.saved]).items():
+                if data is None:                              # сбой сети — ещё попытка, после трёх — портрет
+                    self.tries[u] = self.tries.get(u, 0) + 1
+                    if self.tries[u] >= 3:
+                        self.failed = True
+                        print(f"[wnb] ride {self.name}: {u} failed", flush=True)
+                        return False
+                    web_fetch([u])
+                    continue
+                os.makedirs(self.part, exist_ok=True)
+                with open(os.path.join(self.part, u.rsplit("/", 1)[1]), "wb") as f:
+                    f.write(data)
+                self.saved.add(u)
+            if len(self.saved) == len(self.urls):
+                os.rename(self.part, os.path.join(ASSETS_DIR, "anim", self.name))
+                _anim_n.pop(self.name, None)                  # кадры появились — пересчитать
+                self.ready = True
+        except Exception as e:                                # ФС браузера не дала записать — портрет
+            print(f"[wnb] ride {self.name}: {e!r}", flush=True)
+            self.failed = True
+        return self.ready
+
+
+def anim_web_want(name):
+    """Браузер: петля проезда нужна (открыто задание героя) — начать/продолжить качать. Не в манифесте — ничего."""
+    n = anim_web_index().get(name)
+    if not n or calm():
+        return
+    ld = ANIM_WEB.get(name)
+    if ld is None:
+        ld = ANIM_WEB[name] = AnimWeb(name, n)
+    ld.update()
+
+
+def anim_web_ready(name):
+    """Петля готова к показу: на компьютере и для петель из пакета — всегда; в браузере петля проезда — когда
+    скачаны все её кадры."""
+    if name not in anim_web_index():
+        return True
+    ld = ANIM_WEB.get(name)
+    return bool(ld and ld.ready)
+
+
 def web_restore():
     """Браузер: файлы сохранений живут в localStorage — перед стартом кладём их обратно в память."""
     for path in (SAVE_PATH, SETTINGS_PATH, FEEDBACK_PATH, BAK_PATH):
@@ -4173,36 +4281,22 @@ class Turntable:
         if now - getattr(self, "_poll", -1000) < 40:          # забираем пришедшее не чаще раза за кадр
             return False
         self._poll = now
-        got = web_js("(function(L){var T=window.wnbTT||{},o={},k=0;for(var j=0;j<L.length&&k<6;j++){var v=T[L[j]];"
-                     "if(v){o[L[j]]=v;delete T[L[j]];k++;}}return JSON.stringify(o);})("
-                     + json.dumps([u for i in range(self.n) if i not in self.frames for u in self.files(i)
-                                   if u not in self._got]) + ")")
-        try:
-            got = json.loads(str(got)) if got else {}
-        except Exception:
-            got = {}
-        import base64
+        got = web_take([u for i in range(self.n) if i not in self.frames for u in self.files(i) if u not in self._got])
         for u, v in got.items():
-            if v == "!":                                      # сбой сети — ещё попытка, после трёх — рисунок
+            if v is None:                                     # сбой сети — ещё попытка, после трёх — рисунок
                 self.tries[u] = self.tries.get(u, 0) + 1
                 if self.tries[u] >= 3:
                     self.failed = True
                 else:
                     self._fetch([u])
                 continue
-            self._got[u] = base64.b64decode(v)
+            self._got[u] = v
             i = int(u.rsplit("_", 1)[1][:2])                  # …_NN.png / _NN.jpg / _NN.a.png
             if i not in self.frames and all(f in self._got for f in self.files(i)):
                 self._decode(i, [self._got.pop(f) for f in self.files(i)])
         return len(self.frames) == self.n and not self.failed
 
-    @staticmethod
-    def _fetch(urls):
-        """Браузер: скачать кадры в window.wnbTT (base64; '!' — не скачался)."""
-        web_js("(function(L){var T=window.wnbTT=window.wnbTT||{};L.forEach(function(u){if(u in T)return;"
-               "T[u]=null;fetch(u).then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then(function(b){"
-               "var a=new Uint8Array(b),s='';for(var i=0;i<a.length;i+=8192)s+=String.fromCharCode.apply(null,"
-               "a.subarray(i,i+8192));T[u]=btoa(s);}).catch(function(){T[u]='!';});});})(" + json.dumps(urls) + ")")
+    _fetch = staticmethod(web_fetch)                      # браузер: скачать кадры в window.wnbTT
 
     def image(self, i, f):
         """Кадр i в пикселях экрана, увеличенный в f раз (кэш на один масштаб)."""
@@ -6195,6 +6289,8 @@ class Game:
         self.seatc = None
         self.act = None                   # анимация инструмента на детали
         self.ride_t0 = None               # тест-драйв: клиент проезжает через экран
+        self._ride_name = None            # петля проезда, выбранная в start_ride (None — скользящий портрет)
+        self._ride_drawn = 0              # сколько кадров петли нарисовано в этом проезде (web_smoke)
         self.ride_done = False            # проезд закончился — ждём «ГОТОВО» (успеть дочитать — отзыв игрока)
         self._vol_drag = None
         self.assign = None                # задание по ссылке (jobs=…, seat=…): свой прогресс, обычный не меняется
@@ -7825,17 +7921,30 @@ class Game:
     RIDE_FLOOR = 534                      # низ кадра петли (в кадре поле ~4 px под колёсами — пол на y≈530, как у портрета)
     RIDE_CRUISE = 0.6                     # доля проезда на полной скорости, дальше плавное торможение
 
-    def ride_anim(self):
-        """Имя петли проезда для текущего клиента или None (Гильдия, «Без анимации», нет кадров — как раньше)."""
-        if not self.cur or self.cur.get("track") == "tech" or calm():
+    def _ride_hero(self):
+        """Имя петли проезда героя текущего задания (по портрету) или None — без проверки кадров."""
+        if not self.cur or self.cur.get("track") == "tech":
             return None
-        name = self.RIDE_ANIM.get(self.cur.get("client_art"))
-        return name if name and anim_count(name) else None
+        return self.RIDE_ANIM.get(self.cur.get("client_art"))
+
+    def ride_anim(self):
+        """Имя петли проезда для текущего клиента или None (Гильдия, «Без анимации», нет кадров — как раньше;
+        браузер: кадры ещё не скачались или сеть подвела). Во время проезда — выбор, сделанный в start_ride:
+        петля, докачавшаяся посреди проезда, его не меняет."""
+        if self.ride_t0 is not None:
+            return self._ride_name
+        name = self._ride_hero()
+        if not name or calm():
+            return None
+        return name if anim_web_ready(name) and anim_count(name) else None
 
     def ride_secs(self):
         return self.RIDE_ANIM_SECS if self.ride_anim() else self.RIDE_SECS
 
     def start_ride(self):
+        self.ride_t0 = None
+        self._ride_name = self.ride_anim()                   # петля или портрет — до конца этого проезда
+        self._ride_drawn = 0
         self.ride_t0 = self.t - (self.ride_secs() if calm() else 0)   # без анимации — проверка сразу, без проезда
         snd("whoosh")
 
@@ -7877,6 +7986,7 @@ class Game:
             add_glow(surf, (x + size[0] * 0.3 - i * 30, self.RIDE_FLOOR - 6), 18, (80, 70, 55), (0.7 - 0.15 * i) * v)
         if img is not None:
             surf.blit(img, (round(x), y))
+            self._ride_drawn += 1                             # проверка браузера: кадры петли рисуются (web_smoke)
 
     def _draw_ride(self, surf):
         """Тест-драйв: клиент в своей коляске проезжает через мастерскую (слева направо — лицом вперёд)."""
@@ -8501,7 +8611,12 @@ class Game:
                     last_click=str(getattr(self, "_last_click", None)), sel_tool=self.sel_tool, fps_hud=FPS_HUD["on"],
                     click_hint=any("click" in tr(t).lower() for _, t in CAPTURE["texts"]),   # подсказки «click»/«tap»
                     tap_hint=any("tap" in tr(t).lower() for _, t in CAPTURE["texts"]),       # (по-английски)
-                    tt_frames=sum(len(t.frames) + len(t.scaled) for t in _TT_CACHE.values() if isinstance(t, Turntable)))
+                    tt_frames=sum(len(t.frames) + len(t.scaled) for t in _TT_CACHE.values() if isinstance(t, Turntable)),
+                    # петли проезда из сети: имя -> "ready" / "failed" / сколько файлов записано; проезд: петля и кадры
+                    ride_web={k: "ready" if v.ready else "failed" if v.failed else len(v.saved)
+                              for k, v in ANIM_WEB.items() if isinstance(v, AnimWeb)},
+                    ride=self.ride_anim(), ride_on=self.ride_t0 is not None, ride_done=self.ride_done,
+                    ride_drawn=self._ride_drawn)
 
     # ---------- геймпад ----------
     def _pad_key(self, k, down=True, mod=0):
@@ -9495,6 +9610,8 @@ class Game:
             self.esc_timer -= dt
         if self.v3d is not None:
             self.update_v3d(dt)
+        if IS_WEB and self.scene == "job" and self._ride_hero():
+            anim_web_want(self._ride_hero())         # браузер: петля проезда героя качается, пока открыто его задание
         if self.ride_t0 is not None and self.scene != "job":
             self.ride_t0 = None                       # ушли из задания — проезд отменён
         if self.ride_t0 is not None and self.t - self.ride_t0 >= self.ride_secs():
