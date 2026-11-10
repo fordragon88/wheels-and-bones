@@ -1125,8 +1125,19 @@ _anim_n = {}
 _anim_cache = {}                  # (имя, размер) -> [мс последнего показа, {кадр: Surf}]; не в _img_cache — там навсегда
 
 
-def anim_frame(name, size, t):
-    """Кадр петли assets/anim/<name> на время t (Мартин и Барти машут, кадры из ролика).
+def anim_count(name):
+    """Сколько кадров в петле assets/anim/<name> (0 — петли нет). Кадры — подряд 00.jpg, 01.jpg, …"""
+    if name not in _anim_n:
+        d = os.path.join(ASSETS_DIR, "anim", name)
+        n = 0                                          # лишние файлы не считаются
+        while os.path.isdir(d) and os.path.exists(os.path.join(d, f"{n:02d}.jpg")):
+            n += 1
+        _anim_n[name] = n
+    return _anim_n[name]
+
+
+def anim_frame(name, size, t, fps=ANIM_FPS):
+    """Кадр петли assets/anim/<name> на время t (Мартин и Барти машут, кадры из ролика; проезд героев — 24 к/с).
     None — кадров нет или «Без анимации»: тогда рисуют обычную картинку.
     Память: кадры размера, который ANIM_KEEP_MS не показывали (ушли со сцены), выгружаются — 36 кадров ×
     несколько размеров иначе копились бы десятками МБ (телефон). Срок не короткий: в браузере каждая
@@ -1136,24 +1147,38 @@ def anim_frame(name, size, t):
         del _anim_cache[k]
     if calm():
         return None
-    if name not in _anim_n:
-        d = os.path.join(ASSETS_DIR, "anim", name)
-        n = 0                                          # кадры — подряд 00.jpg, 01.jpg, …; лишние файлы не считаются
-        while os.path.isdir(d) and os.path.exists(os.path.join(d, f"{n:02d}.jpg")):
-            n += 1
-        _anim_n[name] = n
-    n = _anim_n[name]
+    n = anim_count(name)
     if not n:
         return None
     ent = _anim_cache.setdefault((name, tuple(size)), [now, {}])
     ent[0] = now
-    i = int(t * ANIM_FPS) % n
+    i = int(t * fps) % n
     if i not in ent[1]:
-        fn = f"anim/{name}/{i:02d}.png"               # asset_path найдёт NN.jpg + NN.a.png
-        img = load_image(fn, size)
-        _img_cache.pop((fn, size), None)
-        ent[1][i] = None if fn in ASSET_MISS else img  # битый кадр — лучше статичная картинка, чем мигающая заглушка
+        ent[1][i] = _anim_load(name, size, i)
     return ent[1][i]
+
+
+def _anim_load(name, size, i):
+    fn = f"anim/{name}/{i:02d}.png"                   # asset_path найдёт NN.jpg + NN.a.png
+    img = load_image(fn, size)
+    _img_cache.pop((fn, size), None)
+    return None if fn in ASSET_MISS else img           # битый кадр — лучше статичная картинка, чем мигающая заглушка
+
+
+def anim_prefetch(name, size, k=1):
+    """Подгрузить в кэш anim_frame до k ещё не загруженных кадров петли. Проезд героя (40+ кадров по 24 к/с):
+    пока игрок читает «Тест-драйв», кадры грузятся по одному за кадр игры — в браузере загрузка кадра — десятки мс,
+    и без этого первый круг петли во время проезда заикался бы."""
+    if calm() or not anim_count(name):
+        return
+    ent = _anim_cache.setdefault((name, tuple(size)), [0, {}])
+    ent[0] = pygame.time.get_ticks()
+    for i in range(anim_count(name)):
+        if k <= 0:
+            break
+        if i not in ent[1]:
+            ent[1][i] = _anim_load(name, size, i)
+            k -= 1
 
 
 def ghost_img(size, t):
@@ -7779,15 +7804,77 @@ class Game:
             self.react_good()
 
     RIDE_SECS = 4.0                       # проезд после ремонта: успеть разглядеть клиента (было 2,3 с — «слишком быстро»)
+    # Герои с петлёй проезда (боковой вид из клипа H3, едут вправо; art_tests/ride_loop.py): вместо портрета — петля.
+    RIDE_ANIM = {"martin.png": "ride_martin", "client_dwarf.png": "ride_wolf", "client_sorceress.png": "ride_mora",
+                 "client_elf.png": "ride_aelin"}
+    # петля: (кадров/с, путь колеса по полу за 1 с петли в высотах кадра, предел ускорения петли) — замер
+    # art_tests/ride_loop.py (ride_shots/*_info.json). Петля идёт не по часам, а по пройденному пути: колёса не
+    # проскальзывают, при торможении и руки замедляются. Предел — чтобы руки не «мельтешили» (у Моры рук в кадре нет);
+    # выше предела колесо чуть проскальзывает. Мартин — 19 к/с: в клипе H3 каждый 4-й кадр повтор, повторы выброшены.
+    # Аэлин: в клипе колесо почти не вращается (спицы «приклеены» к раме) — путь по толчкам, предел 2,4.
+    RIDE_LOOP = {"ride_martin": (19, 0.28, 2.4), "ride_wolf": (12, 0.23, 2.4), "ride_mora": (12, 0.21, 4.0),
+                 "ride_aelin": (12, 0.026, 2.4)}
+    RIDE_ANIM_SECS = 4.6                  # проезд с петлёй: въезд слева, торможение и остановка в центре
+    RIDE_ANIM_H = 330                     # высота кадра петли (портрет — 250): колёса на той же линии пола
+    RIDE_FLOOR = 534                      # низ кадра петли (в кадре поле ~4 px под колёсами — пол на y≈530, как у портрета)
+    RIDE_CRUISE = 0.6                     # доля проезда на полной скорости, дальше плавное торможение
+
+    def ride_anim(self):
+        """Имя петли проезда для текущего клиента или None (Гильдия, «Без анимации», нет кадров — как раньше)."""
+        if not self.cur or self.cur.get("track") == "tech" or calm():
+            return None
+        name = self.RIDE_ANIM.get(self.cur.get("client_art"))
+        return name if name and anim_count(name) else None
+
+    def ride_secs(self):
+        return self.RIDE_ANIM_SECS if self.ride_anim() else self.RIDE_SECS
 
     def start_ride(self):
-        self.ride_t0 = self.t - (self.RIDE_SECS if calm() else 0)   # без анимации — проверка сразу, без проезда
+        self.ride_t0 = self.t - (self.ride_secs() if calm() else 0)   # без анимации — проверка сразу, без проезда
         snd("whoosh")
 
     RIDE_FLIP = {"client_iris.png", "client_iris_mom.png", "client_f5.png"}   # портреты, где коляска смотрит влево
 
+    def _ride_anim_size(self):
+        return (round(self.RIDE_ANIM_H * 1.05), self.RIDE_ANIM_H)   # кадры уже 1,05 высоты — вписаны по высоте
+
+    def _draw_ride_anim(self, surf, name):
+        """Проезд петлёй: въезд из-за левого края, полный ход, плавная остановка в центре мастерской (там после
+        проезда стоит портрет). Кадр петли — по пройденному пути: колесо радиуса r за оборот проходит 2πr."""
+        T, p = self.RIDE_ANIM_SECS, self.RIDE_CRUISE
+        k = min(1.0, max(0.0, (self.t - self.ride_t0) / T))
+        dist = p + (1 - p) * 2 / math.pi                     # путь при скорости 1 (доля T): ход + торможение по косинусу
+        if k < p:
+            e, v = k / dist, 1.0
+        else:
+            u = (k - p) / (1 - p)
+            e, v = (p + (1 - p) * 2 / math.pi * math.sin(math.pi / 2 * u)) / dist, math.cos(math.pi / 2 * u)
+        size = self._ride_anim_size()
+        x0, x1 = -size[0] / 2, self._chair_rect().centerx
+        P = x1 - x0
+        fps, roll, rate = self.RIDE_LOOP.get(name, (ANIM_FPS, 0.25, 2.4))
+        roll *= size[1]                                       # px пути за 1 с петли
+        peak = P / (dist * T)                                 # px/с на полном ходу
+        tau = e * P / max(roll, peak / rate)                  # время петли = путь / (путь за 1 с петли)
+        img = anim_frame(name, size, tau, fps)
+        x, y = x0 + P * e - size[0] / 2, self.RIDE_FLOOR - size[1]
+        if v > 0.35:                                          # линии скорости — пока едет быстро
+            for i in range(6):
+                ly = y + size[1] * 0.3 + i * 26
+                ln = (60 + 40 * _h01(i, 3)) * v
+                xe = x + size[0] * 0.08 - 20 * i % 50
+                DR.line(surf, (200, 200, 210), (xe - ln, ly), (xe, ly), 2)
+        for i in range(4):                                    # пыль из-под заднего колеса
+            add_glow(surf, (x + size[0] * 0.3 - i * 30, self.RIDE_FLOOR - 6), 18, (80, 70, 55), (0.7 - 0.15 * i) * v)
+        if img is not None:
+            surf.blit(img, (round(x), y))
+
     def _draw_ride(self, surf):
         """Тест-драйв: клиент в своей коляске проезжает через мастерскую (слева направо — лицом вперёд)."""
+        name = self.ride_anim()
+        if name:
+            self._draw_ride_anim(surf, name)
+            return
         k = (self.t - self.ride_t0) / self.RIDE_SECS
         e = k * k * (3 - 2 * k)
         art = self.cur["client_art"]
@@ -9401,7 +9488,7 @@ class Game:
             self.update_v3d(dt)
         if self.ride_t0 is not None and self.scene != "job":
             self.ride_t0 = None                       # ушли из задания — проезд отменён
-        if self.ride_t0 is not None and self.t - self.ride_t0 >= self.RIDE_SECS:
+        if self.ride_t0 is not None and self.t - self.ride_t0 >= self.ride_secs():
             self.ride_t0 = None
             self.ride_done = True                      # дочитать текст и реплику — итог по «ГОТОВО» (отзыв)
             if self.cur and self.cur.get("track") != "tech":
@@ -13233,6 +13320,8 @@ class Game:
             draw_text(surf, "ТЕСТ-ДРАЙВ", (360, 70), 20, GOOD, bold=True)
             draw_wrapped(surf, job["test"], (360, 100), 560, 19, WHITE)
             if self.ride_t0 is None:
+                if not self.ride_done and self.ride_anim():   # пока читают — подгрузить кадры петли проезда
+                    anim_prefetch(self.ride_anim(), self._ride_anim_size())
                 self._draw_ride_done(surf)
                 Button(self._test_btn_rect(), "ГОТОВО ▸" if self.ride_done else "ПРОКАТИТЬ И ПРОВЕРИТЬ",
                        GOOD).draw(surf, mouse)
@@ -15391,7 +15480,7 @@ def run_selftest():
         gr.start_job("flat")
         gr.phase = "test"
         gr.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gr._test_btn_rect().center))
-        for _ in range(int(Game.RIDE_SECS * 30) + 15):
+        for _ in range(int(Game.RIDE_ANIM_SECS * 30) + 15):  # flat — Мартин с петлёй проезда (самый долгий)
             gr.update(1 / 30)
         if gr.scene != "job" or not gr.ride_done:
             failures.append("Тест-драйв: после проезда итог открылся сам, без «ГОТОВО»")
@@ -15400,6 +15489,32 @@ def run_selftest():
         if gr.scene != "result":
             failures.append("Тест-драйв: «ГОТОВО» не открыло итог")
         A11Y["calm"] = calm0
+    for art, name in Game.RIDE_ANIM.items():                   # петли проезда героев: кадры есть, проезд рисуется
+        if anim_count(name) < 2:
+            failures.append(f"Проезд: нет кадров assets/anim/{name}")
+            continue
+        jid = next((j["id"] for j in JOBS if j.get("client_art") == art and j.get("track") != "tech"), None)
+        if not jid:
+            failures.append(f"Проезд: нет задания с портретом {art}")
+            continue
+        gr = Game(headless=True)
+        gr.start_job(jid)
+        gr.phase = "test"
+        sc = pygame.display.get_surface()
+        gr.draw(sc)                                            # «Тест-драйв» до нажатия: подгрузка кадров петли
+        gr.start_ride()
+        if gr.ride_anim() != name or gr.ride_secs() != Game.RIDE_ANIM_SECS:
+            failures.append(f"Проезд {jid}: петля {name} не выбрана")
+        try:
+            for _ in range(int(Game.RIDE_ANIM_SECS * 20) + 10):
+                if gr.ride_t0 is None:
+                    break
+                gr.update(1 / 20)
+                gr.draw(sc)
+        except Exception as ex:
+            failures.append(f"Проезд {jid} ({name}): {ex!r}")
+        if not gr.ride_done:
+            failures.append(f"Проезд {jid}: не завершился")
     gk = Game(headless=True)                                   # «Пропустить обучение»: всё открыто, сброс — снова закрыто
     gk.scene, gk.intro_idx = "intro", 0
     gk.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gk._skip_tut_rect().center))

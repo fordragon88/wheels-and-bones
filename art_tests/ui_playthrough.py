@@ -144,7 +144,7 @@ def play_base_job(jid):
     click(g._test_btn_rect().center)
     tick(12)
     shot("ride")
-    tick(int(g.RIDE_SECS * 30) + 10)
+    tick(int(g.ride_secs() * 30) + 10)
     if g.scene == "job" and g.ride_done:                # проезд ждёт «ГОТОВО»
         shot("ride_done")
         click(g._test_btn_rect().center)
@@ -183,7 +183,7 @@ def play_tech_job(jid):
         tick(30)
     assert g.phase == "test", f"{jid}: tech не дошло до теста"
     click(g._test_btn_rect().center)
-    tick(int(g.RIDE_SECS * 30) + 20)
+    tick(int(g.ride_secs() * 30) + 20)
     if g.scene == "job" and g.ride_done:
         click(g._test_btn_rect().center)
     assert g.scene in ("result", "exam_result"), g.scene
@@ -259,7 +259,7 @@ try:
         click(rect_of(g._op_rects(), st["id"]).center)
         tick(30)
     click(g._test_btn_rect().center)
-    tick(int(g.RIDE_SECS * 30) + 20)
+    tick(int(g.ride_secs() * 30) + 20)
     if g.scene == "job" and g.ride_done:
         click(g._test_btn_rect().center)
     shot("exam_result")
