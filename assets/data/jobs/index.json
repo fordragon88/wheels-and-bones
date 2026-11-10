@@ -1,0 +1,27 @@
+{
+  "jobs": [
+    "flat",
+    "caster",
+    "brake",
+    "spokes",
+    "bearing",
+    "cushion",
+    "lift",
+    "joystick",
+    "freewheel",
+    "aeroz_lock",
+    "cross6_back",
+    "iris_tilt",
+    "focuscr_cable",
+    "whill_code",
+    "f5_charge",
+    "dracul_speed"
+  ],
+  "folk": [
+    "yaga_d100",
+    "olga_x3",
+    "leshy_x8",
+    "ra_emotion",
+    "gorynych_jazzy"
+  ]
+}
