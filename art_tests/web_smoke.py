@@ -216,22 +216,26 @@ async def phone(b):
                               "return [b?b.getBoundingClientRect().width:0, x?getComputedStyle(x).display:null]})()")
     check(fsb[0] and fsb[0] <= 48 and fsb[1] in (None, "none"),
           f"phone: кнопка ⛶ компактная ({fsb[0]} px), широкой «Exit fullscreen (Esc)» нет ({fsb[1]})")
-    try:
-        await p.pg.tap("#wnb-full", timeout=3000)
-        await p.pg.wait_for_timeout(1200)
-        fs = await p.pg.evaluate("(()=>{const b=document.getElementById('wnb-full'),x=document.getElementById('wnb-exitfs');"
-                                 "return [!!document.fullscreenElement, b.textContent, b.getAttribute('aria-label'),"
-                                 "Math.round(b.getBoundingClientRect().width), x?getComputedStyle(x).display:null]})()")
-        if fs[0]:
-            check(fs[1] == "\u2716" and fs[2] == "Exit fullscreen" and fs[3] <= 48 and fs[4] in (None, "none"),
-                  f"phone: в полном экране — та же кнопка ✖ «Exit fullscreen», компактная ({fs})")
-            await p.shot("2c_fullscreen")
+    FSQ = ("(()=>{const b=document.getElementById('wnb-full'),x=document.getElementById('wnb-exitfs');"
+           "return [!!document.fullscreenElement, b.textContent, b.getAttribute('aria-label'),"
+           "Math.round(b.getBoundingClientRect().width), x?getComputedStyle(x).display:null]})()")
+
+    def fs_ok(fs):                      # значок и подпись кнопки совпадают с режимом; широкой кнопки выхода нет
+        want = ("✖", "Exit fullscreen") if fs[0] else ("⛶", "Fullscreen")
+        return (fs[1], fs[2]) == want and fs[3] <= 48 and fs[4] in (None, "none")
+    try:                                # первое касание на телефоне уже включает полный экран (full() по touchend)
+        for _ in range(2):              # туда и обратно: ⛶ ⇄ ✖ — одна и та же кнопка
+            fs0 = await p.pg.evaluate(FSQ)
+            check(fs_ok(fs0), f"phone: кнопка ⛶/✖ соответствует режиму, компактная ({fs0})")
+            if fs0[0]:
+                await p.shot("2c_fullscreen")
             await p.pg.tap("#wnb-full", timeout=3000)
             await p.pg.wait_for_timeout(1200)
-            back = await p.pg.evaluate("[!!document.fullscreenElement, document.getElementById('wnb-full').textContent]")
-            check(not back[0] and back[1] == "\u26F6", f"phone: ✖ — выход из полного экрана, значок снова ⛶ ({back})")
-        else:
-            print("  ..   phone: полный экран в headless не включился — проверка ✖ пропущена", flush=True)
+            fs1 = await p.pg.evaluate(FSQ)
+            if fs1[0] == fs0[0]:
+                print("  ..   phone: полный экран в headless не переключился — проверка ✖ пропущена", flush=True)
+                break
+            check(fs_ok(fs1), f"phone: тап — режим сменился, значок тоже ({fs0[1]} -> {fs1[1]}, {fs1[2]})")
     except Exception as e:
         print(f"  ..   phone: кнопка ⛶ не нажата ({type(e).__name__})", flush=True)
     await p.tap(1145, 27, 1500)                                  # ⚑
