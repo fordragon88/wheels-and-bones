@@ -25,7 +25,8 @@
   Есть **Кабинет посадки** с **некромантом Мортимером** (учит позиционированию в коляске).
 - **Жёсткие требования владельца:**
   - **Достоверность.** Шаги ремонта, цифры, коды ошибок — только из реальных мануалов производителей
-    (база `D:\Project  BARC\manuals`, два пробела в имени). В заданиях есть комментарии `# source: файл pNN`.
+    (база `D:\Project  BARC\manuals`, два пробела в имени). У заданий и шагов есть ссылки `файл pNN` — поле
+    `"source"` в `assets/data/**/*.json` (до ветки `feature/data-files` — комментарии `# source:` в game.py).
     Игровые допущения помечаются `GAME`.
   - **Уважительный тон.** Юмор — от Мартина (нога), Барти, Мортимера, ситуаций. **Никогда** не над инвалидностью
     и не над пользователями колясок. Клиенты — уверенные, живые персонажи.
@@ -60,7 +61,10 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 
 | Путь | Что там |
 |---|---|
-| `game.py` | вся игра: данные заданий, рендер, логика, селфтест |
+| `game.py` | вся игра: загрузчик данных, рендер, логика, селфтест |
+| `assets/data/` | **содержание игры** (с ветки `feature/data-files`): `jobs/<id>.json` + `jobs/index.json` (порядок; `folk` — фольклорные), `tech/<id>.json` + `tech/index.json` (Гильдия), `seating/{lessons,cases,quiz,mentor}.json`, `manual.json`, `manual_notes.json`, `tools.json`, `parts.json`, `credits.json`; `README.md` — формат для людей |
+| `art_tests/data_golden.py` | «золотое» сравнение содержания с эталоном `data_golden_before.json` (`--check`; `--update` — только при намеренной правке содержания); `data_extract_once.py` — одноразовый перенос литералов в JSON (история) |
+| `i18n_work/data_strings.py` | тексты из `assets/data` для скриптов перевода (без полей `source`/`comment`) |
 | `assets/` | PNG (фоны `bg_*`, коляски `chair_*`, клиенты `client_*`, `martin`, `ghost`, `master`, `mentor_necro*`, иконки `tool_*`), `models/` (3D JSON), `music/` (mp3), `lang_en.json`, `icon.ico` |
 | `assets/models/chair_<k>_ai.json`, `*_ai_lod.json` | 3D-модели колясок (полная и облегчённая) |
 | `art_tests/` | инструменты и черновики (см. ниже), бэкапы `game.py.bak_before_*` |
@@ -111,9 +115,14 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 9. **Векторный арт** `VECTOR_ART` — запасной рисунок кодом, если PNG нет.
 10. **3D**: `Mesh3D`, `project_mesh` (+ numpy-путь `_project_mesh_np`), процедурные запасные модели,
     `get_ai_chair3d(chair_art, lod=False)` грузит `assets/models`. `AI_MODELS` — список колясок с моделями.
-11. **Данные**: `TOOLS`, `PARTS`, `MANUAL` (спеки Гильдии), `SEAT_*` (кабинет посадки), `JOBS`, блок «Вторая волна»
-    (`JOBS += [...]`, `PARTS.update`, `MANUAL.update`), `TECH_JOBS`, `ALL_JOBS`. Хелперы: `S(...)` шаг, `D(...)` вариант
-    диагноза, `T(...)` шаг Гильдии, `resolve_job` (варианты поломки).
+11. **Данные** — сами тексты и шаги в `assets/data/**/*.json` (§3), в коде только загрузчик (`_data_*`, `DataError`,
+    схема полей `_DATA_SCHEMA`; путь `CONTENT_DIR` = `ASSETS_DIR/data`). Модульные имена прежние: `TOOLS`, `PARTS`,
+    `MANUAL` (спеки Гильдии), `SEAT_CASES/LESSONS/QUIZ/MENTOR`, `JOBS` (обе волны + включённые `FOLK_JOBS`), `TECH_JOBS`,
+    `ALL_JOBS`, `MANUAL_NOTES`, `CREDITS`; типы как раньше (загрузчик зовёт `S(**поля)`/`D`/`T` и делает кортежами
+    варианты ответа, `skin/back/angle`, записи `MANUAL`/`TOOLS`/`MANUAL_NOTES`/`CREDITS`). В коде остались: `SEAT_SLIDERS`,
+    `SEAT_BODY`, `SEAT_QUIZ_PASS`, фильтр `_folk_ready`, добавка «насос → ниппель» (`alt += valve`), `CLIENT_TALK`.
+    Битый файл — `DataError` при запуске с именем файла, шагом и полем; неизвестное поле — тоже ошибка (опечатки).
+    Хелперы: `S(...)` шаг, `D(...)` вариант диагноза, `T(...)` шаг Гильдии, `resolve_job` (варианты поломки).
 12. **`class Game`**: сцены `title, intro, hub, job (diagnose → repair → test), result, garage, guild, exam_result, failed,
     seating, ending`. Методы `draw_<сцена>`, `click_<сцена>`, `handle_event`, `update`. Оверлеи: 3D-осмотр (`v3d`),
     коляска в окне диагностики/ремонта (`m3d`: кадры поворота `Turntable`, живая сетка только при `WNB_TT=0`),
@@ -121,9 +130,11 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 13. **`run_selftest()`** и **`main()`**.
 
 ### Где что лежит (для людей)
-- Тексты квестов, диагнозы, шаги и решения — всё в `game.py` (`JOBS`, `TECH_JOBS`, `SEAT_*`, `CLIENT_TALK`, `MANUAL`);
-  английский — `assets/lang_en.json` (собирается из `i18n_work/en*.json`). Читаемая выгрузка — `docs/QUESTS*.md`
-  (пересобирать `python docs/export_quests.py` после правок квестов).
+- Тексты квестов, диагнозы, шаги и решения — в `assets/data/` (задания `jobs/<id>.json`, Гильдия `tech/`, посадка
+  `seating/`, мануал, сноски, титры; как править — `assets/data/README.md`); реплики клиентов `CLIENT_TALK` — пока в
+  `game.py`. Английский — `assets/lang_en.json` (собирается из `i18n_work/en*.json`). Читаемая выгрузка —
+  `docs/QUESTS*.md` (пересобирать `python docs/export_quests.py` после правок квестов). После НАМЕРЕННОЙ правки
+  содержания — `python art_tests/data_golden.py --update` (иначе `--check` в §10а покажет отличие).
 - Сохранения: из исходников — рядом с game.py (save.json, settings.json, feedback.json, crash.log); exe —
   `%APPDATA%\WheelsAndBones\`; браузер — localStorage (`wnb:save.json` …).
 - Инструмент один — `hands` («Руки и глаза»): потрогать, нажать, снять/поставить, работать джойстиком, посмотреть
@@ -133,6 +144,9 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 - Деталь `controller` = пульт с джойстиком (весь блок); `joystick` = только ручка. «Контроллер» в текстах — электроника.
 
 ### Формат задания (обычное)
+Файл `assets/data/jobs/<id>.json` — те же поля объектом JSON (шаг — `{"instr", "tool", "part", "note", …}` только с
+заданными полями, кортежи — списками; `"source"` — ссылки на страницы мануалов, `"comment"` — заметки; подробно —
+`assets/data/README.md`). Новое задание — файл + id в `jobs/index.json`. Смысл полей (как раньше в коде):
 ```python
 dict(id="...", kind="manual"|"power", client="...", client_art="client_x.png", chair_art="chair_x.png",
      chair_model="x", chair_name="Модель (уточнение)", title="...", symptom="...",
@@ -146,7 +160,7 @@ dict(id="...", kind="manual"|"power", client="...", client_art="client_x.png", c
 **Без однообразных шагов** (замечание коллеги владельца, 10.11, ветка `feature/shorter-steps`): в варианте не больше
 12 шагов и нет трёх одинаковых ходов «инструмент → деталь» подряд (selftest, исключения — `STEP_LIMIT_EXCEPTIONS`).
 Соседние шаги с одним инструментом и деталью, между которыми нечего решать, — один шаг одним предложением (все числа и
-`# source:` сохраняются); повтор процедуры, ничего не меняющий в сюжете (сброс питания у Сайры), — рассказ в `note`.
+ссылки `source` сохраняются); повтор процедуры, ничего не меняющий в сюжете (сброс питания у Сайры), — рассказ в `note`.
 Не объединять: мини (`mini=`), ловушки Барти (`ghost_wrong`) с чужой половиной, обесточивание с не-safety шагами.
 Объединённый текст — не длиннее 3 строк (как обычный шаг) над коляской при крупном тексте 125 % (RU и EN).
 Задание Гильдии: `track="tech"`, `manual=[ключи MANUAL]`, `tools=[...]`, `intro`, шаги `T(id, ..., after=[...],
@@ -388,6 +402,11 @@ Windswept, 2017) и таблица Lange & Presperin Pedersen «Positioning Char
 i18n_work/build_lang.py` (пересобирает `assets/lang_en.json` и проверяет «строк с кириллицей на экране: 0»).
 **Не передавать `extract_new.py` имя готового chunk** — `extract_new.py chunk5.json` затирал 3,7 тыс. строк перевода
 (теперь скрипт сам пишет в `_new_strings.json`, если такой chunk уже есть).
+**Тексты есть и в данных:** `extract_new.py` читает AST-литералы game.py И все строковые значения `assets/data/**/*.json`
+(кроме полей `source`/`comment`; общий помощник `i18n_work/data_strings.py`, у строк из данных `line: 0`, `context` —
+путь файла). Функции `_data_*` (сообщения загрузчика — консоль) не переводятся. `build_lang.py` game.py не разбирает —
+он прогоняет экраны, правок не потребовал. **Чистка мёртвых ключей** (§12): ключ жив, если он есть в game.py ИЛИ в
+`data_strings()`; `art_tests/dialogs_export.py` тоже ищет реплики в обоих.
 
 ## 10. Как проверять (обязательно после правок)
 ```bash
@@ -411,6 +430,7 @@ python i18n_work/build_lang.py       # перевод полон
 **1. Автоматика** (bash: `export PYTHONIOENCODING=utf-8 SDL_VIDEODRIVER=dummy`; ожидаемый итог — справа):
 | Команда | Итог |
 |---|---|
+| `python art_tests/data_golden.py --check` | `DATA GOLDEN OK — содержание совпадает с эталоном байт в байт` (JOBS/TECH/SEAT/справочники и число ссылок source = 211; после намеренной правки содержания — `--update`) |
 | `python game.py --selftest`; `WNB_TT=0 python game.py --selftest`; `py game.py --selftest` | `SELFTEST OK — 21 заданий (27 вариантов поломок) + 6 про-заданий + экзамен Гильдии.` (×3: кадры поворота — по умолчанию и на десктопе, живая сетка `WNB_TT=0`, Python 3.14) |
 | `python art_tests/asset_check.py` | `АССЕТЫ OK — 27 заданий…` |
 | `python art_tests/ui_playthrough.py` | `ПРОЙДЕНО: все задания, Гильдия, экзамен, финал` (снимки — `art_tests/audit_shots/`) |
@@ -535,7 +555,7 @@ python i18n_work/build_lang.py       # перевод полон
   «Посмотрел — теперь нужно сделать руками: возьми «Руки».», «Прошлый шаг», «Напомнить прошлый шаг», «Наклон в пространстве
   (tilt-in-space)…». Аудит 26.10 насчитал грубым подстрочным поиском ~414 ключей `lang_en.json` без вхождения в game.py (202 из
   них — старые тексты в `en6.json`; это ~70 КБ в веб-пакете, игре не мешают). Критерий чистки — как в `dead_keys` (AST-литералы
-  game.py, см. §11), потом `build_lang.py` и проверки.
+  game.py, см. §11) **плюс строки `assets/data` (`i18n_work/data_strings.py`)**, потом `build_lang.py` и проверки.
 - (закрыто 23.10) Джойстик Edge 4 и совпадение 3D с артом — арт теперь кадр поворота той же модели.
 - ACE-Step для чистой инструментальной музыки (~10 ГБ, спросить владельца).
 - Ещё коляски из базы BARC: Permobil F3/M5, Explorer Mini/Koala (детские), Invacare TDX/Storm4, Broda, скутеры.
@@ -571,6 +591,19 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-10 — Claude (Opus 5.5), ветка `feature/data-files` от `test-build` (**в main и test-build НЕ влита, не
+  выложена; только локальная сборка**) — **содержание вынесено из game.py в `assets/data/*.json`** (тексты и шаги без
+  программиста; задел на перенос движка): 21 задание (`jobs/<id>.json` + `jobs/index.json`, фольклорные — список
+  `folk`), 6 Гильдии (`tech/`), Кабинет посадки (`seating/lessons|cases|quiz|mentor.json`), `manual.json`,
+  `manual_notes.json`, `tools.json`, `parts.json`, `credits.json`. В коде загрузчик `_data_*` со схемой (`DataError`:
+  файл, шаг, поле; опечатка в имени поля — ошибка) и прежние имена/типы (S/D/T(**поля), кортежи). 211 ссылок
+  `# source:` → 210 полей `"source"` + 1 комментарий в game.py; прочие комментарии — поля `"comment"`. game.py
+  18 236 → 15 580 строк. Эталон до правок — `art_tests/data_golden.py` (`--check` → байт в байт; число ссылок в нём же).
+  Перевод: `extract_new.py` читает и данные (`i18n_work/data_strings.py`), `dialogs_export.py` тоже; `build_lang` без
+  правок. Упаковка без правок: `build_web.stage` копирует `assets/` целиком (json не фильтруется, в apk 39 файлов
+  `assets/assets/data/…`, +~40 КБ сжатыми), `exe_assets.py` копирует всё, кроме моделей и тел. Проверки: data_golden,
+  selftest ×3, asset_check, ui/keyboard ru+en/switch/pad playthrough, rs_smoke 2, build_lang (0), extract_new (3),
+  monkey, export_quests (docs без изменений), web_smoke локальной сборки на :8765 — 26 ok, 0 FAIL.
 
 - 2026-11-10 — Claude (Fable 5.2) — **тест переехал в отдельный репозиторий** (решение владельца 09.11): `fordragon88/wheels-and-bones-test`
   → https://fordragon88.github.io/wheels-and-bones-test/ (локальный клон `D:\wheels_and_bones\web_deploy_test`, в `.git/info/exclude`
