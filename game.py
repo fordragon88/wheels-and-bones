@@ -326,7 +326,7 @@ class LFont:
     строка рисуется кусками, ширина считается так же."""
 
     def __init__(self, size, bold=False):
-        px = max(1, round(size * RS * TEXT_K[min(len(TEXT_K) - 1, max(0, A11Y.get("text", 0)))]))
+        px = max(1, round(size * RS * text_k()))
         path = os.path.join(ASSETS_DIR, "fonts", "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf")
         try:                                     # свой шрифт: значки ⚑ ✔ ◉ ★ ⟲ есть на любом компьютере
             self.f = pygame.font.Font(path, px)
@@ -849,8 +849,34 @@ def system_lang():
     return "en"
 
 
+def text_k():
+    """Множитель крупного текста сейчас: выбор игрока (TEXT_K), но не больше потолка плотного окна (text_cap)."""
+    k = TEXT_K[min(len(TEXT_K) - 1, max(0, A11Y.get("text", 0)))]
+    return min(k, TEXT_CAP["k"]) if TEXT_CAP["k"] else k
+
+
+TEXT_CAP = {"k": None}
+
+
+@contextmanager
+def _no_cap():
+    yield
+
+
+@contextmanager
+def text_cap(k=1.25):
+    """Плотные окна с раскладкой под 125 % (настройки, коды, Гильдия, титры…): при 150 % текст в них не крупнее k —
+    иначе строки налезают друг на друга. Остальные экраны — в полном размере."""
+    prev = TEXT_CAP["k"]
+    TEXT_CAP["k"] = k if prev is None else min(prev, k)
+    try:
+        yield
+    finally:
+        TEXT_CAP["k"] = prev
+
+
 def font(size, bold=False):
-    key = (size, bold)
+    key = (size, bold, text_k())
     if key not in _font_cache:
         _font_cache[key] = LFont(size, bold)
     return _font_cache[key]
@@ -862,7 +888,7 @@ A11Y = dict(on=False, voices=True, rate=0, contrast=False, instant=False, speech
             calm=False, calm_set=False, scan=0, font=False,
             barty=True, quiet=False, quiet_set=False)       # scan — одна кнопка: 0 выкл, 1–3 — скорость (SCAN_SPEEDS)                 # calm — без анимации (по умолчанию — как в системе)   # text — размер текста (TEXT_K): в браузере окно мельче —
                                                          # сразу 125 %; text_set — игрок выбрал размер сам
-TEXT_K = (1.0, 1.12, 1.25)
+TEXT_K = (1.0, 1.12, 1.25, 1.5)   # 150 % (индекс 3) — для телефонов/планшетов, выбор в настройках; по умолчанию не ставится
 # Кабинет посадки, «Рентген»: тело клиента сбоку поверх скелета (по позе, см). bulk — телосложение,
 # top/legs/shoes — одежда, head — голова (радиус, см), extras — приметы. Голову можно заменить картинкой
 # assets/seat_head_<id>.png (профиль, смотрит вправо, по центру — центр головы) — тогда рисуется она.
@@ -1719,6 +1745,7 @@ def web_setup_touch():
           if (api()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
           if (window.parent && window.parent !== window) {                 // сайт развернул iframe: просим страницу
             try { window.parent.postMessage({wnb: 'exitfs'}, '*'); } catch (e) {} }
+          if (isTouch) return;
           x.textContent = 'Press F11 (or Esc) to leave full screen';         // F11 браузера снять скриптом нельзя
           setTimeout(function(){ x.textContent = '\\u2716 Exit fullscreen (Esc)'; }, 4000);
         };
@@ -1727,7 +1754,16 @@ def web_setup_touch():
         // показывает СВОЮ кнопку #wnb-exit — наша рядом давала «двоение» текста (владелец 09.11). Поэтому во фрейме
         // кнопку показываем только при полном экране самого документа игры (api()); вне фрейма — и при F11 (big()).
         var inFrame = false; try { inFrame = window.parent !== window; } catch (e) { inFrame = true; }
-        var fs = function(){ x.style.display = (api() || (!inFrame && big())) ? 'block' : 'none'; };
+        // Сенсорный экран (телефон/планшет): выход — та же кнопка ⛶ слева (#wnb-full меняет значок на ✖), надпись
+        // «Exit fullscreen (Esc)» внизу закрывала реплику Барти, а Esc там нет. Если ⛶ нет — компактная ✖ на её месте.
+        if (isTouch) {
+          x.textContent = '\\u2716';
+          x.style.cssText = 'display:none;position:fixed;left:6px;top:50%;transform:translateY(-50%);z-index:9998;' +
+            'width:44px;height:44px;padding:0;border:0;border-radius:10px;background:rgba(0,0,0,.45);color:#fff;' +
+            'font:bold 20px sans-serif;opacity:.6;cursor:pointer';
+        }
+        var fs = function(){ x.style.display = (isTouch ? (api() && !document.getElementById('wnb-full'))
+          : (api() || (!inFrame && big()))) ? 'block' : 'none'; };
         document.addEventListener('fullscreenchange', fs); document.addEventListener('webkitfullscreenchange', fs);
         window.addEventListener('resize', fs); setInterval(fs, 1000); fs();
       }
@@ -1742,10 +1778,20 @@ def web_setup_touch():
       ov.style.cssText = 'position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;align-items:center;' +
         'justify-content:center;background:#1d1b24;color:#f0b85a;font:bold 22px sans-serif;text-align:center;padding:24px';
       ov.innerHTML = '<div style="font-size:72px;line-height:1">&#x21BB;</div><div style="margin-top:12px">' +
-        'Turn your phone sideways to play</div>';
+        (phone ? 'Turn your phone sideways to play' : 'Turn your device sideways to play') + '</div>';
+      var anyway = false;                   // планшет: «Играть так» — до перезагрузки страницы
+      if (!phone) {
+        var pa = document.createElement('button'); pa.id = 'wnb-portrait'; pa.type = 'button';
+        pa.textContent = 'Play in portrait anyway';
+        pa.style.cssText = 'margin-top:28px;min-height:48px;padding:10px 22px;border:2px solid #f0b85a;border-radius:10px;' +
+          'background:transparent;color:#f0b85a;font:bold 18px sans-serif;cursor:pointer';
+        pa.onclick = function(e){ anyway = true; chk(); if (e) e.stopPropagation(); };
+        ov.appendChild(pa);
+      }
       document.body.appendChild(ov);
-      function chk(){ ov.style.display = (phone && screen.height > screen.width && innerHeight > innerWidth * 0.9)
-        ? 'flex' : 'none'; }
+      // Телефон — как раньше; планшет (и любое сенсорное не-«телефон») — в книжной ориентации окна (высота > ширины)
+      function chk(){ ov.style.display = (phone ? (screen.height > screen.width && innerHeight > innerWidth * 0.9)
+        : (!anyway && innerHeight > innerWidth)) ? 'flex' : 'none'; }
       window.addEventListener('resize', chk); window.addEventListener('orientationchange', chk); chk();
       function full(){ var d = document.documentElement, f = d.requestFullscreen || d.webkitRequestFullscreen;
         if (document.fullscreenElement || document.webkitFullscreenElement || !f) return;
@@ -1755,11 +1801,16 @@ def web_setup_touch():
       if (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen) {
       var b = document.createElement('button'); b.id = 'wnb-full'; b.type = 'button'; b.textContent = '\\u26F6';
       b.setAttribute('aria-label', 'Fullscreen');
-      b.style.cssText = 'position:fixed;left:6px;top:50%;transform:translateY(-50%);z-index:9998;width:36px;height:36px;border:0;' +
-        'border-radius:8px;background:rgba(0,0,0,.45);color:#fff;font-size:20px;opacity:.6';   // у левого края по центру: не на «◂» и не на инструментах
-      b.onclick = function(){ if (document.fullscreenElement) { document.exitFullscreen && document.exitFullscreen(); }
+      b.style.cssText = 'position:fixed;left:6px;top:50%;transform:translateY(-50%);z-index:9998;width:44px;height:44px;border:0;' +
+        'padding:0;border-radius:10px;background:rgba(0,0,0,.45);color:#fff;font-size:20px;opacity:.6';   // у левого края по центру: не на «◂» и не на инструментах
+      var isFs = function(){ return !!(document.fullscreenElement || document.webkitFullscreenElement); };
+      var bIcon = function(){ var on = isFs(); b.textContent = on ? '\\u2716' : '\\u26F6';   // одна кнопка: вход ⛶ / выход ✖
+        b.setAttribute('aria-label', on ? 'Exit fullscreen' : 'Fullscreen'); };
+      b.onclick = function(){ if (isFs()) { var ex = document.exitFullscreen || document.webkitExitFullscreen;
+          if (ex) ex.call(document); }
         else full(); };
-      document.body.appendChild(b); }
+      document.addEventListener('fullscreenchange', bIcon); document.addEventListener('webkitfullscreenchange', bIcon);
+      document.body.appendChild(b); bIcon(); }
       window.wnbText = function(x, y, w, h, fs, show){     // comment box over the canvas (on-screen keyboard)
         var t = document.getElementById('wnb-text');
         if (!show) { if (t) { t.style.display = 'none'; t.blur(); } return ''; }
@@ -2558,6 +2609,57 @@ def present(frame):
         pygame.transform.smoothscale(frame, view.size, buf)
         screen.fill((0, 0, 0))
         screen.blit(buf, view.topleft)
+
+
+FPS_HUD = dict(on=False, n=0, t=0.0, hist=[], text="", font=None)   # плашка fps (?fps=1 / --fps), по умолчанию выкл
+
+
+def fps_hud_wanted(query=""):
+    """Включить плашку fps: ключ запуска --fps (десктоп) или параметр адреса ?fps=1 (браузер; в ссылки-задания не
+    попадает — их разбирает parse_link только по SHARE_PARAMS)."""
+    if "--fps" in sys.argv:
+        return True
+    try:
+        v = urllib.parse.parse_qs(str(query or "").split("?", 1)[-1].split("#", 1)[0]).get("fps", [""])[-1]
+    except Exception:
+        return False
+    return v.strip().lower() not in ("", "0", "no", "off", "false")
+
+
+def fps_hud_tick(dt):
+    """Считает кадры; раз в секунду обновляет подпись: fps, минимум за 10 с, холст, RS, сенсор."""
+    h = FPS_HUD
+    h["n"] += 1
+    h["t"] += dt
+    if h["t"] < 1.0:
+        return
+    fps = h["n"] / h["t"]
+    h["n"], h["t"] = 0, 0.0
+    h["hist"] = (h["hist"] + [fps])[-10:]
+    scr = pygame.display.get_surface()
+    cw, ch = scr.get_size() if scr else (0, 0)
+    h["text"] = (f"fps {fps:.0f} · min10s {min(h['hist']):.0f} · " + tr("холст") + f" {cw}×{ch} · rs {RS:g}"
+                 + (" · touch" if TOUCH["on"] else ""))
+
+
+def fps_hud_draw(screen):
+    """Плашка поверх готового кадра (в пикселях окна, мелко, в левом нижнем углу)."""
+    h = FPS_HUD
+    if not h["text"] or screen is None:
+        return
+    px = max(11, screen.get_height() // 36)
+    if h["font"] is None or h["font"][0] != px:
+        try:
+            f = pygame.font.Font(os.path.join(ASSETS_DIR, "fonts", "DejaVuSans.ttf"), px)
+        except Exception:
+            f = pygame.font.SysFont("dejavusans,arial", px)
+        h["font"] = (px, f)
+    img = h["font"][1].render(h["text"], True, (255, 255, 255))
+    x, y = 4, screen.get_height() - img.get_height() - 6
+    bg = pygame.Surface((img.get_width() + 8, img.get_height() + 4), pygame.SRCALPHA)
+    bg.fill((0, 0, 0, 170))
+    screen.blit(bg, (x - 4, y - 2))
+    screen.blit(img, (x, y))
 
 
 def window_to_logical(pos):
@@ -5063,7 +5165,7 @@ SPEECH = Speech()
 
 def _min_btn_sz():
     """Мельче этого подпись кнопки не сжимается; при крупном тексте (TEXT_K) — в тех же экранных пикселях."""
-    return max(8, round(11 / TEXT_K[min(len(TEXT_K) - 1, max(0, A11Y.get("text", 0)))]))
+    return max(8, round(11 / text_k()))
 
 
 # Титры (экран «ТИТРЫ» с титула и с вечеринки). Текст владельца — docs/credits_draft_en.txt; английский — в словаре.
@@ -8289,7 +8391,9 @@ class Game:
                     missing=sorted(ASSET_MISS)[:30], done=len(self.done), version=GAME_VERSION,
                     queue=self.available_jobs(), assign=self.assign["id"] if self.assign_on() else None,
                     share=self.share_ui["mode"] if self.share_ui else None,
-                    last_click=str(getattr(self, "_last_click", None)),
+                    last_click=str(getattr(self, "_last_click", None)), sel_tool=self.sel_tool, fps_hud=FPS_HUD["on"],
+                    click_hint=any("click" in tr(t).lower() for _, t in CAPTURE["texts"]),   # подсказки «click»/«tap»
+                    tap_hint=any("tap" in tr(t).lower() for _, t in CAPTURE["texts"]),       # (по-английски)
                     tt_frames=sum(len(t.frames) + len(t.scaled) for t in _TT_CACHE.values() if isinstance(t, Turntable)))
 
     # ---------- геймпад ----------
@@ -9326,6 +9430,8 @@ class Game:
         if seen:
             self._typing[key] = (seen[0], self.t - 1000)
 
+    TEXT_CAP_SCENES = ("guild", "credits", "failed", "ending", "exam_result")   # плотная раскладка: текст не крупнее 125 % (text_cap)
+
     def draw(self, surf):
         if self.scene != self._scene_seen:          # смена сцены: растворяем прошлый кадр
             if self._scene_seen is not None and not calm():   # без анимации — без растворения
@@ -9336,7 +9442,10 @@ class Game:
             self._scene_seen = self.scene
             self.scene_t0 = self.t
         CAPTURE.update(frame=surf, texts=[], buttons=[], modal=None, mute=0)
-        getattr(self, f"draw_{self.scene}")(surf)
+        with (text_cap() if self.scene in self.TEXT_CAP_SCENES or (self.scene == "seating" and (self.seatc or {}).get("tab") == "fit")
+              or (self.scene == "job" and (self.cur or {}).get("track") == "tech")
+              else _no_cap()):
+            getattr(self, f"draw_{self.scene}")(surf)
         CAPTURE["mute"] += 1                            # тост и значки сверху читаются отдельно
         if self.toast_timer > 0 and self.toast:
             self._draw_toast(surf)
@@ -9355,9 +9464,11 @@ class Game:
         if self.dispute_ui is not None:
             self._draw_dispute_panel(surf, mouse_pos())
         if self.show_sound:
-            self._draw_sound_panel(surf)
+            with text_cap():
+                self._draw_sound_panel(surf)
         if self.share_ui is not None:
-            self._draw_share(surf)
+            with text_cap():
+                self._draw_share(surf)
         if self.kb["help"]:
             self._draw_help(surf)
         self.a11y_frame(surf)
@@ -12925,8 +13036,12 @@ class Game:
             surf.blit(tip, rect)
             aa_rect(surf, AMBER if hover in self.cur["parts"] else WHITE, rect, 1, border_radius=7)
             draw_text(surf, label, rect.center, 15, WHITE, bold=True, center=True)
-        draw_text(surf, "ЛКМ — вращать · колесо или +/− — зум · клик по детали — осмотр · Esc — закрыть",
-                  (vr.x + 12, vr.bottom - 26), 13, (150, 160, 175))
+        hint = ("тяни пальцем — вращать · +/− — зум · тап по детали — осмотр" if TOUCH["on"] else
+                "ЛКМ — вращать · колесо или +/− — зум · клик по детали — осмотр · Esc — закрыть")
+        if text_k() > 1.25:                            # 150 %: строка не шире окна (до 125 % — как было)
+            fit_text(surf, hint, (vr.x + 12, vr.bottom - 26), vr.w - 24, 13, (150, 160, 175))
+        else:
+            draw_text(surf, hint, (vr.x + 12, vr.bottom - 26), 13, (150, 160, 175))
         # панель справа: детали задания, прогресс, находка
         sr = self._v3d_side_rect().move(0, int(30 * (1 - ok)))
         side = Surf(sr.size, pygame.SRCALPHA)
@@ -13077,7 +13192,8 @@ class Game:
             draw_wrapped(surf, job["symptom"], (360, 100), 560, 17, WHITE)
             unlocked = len(self.inspected) >= INSPECT_REQ
             tip = ("Улики собраны — выбери диагноз:" if unlocked else
-                   f"Осмотри детали (клик по коляске или списку): {len(self.inspected)}/{INSPECT_REQ}")
+                   (f"Осмотри детали (тап по коляске или списку): {len(self.inspected)}/{INSPECT_REQ}" if TOUCH["on"] else
+                    f"Осмотри детали (клик по коляске или списку): {len(self.inspected)}/{INSPECT_REQ}"))
             draw_text(surf, tip, (360, crect.bottom + 4), 15, GREY if unlocked else AMBER, bold=not unlocked)
             draw_text(surf, "ДИАГНОЗ", (980, self._right_col_top() + 6), 16, CYAN if unlocked else DIM, bold=True)
             drects = self._diag_rects()
@@ -13119,7 +13235,8 @@ class Game:
         if self.show_manual:                          # сноски одним окном (отзыв 93)
             self._draw_manual_overlay(surf, mouse)
         if self.mini_pending:
-            self._draw_mini_overlay(surf, mouse)
+            with text_cap():                                  # плотное окно: текст не крупнее 125 %
+                self._draw_mini_overlay(surf, mouse)
         if self.v3d is not None:
             self._draw_v3d(surf, mouse)
         self._draw_tool_in_hand(surf, mouse)
@@ -13335,15 +13452,23 @@ class Game:
             draw_wrapped(surf, TOOLS[tid][1], (info.x + isz + 22, info.y + (27 if low else 36)),
                          info.w - isz - 34, 13 if low else 15, GREY)
         elif want:                                    # обучение: куда смотреть
-            draw_wrapped(surf, "Обучение: нужный инструмент обведён зелёным — возьми его, потом кликни деталь в "
+            draw_wrapped(surf, "Обучение: нужный инструмент обведён зелёным — возьми его, потом коснись детали в "
+                         "зелёном кружке." if TOUCH["on"] else
+                         "Обучение: нужный инструмент обведён зелёным — возьми его, потом кликни деталь в "
                          "зелёном кружке.", (info.x + 16, info.y + 12), info.w - 32, 15, GOOD)
         else:
-            hint = ("Выбери инструмент, потом кликни шаг" if tech else
-                    "Выбери инструмент, потом кликни деталь на коляске или в списке")
+            if TOUCH["on"]:                           # сенсорный экран: «коснись», а не «кликни»
+                hint = ("Выбери инструмент, потом коснись шага" if tech else
+                        "Выбери инструмент, потом коснись детали на коляске или в списке")
+            else:
+                hint = ("Выбери инструмент, потом кликни шаг" if tech else
+                        "Выбери инструмент, потом кликни деталь на коляске или в списке")
             y = draw_wrapped(surf, hint, (info.x + 16, info.y + 12), info.w - 32, 15, GREY)
             if not tech and MANUAL_NOTES.get(self.cur["id"]):     # где сноски: значок книжки у детали
                 _draw_book_icon(surf, (info.x + 26, y + 16), 10, CYAN)
-                draw_wrapped(surf, "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа.",
+                draw_wrapped(surf, "У деталей с книжкой есть сноска из мануала — коснись книжки; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа."
+                             if TOUCH["on"] else  # «наведи» на сенсоре не бывает
+                             "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа.",
                              (info.x + 44, y + 7), info.w - 60, 14, CYAN)
 
     def _draw_tool_in_hand(self, surf, mouse):
@@ -13480,7 +13605,8 @@ class Game:
         if self.v3d is None and self.phase == "repair":   # анимация инструмента — под окнами (мануал, спека, мини);
             self._draw_action(surf)                      # в «Проверке» не рисуем — иначе иконка висит над коляской (аудит 24.10)
         if self.mini_pending:
-            self._draw_mini_overlay(surf, mouse)
+            with text_cap():                                  # плотное окно: текст не крупнее 125 %
+                self._draw_mini_overlay(surf, mouse)
         if self.spec_pending:
             self._draw_spec_overlay(surf, mouse)
         if self.show_manual:
@@ -13795,14 +13921,15 @@ class Game:
         while sz > 16 and font(sz, True).size(text)[0] > p.w - 48:
             sz -= 1
         draw_text(surf, text, (trk.centerx, trk.bottom + 46), sz, WHITE, bold=True, center=True)
-        draw_text(surf, "Кликни по шкале, чтобы выставить значение.",
+        draw_text(surf, "Коснись шкалы, чтобы выставить значение." if TOUCH["on"] else "Кликни по шкале, чтобы выставить значение.",
                   (trk.centerx, trk.bottom + 82), 14, GREY, center=True)
         Button(self._mini_gap_check_rect(), "ПРОВЕРИТЬ", GOOD).draw(surf, mouse)
 
     def _draw_mini_ping(self, surf, mouse, p, m, cfg):
         cx, cy = p.centerx, p.y + 230
         found = len(m["dull"] & m["tested"])
-        draw_text(surf, f"Кликай спицы, ищи глухие. Найдено: {found}/{len(m['dull'])}",
+        draw_text(surf, f"Касайся спиц, ищи глухие. Найдено: {found}/{len(m['dull'])}" if TOUCH["on"] else
+                  f"Кликай спицы, ищи глухие. Найдено: {found}/{len(m['dull'])}",
                   (p.x + 24, p.bottom - 46), 15, CYAN)            # внизу — не на колесе
         aa_circle(surf, DIM, (cx, cy), 150, 3)
         for i, rect in self._mini_ping_spots():
@@ -15312,6 +15439,21 @@ def run_selftest():
             failures.append("мышь: клик мимо плитки инструмента выбрал её")
         if gk._touch_snap((5, 5), [ra]) != (5, 5):
             failures.append("_touch_snap: без сенсорного режима тап сдвинут")
+        if TEXT_K[:3] != (1.0, 1.12, 1.25) or TEXT_K[3] != 1.5:      # 0–2 из старых настроек значат то же, что раньше
+            failures.append(f"TEXT_K: ступени сдвинулись {TEXT_K}")
+        t0_ = A11Y.get("text", 0)
+        A11Y["text"] = 3
+        with text_cap():
+            if text_k() != 1.25:
+                failures.append("text_cap: потолок 125 % не действует")
+        if text_k() != 1.5:
+            failures.append("text_cap: потолок остался после окна")
+        A11Y["text"] = t0_
+        if not fps_hud_wanted("?fps=1") or fps_hud_wanted("") or fps_hud_wanted("?fps=0") \
+                or not fps_hud_wanted("?jobs=flat&fps=1"):
+            failures.append("?fps=1: параметр плашки fps читается неверно")
+        if "fps" in parse_link("?jobs=flat&fps=1") or parse_link("?jobs=flat&fps=1").get("jobs") != "flat":
+            failures.append("?fps=1 попал в параметры ссылки-задания или сломал их")
     except Exception as e:
         failures.append(f"запас на промах: {type(e).__name__}: {e}")
     finally:
@@ -15652,7 +15794,9 @@ async def main():
         game.done.update(j["id"] for j in JOBS)
         game.no_save = True
         print("[wnb] --unlock: прогресс не сохраняется", flush=True)
-    game.apply_link(web_link_query())     # ?jobs=…/?load=… (браузер) или --link "<адрес>" (десктоп); без них — ничего
+    _q = web_link_query()
+    game.apply_link(_q)                   # ?jobs=…/?load=… (браузер) или --link "<адрес>" (десктоп); без них — ничего
+    FPS_HUD["on"] = fps_hud_wanted(_q)    # ?fps=1 / --fps — плашка fps в углу (снять цифры с телефона)
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0
@@ -15687,6 +15831,9 @@ async def main():
             game.update(dt)
             game.draw(DISPLAY["frame"])                    # кадр пересоздаётся при смене разрешения
             present(DISPLAY["frame"])
+            if FPS_HUD["on"]:
+                fps_hud_tick(dt)
+                fps_hud_draw(pygame.display.get_surface())
             pygame.display.flip()
             if IS_WEB:
                 DISPLAY["_px_t"] = DISPLAY.get("_px_t", 0) + dt

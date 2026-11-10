@@ -198,6 +198,42 @@ async def phone(b):
     await p.pg.wait_for_timeout(1200)
     check(before != await p.pg.screenshot(), "phone: протянуть пальцем — коляска повернулась")
     await p.shot("2_rotated")
+    st = await p.state()
+    check(st.get("tap_hint") and not st.get("click_hint"),
+          f"phone: подсказки «tap», без «click» (tap {st.get('tap_hint')}, click {st.get('click_hint')})")
+    for y in (114, 156):                                         # осмотр: две строки списка деталей
+        await p.tap(1120, y, 700)
+    for i in range(3):                                           # диагноз: варианты по очереди, пока не ремонт
+        if (await p.state()).get("phase") == "repair":
+            break
+        await p.tap(1120, 378 + i * 76 + 34, 1200)
+    st = await p.wait(lambda s: s.get("phase") == "repair", "phone: ремонт")
+    await p.tap(18, 585, 1000)                                   # на 6 px левее первой плитки инструмента
+    st = await p.state()
+    check(st.get("sel_tool"), f"phone: тап рядом с плиткой инструмента выбрал её ({st.get('sel_tool')})")
+    await p.shot("2b_tool_near_tap")
+    fsb = await p.pg.evaluate("(()=>{const b=document.getElementById('wnb-full'),x=document.getElementById('wnb-exitfs');"
+                              "return [b?b.getBoundingClientRect().width:0, x?getComputedStyle(x).display:null]})()")
+    check(fsb[0] and fsb[0] <= 48 and fsb[1] in (None, "none"),
+          f"phone: кнопка ⛶ компактная ({fsb[0]} px), широкой «Exit fullscreen (Esc)» нет ({fsb[1]})")
+    try:
+        await p.pg.tap("#wnb-full", timeout=3000)
+        await p.pg.wait_for_timeout(1200)
+        fs = await p.pg.evaluate("(()=>{const b=document.getElementById('wnb-full'),x=document.getElementById('wnb-exitfs');"
+                                 "return [!!document.fullscreenElement, b.textContent, b.getAttribute('aria-label'),"
+                                 "Math.round(b.getBoundingClientRect().width), x?getComputedStyle(x).display:null]})()")
+        if fs[0]:
+            check(fs[1] == "\u2716" and fs[2] == "Exit fullscreen" and fs[3] <= 48 and fs[4] in (None, "none"),
+                  f"phone: в полном экране — та же кнопка ✖ «Exit fullscreen», компактная ({fs})")
+            await p.shot("2c_fullscreen")
+            await p.pg.tap("#wnb-full", timeout=3000)
+            await p.pg.wait_for_timeout(1200)
+            back = await p.pg.evaluate("[!!document.fullscreenElement, document.getElementById('wnb-full').textContent]")
+            check(not back[0] and back[1] == "\u26F6", f"phone: ✖ — выход из полного экрана, значок снова ⛶ ({back})")
+        else:
+            print("  ..   phone: полный экран в headless не включился — проверка ✖ пропущена", flush=True)
+    except Exception as e:
+        print(f"  ..   phone: кнопка ⛶ не нажата ({type(e).__name__})", flush=True)
     await p.tap(1145, 27, 1500)                                  # ⚑
     await p.wait(lambda s: s["dispute"], "окно замечания")
     ta = await p.pg.evaluate("(()=>{const t=document.getElementById('wnb-text');return t?getComputedStyle(t).display:null})()")
@@ -224,6 +260,58 @@ async def phone(b):
     disp = await p.pg.evaluate("(()=>{const o=document.getElementById('wnb-rotate');return o?getComputedStyle(o).display:null})()")
     check(disp == "flex", "portrait: просьба повернуть телефон")
     await p.shot("1_rotate")
+    btn = await p.pg.evaluate("!!document.getElementById('wnb-portrait')")
+    check(not btn, "portrait: у телефона кнопки «Play in portrait anyway» нет")
+    await ctx.close()
+
+
+ROT = "(()=>{const o=document.getElementById('wnb-rotate');return o?[getComputedStyle(o).display,o.textContent]:null})()"
+
+
+async def tablet(b):
+    """Планшет в книжной ориентации: просьба повернуть с кнопкой «Play in portrait anyway»; поворот — оверлей уходит."""
+    ctx = await b.new_context(viewport={"width": 768, "height": 1024}, is_mobile=True, has_touch=True,
+                              device_scale_factor=2, screen={"width": 768, "height": 1024})
+    p = Page(await ctx.new_page(), "tablet")
+    await p.pg.route("**/script.google.com/**", lambda r: r.abort())
+    await p.pg.goto(URL)
+    await p.pg.wait_for_timeout(6000)
+    await p.pg.touchscreen.tap(384, 300)
+    await p.wait(lambda s: s.get("scene"), "игра запустилась", 90)
+    ov = await p.pg.evaluate(ROT)
+    check(ov and ov[0] == "flex" and "Turn your device sideways" in ov[1] and "Play in portrait anyway" in ov[1],
+          f"tablet: книжная — просьба повернуть с кнопкой ({ov})")
+    await p.shot("1_portrait")
+    await p.pg.set_viewport_size({"width": 1024, "height": 768})
+    await p.pg.wait_for_timeout(1000)
+    ov = await p.pg.evaluate(ROT)
+    check(ov and ov[0] == "none", f"tablet: повернули в альбомную — оверлей пропал ({ov and ov[0]})")
+    await p.shot("2_landscape")
+    await p.pg.set_viewport_size({"width": 768, "height": 1024})
+    await p.pg.wait_for_timeout(1000)
+    ov = await p.pg.evaluate(ROT)
+    check(ov and ov[0] == "flex", f"tablet: снова книжная — оверлей вернулся ({ov and ov[0]})")
+    await p.pg.tap("#wnb-portrait")
+    await p.pg.wait_for_timeout(800)
+    ov = await p.pg.evaluate(ROT)
+    check(ov and ov[0] == "none", f"tablet: «Play in portrait anyway» убрала оверлей ({ov and ov[0]})")
+    await p.shot("3_anyway")
+    st = await p.state()
+    check(st.get("touch"), "tablet: сенсорный режим включён")
+    p.check_console()
+    await ctx.close()
+
+
+async def fps(b):
+    """?fps=1 — плашка fps поверх игры (для замеров на телефоне); без параметра её нет."""
+    ctx = await b.new_context(viewport={"width": 1280, "height": 720})
+    p = Page(await ctx.new_page(), "fps")
+    st = await p.boot(query="?fps=1")
+    await p.pg.wait_for_timeout(2500)
+    st = await p.state()
+    check(st.get("fps_hud") and not st.get("assign"), f"fps: ?fps=1 — плашка включена, в задание не попал ({st.get('fps_hud')})")
+    await p.shot("1_fps")
+    p.check_console()
     await ctx.close()
 
 
@@ -316,7 +404,8 @@ async def main():
         os.remove(os.path.join(SHOTS, f))
     async with async_playwright() as pw:
         for fn, args in ((desktop, ("site", 1100, 620, 1.0)), (desktop, ("full", 1920, 1080, 1.0)),
-                         (desktop, ("laptop125", 1366, 768, 1.25)), (phone, ()), (gamepad, ()), (links, ())):
+                         (desktop, ("laptop125", 1366, 768, 1.25)), (phone, ()), (tablet, ()), (fps, ()),
+                         (gamepad, ()), (links, ())):
             print(f"— {fn.__name__} {args[0] if args else ''}", flush=True)
             b = await pw.chromium.launch(args=["--autoplay-policy=no-user-gesture-required", "--mute-audio"])   # свой браузер на
             try:                                                                                # сценарий

@@ -1,0 +1,11 @@
+{
+ "холст": "canvas",
+ "тяни пальцем — вращать · +/− — зум · тап по детали — осмотр": "drag with a finger — rotate · +/− — zoom · tap a part — inspect",
+ "Осмотри детали (тап по коляске или списку): {0}/{1}": "Inspect parts (tap the chair or the list): {0}/{1}",
+ "Обучение: нужный инструмент обведён зелёным — возьми его, потом коснись детали в зелёном кружке.": "Tutorial: the tool you need has a green frame. Pick it up, then tap the part in the green circle.",
+ "Выбери инструмент, потом коснись шага": "Pick a tool, then tap a step",
+ "Выбери инструмент, потом коснись детали на коляске или в списке": "Pick a tool, then tap a part on the chair or in the list",
+ "У деталей с книжкой есть сноска из мануала — коснись книжки; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа.": "Parts with a book icon have a manual footnote — tap the icon; for all of them at once press MANUAL NOTES at the bottom right.",
+ "Коснись шкалы, чтобы выставить значение.": "Tap the scale to set the value.",
+ "Касайся спиц, ищи глухие. Найдено: {0}/{1}": "Tap the spokes, find the dull ones. Found: {0}/{1}"
+}
