@@ -1,5 +1,6 @@
-"""Выгрузка непереведённых русских строк из game.py в chunkN.json (формат как chunk1-4):
-python i18n_work/extract_new.py chunk5.json  — строки-литералы и шаблоны f-строк ({0}, {1}…)."""
+"""Выгрузка непереведённых русских строк из game.py и assets/data/**/*.json в chunkN.json (формат как chunk1-4):
+python i18n_work/extract_new.py chunk5.json  — строки-литералы и шаблоны f-строк ({0}, {1}…) кода, а также тексты
+заданий, Гильдии, Кабинета посадки и справочников из файлов данных (поля source/comment — не текст; data_strings.py)."""
 import ast, json, os, re, sys, glob
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "game.py")
@@ -29,7 +30,7 @@ SKIP_FN = {"run_selftest", "print_assets", "main", "_selftest_play"}
 
 class V(ast.NodeVisitor):
     def visit_FunctionDef(self, node):
-        if node.name in SKIP_FN:
+        if node.name in SKIP_FN or node.name.startswith("_data_"):   # _data_* — загрузчик assets/data, ошибки в консоль
             return                               # консольные проверки — не экран игры
         self.generic_visit(node)
 
@@ -53,6 +54,13 @@ class V(ast.NodeVisitor):
 
 
 V().visit(ast.parse(src))
+sys.path.insert(0, HERE)
+from data_strings import data_strings  # noqa: E402
+
+for _text, _where in data_strings():          # содержание игры (с 10.11.2026 — не в game.py)
+    if CYR.search(_text) and _text not in have and _text not in seen:
+        seen.add(_text)
+        out.append(dict(ru=_text, line=0, fmt=False, context=_where))
 dst = os.path.join(HERE, sys.argv[1] if len(sys.argv) > 1 else "_new_strings.json")
 if os.path.basename(dst).startswith("chunk") and os.path.exists(dst) and os.path.getsize(dst) > 10:
     # готовый chunk с переводом не затираем (раньше проверка «extract_new.py chunk5.json» стирала 3,7 тыс. строк)

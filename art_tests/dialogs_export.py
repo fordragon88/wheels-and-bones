@@ -19,6 +19,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 SRC = open(os.path.join(HERE, "..", "game.py"), encoding="utf-8").read()
+sys.path.insert(0, os.path.join(HERE, "..", "i18n_work"))
+from data_strings import data_strings  # noqa: E402
+SRC += chr(10).join(t for t, _ in data_strings())     # содержание игры с 10.11.2026 — в assets/data/*.json
 OUT = os.path.join(HERE, "dialogs", "WheelsAndBones_dialogues.xlsx")
 game.set_lang("en")
 EN = game.tr
