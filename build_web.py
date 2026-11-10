@@ -131,6 +131,9 @@ def build(serve=False):
 
 SPLASH_CSS = """
 <style id="wnb-splash-css">
+  /* телефон: тап по надписи страницы не выделяет текст и не вызывает панель поиска Chrome («Touch to Search») */
+  html, body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  input, textarea { -webkit-user-select: text; user-select: text; }
   #wnb-splash { position: fixed; inset: 0; z-index: 999995; pointer-events: none; display: flex; flex-direction: column;
     align-items: center; justify-content: flex-end; padding-bottom: 7vh; box-sizing: border-box;
     background: linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(10,8,14,.72) 100%), #1d1b24 url(splash.jpg) center / cover no-repeat;
@@ -157,7 +160,25 @@ SPLASH_HTML = ('<div id="wnb-splash"><div class="t">Wheels &amp; Bones</div>'
                'if(p&&p.max&&p.value>0){bar.max=p.max;bar.value=p.value;}else{bar.removeAttribute("value");}'
                'var txt=(ib&&ib.offsetParent!==null&&ib.innerText)||(st&&st.innerText)||"";'
                'if(/Ready/i.test(txt)){txt="Ready — click or tap anywhere to start";bar.max=100;bar.value=100;}'
-               'if(txt)msg.textContent=txt;setTimeout(tick,250);}tick();})();</script>')
+               'if(txt)msg.textContent=txt;setTimeout(tick,250);}tick();})();</script>'
+               # Сторож раскладки холста (10.11, телефон владельца): pygbag раскладывает холст один раз, через 0,1 с после
+               # события resize. На настоящем телефоне при повороте/входе в полный экран innerHeight в этот момент ещё
+               # старый (книжный): холст считается на «квадратное» окно, выходит выше экрана и уезжает вниз, а нового resize
+               # нет. Дважды в секунду проверяем: холст вылез за окно или не занял его — зовём window_resize() (не больше
+               # 3 попыток на один размер окна, чтобы не дёргать фокус у поля ввода).
+               '<script id="wnb-fit">(function(){var key="",tries=0;'
+               'function bad(){var c=document.getElementById("canvas");'
+               'if(!c||!c.width||!c.height||!(parseFloat(c.style.width)>0))return false;'
+               'var W=window.innerWidth,H=window.innerHeight,r=c.getBoundingClientRect();if(W<50||H<50)return false;'
+               'return r.left<-2||r.top<-2||r.right>W+2||r.bottom>H+2||(r.width<W-3&&r.height<H-3);}'
+               'function fit(){if(typeof window_resize!=="function")return;'
+               'var k=window.innerWidth+"x"+window.innerHeight;if(k!==key){key=k;tries=0;}'
+               'if(bad()&&tries<3){tries++;window.wnbFitFixed=(window.wnbFitFixed||0)+1;window_resize();}}'
+               'setInterval(fit,500);'
+               '["orientationchange","fullscreenchange","webkitfullscreenchange"].forEach(function(e){'
+               'window.addEventListener(e,function(){key="";setTimeout(fit,350);setTimeout(fit,1200);});});'
+               'if(window.visualViewport)visualViewport.addEventListener("resize",function(){setTimeout(fit,350);});'
+               '})();</script>')
 
 
 # Анонимный счётчик посещений GoatCounter (решение владельца 29.10, «после заморозки»): без cookies и личных данных,

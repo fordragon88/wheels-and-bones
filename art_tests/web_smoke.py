@@ -178,6 +178,16 @@ async def phone(b):
     await p.check_canvas()
     st = await p.state()
     check(st.get("touch"), "phone: сенсорный режим включён")
+    # «залипшая» раскладка настоящего телефона (поворот/полный экран: ширина уже альбомная, высота ещё книжная) —
+    # холст выше экрана и уехал вниз; сторож #wnb-fit обязан вернуть его в окно (10.11, телефон владельца)
+    await p.pg.evaluate("(function(){var c=document.getElementById('canvas');c.style.width=innerWidth+'px';"
+                        "c.style.height=Math.round(innerWidth*9/16)+'px';})()")
+    await p.pg.wait_for_timeout(1800)
+    fitr = await p.pg.evaluate("(function(){var r=document.getElementById('canvas').getBoundingClientRect();"
+                               "return [r.top>=-2,r.bottom<=innerHeight+2,r.right<=innerWidth+2,window.wnbFitFixed||0];})()")
+    check(all(fitr[:3]) and fitr[3] >= 1, f"phone: холст, вылезший за окно, сам вернулся на место ({fitr})")
+    sel = await p.pg.evaluate("getComputedStyle(document.body).userSelect || getComputedStyle(document.body).webkitUserSelect")
+    check(sel == "none", f"phone: текст страницы не выделяется тапом — нет панели поиска Chrome ({sel})")
     await p.tap(640, 470)
     await p.wait(lambda s: s["scene"] == "intro", "касание «начать» — вступление, без двойного срабатывания")
     st = await p.state()
