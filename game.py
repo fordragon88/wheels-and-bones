@@ -1672,6 +1672,32 @@ def web_persist(path):
 
 
 TOUCH = {"on": False}                         # браузер на телефоне/планшете (палец вместо мыши)
+TOUCH_PAD = 16                                # лог. px: запас на промах пальцем вокруг мелких целей (на телефоне ×0,5)
+
+
+def _touch_pick(items, pos, pad=None):
+    """Цель под пальцем из items [(ключ, Rect)]: точное попадание — как раньше (первое в списке); если точного нет и
+    экран сенсорный — ближайшая цель, до края которой не дальше pad (при равенстве — ближайшая по центру).
+    Мышь (TOUCH выкл) — только точное попадание. Возврат: ключ или None."""
+    x, y = pos
+    for key, r in items:
+        if r is not None and r.collidepoint(pos):
+            return key
+    if not TOUCH["on"]:
+        return None
+    pad = TOUCH_PAD if pad is None else pad
+    best = None
+    for key, r in items:
+        if r is None or r.w <= 0 or r.h <= 0:
+            continue
+        dx = max(r.left - x, 0, x - (r.right - 1))
+        dy = max(r.top - y, 0, y - (r.bottom - 1))
+        d = math.hypot(dx, dy)
+        if d <= pad:
+            dc = math.hypot(x - r.centerx, y - r.centery)
+            if best is None or (d, dc) < best[:2]:
+                best = (d, dc, key)
+    return best[2] if best else None
 
 
 def web_setup_touch():
@@ -8953,6 +8979,8 @@ class Game:
             self.start_job("flat")
 
     def click_hub(self, m):
+        m = self._touch_snap(m, [r for _, r in self._hub_job_rects()] + [r for _, r in self._hub_arrow_rects()],
+                             block=(self._hub_seat_rect(), self._hub_guild_rect(), self._hub_garage_rect()))
         for jid, rect in self._hub_job_rects():
             if rect.collidepoint(m):
                 self.start_job(jid)
@@ -9016,6 +9044,8 @@ class Game:
             if self._manual_close_rect().collidepoint(m):
                 self.show_manual = False
             return
+        if TOUCH["on"] and self._hotspot_at(m) is None:          # кружок детали (у него свой запас) — первым
+            m = self._touch_snap(m, self._job_touch_targets(), block=(self._chair_rect(),))
         nb = self._notes_btn_rect()
         if nb and (nb.collidepoint(m) or (getattr(self, "_sub_rect", None) and self._sub_rect.collidepoint(m))):
             self.open_manual("notes:" + self.cur["id"])
@@ -9134,6 +9164,8 @@ class Game:
             return
         if self.spec_pending:
             spec = self.spec_pending["spec"]
+            m = self._touch_snap(m, [self._spec_manual_rect(), self._spec_cancel_rect()] + (
+                [r for _, r in self._spec_option_rects()] if spec["manual"] in self.manual_viewed else []))
             if self._spec_manual_rect().collidepoint(m):
                 self.open_manual(spec["manual"])
                 return
@@ -9147,6 +9179,9 @@ class Game:
                         return
             return
         if self.phase == "repair":
+            m = self._touch_snap(m, [self._manual_btn_rect()] + ([] if self.exam_mode else [self._tech_skip_rect()])
+                                 + [r for _, r in self._tool_rects()] + [r for _, r in self._op_rects()],
+                                 block=(self._tech_chair_rect(),))
             if self._manual_btn_rect().collidepoint(m):
                 self.open_manual()
                 return
@@ -9203,6 +9238,31 @@ class Game:
     def _tap(self, rect, pos):
         """Попадание по кнопке; на сенсорном экране маленькие значки «шире» пальца — запас по краям."""
         return (rect.inflate(18, 18) if TOUCH["on"] else rect).collidepoint(pos)
+
+    @staticmethod
+    def _touch_snap(m, targets, block=()):
+        """Сенсорный экран, палец чуть мимо цели: тап переносится в центр ближайшей из targets (не дальше TOUCH_PAD
+        от её края) — дальше обработчик работает как с точным кликом. Точное попадание в любую цель или в зону из
+        block (окно коляски — там палец вращает её, ползунки, другие кнопки) — тап не трогаем. Мышь — без изменений."""
+        if not TOUCH["on"]:
+            return m
+        targets = [r for r in targets if r is not None]
+        if any(r.collidepoint(m) for r in targets) or any(b is not None and b.collidepoint(m) for b in block):
+            return m
+        r = _touch_pick([(r, r) for r in targets], m)
+        return r.center if r is not None else m
+
+    def _job_touch_targets(self):
+        """Цели запаса на промах в обычном задании (кроме мини-окна и мануала)."""
+        out = [self._notes_btn_rect(), getattr(self, "_sub_rect", None)]
+        if self.phase == "diagnose":
+            out += [r for _, r in self._part_rects()] + [r for _, r in self._diag_rects()]
+        elif self.phase == "repair":
+            out += [self._step_prev_rect(), self._step_skip_rect()]
+            out += [r for _, r in self._tool_rects()] + [r for _, r in self._part_rects()]
+        elif self.phase == "test":
+            out.append(self._test_btn_rect())
+        return out
 
     def update(self, dt):
         self.t += dt
@@ -9601,6 +9661,25 @@ class Game:
         if key in ("amb", "master", "music"):
             apply_volume()
 
+    def _settings_touch_targets(self, tab):
+        """Цели запаса на промах в окне настроек: «закрыть», вкладки и строки текущей вкладки."""
+        out = [self._sound_close_rect()] + [r for _, r in self._settings_tab_rects()]
+        if tab == "access":
+            out += [r for _, r in self._access_rects()]
+        elif tab == "game":
+            out += [r for _, r in self._share_set_rects()]
+            out += ([self._reset_yes_rect(), self._reset_no_rect()] if getattr(self, "_reset_ask", False)
+                    else [self._reset_btn_rect()])
+        elif tab == "sound":
+            out.append(self._sound_mute_rect())
+        else:
+            if IS_WEB:
+                out += [r for _, r in self._webq_rects()] + [self._web_fs_rect()]
+            else:
+                out += [r for _, r in self._mode_rects()] + [r for _, r in self._res_rects()]
+            out += [self._glow_btn_rect(), self._gpu_btn_rect()]
+        return out
+
     def handle_sound_event(self, event):
         tab = getattr(self, "settings_tab", "sound")
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE and getattr(self, "_reset_ask", False):
@@ -9611,6 +9690,12 @@ class Game:
             self._vol_drag, self._reset_ask = None, False
             self.save_settings()
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if TOUCH["on"]:                                   # палец чуть мимо строки/вкладки — запас на промах
+                pos = self._touch_snap(event.pos, self._settings_touch_targets(tab),
+                                       block=[t.inflate(24, 30) for _, t in self._vol_slider_rects()]
+                                       if tab == "sound" else ())
+                if pos != event.pos:
+                    event = pygame.event.Event(event.type, button=1, pos=pos)
             if self._sound_close_rect().collidepoint(event.pos) or \
                     not self._sound_panel_rect().collidepoint(event.pos):
                 self.show_sound = False
@@ -10545,6 +10630,15 @@ class Game:
 
     def click_seating(self, m):
         sc = self.seatc
+        tg = [self._seat_back_rect()] + [r for _, r in self._seat_tab_rects()] + [r for _, r in self._seat_list_rects()]
+        if sc["tab"] in ("lessons", "fit"):
+            tg.append(self._seat_demo_toggle_rect())
+        if sc["tab"] == "quiz" and not sc["quiz_done"] and sc["picked"] is None:
+            tg += [r for _, r in self._seat_quiz_rects()]
+        if sc["tab"] == "fit" or (sc["tab"] == "quiz" and (sc["quiz_done"] or sc["picked"] is not None)):
+            tg.append(self._seat_btn_rect())
+        m = self._touch_snap(m, tg, block=[r.inflate(30, 30) for _, r in self._seat_slider_rects()]
+                             if sc["tab"] == "fit" else ())
         if self._seat_back_rect().collidepoint(m):
             self.scene = "hub"
             return
@@ -12262,8 +12356,9 @@ class Game:
             return True
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self._m3d_zoom_on():
             zin, zout = self._m3d_zoom_rects()
-            if zin.collidepoint(event.pos) or zout.collidepoint(event.pos):
-                self.m3d_zoom(1 if zin.collidepoint(event.pos) else -1)
+            z = _touch_pick(((1, zin), (-1, zout)), event.pos) if self._hotspot_at(event.pos) is None else None
+            if z is not None:                            # на сенсоре — с запасом на промах (кружок детали важнее)
+                self.m3d_zoom(z)
                 return True
         if event.type == pygame.MOUSEWHEEL and self._chair_rect().collidepoint(mouse_pos()):
             s["zoom_k"] = max(self.M3D_ZOOM[0], min(self.M3D_ZOOM[1], s.get("zoom_k", 1.0) * (self.M3D_ZOOM[2] ** event.y)))
@@ -13582,7 +13677,23 @@ class Game:
         n = len(self.mini_pending["cfg"]["options"])
         return [(i, pygame.Rect(p.x + 40, p.y + 202 + i * 70, p.w - 240, 62)) for i in range(n)]
 
+    def _mini_touch_targets(self):
+        """Цели запаса на промах в мини-окне (кнопки, варианты, точки простукивания); дорожка зазора — без запаса."""
+        k = self.mini_pending["kind"]
+        out = [self._mini_cancel_rect()]
+        if k == "pump":
+            out += list(self._mini_pump_rects()) + [self._mini_release_rect()]
+        elif k == "gap":
+            out.append(self._mini_gap_check_rect())
+        elif k == "ping":
+            out += [r for _, r in self._mini_ping_spots()]
+        elif k == "meter":
+            out += [r for _, r in self._mini_meter_rects()]
+        return out
+
     def _click_mini(self, m):
+        m = self._touch_snap(m, self._mini_touch_targets(),
+                             block=(self._mini_gap_track(),) if self.mini_pending["kind"] == "gap" else ())
         if self._mini_cancel_rect().collidepoint(m):
             self.mini_pending = None
             return
@@ -15165,6 +15276,46 @@ def run_selftest():
     gk.done.add("flat")
     if gk._tutor_want() is not None:
         failures.append("обучение: подсветка осталась после первого ремонта")
+    # --- запас на промах пальцем (_touch_pick / _touch_snap): точное попадание выигрывает, мышь без запаса ---
+    touch0 = TOUCH["on"]
+    try:
+        ra, rb = pygame.Rect(100, 100, 50, 50), pygame.Rect(158, 100, 50, 50)    # соседние плитки, зазор 8
+        TOUCH["on"] = True
+        if _touch_pick([("a", ra), ("b", rb)], (150, 120)) != "a" or _touch_pick([("a", ra), ("b", rb)], (158, 120)) != "b":
+            failures.append("_touch_pick: точное попадание не выиграло у соседа")
+        if _touch_pick([("a", ra)], (ra.right - 1 + TOUCH_PAD - 1, 120)) != "a":
+            failures.append("_touch_pick: промах на pad−1 px не попал")
+        if _touch_pick([("a", ra)], (ra.right - 1 + TOUCH_PAD + 2, 120)) is not None:
+            failures.append("_touch_pick: промах на pad+2 px попал")
+        if _touch_pick([(0, ra)], (ra.x - 3, ra.y)) != 0:
+            failures.append("_touch_pick: ключ 0 потерян")
+        gk.start_job("flat")
+        gk.phase, gk.sel_tool = "repair", None
+        tid0, tr0 = gk._tool_rects()[0]
+        gk.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=(tr0.x - 6, tr0.centery)))
+        gk.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=(tr0.x - 6, tr0.centery)))
+        if gk.sel_tool != tid0:
+            failures.append("сенсор: тап рядом с плиткой инструмента её не выбрал")
+        gk.sel_tool = None
+        cr_ = gk._chair_rect()
+        mid = next(((x, y) for y in range(cr_.centery, cr_.bottom - 8, 6) for x in range(cr_.centerx - 60, cr_.centerx + 61, 6)
+                    if gk._hotspot_at((x, y)) is None), cr_.center)
+        gk.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=mid))
+        gk.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=mid))
+        if gk.sel_tool is not None:
+            failures.append(f"сенсор: тап по коляске {mid} выбрал инструмент {gk.sel_tool}")
+        TOUCH["on"] = False
+        if _touch_pick([("a", ra)], (ra.right + 2, 120)) is not None:
+            failures.append("_touch_pick: без сенсорного режима появился запас")
+        gk.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=(tr0.x - 6, tr0.centery)))
+        if gk.sel_tool is not None:
+            failures.append("мышь: клик мимо плитки инструмента выбрал её")
+        if gk._touch_snap((5, 5), [ra]) != (5, 5):
+            failures.append("_touch_snap: без сенсорного режима тап сдвинут")
+    except Exception as e:
+        failures.append(f"запас на промах: {type(e).__name__}: {e}")
+    finally:
+        TOUCH["on"] = touch0
     # --- ссылки и коды (docs/SHARE_LINKS.md): прогресс туда-обратно, битая сумма, задание, результат с солью ---
     gp = Game(headless=True)
     gp.done, gp.garage = {"flat", "caster", "yaga_d100"}, [("flat", 3), ("caster", 1)]
