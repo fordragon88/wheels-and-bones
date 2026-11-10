@@ -65,3 +65,4 @@ i18n_work/_new_strings.json
 
 # копии exe релиза (страховка), не для git
 backups/
+art_tests/data_golden_now.json
