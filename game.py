@@ -7905,7 +7905,12 @@ class Game:
                  "client_elf.png": "ride_aelin", "client_orc.png": "ride_gra", "client_troll.png": "ride_bomm",
                  "client_aeroz.png": "ride_yuki", "client_fairy.png": "ride_tilly",
                  "client_cross6.png": "ride_ivushka", "client_rusalka.png": "ride_olga", "client_mummy.png": "ride_seneb",
-                 "client_yaga.png": "ride_yaga"}
+                 "client_yaga.png": "ride_yaga",
+                 # электроколяски и двое с сопровождающим (12.11): теперь петля у всех героев
+                 "client_q6edge2.png": "ride_dracula", "client_f5.png": "ride_matilda", "client_golem.png": "ride_grund",
+                 "client_gorynych.png": "ride_gorynych", "client_leshy.png": "ride_leshy", "client_goblin.png": "ride_zix",
+                 "client_whillc2.png": "ride_saira", "client_focuscr_grandson.png": "ride_agatha",
+                 "client_iris_mom.png": "ride_iskra"}
     # петля: (кадров/с, путь колеса по полу за 1 с петли в высотах кадра, предел ускорения петли) — замер
     # art_tests/ride_loop.py (ride_shots/*_info.json). Петля идёт не по часам, а по пройденному пути: колёса не
     # проскальзывают, при торможении и руки замедляются. Предел — чтобы руки не «мельтешили» (у Моры рук в кадре нет);
@@ -7921,7 +7926,16 @@ class Game:
                  # третья партия (11.11) — тоже тонкие спицы, в петле один толчок: Ивушка 1,42 с, Ольга 1,0 с,
                  # Сенеб 1,33 с, Яга 1,83 с; у пожилых Ивушки и Яги толчок чуть медленнее (~0,8 с)
                  "ride_ivushka": (12, 0.03, 1.8), "ride_olga": (12, 0.03, 1.5), "ride_seneb": (12, 0.03, 1.9),
-                 "ride_yaga": (12, 0.03, 2.3)}
+                 "ride_yaga": (12, 0.03, 2.3),
+                 # электроколяски: рук на ободах нет, петлю можно ускорять сильнее (как у Моры); путь колеса — по
+                 # повороту ступицы в кадрах петли (~10–18° за кадр, круг Хафа на таких ступицах ошибается).
+                 # Горыныч — 9,5 к/с: в клипе H3 каждый 4-й кадр повтор (как у Мартина), повторы выброшены
+                 "ride_dracula": (12, 0.31, 4.0), "ride_matilda": (12, 0.30, 4.0), "ride_grund": (12, 0.35, 4.0),
+                 "ride_gorynych": (9.5, 0.30, 4.0), "ride_leshy": (12, 0.30, 4.0), "ride_zix": (12, 0.45, 4.0),
+                 "ride_saira": (12, 0.30, 4.0),
+                 # сопровождающий идёт пешком: путь за 1 с петли = темп × длина шага (замер по ступням в кадрах:
+                 # Агата 1,39 шага/с × 153 px, Искра 1,5 × 140 px при высоте кадра 440) — ноги не «скользят» по полу
+                 "ride_agatha": (12, 0.48, 1.3), "ride_iskra": (12, 0.48, 1.3)}
     RIDE_ANIM_SECS = 4.6                  # проезд с петлёй: въезд слева, торможение и остановка в центре
     RIDE_ANIM_H = 330                     # высота кадра петли (портрет — 250): колёса на той же линии пола
     RIDE_FLOOR = 534                      # низ кадра петли (в кадре поле ~4 px под колёсами — пол на y≈530, как у портрета)
@@ -7956,11 +7970,16 @@ class Game:
 
     RIDE_FLIP = {"client_iris.png", "client_iris_mom.png", "client_f5.png"}   # портреты, где коляска смотрит влево
 
-    RIDE_SCALE = {"ride_tilly": 0.8}      # Тилли — ребёнок в детской коляске: рядом с орком и троллем мельче
+    # Тилли — ребёнок в детской коляске: рядом с орком и троллем мельче. Пары: в кадре ещё и идущий в полный рост —
+    # кадр выше, чтобы коляска осталась того же размера, что у остальных (у Искры — детская). Леший и Грунд — великаны,
+    # у Зикса сиденье поднято на лифте
+    RIDE_SCALE = {"ride_tilly": 0.8, "ride_agatha": 1.15, "ride_iskra": 1.1, "ride_leshy": 1.1, "ride_grund": 1.1,
+                  "ride_zix": 1.15}
+    RIDE_ASPECT = {"ride_agatha": 1.31, "ride_iskra": 1.22}   # ширина/высота кадра петли, если шире 1,05 (пары)
 
     def _ride_anim_size(self, name=None):
         h = round(self.RIDE_ANIM_H * self.RIDE_SCALE.get(name, 1.0))
-        return (round(h * 1.05), h)       # кадры уже 1,05 высоты — вписаны по высоте
+        return (round(h * self.RIDE_ASPECT.get(name, 1.05)), h)   # кадры уже этой ширины — вписаны по высоте
 
     def _draw_ride_anim(self, surf, name):
         """Проезд петлёй: въезд из-за левого края, полный ход, плавная остановка в центре мастерской (там после

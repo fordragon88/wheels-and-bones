@@ -119,7 +119,7 @@ def pick_loop(fr, bgs, lmin=18, lmax=72, step=1):
 
 
 # ---------- ключ ----------
-def key_frame(f, bg, mode, lo, hi, choke=0.15, thin=0):
+def key_frame(f, bg, mode, lo, hi, choke=0.15, thin=0, trap_near=0):
     c = f.astype(np.float32)
     r, g, b = c[..., 0], c[..., 1], c[..., 2]
     if mode == "green":                                                  # «экранность»: насколько канал фона
@@ -160,6 +160,9 @@ def key_frame(f, bg, mode, lo, hi, choke=0.15, thin=0):
     trap = (a > 0) & (kv > 0.12) & (cos > (0.8 if mode == "green" else 0.75))
     if mode == "green":
         trap &= c[..., 2] > c[..., 0] + 8
+    if trap_near:                                                        # бирюзовая мантия мамы Искры на зелёном: вся
+        k = 2 * int(trap_near) + 1                                       # ткань «похожа на зажатый фон» и шла пятнами —
+        trap &= cv2.dilate(clear, np.ones((k, k), np.uint8)) > 0         # щели ищем только у края силуэта
     fix |= trap
     c = np.where(fix[..., None], c - t[..., None] * u, c)
     # островки (мусор фона) — прочь; тело, колёса и спицы связаны в крупные области
@@ -327,6 +330,7 @@ def main():
     ap.add_argument("--amax", type=float, default=25, help="поиск поворота колеса за кадр, ± градусов")
     ap.add_argument("--margin", type=int, default=6)
     ap.add_argument("--thin", type=float, default=0, help="сохранять тонкие светлые детали: порог «светлее фона» (14)")
+    ap.add_argument("--trap-near", type=int, default=0, help="чистить «зажатый фон» только в N px от края (Искра: 12)")
     ap.add_argument("--stab", action="store_true", help="снять плавный дрейф героя по горизонтали (Тилли)")
     ap.add_argument("--out", default=os.path.join(ROOT, "assets", "anim"))
     args = ap.parse_args()
@@ -355,7 +359,7 @@ def main():
 
     rgbs, alphas = [], []
     for i in idx:
-        rgb, a = key_frame(fr[i], bgs[i], args.key, lo, hi, args.choke, args.thin)
+        rgb, a = key_frame(fr[i], bgs[i], args.key, lo, hi, args.choke, args.thin, args.trap_near)
         rgbs.append(rgb)
         alphas.append(a)
     if args.fade and len(idx) > 2 * args.fade and args.step == 1:                           # шов: последние кадры плавно в кадры до начала
@@ -363,7 +367,7 @@ def main():
             j = s - args.fade + k                                        # кадр, который шёл бы перед первым
             if j < 1:
                 break
-            rp, ap_ = key_frame(fr[j], bgs[j], args.key, lo, hi, args.choke, args.thin)
+            rp, ap_ = key_frame(fr[j], bgs[j], args.key, lo, hi, args.choke, args.thin, args.trap_near)
             t = (k + 1) / (args.fade + 1)
             p = len(idx) - args.fade + k
             rgbs[p] = rgbs[p] * (1 - t) + rp * t

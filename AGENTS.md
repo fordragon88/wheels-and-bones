@@ -89,7 +89,7 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 | `build_exe.bat`, `exe_assets.py`, `WheelsAndBones.spec` | один exe (PyInstaller); `exe_assets.py` — копия assets без полных моделей и тел |
 | `assets/turntable/` | кадры поворота колясок `chair_<k>_NN.jpg` + `.a.png`, `index.json`/`index_folk.json` (центры деталей) |
 | `assets/anim/martin_wave/`, `barty_wave/` | петли «машет рукой» из ролика (36 кадров, 12 к/с, `NN.jpg` + маска `NN.a.png`, 560 px); исходники — `tools/hyperframes/trailer/assets/*_wave.webm`, кадры 45–80 и 30–65 (стык почти незаметен) |
-| `assets/anim/ride_martin/`, `ride_wolf/`, `ride_mora/`, `ride_aelin/`, `ride_gra/`, `ride_bomm/`, `ride_yuki/`, `ride_tilly/`, `ride_ivushka/`, `ride_olga/`, `ride_seneb/`, `ride_yaga/` | петли **проезда** (в браузерный пакет НЕ кладутся: лежат на сайте в `anim/ride_*`, игра качает петлю героя, когда открыто его задание — `AnimWeb`; в пакете только манифест `assets/anim/ride_index.json` «имя → кадров», его пишет `build_web.stage`) (боковой вид, едут вправо) для тест-драйва: `NN.jpg` + `NN.a.png`, 440 px; Мартин 31 кадр 19 к/с, Вольф 13 и Мора 12 кадров 12 к/с, Аэлин 21 кадр 12 к/с; вторая партия (12 к/с): Гра 20, Бомм 21, Юки 13, Тилли 18 кадров; третья (12 к/с): Ивушка 17, Ольга 12, Сенеб 16, Яга 22 кадра. Ключи `ride_loop.py`: `--thin 14` — сохранять тонкие светлые спицы (Аэлин, Гра, Юки, Тилли: без него колесо выходит пустым), `--stab` — снять плавный дрейф героя в кадре (Тилли). Делает `python art_tests/ride_loop.py <имя> <mp4> --key green\|magenta [--step 2] [--wheel cx,cy,r]` из клипов MiniMax H3 `art_tests/codex_ride/<герой>/h3_v*/…mp4` (промпты — `tools/trailer/make_ride_prompts.py` в основной папке, не в git); листы проверки ключа и шва, замер колеса — `art_tests/ride_shots/` (не в git) |
+| `assets/anim/ride_martin/`, `ride_wolf/`, `ride_mora/`, `ride_aelin/`, `ride_gra/`, `ride_bomm/`, `ride_yuki/`, `ride_tilly/`, `ride_ivushka/`, `ride_olga/`, `ride_seneb/`, `ride_yaga/`, `ride_dracula/`, `ride_matilda/`, `ride_grund/`, `ride_gorynych/`, `ride_leshy/`, `ride_zix/`, `ride_saira/`, `ride_agatha/`, `ride_iskra/` | петли **проезда** (в браузерный пакет НЕ кладутся: лежат на сайте в `anim/ride_*`, игра качает петлю героя, когда открыто его задание — `AnimWeb`; в пакете только манифест `assets/anim/ride_index.json` «имя → кадров», его пишет `build_web.stage`) (боковой вид, едут вправо) для тест-драйва: `NN.jpg` + `NN.a.png`, 440 px; Мартин 31 кадр 19 к/с, Вольф 13 и Мора 12 кадров 12 к/с, Аэлин 21 кадр 12 к/с; вторая партия (12 к/с): Гра 20, Бомм 21, Юки 13, Тилли 18 кадров; третья (12 к/с): Ивушка 17, Ольга 12, Сенеб 16, Яга 22 кадра; электроколяски и пары (12 к/с, Горыныч 9,5): Дракулеску 26, Матильда 11, Грунд 27, Горыныч 9, Леший 14, Зикс 32, Сайра 13, Агата 26, Искра 16 кадров — петля теперь у всех 21 героя. Ещё ключ `--trap-near N` (чистка «зажатого фона» только у края силуэта: бирюзовая мантия мамы Искры на зелёном шла пятнами). Ключи `ride_loop.py`: `--thin 14` — сохранять тонкие светлые спицы (Аэлин, Гра, Юки, Тилли: без него колесо выходит пустым), `--stab` — снять плавный дрейф героя в кадре (Тилли). Делает `python art_tests/ride_loop.py <имя> <mp4> --key green\|magenta [--step 2] [--wheel cx,cy,r]` из клипов MiniMax H3 `art_tests/codex_ride/<герой>/h3_v*/…mp4` (промпты — `tools/trailer/make_ride_prompts.py` в основной папке, не в git); листы проверки ключа и шва, замер колеса — `art_tests/ride_shots/` (не в git) |
 | `assets/fonts/` | шрифты и их лицензии |
 | `tools/` | portable Blender, `render_in/`/`render_out/` кадров; не в git |
 | `CLAUDE.md`, `GEMINI.md`, `MUSE_3D_TASK.md` | указатели для агентов (читать AGENTS.md); задание для Muse по 3D (архив) |
@@ -109,10 +109,11 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
    `anim_frame(…, fps)` — у петли своя частота (по умолчанию `ANIM_FPS` 12); `anim_count(имя)` — число кадров;
    `anim_prefetch(имя, размер)` — подгрузить ещё один кадр в кэш (браузер: не заикаться при первом показе).
    **Проезд в тест-драйве** (`Game._draw_ride`): если портрет клиента есть в `Game.RIDE_ANIM` (`martin.png`, `client_dwarf.png`,
-   `client_sorceress.png`, `client_elf.png`, `client_orc.png`, `client_troll.png`, `client_aeroz.png`, `client_fairy.png`, `client_cross6.png`, `client_rusalka.png`, `client_mummy.png`, `client_yaga.png` → `ride_*`) и кадры есть — вместо скользящего портрета 3/4 едет петля бокового
+   `client_sorceress.png`, `client_elf.png`, `client_orc.png`, `client_troll.png`, `client_aeroz.png`, `client_fairy.png`, `client_cross6.png`, `client_rusalka.png`, `client_mummy.png`, `client_yaga.png` и остальные — у всех героев → `ride_*`) и кадры есть — вместо скользящего портрета 3/4 едет петля бокового
    вида (`_draw_ride_anim`): въезд из-за левого края, полный ход 60 % времени, плавное торможение до центра мастерской
    (`CHAIR_CX`, там после проезда стоит портрет), `RIDE_ANIM_SECS` = 4,6 с, высота кадра `RIDE_ANIM_H` 330 (× `RIDE_SCALE[имя]`:
-   Тилли 0,8 — ребёнок), низ кадра
+   Тилли 0,8 — ребёнок; пары Агата 1,15 и Искра 1,1 — в кадре идущий в полный рост; Леший, Грунд 1,1; Зикс 1,15), ширина кадра
+   1,05 высоты или `RIDE_ASPECT[имя]` (пары шире), низ кадра
    `RIDE_FLOOR` 534 (колёса на y≈530, как у портрета), `RIDE_FLIP` не применяется. Кадр петли — по пройденному пути, не по
    часам: `RIDE_LOOP[имя] = (к/с, путь колеса за 1 с петли в высотах кадра, предел ускорения)` — замер `ride_loop.py`
    (`*_info.json`); колёса не проскальзывают, при торможении и руки замедляются; выше предела (руки не «мельтешат»)
@@ -651,6 +652,16 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-11-12 — Claude (Fable 5.2), ветка `feature/ride-anim` (только тестовая сборка) — **проезд: последние девять героев**
+  (выбор владельца: Дракулеску 3, Матильда 1, Грунд 2, Горыныч 2, Леший 1, Зикс 3, Сайра 3, Агата 2, Искра — перерисовка
+  с двумя передними роликами, вариант 2; клипы одобрены): `assets/anim/ride_dracula`, `ride_matilda`, `ride_grund`,
+  `ride_gorynych`, `ride_leshy`, `ride_zix`, `ride_saira`, `ride_agatha`, `ride_iskra`. Электроколяски: рука на
+  джойстике, крутятся колёса. Агату везёт внук, Искру — мама: в кадре двое, сопровождающий шагает позади; скорость петли
+  подобрана по длине и темпу шага (замер по ступням), чтобы ноги не скользили. `RIDE_ANIM`, `RIDE_LOOP`, `RIDE_SCALE`,
+  новый `RIDE_ASPECT` (кадры пар шире 1,05 высоты). `ride_loop.py`: `--trap-near`. Сцены H3 — шаблоны `POWER` и
+  `ATTEND` в `tools/trailer/make_ride_prompts.py`; брифы Codex — типы `power`, `attendant` и правки `FIX` в
+  `art_tests/codex_ride/make_briefs.py`. Проверки §10а зелёные.
 
 - 2026-11-11 — Claude (Fable 5.2), ветка `feature/ride-anim` (только тестовая сборка) — **проезд: третья партия героев**
   (выбор владельца: Ивушка 2, Ольга 2, Сенеб 3, Яга 2; клипы одобрены): `assets/anim/ride_ivushka`, `ride_olga`,
