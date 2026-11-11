@@ -97,6 +97,24 @@ def frames_sheet(rgbs, alphas, path):
     Image.fromarray(vstack([hstack(th[i:i + per], 3) for i in range(0, len(th), per)], 3)).save(path)
 
 
+def despill(rgb, a, key, keep, soft=40.0):
+    """Свечение волшебства, смешанное H3 с фоном (ореол луны Вольфа — зеленоватое кольцо вокруг диска): ВНЕ силуэта
+    самого героя (keep — альфа статичного портрета с запасом; там зелёная клетка рубашки и т. п. не трогаются) пиксели
+    с избытком цвета фона (зелёный: G выше R и B; пурпурный: R и B выше G) теряют этот избыток и гаснут тем сильнее,
+    чем он больше. Включать только героям, которым нужно: волшебные предметы цвета фона тоже погаснут."""
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    ex = (g - np.maximum(r, b)) if key == "green" else (np.minimum(r, b) - g)
+    m = (~keep) & (a > 0) & (ex > 0)
+    out = rgb.copy()
+    if key == "green":
+        out[..., 1] = np.where(m, g - ex, g)
+    else:
+        out[..., 0] = np.where(m, r - ex, r)
+        out[..., 2] = np.where(m, b - ex, b)
+    a = np.where(m, a * np.clip(1 - ex / soft, 0, 1), a)
+    return out, a
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("hero")
@@ -109,6 +127,8 @@ def main():
     ap.add_argument("--choke", type=float, default=0.15)
     ap.add_argument("--thin", type=float, default=14)
     ap.add_argument("--trap-near", type=int, default=12)
+    ap.add_argument("--despill", type=float, default=0,
+                    help="снять ореол цвета фона вне силуэта героя: избыток N гасит пиксель полностью (Вольф 40); 0 — выкл.")
     ap.add_argument("--feather", type=int, default=12, help="края кадра гаснут на столько px (обрезанное волшебство)")
     ap.add_argument("--feather-top", action="store_true", help="гасить и верхний край (если верх кадра не под шапкой)")
     ap.add_argument("--no-match", dest="match", action="store_false", help="не подгонять цвет кадров под портрет")
@@ -130,9 +150,14 @@ def main():
     size = (round((X1 - X0) * k), H)
 
     rgbs, alphas = [], []
+    keep_ref = None
+    if args.despill:                                                    # силуэт статичного портрета с запасом 8 px
+        keep_ref = cv2.dilate((portrait_rgba(art, lay, fr.shape[1:3])[1] > 0.5).astype(np.uint8), np.ones((17, 17), np.uint8)) > 0
     for i in idx:
         bg = bg_color(fr[i])
         rgb, a = key_frame(fr[i], bg, key, args.lo, args.hi, args.choke, args.thin, args.trap_near)
+        if args.despill:
+            rgb, a = despill(rgb, a, key, keep_ref, args.despill)
         rgbs.append(rgb)
         alphas.append(a)
 

@@ -1,4 +1,79 @@
 {
+ "magic_aelin": {
+  "art": "client_elf.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.42,
+   36.28,
+   212.36,
+   286.96
+  ],
+  "size": [
+   500,
+   360
+  ]
+ },
+ "magic_agatha": {
+  "art": "client_focuscr_grandson.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   35.63,
+   38.83,
+   241.81,
+   281.85
+  ],
+  "size": [
+   548,
+   360
+  ]
+ },
+ "magic_bomm": {
+  "art": "client_troll.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   38.68,
+   42.24,
+   264.87,
+   275.13
+  ],
+  "size": [
+   600,
+   360
+  ]
+ },
+ "magic_dracula": {
+  "art": "client_q6edge2.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.42,
+   36.28,
+   188.32,
+   286.96
+  ],
+  "size": [
+   475,
+   360
+  ]
+ },
+ "magic_gorynych": {
+  "art": "client_gorynych.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.42,
+   36.28,
+   191.98,
+   286.96
+  ],
+  "size": [
+   479,
+   360
+  ]
+ },
  "magic_gra": {
   "art": "client_orc.png",
   "fps": 12.0,
@@ -11,6 +86,51 @@
   ],
   "size": [
    525,
+   360
+  ]
+ },
+ "magic_grund": {
+  "art": "client_golem.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   35.02,
+   38.24,
+   239.89,
+   283.36
+  ],
+  "size": [
+   544,
+   360
+  ]
+ },
+ "magic_iskra": {
+  "art": "client_iris_mom.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   39.8,
+   43.46,
+   272.52,
+   272.92
+  ],
+  "size": [
+   617,
+   360
+  ]
+ },
+ "magic_ivushka": {
+  "art": "client_cross6.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.42,
+   36.28,
+   218.48,
+   286.96
+  ],
+  "size": [
+   505,
    360
   ]
  },
@@ -29,6 +149,36 @@
    360
   ]
  },
+ "magic_martin": {
+  "art": "martin.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   35.97,
+   39.17,
+   244.58,
+   281.35
+  ],
+  "size": [
+   554,
+   360
+  ]
+ },
+ "magic_matilda": {
+  "art": "client_f5.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.42,
+   36.28,
+   218.89,
+   286.96
+  ],
+  "size": [
+   506,
+   360
+  ]
+ },
  "magic_mora": {
   "art": "client_sorceress.png",
   "fps": 12.0,
@@ -41,6 +191,126 @@
   ],
   "size": [
    522,
+   360
+  ]
+ },
+ "magic_olga": {
+  "art": "client_rusalka.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.77,
+   36.62,
+   229.88,
+   286.44
+  ],
+  "size": [
+   521,
+   360
+  ]
+ },
+ "magic_saira": {
+  "art": "client_whillc2.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.42,
+   36.28,
+   196.06,
+   286.96
+  ],
+  "size": [
+   483,
+   360
+  ]
+ },
+ "magic_seneb": {
+  "art": "client_mummy.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.42,
+   36.28,
+   226.63,
+   286.96
+  ],
+  "size": [
+   514,
+   360
+  ]
+ },
+ "magic_tilly": {
+  "art": "client_fairy.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   35.97,
+   39.17,
+   243.78,
+   281.35
+  ],
+  "size": [
+   553,
+   360
+  ]
+ },
+ "magic_wolf": {
+  "art": "client_dwarf.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   37.5,
+   41.05,
+   256.97,
+   277.89
+  ],
+  "size": [
+   582,
+   360
+  ]
+ },
+ "magic_yaga": {
+  "art": "client_yaga.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   41.45,
+   45.25,
+   283.79,
+   268.98
+  ],
+  "size": [
+   643,
+   360
+  ]
+ },
+ "magic_yuki": {
+  "art": "client_aeroz.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   35.08,
+   37.9,
+   238.31,
+   283.87
+  ],
+  "size": [
+   540,
+   360
+  ]
+ },
+ "magic_zix": {
+  "art": "client_goblin.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.42,
+   36.28,
+   168.75,
+   286.96
+  ],
+  "size": [
+   456,
    360
   ]
  }
