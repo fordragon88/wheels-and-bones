@@ -5,7 +5,8 @@
                                                                      кадров) + _before/_during/_after.png (крупно угол)
   python art_tests/magic_shots.py --md5 flat spokes lift          -> только md5 кадров (сравнение кода «до/после»)
   --calm — с «Без анимации»; --rs 1.5 — рендер ×1,5 (как на экране 1920×1080); --click — ещё и клик по портрету
-  после первого показа (повтор).
+  после первого показа (повтор); --result — экран итога задания (после finish_test): моменты 0,3…1,5 с (подпрыг
+  героя, до волшебства), потом 2,0…6,5 с (волшебство) и 62,5 с (повтор через минуту).
 
 Часы подменены (как в ride_shots.py): pygame.time.get_ticks, time.time/perf_counter/monotonic и random.seed(1) —
 одинаковый код даёт одинаковые байты кадров. Так проверяли, что герои без волшебства и «Без анимации» не изменились.
@@ -37,6 +38,7 @@ F = game.Surf((1280, 720)) if rs != 1 else S
 md5 = "--md5" in args
 calm = "--calm" in args
 click = "--click" in args
+result = "--result" in args
 jobs = [a for a in args if not a.startswith("--")] or ["leshy_x8", "joystick", "bearing"]
 TIMES = [0.3, 0.9, 1.3, 1.7, 2.1, 2.5, 2.9, 3.3, 3.7, 4.1, 4.5, 4.9, 5.4, 6.5]
 out = os.path.join(ROOT, "art_tests", "magic_shots")
@@ -58,6 +60,12 @@ for jid in jobs:
     j = g.job_by_id(jid)
     g.start_job(jid, variant=0 if "variants" in j else None)
     times = list(TIMES)
+    if result:
+        for _ in range(5):
+            _clock[0] += 1 / 60
+            g.update(1 / 60)
+        g.finish_test()
+        times = [0.3, 0.6, 0.9, 1.2, 1.5, 2.0, 2.4, 2.8, 3.2, 3.6, 4.0, 4.4, 5.0, 6.5, 62.5, 63.5]
     if click:
         times += [7.0, 7.4, 8.0, 9.0, 11.5]
     frames, hashes, t0 = [], [], g.t
@@ -74,7 +82,7 @@ for jid in jobs:
         im = frame()
         hashes.append(hashlib.md5(pygame.image.tobytes(im, "RGB")).hexdigest()[:10])
         frames.append(im)
-    tag = ("_calm" if calm else "") + (f"_rs{rs:g}" if rs != 1 else "")
+    tag = ("_result" if result else "") + ("_calm" if calm else "") + (f"_rs{rs:g}" if rs != 1 else "")
     print(jid + tag, " ".join(hashes), "magic:", getattr(g, "_magic_drawn", None))
     if not md5:
         W, H = pygame.Surface.get_size(frames[0])
@@ -87,5 +95,7 @@ for jid in jobs:
             sheet.blit(pygame.transform.smoothscale(im, (w, h)), ((i % cols) * w, (i // cols) * h))
         pygame.image.save(sheet, os.path.join(out, f"{jid}{tag}_magic.png"))
         corner = pygame.Rect(0, 0, round(520 * W / 1280), round(330 * H / 720))
-        for nm, i in (("before", 0), ("during1", 3), ("during2", 6), ("during3", 9), ("after", len(TIMES) - 1)):
+        if result:
+            corner = pygame.Rect(0, round(150 * H / 720), round(760 * W / 1280), round(480 * H / 720))
+        for nm, i in (("before", 0), ("during1", 3), ("during2", 6), ("during3", 9), ("after", len(times) - 1)):
             pygame.image.save(frames[i].subsurface(corner), os.path.join(out, f"{jid}{tag}_{nm}.png"))
