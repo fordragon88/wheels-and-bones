@@ -433,8 +433,9 @@ async def ride(b, mode):
     want = "ready" if mode == "ok" else "failed"
     st = await p.wait(lambda s: s.get("ride_web", {}).get("ride_martin") == want, f"петля Мартина: {want}", 60)
     check(st.get("ride_web", {}).get("ride_martin") == want, f"{p.name}: петля Мартина с сайта — {want} ({st.get('ride_web')})")
-    other = sorted({u.split("/anim/")[1].split("/")[0] for u in asked} - {"ride_martin"})
-    check(list(st.get("ride_web", {})) == ["ride_martin"] and not other,
+    mine = {"ride_martin", "magic_martin"}                      # у Мартина с 12.11 есть и волшебство на портрете
+    other = sorted({u.split("/anim/")[1].split("/")[0] for u in asked} - mine)
+    check("ride_martin" in st.get("ride_web", {}) and set(st.get("ride_web", {})) <= mine and not other,
           f"{p.name}: качается только петля открытого героя ({list(st.get('ride_web', {}))}, другие запросы: {other})")
     for y in (114, 156):                                         # осмотр: две строки списка деталей
         await p.click(1120, y, 700)
