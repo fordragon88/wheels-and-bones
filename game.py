@@ -7903,7 +7903,9 @@ class Game:
     # Герои с петлёй проезда (боковой вид из клипа H3, едут вправо; art_tests/ride_loop.py): вместо портрета — петля.
     RIDE_ANIM = {"martin.png": "ride_martin", "client_dwarf.png": "ride_wolf", "client_sorceress.png": "ride_mora",
                  "client_elf.png": "ride_aelin", "client_orc.png": "ride_gra", "client_troll.png": "ride_bomm",
-                 "client_aeroz.png": "ride_yuki", "client_fairy.png": "ride_tilly"}
+                 "client_aeroz.png": "ride_yuki", "client_fairy.png": "ride_tilly",
+                 "client_cross6.png": "ride_ivushka", "client_rusalka.png": "ride_olga", "client_mummy.png": "ride_seneb",
+                 "client_yaga.png": "ride_yaga"}
     # петля: (кадров/с, путь колеса по полу за 1 с петли в высотах кадра, предел ускорения петли) — замер
     # art_tests/ride_loop.py (ride_shots/*_info.json). Петля идёт не по часам, а по пройденному пути: колёса не
     # проскальзывают, при торможении и руки замедляются. Предел — чтобы руки не «мельтешили» (у Моры рук в кадре нет);
@@ -7915,7 +7917,11 @@ class Game:
                  # не видно, путь условный, а предел подобран под толчок ~0,7 с на полном ходу (в петле один толчок:
                  # Гра 1,67 с, Юки 1,08 с, Тилли 1,5 с). Бомм — восемь толстых спиц, путь по замеру колеса.
                  "ride_gra": (12, 0.03, 2.4), "ride_bomm": (12, 0.27, 2.4), "ride_yuki": (12, 0.03, 1.6),
-                 "ride_tilly": (12, 0.03, 2.1)}
+                 "ride_tilly": (12, 0.03, 2.1),
+                 # третья партия (11.11) — тоже тонкие спицы, в петле один толчок: Ивушка 1,42 с, Ольга 1,0 с,
+                 # Сенеб 1,33 с, Яга 1,83 с; у пожилых Ивушки и Яги толчок чуть медленнее (~0,8 с)
+                 "ride_ivushka": (12, 0.03, 1.8), "ride_olga": (12, 0.03, 1.5), "ride_seneb": (12, 0.03, 1.9),
+                 "ride_yaga": (12, 0.03, 2.3)}
     RIDE_ANIM_SECS = 4.6                  # проезд с петлёй: въезд слева, торможение и остановка в центре
     RIDE_ANIM_H = 330                     # высота кадра петли (портрет — 250): колёса на той же линии пола
     RIDE_FLOOR = 534                      # низ кадра петли (в кадре поле ~4 px под колёсами — пол на y≈530, как у портрета)
