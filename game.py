@@ -1179,6 +1179,35 @@ def anim_prefetch(name, size, k=1):
         if i not in ent[1]:
             ent[1][i] = _anim_load(name, size, i)
             k -= 1
+    return len(ent[1])                                 # сколько кадров этого размера уже в памяти
+
+
+_MAGIC_IDX = {}
+
+
+def magic_index():
+    """«Волшебство» героев на портрете экрана задания: assets/anim/magic_index.json (пишет art_tests/magic_frames.py):
+    имя петли -> {art, n, fps, size [w, h], portrait [x, y, w, h] — где в кадре стоит портрет героя}. Новый герой
+    добавляется запуском инструмента, без правок кода. Нет файла или он битый — волшебства нет ни у кого."""
+    if "idx" not in _MAGIC_IDX:
+        idx = {}
+        try:
+            with open(os.path.join(ASSETS_DIR, "anim", "magic_index.json"), encoding="utf-8") as f:
+                for name, e in json.load(f).items():
+                    if (isinstance(e, dict) and isinstance(e.get("art"), str) and int(e.get("n", 0)) > 1
+                            and len(e.get("size", ())) == 2 and len(e.get("portrait", ())) == 4):
+                        idx[name] = e
+        except Exception:
+            idx = {}
+        _MAGIC_IDX["idx"] = idx
+        _MAGIC_IDX["art"] = {e["art"]: name for name, e in sorted(idx.items())}   # портрет -> петля
+    return _MAGIC_IDX["idx"]
+
+
+def magic_for_art(art):
+    """Имя петли «волшебства» для портрета героя (client_art) или None."""
+    magic_index()
+    return _MAGIC_IDX["art"].get(art)
 
 
 def ghost_img(size, t):
@@ -1721,17 +1750,18 @@ def web_take(urls, k=6):
     return {u: (None if v == "!" else base64.b64decode(v)) for u, v in got.items()}
 
 
-ANIM_WEB = {}                          # браузер: имя петли проезда -> AnimWeb (только герои, чьё задание открывали)
+ANIM_WEB = {}                          # браузер: имя петли -> AnimWeb (только герои, чьё задание открывали)
 
 
 def anim_web_index():
-    """Браузер: манифест петель проезда, которые НЕ лежат в пакете игры (assets/anim/ride_index.json: имя -> кадров;
-    собирает build_web.stage). На компьютере — пусто: все кадры в assets/anim."""
+    """Браузер: манифест петель героев, которые НЕ лежат в пакете игры — проезд ride_* и «волшебство» на портрете
+    magic_* (assets/anim/web_index.json: имя -> кадров; собирает build_web.stage). На компьютере — пусто: все кадры
+    в assets/anim."""
     if "index" not in ANIM_WEB:
         idx = {}
         if IS_WEB:
             try:
-                with open(os.path.join(ASSETS_DIR, "anim", "ride_index.json"), encoding="utf-8") as f:
+                with open(os.path.join(ASSETS_DIR, "anim", "web_index.json"), encoding="utf-8") as f:
                     idx = json.load(f)
             except Exception:
                 idx = {}
@@ -1740,8 +1770,8 @@ def anim_web_index():
 
 
 class AnimWeb:
-    """Браузер: петля проезда героя качается с сайта (anim/<имя>/NN.jpg + NN.a.png рядом с игрой, не в пакете),
-    когда открыто задание этого героя. Файлы пишутся в assets/anim/.<имя>.part/, а когда пришли ВСЕ кадры (число —
+    """Браузер: петля героя (проезд ride_*, «волшебство» magic_*) качается с сайта (anim/<имя>/NN.jpg + NN.a.png
+    рядом с игрой, не в пакете), когда открыто задание этого героя. Файлы пишутся в assets/anim/.<имя>.part/, а когда пришли ВСЕ кадры (число —
     из манифеста), папка переименовывается в assets/anim/<имя>/ — дальше anim_count/anim_frame как на компьютере.
     Частично скачанная петля не видна; сеть подвела (3 попытки на файл, как у Turntable) — failed, герой едет портретом."""
 
@@ -1770,7 +1800,7 @@ class AnimWeb:
                     self.tries[u] = self.tries.get(u, 0) + 1
                     if self.tries[u] >= 3:
                         self.failed = True
-                        print(f"[wnb] ride {self.name}: {u} failed", flush=True)
+                        print(f"[wnb] anim {self.name}: {u} failed", flush=True)
                         return False
                     web_fetch([u])
                     continue
@@ -1783,13 +1813,13 @@ class AnimWeb:
                 _anim_n.pop(self.name, None)                  # кадры появились — пересчитать
                 self.ready = True
         except Exception as e:                                # ФС браузера не дала записать — портрет
-            print(f"[wnb] ride {self.name}: {e!r}", flush=True)
+            print(f"[wnb] anim {self.name}: {e!r}", flush=True)
             self.failed = True
         return self.ready
 
 
 def anim_web_want(name):
-    """Браузер: петля проезда нужна (открыто задание героя) — начать/продолжить качать. Не в манифесте — ничего."""
+    """Браузер: петля героя нужна (открыто его задание) — начать/продолжить качать. Не в манифесте — ничего."""
     n = anim_web_index().get(name)
     if not n or calm():
         return
@@ -1800,7 +1830,7 @@ def anim_web_want(name):
 
 
 def anim_web_ready(name):
-    """Петля готова к показу: на компьютере и для петель из пакета — всегда; в браузере петля проезда — когда
+    """Петля готова к показу: на компьютере и для петель из пакета — всегда; в браузере петля героя — когда
     скачаны все её кадры."""
     if name not in anim_web_index():
         return True
@@ -6291,6 +6321,11 @@ class Game:
         self.ride_t0 = None               # тест-драйв: клиент проезжает через экран
         self._ride_name = None            # петля проезда, выбранная в start_ride (None — скользящий портрет)
         self._ride_drawn = 0              # сколько кадров петли нарисовано в этом проезде (web_smoke)
+        self.magic_t0 = None              # «волшебство» на портрете: когда началось (None — не играет)
+        self._magic_name = None
+        self._magic_auto = False          # первый показ после открытия задания ещё впереди
+        self._magic_drawn = 0             # сколько кадров «волшебства» нарисовано (web_smoke)
+        self.magic_plays = 0              # сколько раз запускалось (selftest)
         self.ride_done = False            # проезд закончился — ждём «ГОТОВО» (успеть дочитать — отзыв игрока)
         self._vol_drag = None
         self.assign = None                # задание по ссылке (jobs=…, seat=…): свой прогресс, обычный не меняется
@@ -7555,6 +7590,7 @@ class Game:
         self.act = None
         self.ride_t0 = None
         self.ride_done = False
+        self.magic_t0, self._magic_auto = None, True   # «волшебство» героя: раз после открытия задания
         self.ghost_line = self.cur.get("intro") or \
             "Бартоломью: «Так-так... осмотри детали и реши, что сломалось.»"
         self.ghost_quip = ""
@@ -7940,6 +7976,149 @@ class Game:
     RIDE_ANIM_H = 330                     # высота кадра петли (портрет — 250): колёса на той же линии пола
     RIDE_FLOOR = 534                      # низ кадра петли (в кадре поле ~4 px под колёсами — пол на y≈530, как у портрета)
     RIDE_CRUISE = 0.6                     # доля проезда на полной скорости, дальше плавное торможение
+
+    # ----- «волшебство» героя на портрете (левый верхний угол экрана задания) -----
+    # Петли magic_* и их раскладка — только в assets/anim/magic_index.json (art_tests/magic_frames.py): портрет
+    # героя -> петля; новый герой — запуском инструмента, без правок кода. Играет раз через MAGIC_DELAY после
+    # открытия задания (когда кадры в памяти) и снова по клику/тапу на портрет; кадр ложится так, что портрет
+    # внутри кадра совпадает со статичным (то же место и масштаб), поля с волшебством выходят за бокс портрета.
+    PORTRAIT_BOX = (24, 70, 150, 190)     # куда вписан портрет клиента (load_image, пропорции сохраняются)
+    MAGIC_DELAY = 0.8                     # с после открытия задания до первого показа
+    MAGIC_AUTO_SECS = 15.0                # кадры (браузер: скачались) позже — сам не играет, только по клику
+    MAGIC_FADE = 0.25                     # плавный переход портрет <-> кадр в начале и в конце (H3 рисует героя
+                                          # чуть иначе, чем портрет: без него была бы «вспышка»)
+    MAGIC_TOP = 55                        # ниже шапки (полоса с названием задания, линия на y 54): выше — под шапкой
+
+    def _magic_hero(self):
+        """Имя петли «волшебства» героя текущего задания (по портрету) или None — без проверки кадров."""
+        if not self.cur or self.cur.get("track") == "tech":
+            return None
+        return magic_for_art(self.cur.get("client_art"))
+
+    def magic_anim(self):
+        """Петля «волшебства», которую можно показать сейчас, или None («Без анимации», Гильдия, нет кадров;
+        браузер: ещё не скачалась или сеть подвела)."""
+        name = self._magic_hero()
+        if not name or calm():
+            return None
+        return name if anim_web_ready(name) and anim_count(name) >= int(magic_index()[name]["n"]) else None
+
+    def _portrait_real(self):
+        """Прямоугольник статичного портрета в пикселях экрана (как его ставит load_image: вписан в PORTRAIT_BOX по
+        центру с сохранением пропорций, размер округлён) — (x, y, w, h)."""
+        art = self.cur["client_art"]
+        sz = _MAGIC_IDX.setdefault("size", {}).get((art, RS))
+        if sz is None:
+            path = asset_path(art)
+            aw, ah = 0, 0
+            try:
+                ap = path[:-4] + ".a.png"
+                im = _load_split(path, ap) if path.endswith(".jpg") and os.path.exists(ap) else pygame.image.load(path)
+                aw, ah = im.get_size()
+            except Exception:
+                pass
+            bx, by, bw, bh = self.PORTRAIT_BOX
+            if aw and ah:
+                k = min(bw * RS / aw, bh * RS / ah)
+                iw, ih = max(1, round(aw * k)), max(1, round(ah * k))
+            else:
+                iw, ih = round(bw * RS), round(bh * RS)
+            sz = (round(bx * RS) + round((bw * RS - iw) / 2), round(by * RS) + round((bh * RS - ih) / 2), iw, ih)
+            _MAGIC_IDX["size"][(art, RS)] = sz
+        return sz
+
+    def _magic_layout(self, name):
+        """Где и каким размером рисовать кадр: (логический размер для anim_frame, x, y в пикселях экрана).
+        Масштаб — высота портрета в кадре = высоте статичного портрета; кадр грузится anim_frame/load_image (вписан в
+        логический размер), и положение считается от того, куда load_image реально ставит кадр — центр портрета в
+        кадре ложится на центр статичного портрета с точностью до долей пикселя."""
+        e = magic_index()[name]
+        W, H = e["size"]
+        fx, fy, fw, fh = e["portrait"]
+        rx, ry, rw, rh = self._portrait_real()
+        sf = rh / fh                                         # пикселей экрана на пиксель кадра
+        L = (int(math.ceil(W * sf / RS)) + 2, max(1, round(H * sf / RS)))   # по высоте; ширина с запасом
+        k = min(L[0] * RS / W, L[1] * RS / H)                # как в load_image
+        iw, ih = max(1, round(W * k)), max(1, round(H * k))
+        ox, oy = round((L[0] * RS - iw) / 2), round((L[1] * RS - ih) / 2)
+        x = round(rx + rw / 2 - (fx + fw / 2) * k - ox)
+        y = round(ry + rh / 2 - (fy + fh / 2) * k - oy)
+        return L, x, y
+
+    def portrait_rect(self):
+        """Бокс портрета клиента (логические px) — клик/тап по нему повторяет «волшебство»."""
+        return pygame.Rect(self.PORTRAIT_BOX)
+
+    def start_magic(self):
+        """Сыграть «волшебство» с начала (True — началось)."""
+        name = self.magic_anim()
+        if not name or self.ride_t0 is not None or self.scene != "job":
+            return False
+        self.magic_t0, self._magic_name, self._magic_auto = self.t, name, False
+        self.magic_plays += 1
+        return True
+
+    def _magic_tick(self):
+        """Из update: браузер — качать петлю; кадры — в память заранее (первый показ не заикается); первый показ."""
+        name = self._magic_hero()
+        if not name or self.scene != "job":
+            self.magic_t0 = None
+            return
+        if calm() or self.ride_t0 is not None:               # «Без анимации», проезд — портрет как раньше
+            self.magic_t0 = None
+            return
+        if self.magic_t0 is not None:
+            e = magic_index()[self._magic_name]
+            if self.t - self.magic_t0 >= int(e["n"]) / float(e["fps"]):
+                self.magic_t0 = None                         # доиграло — снова статичный портрет
+            return
+        if not self.magic_anim():
+            return
+        L, _, _ = self._magic_layout(name)
+        n = int(magic_index()[name]["n"])
+        have = anim_prefetch(name, L) or 0                    # по кадру за кадр игры (браузер: десятки мс на
+                                                             # кадр — не заикаться); выгрузка — штатно, ANIM_KEEP_MS
+        since = self.t - getattr(self, "_job_t0", self.t)
+        if self._magic_auto and since > self.MAGIC_AUTO_SECS:
+            self._magic_auto = False
+        if self._magic_auto and have >= n and since >= self.MAGIC_DELAY:
+            self.start_magic()
+
+    def _draw_magic(self, surf):
+        """Кадр «волшебства» вместо статичного портрета. False — не играет (портрет рисуется как раньше)."""
+        if self.magic_t0 is None or self.ride_t0 is not None or calm():
+            return False
+        name = self._magic_name
+        e = magic_index().get(name)
+        if not e:
+            return False
+        fps, n = float(e["fps"]), int(e["n"])
+        u = self.t - self.magic_t0
+        dur = n / fps
+        if u >= dur or u < 0:
+            return False
+        L, x, y = self._magic_layout(name)
+        img = anim_frame(name, L, min(u, dur - 0.5 / fps), fps)
+        if img is None:
+            return False
+        a = clamp01(min(u, dur - u) / self.MAGIC_FADE)
+        if a < 1:                                            # переход: статичный портрет под кадром
+            blit_idle(surf, load_image(self.cur["client_art"], tuple(self.PORTRAIT_BOX[2:]), GHOST),
+                      self.PORTRAIT_BOX[:2], self.t)
+        clip = pygame.Surface.get_clip(surf)
+        top = round(self.MAGIC_TOP * _rs(surf))
+        pygame.Surface.set_clip(surf, pygame.Rect(0, top, pygame.Surface.get_width(surf),
+                                                  pygame.Surface.get_height(surf) - top).clip(clip))
+        try:
+            if a < 1:
+                pygame.Surface.set_alpha(img, round(255 * a))
+            pygame.Surface.blit(surf, img, (x, y))
+        finally:
+            if a < 1:
+                pygame.Surface.set_alpha(img, 255)
+            pygame.Surface.set_clip(surf, clip)
+        self._magic_drawn += 1                               # проверка браузера: кадры рисуются (web_smoke)
+        return True
 
     def _ride_hero(self):
         """Имя петли проезда героя текущего задания (по портрету) или None — без проверки кадров."""
@@ -8641,7 +8820,9 @@ class Game:
                     ride_web={k: "ready" if v.ready else "failed" if v.failed else len(v.saved)
                               for k, v in ANIM_WEB.items() if isinstance(v, AnimWeb)},
                     ride=self.ride_anim(), ride_on=self.ride_t0 is not None, ride_done=self.ride_done,
-                    ride_drawn=self._ride_drawn)
+                    ride_drawn=self._ride_drawn,
+                    magic=self._magic_name if self.magic_t0 is not None else None, magic_drawn=self._magic_drawn,
+                    magic_plays=self.magic_plays)
 
     # ---------- геймпад ----------
     def _pad_key(self, k, down=True, mod=0):
@@ -9395,6 +9576,9 @@ class Game:
             if self._manual_close_rect().collidepoint(m):
                 self.show_manual = False
             return
+        if (self.magic_t0 is None and self.ride_t0 is None and self.portrait_rect().collidepoint(m)
+                and self.start_magic()):                      # клик/тап по портрету — «волшебство» ещё раз
+            return
         if TOUCH["on"] and self._hotspot_at(m) is None:          # кружок детали (у него свой запас) — первым
             m = self._touch_snap(m, self._job_touch_targets(), block=(self._chair_rect(),))
         nb = self._notes_btn_rect()
@@ -9635,8 +9819,11 @@ class Game:
             self.esc_timer -= dt
         if self.v3d is not None:
             self.update_v3d(dt)
-        if IS_WEB and self.scene == "job" and self._ride_hero():
-            anim_web_want(self._ride_hero())         # браузер: петля проезда героя качается, пока открыто его задание
+        if IS_WEB and self.scene == "job":           # браузер: петли героя (проезд, «волшебство») качаются,
+            for name in (self._ride_hero(), self._magic_hero()):   # пока открыто его задание
+                if name:
+                    anim_web_want(name)
+        self._magic_tick()
         if self.ride_t0 is not None and self.scene != "job":
             self.ride_t0 = None                       # ушли из задания — проезд отменён
         if self.ride_t0 is not None and self.t - self.ride_t0 >= self.ride_secs():
@@ -13405,8 +13592,9 @@ class Game:
         self._topbar(surf, job["title"], job.get("chair_name"))
         mouse = mouse_pos()
 
-        # клиент слева
-        blit_idle(surf, load_image(job["client_art"], (150, 190), GHOST), (24, 70), self.t)
+        # клиент слева (у героя с «волшебством» — пока оно играет, кадр петли поверх портрета)
+        if not self._draw_magic(surf):
+            blit_idle(surf, load_image(job["client_art"], (150, 190), GHOST), (24, 70), self.t)
         draw_text(surf, job["client"], (24, 266), 16, WHITE, bold=True)
         if self.ride_t0 is None:
             self._draw_client_bubble(surf)
@@ -15666,7 +15854,71 @@ def run_selftest():
             failures.append(f"Проезд {jid} ({name}): {ex!r}")
         if not gr.ride_done:
             failures.append(f"Проезд {jid}: не завершился")
-    gk = Game(headless=True)                                   # «Пропустить обучение»: всё открыто, сброс — снова закрыто
+    calm0 = A11Y["calm"]                                       # «волшебство» героев на портрете (magic_index.json)
+    A11Y["calm"] = False
+    try:
+        sc = pygame.display.get_surface()
+        for name, e in magic_index().items():
+            if anim_count(name) != int(e["n"]):
+                failures.append(f"Волшебство: в assets/anim/{name} {anim_count(name)} кадров, в индексе {e['n']}")
+                continue
+            if magic_for_art(e["art"]) != name:
+                failures.append(f"Волшебство {name}: портрет {e['art']} занят другой петлёй")
+                continue
+            jid = next((j["id"] for j in JOBS if j.get("client_art") == e["art"] and j.get("track") != "tech"), None)
+            if not jid:
+                failures.append(f"Волшебство {name}: нет задания с портретом {e['art']}")
+                continue
+            gw = Game(headless=True)
+            gw.start_job(jid)
+            if gw.scene != "job" or gw.magic_anim() != name:
+                failures.append(f"Волшебство {jid}: задание не открылось или петля {name} не выбрана")
+                continue
+            try:
+                dur = int(e["n"]) / float(e["fps"])
+                for _ in range(int((Game.MAGIC_DELAY + dur) * 30) + 30):   # сам: через ~0,8 с, до конца
+                    gw.update(1 / 30)
+                    gw.draw(sc)
+                ok = gw.magic_plays == 1 and gw.magic_t0 is None and gw._magic_drawn >= int(dur * 30) - 3
+                if not ok:
+                    failures.append(f"Волшебство {jid}: не проигралось от начала до конца (запусков {gw.magic_plays}, "
+                                    f"кадров {gw._magic_drawn}, играет {gw.magic_t0 is not None})")
+                gw.draw(sc)                                    # после — статичный портрет, как у героя без петли
+                f1 = pygame.image.tobytes(sc, "RGB")
+                drawn = gw._magic_drawn
+                gw.draw(sc)
+                if gw._magic_drawn != drawn or pygame.image.tobytes(sc, "RGB") != f1:
+                    failures.append(f"Волшебство {jid}: после конца не вернулся статичный портрет")
+                pr = gw.portrait_rect().center                 # клик по портрету — ещё раз
+                gw.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=pr))
+                gw.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=pr))
+                gw.update(1 / 30)
+                gw.draw(sc)
+                if gw.magic_plays != 2 or gw.magic_t0 is None:
+                    failures.append(f"Волшебство {jid}: клик по портрету не запустил повтор")
+                gw.phase = "test"                              # тест-драйв — портрет как раньше
+                gw.start_ride()
+                gw.update(1 / 30)
+                if gw.magic_t0 is not None:
+                    failures.append(f"Волшебство {jid}: не остановилось на тест-драйве")
+                A11Y["calm"] = True                            # «Без анимации»: не запускается ни само, ни по клику
+                gc = Game(headless=True)
+                gc.start_job(jid)
+                for _ in range(int((Game.MAGIC_DELAY + 0.5) * 30)):
+                    gc.update(1 / 30)
+                gc.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=pr))
+                gc.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=pr))
+                gc.update(1 / 30)
+                gc.draw(sc)
+                if gc.magic_plays or gc._magic_drawn:
+                    failures.append(f"Волшебство {jid}: запустилось при «Без анимации»")
+            except Exception as ex:
+                failures.append(f"Волшебство {jid} ({name}): {ex!r}")
+            finally:
+                A11Y["calm"] = False
+    finally:
+        A11Y["calm"] = calm0
+    gk = Game(headless=True)                                  # «Пропустить обучение»: всё открыто, сброс — снова закрыто
     gk.scene, gk.intro_idx = "intro", 0
     gk.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=gk._skip_tut_rect().center))
     if gk.scene != "hub" or len(gk.available_jobs()) != len(JOBS) or not gk.tutorial_ok():

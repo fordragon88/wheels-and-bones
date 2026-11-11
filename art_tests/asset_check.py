@@ -46,7 +46,7 @@ for j in g.ALL_JOBS:
 # петли героев (Мартин и Барти машут): кадры подряд с 00, у каждого маска .a.png того же размера, что JPEG
 import pygame
 pygame.display.init()
-anims = sorted(os.listdir(ANIM)) if os.path.isdir(ANIM) else []
+anims = sorted(n for n in os.listdir(ANIM) if os.path.isdir(f"{ANIM}/{n}")) if os.path.isdir(ANIM) else []
 for name in anims:
     d = f"{ANIM}/{name}"
     jp = sorted(f for f in os.listdir(d) if f.endswith(".jpg"))
@@ -65,6 +65,27 @@ for name in anims:
             bad.append(f"anim/{name}: нет маски {os.path.basename(a)}")
         elif pygame.image.load(a).get_size() != pygame.image.load(f"{d}/{f}").get_size():
             bad.append(f"anim/{name}: маска {os.path.basename(a)} не того размера")
+# «волшебство» на портрете: assets/anim/magic_index.json (art_tests/magic_frames.py) — петля есть, кадров и размер как
+# в индексе, портрет героя существует, прямоугольник портрета внутри кадра
+mi = f"{ANIM}/magic_index.json"
+if os.path.exists(mi):
+    import json
+    with open(mi, encoding="utf-8") as f:
+        magic = json.load(f)
+    for name, e in sorted(magic.items()):
+        d = f"{ANIM}/{name}"
+        n = len([f for f in os.listdir(d) if f.endswith(".jpg")]) if os.path.isdir(d) else 0
+        if n != e.get("n"):
+            bad.append(f"magic_index {name}: кадров {n}, в индексе {e.get('n')}")
+            continue
+        if not os.path.exists(f"assets/{e.get('art')}"):
+            bad.append(f"magic_index {name}: нет портрета assets/{e.get('art')}")
+        sz = pygame.image.load(f"{d}/00.jpg").get_size()
+        if list(sz) != list(e.get("size", ())):
+            bad.append(f"magic_index {name}: кадр {sz}, в индексе {e.get('size')}")
+        x, y, w, h = e.get("portrait", (0, 0, 0, 0))
+        if not (0 <= x and 0 <= y and w > 0 and h > 0 and x + w <= sz[0] + 1 and y + h <= sz[1] + 1):
+            bad.append(f"magic_index {name}: портрет {e.get('portrait')} вне кадра {sz}")
 print("\n".join(bad) if bad else f"АССЕТЫ OK — {len(g.ALL_JOBS)} заданий: портреты, арт, модели, кадры, хотспоты; "
       f"петли anim: {', '.join(anims) or 'нет'}")
 sys.exit(1 if bad else 0)

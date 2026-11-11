@@ -465,6 +465,52 @@ async def ride(b, mode):
     await ctx.close()
 
 
+async def magic(b, mode):
+    """«Волшебство» героя на портрете (anim/magic_*) качается с сайта, когда открыто его задание (в пакете — только
+    индекс). ok — у Гра (bearing) кадры скачались, «волшебство» само сыграло и нарисовалось, клик по портрету —
+    ещё раз; 404 — сайт кадры не отдаёт: задание как раньше, без волшебства (и по клику тоже) и без ошибок в консоли."""
+    ctx = await b.new_context(viewport={"width": 1280, "height": 720})
+    p = Page(await ctx.new_page(), "magic_" + mode)
+    asked = []
+    p.pg.on("request", lambda r: asked.append(r.url) if "/anim/" in r.url else None)
+    if mode == "404":
+        await p.pg.route("**/anim/magic_*/**", lambda r: r.fulfill(status=404, body="no"))
+    await p.boot()
+    await p.click(640, 470)                                      # начать
+    await p.wait(lambda s: s["scene"] == "intro", "вступление")
+    await p.click(1125, 667, 2000)                               # пропустить обучение
+    await p.wait(lambda s: s["scene"] == "hub", "мастерская")
+    check(not asked, f"{p.name}: до задания петли не качаются ({len(asked)} запросов)")
+    await p.click(160, 500, 1500)                                # Гра (bearing) — вторая строка, первая карточка
+    await p.wait(lambda s: s["scene"] == "job" and s["job"] == "bearing", "задание Гра")
+    want = "ready" if mode == "ok" else "failed"
+    st = await p.wait(lambda s: s.get("ride_web", {}).get("magic_gra") == want, f"волшебство Гра: {want}", 60)
+    check(st.get("ride_web", {}).get("magic_gra") == want,
+          f"{p.name}: волшебство Гра с сайта — {want} ({st.get('ride_web')})")
+    other = sorted({u.split("/anim/")[1].split("/")[0] for u in asked} - {"magic_gra", "ride_gra"})
+    check(not other, f"{p.name}: качаются только петли открытого героя (другие запросы: {other})")
+    if mode == "ok":
+        st = await p.wait(lambda s: s.get("magic_plays", 0) >= 1 and s.get("magic_drawn", 0) > 3, "волшебство играет", 25)
+        await p.pg.wait_for_timeout(700)
+        await p.shot("1_magic")
+        st = await p.wait(lambda s: s.get("magic") is None and s.get("magic_plays") == 1, "волшебство доиграло", 15)
+        drawn = st.get("magic_drawn", 0)
+        check(drawn > 20, f"{p.name}: волшебство сыграло само, кадров нарисовано {drawn}")
+        await p.click(99, 165, 300)                              # клик по портрету — ещё раз
+        st = await p.wait(lambda s: s.get("magic_plays") == 2 and s.get("magic_drawn", 0) > drawn, "повтор по клику", 10)
+        check(st.get("magic_plays") == 2, f"{p.name}: клик по портрету — повтор ({st.get('magic_plays')} запуска)")
+        await p.wait(lambda s: s.get("magic") is None, "повтор доиграл", 15)
+    else:
+        await p.pg.wait_for_timeout(3000)
+        await p.click(99, 165, 1500)                             # клик по портрету — ничего
+        st = await p.state()
+        check(st.get("scene") == "job" and not st.get("magic_plays") and not st.get("magic_drawn"),
+              f"{p.name}: без кадров — без волшебства (запусков {st.get('magic_plays')}, кадров {st.get('magic_drawn')})")
+    await p.shot("2_after")
+    p.check_console()
+    await ctx.close()
+
+
 async def main():
     os.makedirs(SHOTS, exist_ok=True)
     for f in os.listdir(SHOTS):
@@ -472,7 +518,8 @@ async def main():
     async with async_playwright() as pw:
         for fn, args in ((desktop, ("site", 1100, 620, 1.0)), (desktop, ("full", 1920, 1080, 1.0)),
                          (desktop, ("laptop125", 1366, 768, 1.25)), (phone, ()), (tablet, ()), (fps, ()),
-                         (gamepad, ()), (links, ()), (ride, ("ok",)), (ride, ("404",))):
+                         (gamepad, ()), (links, ()), (ride, ("ok",)), (ride, ("404",)),
+                         (magic, ("ok",)), (magic, ("404",))):
             print(f"— {fn.__name__} {args[0] if args else ''}", flush=True)
             b = await pw.chromium.launch(args=["--autoplay-policy=no-user-gesture-required", "--mute-audio"])   # свой браузер на
             try:                                                                                # сценарий

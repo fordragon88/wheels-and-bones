@@ -2,8 +2,9 @@
 
 Собирает папку web_build/wheels_and_bones (main.py + game.py + assets, музыка в .ogg),
 затем pygbag кладёт готовый сайт в web_build/wheels_and_bones/build/web/:
-  index.html + wheels_and_bones.apk + favicon.png + папки turntable/ и anim/ (кадры поворота колясок и петли
-  проезда героев — браузер качает их по мере надобности) — всё это и выкладывается на сервер.
+  index.html + wheels_and_bones.apk + favicon.png + папки turntable/ и anim/ (кадры поворота колясок, петли
+  проезда героев ride_* и «волшебства» на портрете magic_* — браузер качает их по мере надобности) — всё это и
+  выкладывается на сервер.
 --serve — после сборки запустить локальный сервер (проверять через http://127.0.0.1:8000).
 --deploy — выложить сборку на GitHub Pages: https://fordragon88.github.io/wheels-and-bones-web/
            (публичный репозиторий только со сборкой; клон — в web_deploy/).
@@ -49,15 +50,19 @@ def _bleed(im):
     return Image.fromarray(np.uint8(np.clip(out, 0, 255)))
 
 
-def ride_loops():
-    """Петли проезда героев assets/anim/ride_<имя>/ (NN.jpg + NN.a.png подряд с 00) -> {имя: кадров}.
-    В пакет игры не кладутся: build() выкладывает их рядом с игрой (build/web/anim/), браузер качает петлю героя,
-    когда открыто его задание (game.AnimWeb); в пакете — только этот список (assets/anim/ride_index.json)."""
+WEB_LOOPS = ("ride_", "magic_")          # петли героев, которые качаются с сайта (проезд, «волшебство» на портрете)
+
+
+def web_loops():
+    """Петли героев assets/anim/ride_<имя>/ и magic_<имя>/ (NN.jpg + NN.a.png подряд с 00) -> {имя: кадров}.
+    В пакет игры не кладутся: build() выкладывает их рядом с игрой (build/web/anim/), браузер качает петли героя,
+    когда открыто его задание (game.AnimWeb); в пакете — только этот список (assets/anim/web_index.json) и
+    раскладка «волшебства» assets/anim/magic_index.json."""
     out = {}
     base = os.path.join(ROOT, "assets", "anim")
     for name in sorted(os.listdir(base)):
         d = os.path.join(base, name)
-        if name.startswith("ride_") and os.path.isdir(d):
+        if name.startswith(WEB_LOOPS) and os.path.isdir(d):
             n = 0
             while os.path.exists(os.path.join(d, f"{n:02d}.jpg")) and os.path.exists(os.path.join(d, f"{n:02d}.a.png")):
                 n += 1
@@ -68,13 +73,15 @@ def ride_loops():
 
 def shrink_anim(fp, out=None):
     """Кадр петли героя (JPEG + маска 560 px) для браузера: холсту 1920×1080 хватает 400 px, маске — половины (игра
-    растягивает её до размера кадра, _load_split) и 32 уровней прозрачности — втрое легче."""
+    растягивает её до размера кадра, _load_split) и 32 уровней прозрачности — втрое легче. Меньшие кадры
+    («волшебство» на портрете — 360 px) не увеличиваются: маска — вдвое меньше кадра, но не выше 200 px."""
     from PIL import Image
     out = out or fp
     name = os.path.basename(fp)
     im = Image.open(fp)
-    h = 200 if name.endswith(".a.png") else 400
-    im = im.resize((round(im.width * h / im.height), h), Image.LANCZOS)
+    h = min(400, im.height) if not name.endswith(".a.png") else min(200, im.height)
+    if h != im.height:
+        im = im.resize((round(im.width * h / im.height), h), Image.LANCZOS)
     if name.endswith(".jpg"):
         im.save(out, "JPEG", quality=80, optimize=True)
     else:
@@ -99,12 +106,12 @@ def stage():
         out = set(skip(d, names))
         if os.path.basename(d) == "turntable":                # кадры поворота — не в пакет, а рядом на сайт:
             out |= {n for n in names if n.endswith((".png", ".jpg"))}   # и png, и jpg+маски (в пакете — только index*.json;
-        if d == os.path.join(src, "anim"):                    # петли проезда героев — тоже рядом на сайт (build: anim/),
-            out |= set(ride_loops())                          # браузер качает петлю героя, когда открыто его задание
+        if d == os.path.join(src, "anim"):                    # петли героев (проезд, «волшебство») — тоже рядом на сайт
+            out |= set(web_loops())                           # (build: anim/), браузер качает их, когда открыто задание
         return out                                            # браузер качает кадры с сайта, 23.10 jpg весили 27 МБ в архиве)
     shutil.copytree(src, dst, ignore=ignore)
-    with open(os.path.join(dst, "anim", "ride_index.json"), "w", encoding="utf-8") as f:   # манифест: имя -> кадров
-        json.dump(ride_loops(), f, ensure_ascii=False, sort_keys=True)
+    with open(os.path.join(dst, "anim", "web_index.json"), "w", encoding="utf-8") as f:    # манифест: имя -> кадров
+        json.dump(web_loops(), f, ensure_ascii=False, sort_keys=True)
     # 3D-модели (*_ai.json, 12 МБ) не берём: без numpy в браузере их не отрисовать. В окне диагностики
     # коляску показывают кадры поворота (assets/turntable): игра скачивает их с сайта, когда коляска на экране
     # музыка: браузер надёжно играет .ogg
@@ -156,9 +163,9 @@ def build(serve=False):
     shutil.rmtree(tt, ignore_errors=True)
     shutil.copytree(os.path.join(ROOT, "assets", "turntable"), tt,
                     ignore=lambda d, names: [n for n in names if not n.endswith((".png", ".jpg"))])
-    anim = os.path.join(APP, "build", "web", "anim")          # петли проезда героев — тоже файлами рядом с игрой,
-    shutil.rmtree(anim, ignore_errors=True)                   # ужатые как петли в пакете (shrink_anim)
-    for name, n in ride_loops().items():
+    anim = os.path.join(APP, "build", "web", "anim")          # петли героев (проезд, «волшебство») — тоже файлами
+    shutil.rmtree(anim, ignore_errors=True)                   # рядом с игрой, ужатые как петли в пакете (shrink_anim)
+    for name, n in web_loops().items():
         os.makedirs(os.path.join(anim, name))
         for i in range(n):
             for f in (f"{i:02d}.jpg", f"{i:02d}.a.png"):

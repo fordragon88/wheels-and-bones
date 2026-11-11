@@ -85,11 +85,12 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 | `i18n_work/` | перевод: `GUIDE.md` (глоссарий, имена), `en*.json`, `chunk*.json`, `build_lang.py`, `extract_new.py` |
 | `README.md`, `PROMPTS.md` | описание для людей, промпты/таблица арта (`CHATGPT_PROMPTS.md` устарел) |
 | `docs/` | `QUESTS.md`/`QUESTS_ru.md` (генерирует `export_quests.py`), `FEEDBACK_STATUS.md`, `FEEDBACK_SETUP.md`, `feedback/`, `SHARE_LINKS.md` (ссылки и коды) |
-| `build_web.py`, `web_build/`, `web_deploy/` | сборка pygbag и выкладка на GitHub Pages (§10а п. 5); `web_smoke.py` проверяет. На сайт рядом с игрой кладутся папки `turntable/` (кадры поворота колясок) и `anim/ride_*` (петли проезда, ужатые `shrink_anim`) — браузер качает их по мере надобности, в пакете их нет |
+| `build_web.py`, `web_build/`, `web_deploy/` | сборка pygbag и выкладка на GitHub Pages (§10а п. 5); `web_smoke.py` проверяет. На сайт рядом с игрой кладутся папки `turntable/` (кадры поворота колясок) и `anim/ride_*`, `anim/magic_*` (петли проезда и «волшебства» на портрете, ужатые `shrink_anim`; список — `web_loops()`) — браузер качает их по мере надобности, в пакете их нет (там только манифест `assets/anim/web_index.json` «имя → кадров» и `magic_index.json`) |
 | `build_exe.bat`, `exe_assets.py`, `WheelsAndBones.spec` | один exe (PyInstaller); `exe_assets.py` — копия assets без полных моделей и тел |
 | `assets/turntable/` | кадры поворота колясок `chair_<k>_NN.jpg` + `.a.png`, `index.json`/`index_folk.json` (центры деталей) |
 | `assets/anim/martin_wave/`, `barty_wave/` | петли «машет рукой» из ролика (36 кадров, 12 к/с, `NN.jpg` + маска `NN.a.png`, 560 px); исходники — `tools/hyperframes/trailer/assets/*_wave.webm`, кадры 45–80 и 30–65 (стык почти незаметен) |
-| `assets/anim/ride_martin/`, `ride_wolf/`, `ride_mora/`, `ride_aelin/`, `ride_gra/`, `ride_bomm/`, `ride_yuki/`, `ride_tilly/`, `ride_ivushka/`, `ride_olga/`, `ride_seneb/`, `ride_yaga/`, `ride_dracula/`, `ride_matilda/`, `ride_grund/`, `ride_gorynych/`, `ride_leshy/`, `ride_zix/`, `ride_saira/`, `ride_agatha/`, `ride_iskra/` | петли **проезда** (в браузерный пакет НЕ кладутся: лежат на сайте в `anim/ride_*`, игра качает петлю героя, когда открыто его задание — `AnimWeb`; в пакете только манифест `assets/anim/ride_index.json` «имя → кадров», его пишет `build_web.stage`) (боковой вид, едут вправо) для тест-драйва: `NN.jpg` + `NN.a.png`, 440 px; Мартин 31 кадр 19 к/с, Вольф 13 и Мора 12 кадров 12 к/с, Аэлин 21 кадр 12 к/с; вторая партия (12 к/с): Гра 20, Бомм 21, Юки 13, Тилли 18 кадров; третья (12 к/с): Ивушка 17, Ольга 12, Сенеб 16, Яга 22 кадра; электроколяски и пары (12 к/с, Горыныч 9,5): Дракулеску 26, Матильда 11, Грунд 27, Горыныч 9, Леший 14, Зикс 32, Сайра 13, Агата 26, Искра 16 кадров — петля теперь у всех 21 героя. Ещё ключ `--trap-near N` (чистка «зажатого фона» только у края силуэта: бирюзовая мантия мамы Искры на зелёном шла пятнами). Ключи `ride_loop.py`: `--thin 14` — сохранять тонкие светлые спицы (Аэлин, Гра, Юки, Тилли: без него колесо выходит пустым), `--stab` — снять плавный дрейф героя в кадре (Тилли). Делает `python art_tests/ride_loop.py <имя> <mp4> --key green\|magenta [--step 2] [--wheel cx,cy,r]` из клипов MiniMax H3 `art_tests/codex_ride/<герой>/h3_v*/…mp4` (промпты — `tools/trailer/make_ride_prompts.py` в основной папке, не в git); листы проверки ключа и шва, замер колеса — `art_tests/ride_shots/` (не в git) |
+| `assets/anim/ride_martin/`, `ride_wolf/`, `ride_mora/`, `ride_aelin/`, `ride_gra/`, `ride_bomm/`, `ride_yuki/`, `ride_tilly/`, `ride_ivushka/`, `ride_olga/`, `ride_seneb/`, `ride_yaga/`, `ride_dracula/`, `ride_matilda/`, `ride_grund/`, `ride_gorynych/`, `ride_leshy/`, `ride_zix/`, `ride_saira/`, `ride_agatha/`, `ride_iskra/` | петли **проезда** (в браузерный пакет НЕ кладутся: лежат на сайте в `anim/ride_*`, игра качает петлю героя, когда открыто его задание — `AnimWeb`; в пакете только манифест `assets/anim/web_index.json` «имя → кадров» (до 12.11 — `ride_index.json`), его пишет `build_web.stage`) (боковой вид, едут вправо) для тест-драйва: `NN.jpg` + `NN.a.png`, 440 px; Мартин 31 кадр 19 к/с, Вольф 13 и Мора 12 кадров 12 к/с, Аэлин 21 кадр 12 к/с; вторая партия (12 к/с): Гра 20, Бомм 21, Юки 13, Тилли 18 кадров; третья (12 к/с): Ивушка 17, Ольга 12, Сенеб 16, Яга 22 кадра; электроколяски и пары (12 к/с, Горыныч 9,5): Дракулеску 26, Матильда 11, Грунд 27, Горыныч 9, Леший 14, Зикс 32, Сайра 13, Агата 26, Искра 16 кадров — петля теперь у всех 21 героя. Ещё ключ `--trap-near N` (чистка «зажатого фона» только у края силуэта: бирюзовая мантия мамы Искры на зелёном шла пятнами). Ключи `ride_loop.py`: `--thin 14` — сохранять тонкие светлые спицы (Аэлин, Гра, Юки, Тилли: без него колесо выходит пустым), `--stab` — снять плавный дрейф героя в кадре (Тилли). Делает `python art_tests/ride_loop.py <имя> <mp4> --key green\|magenta [--step 2] [--wheel cx,cy,r]` из клипов MiniMax H3 `art_tests/codex_ride/<герой>/h3_v*/…mp4` (промпты — `tools/trailer/make_ride_prompts.py` в основной папке, не в git); листы проверки ключа и шва, замер колеса — `art_tests/ride_shots/` (не в git) |
+| `assets/anim/magic_leshy/`, `magic_mora/`, `magic_gra/`, `assets/anim/magic_index.json`, `art_tests/magic_frames.py` | **«волшебство» героя на портрете** экрана задания (≈3,7 с, 45 кадров 12 к/с, `NN.jpg` + `NN.a.png`, высота 360 px — портрет в кадре ~287 px, на 1080p портрет 264 px, без увеличения): Леший — корни и папоротники, листья и цветок на рогах; Мора — голубая руна, рассыпается звёздочками; Гра — подбрасывает и ловит топорик. Как `ride_*`: в браузерный пакет НЕ кладутся (сайт `anim/magic_*`, качаются, когда открыто задание героя). `magic_index.json` (в пакете) — имя → `{art, n, fps, size [w,h], portrait [x,y,w,h]}` (портрет героя внутри кадра, px кадра); игра строит «портрет → петля» только по нему — **новый герой без правок game.py**: `python art_tests/magic_frames.py <герой> <mp4>` (исходники — `art_tests/portrait_magic/<герой>/` в основной папке, не в git: клип H3 960×640 24 к/с + `layout.json` с `key`, `portrait`, `crop`, `art` на холсте 1536×1024 = клип ÷ 0,625; заготовки — `portrait_magic/make_refs.py`). Инструмент: кадры 1..89 через один (кадр 0 — исходник, не берём), ключ `ride_loop.key_frame` (`--thin 14 --trap-near 12` по умолчанию), цвет кадров под статичный портрет (усиление каналов по 1-му кадру: H3 рисует героя темнее — Леший ×1,03/1,06/1,12), обрезка по `crop`, края кадра (кроме верхнего — он под шапкой) гаснут на 12 px, уточнение `portrait` подгонкой альфы портрета к 1-му кадру (сдвиг/масштаб), дописывает запись в индекс; листы проверки ключа — `art_tests/magic_shots/<герой>_key.png`, `_frames.png` (не в git). Снимки экрана задания — `art_tests/magic_shots.py` (часы подменены, `--md5`, `--calm`, `--rs 1.5`, `--click`) |
 | `assets/fonts/` | шрифты и их лицензии |
 | `tools/` | portable Blender, `render_in/`/`render_out/` кадров; не в git |
 | `CLAUDE.md`, `GEMINI.md`, `MUSE_3D_TASK.md` | указатели для агентов (читать AGENTS.md); задание для Muse по 3D (архив) |
@@ -121,9 +122,27 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
    с петлёй, иначе `RIDE_SECS` 4,0 (боты ждут `g.ride_secs()`). Гильдия (tech), «Без анимации» — как раньше.
    Выбор «петля или портрет» фиксируется в `start_ride` (`_ride_name`): пока идёт проезд, `ride_anim()`/`ride_secs()`
    отвечают одно и то же, даже если петля докачалась посреди проезда.
-   **Браузер (11.11):** петель проезда нет в пакете. Пока открыто задание героя из `RIDE_ANIM` (и не «Без анимации»),
-   `Game.update` зовёт `anim_web_want(имя)` → `AnimWeb`: `web_fetch` (тот же JS, что у `Turntable`: base64 в
-   `window.wnbTT`) качает `anim/<имя>/NN.jpg` + `NN.a.png` (число кадров — из `ride_index.json`), `web_take` забирает по 6
+   **«Волшебство» на портрете (12.11, ветка `feature/portrait-magic`).** Портрет клиента в левом верхнем углу экрана
+   задания (`draw_job`, `load_image(art, (150, 190))` в `PORTRAIT_BOX` (24, 70, 150, 190) — вписан с сохранением
+   пропорций, по центру; у Гильдии свой `draw_job_tech`, там волшебства нет). Если портрет есть в
+   `assets/anim/magic_index.json` (`magic_index()`, `magic_for_art(art)`; пишет `art_tests/magic_frames.py`) —
+   `Game._draw_magic` рисует вместо портрета кадр петли: `_portrait_real()` — точный прямоугольник статичного портрета
+   в пикселях экрана (как его ставит `load_image`), `_magic_layout()` — масштаб «высота портрета в кадре = высота
+   портрета на экране», кадр грузится `anim_frame` в логический размер, положение — от того, куда `load_image` реально
+   ставит кадр (центр портрета в кадре = центр статичного; проверено попиксельно: RS 1 и 1,5 — сдвиг 0, RS 2 — до 1 px).
+   Поля с волшебством выходят за бокс; выше шапки (`MAGIC_TOP` 55) — `set_clip` (топор Гра уходит под шапку);
+   подпись с именем и пузырь клиента рисуются поверх. Переход портрет ↔ кадр — `MAGIC_FADE` 0,25 с (статичный
+   портрет под полупрозрачным кадром). Запуск: `_magic_tick` (из `update`) — кадры в память по одному за кадр игры
+   (`anim_prefetch`, потом выгрузка штатно `ANIM_KEEP_MS`), первый показ — когда все кадры в памяти и прошло
+   `MAGIC_DELAY` 0,8 с от входа (не позже `MAGIC_AUTO_SECS` 15 с — потом только по клику); повтор — клик/тап по
+   `portrait_rect()` (`click_job`, до запаса касаний; клавиатура/геймпад/одна кнопка — без новых целей). Не играет:
+   `calm()`, Гильдия, тест-драйв (`ride_t0` — сразу останавливается), петли нет/не скачалась. Состояние:
+   `magic_t0`, `_magic_name`, `magic_plays`, `_magic_drawn`; `debug_state`: `magic`, `magic_drawn`, `magic_plays`.
+   Герои без петли и «Без анимации» — побайтно как раньше (`magic_shots.py --md5`: flat, spokes, lift; --calm трое).
+   **Браузер (11.11):** петель проезда и «волшебства» нет в пакете. Пока открыто задание героя из `RIDE_ANIM` / из
+   `magic_index.json` (и не «Без анимации»),
+   `Game.update` зовёт `anim_web_want(имя)` для обеих → `AnimWeb`: `web_fetch` (тот же JS, что у `Turntable`: base64 в
+   `window.wnbTT`) качает `anim/<имя>/NN.jpg` + `NN.a.png` (число кадров — из `web_index.json`), `web_take` забирает по 6
    за кадр игры, файлы пишутся в `assets/anim/.<имя>.part/`; когда пришли ВСЕ — папка переименовывается в
    `assets/anim/<имя>/` (ФС pygbag в памяти, писать можно), `_anim_n` сбрасывается — дальше `anim_count`/`anim_frame` как
    на компьютере. `anim_web_ready(имя)` — True на компьютере и для петель из пакета; в браузере — когда петля скачана.
@@ -497,7 +516,7 @@ python i18n_work/build_lang.py       # перевод полон
 | `python art_tests/rs_smoke.py 2` | `RS 2.0 — все сцены отрисованы без ошибок` |
 | `python i18n_work/build_lang.py`; `python i18n_work/extract_new.py` | `строк с кириллицей на экране: 0`; `3 строк -> …_new_strings.json` (3 — консольные `[wnb] …`, их не переводим) |
 | `python art_tests/monkey_test.py` (долго) | `уникальных падений: 0` |
-| `WNB_URL=https://fordragon88.github.io/wheels-and-bones-web/ python art_tests/web_smoke.py --no-build` | `WEB SMOKE: 26 ok, 0 FAIL` (с 03.11 — со сценарием `links`: `?jobs=flat,caster`, «Скопировать код», `?load=`; на сайте до выкладки ссылок `links` не пройдёт; без `WNB_URL` — локальная сборка на :8000; с 10.11 в ветке `feature/mobile-pack1` — ещё `tablet` и `fps` и проверки касаний в `phone`: локально `WEB SMOKE: 42 ok, 0 FAIL`; на сайте до выкладки они не пройдут; с 11.11 в ветке `feature/ride-anim` — ещё `ride ok` и `ride 404` (петля проезда качается с сайта только для открытого героя и рисуется; при 404 на `anim/` — проезд портретом без ошибок): локально `WEB SMOKE: 54 ok, 0 FAIL`) |
+| `WNB_URL=https://fordragon88.github.io/wheels-and-bones-web/ python art_tests/web_smoke.py --no-build` | `WEB SMOKE: 26 ok, 0 FAIL` (с 03.11 — со сценарием `links`: `?jobs=flat,caster`, «Скопировать код», `?load=`; на сайте до выкладки ссылок `links` не пройдёт; без `WNB_URL` — локальная сборка на :8000; с 10.11 в ветке `feature/mobile-pack1` — ещё `tablet` и `fps` и проверки касаний в `phone`: локально `WEB SMOKE: 42 ok, 0 FAIL`; на сайте до выкладки они не пройдут; с 11.11 в ветке `feature/ride-anim` — ещё `ride ok` и `ride 404` (петля проезда качается с сайта только для открытого героя и рисуется; при 404 на `anim/` — проезд портретом без ошибок): локально `WEB SMOKE: 54 ok, 0 FAIL`; с 12.11 в ветке `feature/portrait-magic` — ещё `magic ok` и `magic 404` (у Гра «волшебство» качается с сайта, само играет и рисуется, клик по портрету — повтор; при 404 на `anim/magic_*` — задание без волшебства, без ошибок): локально `WEB SMOKE: 65 ok, 0 FAIL`). Ещё проверка «ничего не сломал» для экрана задания: `python art_tests/magic_shots.py --md5 flat spokes lift` и `--md5 --calm leshy_x8 joystick bearing` — md5 до и после правки совпадают |
 
 **2. Глазами** (снимки ботов + свои): `art_tests/layout_shots.py <job…>` — диагноз/ремонт без наложений;
 `audit_shots/` — мастерская, задание, проезд и «ГОТОВО», итог, гараж, Гильдия, экзамен, финал; Кабинет посадки — все
@@ -544,6 +563,9 @@ python i18n_work/build_lang.py       # перевод полон
   петель до 400 px, маски — до 200 px и 32 уровней прозрачности, без этого +3 МБ). Петли проезда `ride_*` (ветка
   `feature/ride-anim`) в пакет не кладутся с 11.11 (было 19,3 МБ с восемью героями): `stage()` их пропускает,
   `build()` кладёт ужатые кадры в `build/web/anim/` рядом с игрой — apk 14,45 МБ, на сайте `anim/` 5,2 МБ (Мартин ~1 МБ, Мора 0,4 МБ); при 22 героях пакет не растёт.
+  С 12.11 так же — «волшебство» на портрете `magic_*` (`web_loops()`: префиксы `ride_`, `magic_`; манифест
+  `web_index.json`): apk 14,46 МБ (14 456 152 байт), на сайте `anim/` 16,1 МБ (21 проезд + 3 волшебства: Гра 1,32 МБ,
+  Леший 1,39, Мора 1,10 — 45 кадров 360 px). `shrink_anim` не увеличивает кадры ниже 400 px (маска — не выше 200).
   Кадры поворота в пакет НЕ кладутся (браузер качает их с сайта из `turntable/`), исключение по расширениям в
   `build_web.stage()` — при смене формата кадров проверять (23.10 jpg-кадры прошли мимо фильтра `.png`: +27 МБ).
 - **Веб-выкладка.** `build_web.py --deploy` ставит в index.html метку `?v=<хэш>` на архив игры (`stamp_archives`):
@@ -652,6 +674,26 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-11-12 — Claude (Opus 5.5), ветка `feature/portrait-magic` (от `feature/ride-anim`, только тестовая сборка) —
+  **«волшебство» героя на портрете экрана задания** (пробная тройка, клипы H3 одобрены владельцем): Леший — корни и
+  папоротники, Мора — руна и звёздочки, Гра — подбрасывает топорик; ≈3,7 с. Инструмент `art_tests/magic_frames.py`
+  (ключ `ride_loop.key_frame` с `--thin 14 --trap-near 12`, цвет под портрет, гашение краёв обрезки, подгонка
+  прямоугольника портрета к 1-му кадру) → `assets/anim/magic_leshy|mora|gra` (45 кадров 12 к/с, 360 px) и
+  `assets/anim/magic_index.json` — игра берёт «портрет → петля» только оттуда (новый герой — без правок кода).
+  game.py: `magic_index`, `magic_for_art`, `anim_prefetch` возвращает число кадров в памяти; `Game.PORTRAIT_BOX`,
+  `MAGIC_*`, `_magic_hero`, `magic_anim`, `_portrait_real`, `_magic_layout`, `portrait_rect`, `start_magic`,
+  `_magic_tick`, `_draw_magic`; запуск раз через 0,8 с после входа и по клику/тапу на портрет; не при «Без анимации»,
+  в Гильдии, на тест-драйве. Браузер: механизм `ride_*` обобщён — `build_web.web_loops()` (бывш. `ride_loops`),
+  манифест `web_index.json` (бывш. `ride_index.json`), `AnimWeb` качает и `magic_*`; `shrink_anim` не увеличивает
+  кадры. Selftest: у каждой петли индекса — кадры, задание, проигрыш до конца, возврат портрета, повтор по клику,
+  остановка на тест-драйве, «Без анимации». `asset_check`: файлы в `assets/anim` (индекс) не считаются петлями, проверка
+  `magic_index.json`. `web_smoke`: `magic ok`/`magic 404`. Новое: `art_tests/magic_shots.py` (снимки и md5 экрана
+  задания с подменёнными часами). Побайтно без изменений: `magic_shots.py --md5 flat spokes lift` (+ RS 1,5),
+  `--calm leshy_x8 joystick bearing`, `ride_shots.py --md5 flat spokes lift`. Совмещение кадра с портретом —
+  сдвиг 0 px при RS 1 и 1,5, до 1 px при RS 2. apk 14,46 МБ (не вырос), WEB SMOKE 65 ok, 0 FAIL, проверки §10а
+  зелёные. (game.py, build_web.py, art_tests/magic_frames.py, magic_shots.py, asset_check.py, web_smoke.py,
+  assets/anim/magic_*, AGENTS.md)
 
 - 2026-11-12 — Claude (Fable 5.2), ветка `feature/ride-anim` (только тестовая сборка) — **проезд: последние девять героев**
   (выбор владельца: Дракулеску 3, Матильда 1, Грунд 2, Горыныч 2, Леший 1, Зикс 3, Сайра 3, Агата 2, Искра — перерисовка

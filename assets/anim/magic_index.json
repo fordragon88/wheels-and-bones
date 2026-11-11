@@ -1,0 +1,47 @@
+{
+ "magic_gra": {
+  "art": "client_orc.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.75,
+   36.68,
+   237.64,
+   286.96
+  ],
+  "size": [
+   525,
+   360
+  ]
+ },
+ "magic_leshy": {
+  "art": "client_leshy.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.75,
+   36.68,
+   245.38,
+   286.96
+  ],
+  "size": [
+   533,
+   360
+  ]
+ },
+ "magic_mora": {
+  "art": "client_sorceress.png",
+  "fps": 12.0,
+  "n": 45,
+  "portrait": [
+   33.75,
+   36.36,
+   233.97,
+   286.96
+  ],
+  "size": [
+   522,
+   360
+  ]
+ }
+}
