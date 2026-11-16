@@ -46,7 +46,7 @@ py game.py                     # двойной клик по .py -> Python 3.14
 python game.py --selftest      # главная проверка логики
 python game.py --lang en       # английский;  --rs 1.5  — масштаб рендера;  --window — не во весь экран
 python game.py --unlock        # всё открыто (предпросмотр);  --reset — сброс сохранения;  --mute — без звука
-build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyInstaller --onefile, ~124 МБ: assets без полных моделей — `exe_assets.py`)
+build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyInstaller --onefile, ~167 МБ: assets без полных моделей, петли ride_/magic_ ужаты — `exe_assets.py`)
 ```
 
 - `start_game.bat` — для двойного клика (держит консоль при ошибке).
@@ -684,6 +684,16 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-11-16 — Claude (Fable 5.2) — **выпуск: сайт, exe и страница**. `main` (347a1d3) выложен: `build_web.py --deploy`,
+  Pages dc4d4b04, архив `?v=4e932b0d9a`, apk 14,5 МБ; web_smoke по живому адресу — 65 ok, 0 FAIL; тег
+  `release-2026-11-16`. **Exe** пересобран (`build_exe.bat`, 16.11 23:28, 167,1 МБ, sha256 878e0f88…; selftest exe — код 0,
+  окно появляется через ~6 с, живой запуск 25 с) и по команде владельца **заменён в Release v0.4** (`gh release upload
+  --clobber`, 21:30 UTC; sha256 в релизе совпадает). `exe_assets.py`: петли `anim/ride_*` и `anim/magic_*` ужимаются тем же
+  `build_web.shrink_anim`, что и для браузера (75,8 → 40,6 МБ; без этого exe был бы ~200 МБ); машущие `*_wave` — как были.
+  Владелец перевставил `wordpress_embed.html` в WordPress — проверено: все 50 предложений блока на странице, ссылка
+  `…/wheels-and-bones/?jobs=flat,caster&from=Test` доходит до игры во фрейме («Assignment from Test: 0/2»).
+  `GAME_VERSION` — по-прежнему "0.4". (exe_assets.py, AGENTS.md)
 
 - 2026-11-16 — Claude (Fable 5.2) — **ВЫПУСК: тестовая сборка влита в `main`** по команде владельца («зарелизить
   сейчас тестовую версию, чтобы она была у нас на сайте»). В релиз вошло всё, что с 03.11 жило в ветках: ссылки-задания
