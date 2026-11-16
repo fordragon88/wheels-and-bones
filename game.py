@@ -16505,9 +16505,10 @@ async def main():
                 if DISPLAY["_fps_t"] > 3:                 # окно замера 3 с
                     DISPLAY["_fps_t"] = 0
                     fps = clock.get_fps()
-                    print(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} scene {game.scene}", flush=True)
-                    web_js("console.log(" + json.dumps(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} "
-                                                      f"scene {game.scene} slow {DISPLAY.get('_slow', 0)} t {game.t:.0f}") + ")")
+                    if FPS_HUD["on"]:                     # журнал замеров — только с ?fps=1 (в релизе консоль не засоряем)
+                        print(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} scene {game.scene}", flush=True)
+                        web_js("console.log(" + json.dumps(f"[wnb] fps {fps:.1f} rs {RS} px {DISPLAY.get('web_px')} "
+                                                          f"scene {game.scene} slow {DISPLAY.get('_slow', 0)} t {game.t:.0f}") + ")")
                     dragged = game.t - getattr(game, "_drag_t", -9) < 3.5      # в этом окне крутили коляску —
                     warm = game.t < 20 or game.st < 6                            # разогрев: грузятся кадры анимаций и
                     skip = dragged or warm                                      # поворота — разовая работа, не слабый ПК
