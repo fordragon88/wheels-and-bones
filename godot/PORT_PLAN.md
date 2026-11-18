@@ -70,9 +70,10 @@ godot/
                            карточка), tool_action.gd (анимация инструмента), mini_game.gd + gap_track.gd,
                            notes_dialog.gd (сноски), ride_view.gd (тест-драйв), magic_portrait.gd (волшебство),
                            leg_gag.gd (сценка с ногой), tutor_ring.gd, book_icon.gd; срез 3: feedback_dialog.gd
-                           (окно замечания), help_overlay.gd (F1), vol_slider.gd; автозагрузка Feedback (отправка)
+                           (окно замечания), help_overlay.gd (F1), vol_slider.gd; автозагрузка Feedback (отправка); срез 4:
+                           manual_dialog.gd, spec_dialog.gd, turntable_show.gd
   screens/                 title, intro, hub, job (диагностика → ремонт → тест-драйв), result, garage, ending, credits.
-                           Дальше: guild, exam,
+                           guild, tech (про-задание и экзамен), failed, exam_result. Дальше:
                            seating, manual, settings (полные вкладки), share, credits, ending
   tests/                   selftest.gd (+ selftest_runner.gd), shots.gd, ref/ (эталоны pygame), shots/ (не в git)
 ```
@@ -144,9 +145,14 @@ game_consts.json); ближняя к низу экрана точка детал
       `content/walkthrough_ref.json` — его пишет sync_content.py, гоняя саму game.py).
 
 ### Шаг 3. Остальные разделы
-- [ ] Гильдия (6 про-заданий) и экзамен.
+- [x] Гильдия (6 про-заданий) и экзамен — срез 4, 18.11: экран Гильдии (звание, карточки, Бренна, вход после
+      5 ремонтов), про-задание `screens/tech` (свободный порядок, after, safety → `failed` с разбором и «ЗАНОВО»,
+      спеки `ui/spec_dialog` после чтения мануала `ui/manual_dialog`, мини-игры, палитра инструментов одним рядом,
+      «ПРОПУСТИТЬ ▸», коляска `ui/turntable_show` с автоповоротом, «Проверка под нагрузкой» — едет коляска, Бренна
+      рядом), экзамен (случайный билет, без подсказок и пропуска, >3 ошибок — провал, `exam_result`, пересдача новым
+      билетом, `exam_passed`, звание и «✔ ДИПЛОМ» в Гильдии), «Я НЕ СОГЛАСЕН» в Гильдии (шаг «сделано: …»).
 - [ ] Кабинет посадки (уроки, случаи, зачёт; рисованный скелет — самый трудоёмкий кусок).
-- [~] Мануал Гильдии — со срезом Гильдии. Настройки — [x] (срез 3: вкладки ЗВУК/ГРАФИКА/ДОСТУПНОСТЬ/ИГРА, карточки
+- [x] Мануал Гильдии (срез 4). Настройки — [x] (срез 3: вкладки ЗВУК/ГРАФИКА/ДОСТУПНОСТЬ/ИГРА, карточки
       «что делает настройка», сброс прогресса с подтверждением); **значение хранится, поведение позже**: озвучка (F2),
       реплики вслух, скорость голоса (ждут шага «Доступность»). Нет пунктов, которых в Godot нет по смыслу: разрешение
       рендера и «3D через видеокарту» (картинка всегда в разрешении экрана), качество в браузере. Обучение и
@@ -253,10 +259,18 @@ D:\Godot\Godot_v4.7.2-stable_win64_console.exe --path godot --audio-driver Dummy
 #   имена: title title_en hub job_flat_diagnose job_flat_inspected job_joystick_diagnose job_joystick_inspected
 #          job_flat_repair mini_pump mini_gap mini_ping mini_meter ride_martin ride_zix result_lift hub_done
 #          intro_1…intro_5 garage garage_open ending credits feedback_general feedback_dispute help
-#          settings_sound settings_graphics settings_access settings_game; «-- --test --calm --shots …» — «Без анимации» (calm_<имя>.png)
+#          settings_sound settings_graphics settings_access settings_game guild_open guild_done guild_diploma
+#          tech_ops tech_manual tech_spec tech_mini tech_failed tech_test tech_ride tech_result
+#          exam_ticket exam_failed exam_passed; «-- --test --calm --shots …» — «Без анимации» (calm_<имя>.png)
 python godot/tools/ref_shots.py                         # эталоны pygame-версии → godot/tests/ref/
 # сразу экран/задание для отладки: … --path godot -- --screen hub   |   -- --job joystick --variant 0
 ```
+Срез 4 в самопроверке: доступ в Гильдию до/после 5 ремонтов; бот проходит все 6 про-заданий в порядке данных и в
+«другом допустимом» (каждый раз — последняя доступная операция), шаги сверены с эталоном game.py
+`content/guild_ref.json` (его пишет sync_content.py: game.py сама проходит те же задания); нарушение `after` не даёт
+операцию; каждая спека — без мануала / неверно / верно; все 15 провалов по безопасности дают тот же разбор, что
+game.py, и «ЗАНОВО»; экзамен — провал по лимиту, «ПЕРЕСДАТЬ» (новый билет), сдача, `exam_passed`, звание; про-задания
+truing и toe и экзамен — событиями мыши, truing и экзамен — клавиатурой; замечание из Гильдии = game.py.
 Срез 3 в самопроверке: новая игра титул → вступление (Enter по слайдам) → первое задание (подсветка обучения, в
 мастерской до обучения — одна карточка), «Пропустить обучение» со вступления, гараж пустой и полный (страницы, окно
 урока, Esc), последний из 21 ремонтов → «НА ВЕЧЕРИНКУ» → вечеринка (ending_seen) → титры → назад → гараж, «ТИТРЫ» и

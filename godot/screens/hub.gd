@@ -75,7 +75,8 @@ func build() -> void:
 	guild.update_a11y()
 	guild.pressed.connect(func() -> void:
 		if guild_ok:
-			Nav.flash("Гильдия появится в следующих шагах переноса.", UI.CYAN, 3.0)
+			Audio.sfx("tick")
+			Nav.go("guild")
 		else:
 			Nav.flash(Loc.fmt("Гильдия Колёсников примет тебя после {0} починенных колясок.", [req]), UI.CYAN, 3.5))
 	add_child(guild)

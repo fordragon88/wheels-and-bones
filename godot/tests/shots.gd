@@ -8,7 +8,9 @@ const ALL := ["title", "title_en", "hub", "job_flat_diagnose", "job_flat_inspect
 	"job_joystick_diagnose", "job_joystick_inspected", "job_flat_repair", "mini_pump", "mini_gap", "mini_ping",
 	"mini_meter", "ride_martin", "ride_zix", "result_lift", "hub_done", "intro_1", "intro_2", "intro_3", "intro_4",
 	"intro_5", "garage", "garage_open", "ending", "credits", "feedback_general", "feedback_dispute", "help",
-	"settings_sound", "settings_graphics", "settings_access", "settings_game"]
+	"settings_sound", "settings_graphics", "settings_access", "settings_game", "guild_open", "tech_ops", "tech_manual",
+	"tech_spec", "tech_mini", "tech_failed", "tech_test", "tech_ride", "tech_result", "guild_done", "exam_ticket",
+	"exam_failed", "exam_passed", "guild_diploma"]
 
 var out_dir := ""
 
@@ -31,6 +33,108 @@ func _shot(name: String) -> void:
 		img.resize(1280, 720, Image.INTERPOLATE_LANCZOS)
 	img.save_png(out_dir.path_join(("calm_" if Settings.calm() else "") + name + ".png"))
 	print("shot ", name, " ", Nav.current_name)
+
+
+## Про-задание для снимка: карточки операций — в порядке данных (как ref_shots.py), иначе снимки не сравнить.
+func _tech_open(jid: String, exam: bool = false) -> Node:
+	Nav.go("tech", {"job": jid, "exam": exam})
+	await _wait(0.1)
+	var scr: Node = Nav.current
+	scr.step_order.clear()
+	for st: Dictionary in scr.job["steps"]:
+		scr.step_order.append(st["id"])
+	scr.rebuild()
+	Frames.want_turntable(scr.job["chair_art"])
+	Frames.flush()
+	Nav.toast.timer = 0.0
+	return scr
+
+
+func _tech_do(scr: Node, sid: String) -> void:
+	var st: Dictionary = scr.step_by_id(sid)
+	scr.select_tool(st["tool"])
+	scr.op_clicked(sid)
+	if scr.spec_dlg:
+		for i in st["spec"]["options"].size():
+			if st["spec"]["options"][i][1]:
+				scr.choose_spec(i)
+	if scr.mini:
+		scr.mini.value = int(scr.mini.cfg.get("lo", 0))
+		if scr.mini.kind == "gap":
+			scr.mini.gap_check()
+		else:
+			scr.mini.pump_done()
+
+
+func _tech_shot(name: String) -> void:
+	var scr: Node
+	match name:
+		"tech_ops":
+			scr = await _tech_open("truing")
+			scr.select_tool(scr.job["steps"][0]["tool"])
+			await _wait(2.0)
+		"tech_manual":
+			scr = await _tech_open("truing")
+			scr.open_manual()
+			await _wait(0.5)
+		"tech_spec":
+			scr = await _tech_open("truing")
+			for p: String in scr.job.get("manual", []):
+				scr.manual_viewed[p] = true
+			for st: Dictionary in scr.job["steps"]:
+				if st.get("spec") is Dictionary:
+					scr.select_tool(st["tool"])
+					scr.op_clicked(st["id"])
+					break
+				_tech_do(scr, st["id"])
+			Nav.toast.timer = 0.0
+			await _wait(0.5)
+		"tech_mini":
+			scr = await _tech_open("toe")
+			for st: Dictionary in scr.job["steps"]:
+				if st.get("mini") is Dictionary:
+					scr.select_tool(st["tool"])
+					scr.op_clicked(st["id"])
+					break
+				_tech_do(scr, st["id"])
+			Nav.toast.timer = 0.0
+			await _wait(0.6)
+		"tech_failed":
+			scr = await _tech_open("t_battery")
+			var st: Dictionary = scr.step_by_id("p_disc_neg")
+			scr.select_tool(st["tool"])
+			scr.op_clicked("p_disc_neg")
+			await _wait(1.2)
+		"tech_test", "tech_ride", "tech_result":
+			scr = await _tech_open("truing")
+			for p: String in scr.job.get("manual", []):
+				scr.manual_viewed[p] = true
+			for st: Dictionary in scr.job["steps"]:
+				_tech_do(Nav.current, st["id"])
+			scr = Nav.current
+			scr.mistakes = 0
+			Nav.toast.timer = 0.0
+			await _wait(1.0)
+			if name != "tech_test":
+				scr._test_pressed()
+				await _wait(2.0)
+			if name == "tech_result":
+				Nav.go("result", {"job": scr.job, "stars": 3, "gag": Content.talk["martin"]["good"][0], "mistakes": 0})
+				await _wait(3.0)
+		"exam_ticket":
+			scr = await _tech_open("truing", true)
+			await _wait(1.5)
+		"exam_failed":
+			scr = await _tech_open("truing", true)
+			var first: Dictionary = scr.job["steps"][0]
+			for k in 4:
+				if Nav.current_name == "tech":
+					scr.select_tool("lube")
+					scr.op_clicked(first["id"])
+			await _wait(1.2)
+		"exam_passed":
+			Nav.go("exam_result", {"mistakes": 0})
+			await _wait(3.0)
 
 
 func _to_repair(jid: String) -> Node:
@@ -82,6 +186,22 @@ func _run() -> void:
 			Frames.want_loop("barty_wave")
 			Frames.flush()
 			await _wait(3.0)
+			await _shot(name)
+		elif name.begins_with("guild_"):
+			SaveGame.done.clear()
+			SaveGame.exam_passed = name == "guild_diploma"
+			for j: Dictionary in Content.jobs.slice(0, 5):
+				SaveGame.done[j["id"]] = true
+			if name != "guild_open":
+				for j: Dictionary in Content.tech_jobs:
+					SaveGame.done[j["id"]] = true
+			Nav.go("guild")
+			Frames.want_loop("barty_wave")
+			Frames.flush()
+			await _wait(2.0)
+			await _shot(name)
+		elif name.begins_with("tech_") or name.begins_with("exam_"):
+			await _tech_shot(name)
 			await _shot(name)
 		elif name.begins_with("intro_"):
 			if Nav.current_name != "intro":

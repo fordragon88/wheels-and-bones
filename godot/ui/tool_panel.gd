@@ -12,6 +12,7 @@ const GAP := 8
 
 var job_screen: Node                       # экран задания: sel_tool, mistakes, tutor_want(), note_part_at()
 var tiles: Dictionary = {}                 # tid → GameButton
+var ids: Array = []                        # Гильдия: палитра задания (tools) одним рядом; пусто — все 20 в 2 ряда
 var _hover_tid: String = ""
 var _miss_seen := -1
 var _miss_t := -9.0
@@ -24,17 +25,25 @@ func _init() -> void:
 	name = "Tools"
 
 
+func tech() -> bool:
+	return not ids.is_empty()
+
+
 @warning_ignore("integer_division")
-static func tile_rects() -> Dictionary:
+func tile_rects() -> Dictionary:
 	var out: Dictionary = {}
-	var ids: Array = Content.tools.keys()
-	var per := (ids.size() + 1) / 2
-	for i in ids.size():
-		out[ids[i]] = Rect2(24 + (i % per) * (TILE + GAP), 560 + (i / per) * (TILE + GAP), TILE, TILE)
+	if tech():                                 # Гильдия: один ряд из палитры задания
+		for i in ids.size():
+			out[ids[i]] = Rect2(130 + i * (TILE + GAP), 638, TILE, TILE)
+		return out
+	var all: Array = Content.tools.keys()
+	var per := (all.size() + 1) / 2
+	for i in all.size():
+		out[all[i]] = Rect2(24 + (i % per) * (TILE + GAP), 560 + (i / per) * (TILE + GAP), TILE, TILE)
 	return out
 
 
-static func info_rect() -> Rect2:
+func info_rect() -> Rect2:
 	var right := 0.0
 	var top := 1e9
 	var bottom := 0.0
@@ -139,20 +148,22 @@ func _draw_card() -> void:
 		_draw_note(info, note_pid)
 	elif tid != "":
 		var in_hand := tid == sel
-		var isz := 44.0
+		var low := info.size.y < 80                 # в Гильдии карточка в один ряд
+		var isz := 38.0 if low else 44.0
 		var tex := Content.texture("tool_%s.png" % tid)
 		if tex:
-			_card.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(10, (info.size.y - isz) / 2.0, isz, isz)), false)
+			_card.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(10, floorf((info.size.y - isz) / 2.0), isz, isz)), false)
 		UI.draw_text(_card, (Loc.t("В РУКЕ: ") if in_hand else "") + Loc.t(Content.tools[tid]["name"]),
-			Vector2(isz + 22, 10), 18, UI.AMBER if in_hand else UI.WHITE, true)
-		UI.draw_wrapped(_card, Loc.t(Content.tools[tid]["hint"]), Vector2(isz + 22, 36), info.size.x - isz - 34, 15, UI.GREY)
+			Vector2(isz + 22, 5 if low else 10), 16 if low else 18, UI.AMBER if in_hand else UI.WHITE, true)
+		UI.draw_wrapped(_card, Loc.t(Content.tools[tid]["hint"]), Vector2(isz + 22, 27 if low else 36), info.size.x - isz - 34,
+			13 if low else 15, UI.GREY)
 	elif not want.is_empty():
 		UI.draw_wrapped(_card, Loc.t("Обучение: нужный инструмент обведён зелёным — возьми его, потом кликни деталь в зелёном кружке."),
 			Vector2(16, 12), info.size.x - 32, 15, UI.GOOD)
 	else:
-		var y := UI.draw_wrapped(_card, Loc.t("Выбери инструмент, потом кликни деталь на коляске или в списке"),
-			Vector2(16, 12), info.size.x - 32, 15, UI.GREY)
-		if not Content.manual_notes.get(job_screen.job["id"], {}).is_empty():
+		var y := UI.draw_wrapped(_card, Loc.t("Выбери инструмент, потом кликни шаг" if tech() else
+			"Выбери инструмент, потом кликни деталь на коляске или в списке"), Vector2(16, 12), info.size.x - 32, 15, UI.GREY)
+		if not tech() and not Content.manual_notes.get(job_screen.job["id"], {}).is_empty():
 			BookIcon.draw_icon(_card, Vector2(26, y + 16), 10, UI.CYAN)
 			UI.draw_wrapped(_card, Loc.t("У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа."),
 				Vector2(44, y + 7), info.size.x - 60, 14, UI.CYAN)

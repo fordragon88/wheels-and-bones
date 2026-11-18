@@ -6,6 +6,8 @@ extends Control
 ## портрет (4 с, RIDE_FLIP — отражённый). Линии скорости и пыль из-под колёс.
 
 var art: String = ""
+var chair_art: String = ""                 # Гильдия: едет коляска задания, Бренна парит рядом
+var tech: bool = false
 var loop_name: String = ""                 # выбрано при старте проезда — до конца проезда
 var stop_x: float = 575.0
 var t: float = 0.0
@@ -46,7 +48,7 @@ func secs() -> float:
 
 
 func start(at: float) -> void:
-	var n := hero_loop(art)
+	var n := "" if tech else hero_loop(art)
 	loop_name = n if n != "" and not Settings.calm() and Frames.loop_ready(n) else ""
 	t0 = at
 	active = true
@@ -123,8 +125,23 @@ func _draw() -> void:
 		var ln := 60 + 40 * BgLayer._h01(i, 3)
 		var off := (20 * i) % 50
 		draw_line(Vector2(x - 30 - ln - off, ly), Vector2(x - 30 - off, ly), Color8(200, 200, 210), 2.0)
-	var tex := Content.texture(art)
-	if tex:
+	var tex := Content.texture(chair_art if tech else art)
+	if tex and tech:
+		var rr := UI.fit_rect(tex.get_size(), Rect2(x, y + 20, 300, 237))
+		var mbt := Vector2(x + 150, y + 20 + 237)
+		draw_set_transform(mbt, deg_to_rad(3))
+		draw_texture_rect(tex, Rect2(rr.position - mbt, rr.size), false)
+		draw_set_transform(Vector2.ZERO)
+		var m := Content.texture(art)
+		if m:
+			var bx := Rect2(x - 100, y - 20, 130, 162)
+			var mr := UI.fit_rect(m.get_size(), bx)
+			var dy := 7.0 * UI.wsin(t * 1.6 + 0.7)
+			draw_set_transform(bx.get_center() + Vector2(0, dy), deg_to_rad(-2.5 * UI.wsin(t * 1.1 + 0.7)))
+			draw_texture_rect(m, Rect2(mr.position - bx.get_center(), mr.size), false)
+			draw_set_transform(Vector2.ZERO)
+		drawn += 1
+	elif tex:
 		var r := UI.fit_rect(tex.get_size(), Rect2(x, y, 230, 250))
 		var flip: bool = art in _r.get("flip", [])
 		var mb := Vector2(x + 115, y + 250)           # покачивание -3° вокруг низа (blit_idle rock)

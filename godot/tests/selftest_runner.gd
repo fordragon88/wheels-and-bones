@@ -158,6 +158,15 @@ func _run() -> void:
 	await _flow_garage_ending()
 	await _flow_feedback()
 	await _flow_help_settings()
+	await _flow_guild_access()
+	var gbot: Array = await _bot_guild()
+	await _flow_exam()
+	await _flow_tech_events("truing", false, false)
+	await _flow_tech_events("toe", false, false)
+	await _flow_tech_events("truing", false, true)
+	await _flow_tech_events("", true, false)
+	await _flow_tech_events("", true, true)
+	await _flow_guild_feedback()
 	Loc.audit = false
 	var n_audit: int = Loc.audited.size()
 	var dump := OS.get_cmdline_user_args().find("--dump-tr")
@@ -190,7 +199,7 @@ func _run() -> void:
 	SaveGame.reset()
 	await _flow_mouse()
 	await _flow_keyboard()
-	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), n_gd, n_audit,
+	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], n_gd, n_audit,
 		"" if _drawn > 0 else " (без окна _draw не вызывается — проверены строки данных и обработчиков)"],
 		n_jobs, n_var, n_tech)
 
@@ -988,3 +997,310 @@ func _flow_help_settings() -> void:
 	await _frames(2)
 	if Nav.settings != null:
 		err("«ГОТОВО» не закрыл настройки")
+
+
+# ======================= срез 4: Гильдия и экзамен =======================
+
+func _gref() -> Dictionary:
+	if not FileAccess.file_exists("res://content/guild_ref.json"):
+		err("нет content/guild_ref.json — запусти tools/sync_content.py")
+		return {}
+	return JSON.parse_string(FileAccess.get_file_as_string("res://content/guild_ref.json"))
+
+
+func _open_tech(jid: String, exam: bool = false) -> Node:
+	Nav.go("tech", {"job": jid, "exam": exam})
+	await _frames(2)
+	return Nav.current
+
+
+static func _tsig(st: Dictionary) -> Array:
+	return [st["id"], st["tool"], st.get("part", ""), st.get("after", []), bool(st.get("safety", false)),
+		st.get("spec") is Dictionary, (st["mini"] as Dictionary).get("kind", "") if st.get("mini") is Dictionary else ""]
+
+
+## Операция обработчиками: инструмент → карточка; спека — верный вариант (мануал прочитан), мини — решена.
+func _tech_do(scr: Node, sid: String) -> void:
+	var st: Dictionary = scr.step_by_id(sid)
+	scr.select_tool(st["tool"])
+	scr.op_clicked(sid)
+	if scr.spec_dlg:
+		var opts: Array = st["spec"]["options"]
+		for i in opts.size():
+			if opts[i][1]:
+				scr.choose_spec(i)
+	if scr.mini:
+		_solve_mini(scr.mini)
+	await _frames(1)
+
+
+func _view_all_manual(scr: Node) -> void:
+	var pages: Array = scr.job.get("manual", [])
+	for p: String in (pages if not pages.is_empty() else Content.manual.keys()):
+		scr.manual_viewed[p] = true
+
+
+func _finish_tech(scr: Node) -> void:
+	scr._test_pressed()
+	scr.ride.t0 = scr.ride.t - scr.ride.secs() - 0.01
+	await _frames(2)
+	scr._test_pressed()
+	await _frames(2)
+
+
+## Доступ в Гильдию: до 5 ремонтов кнопка серая и не пускает, после — открывает.
+func _flow_guild_access() -> void:
+	SaveGame.reset()
+	SaveGame.tutorial_skipped = true
+	for j: Dictionary in Content.jobs.slice(0, 4):
+		SaveGame.done[j["id"]] = true
+	Nav.go("hub")
+	await _frames(2)
+	var gb: GameButton = Nav.current.get_node("Guild")
+	if gb.enabled:
+		err("Гильдия: кнопка доступна после 4 ремонтов")
+	await _press(gb, false)
+	await _frames(2)
+	if Nav.current_name != "hub" or not Nav.toast.text.contains("Гильдия Колёсников примет тебя"):
+		err("Гильдия до 5 ремонтов: нет объяснения или пустили")
+	SaveGame.done[Content.jobs[4]["id"]] = true
+	Nav.go("hub")
+	await _frames(2)
+	await _press(Nav.current.get_node("Guild"), false)
+	await _frames(2)
+	if Nav.current_name != "guild" or Nav.current._cards.size() != 6 or Nav.current.get_node_or_null("Exam") != null:
+		err("Гильдия после 5 ремонтов: нет 6 заданий (или экзамен раньше зачётов)")
+
+
+## Бот: все 6 про-заданий в порядке данных и в «другом допустимом» порядке, эталон шагов и провалов — из game.py.
+func _bot_guild() -> Array:
+	var ref := _gref()
+	if ref.is_empty():
+		return [0, 0]
+	var ok := 0
+	var fails := 0
+	for job: Dictionary in Content.tech_jobs:
+		var jid: String = job["id"]
+		var want: Dictionary = ref["jobs"].get(jid, {})
+		for pass_i in 2:
+			var scr: Node = await _open_tech(jid)
+			if pass_i == 0:
+				var mine: Array = []
+				for st: Dictionary in scr.job["steps"]:
+					mine.append(_tsig(st))
+				if JSON.stringify(mine) != JSON.stringify(want.get("steps", [])):
+					err("Гильдия %s: шаги не как в game.py" % jid)
+			_view_all_manual(scr)
+			var order: Array = []
+			if pass_i == 0:
+				for st: Dictionary in scr.job["steps"]:
+					order.append(st["id"])
+			else:
+				order = want.get("alt_order", [])
+			for sid: String in order:
+				await _tech_do(scr, sid)
+				if not scr.done_steps.has(sid) or scr.mistakes != 0:
+					err("Гильдия %s (%s): операция %s не выполнена" % [jid, "порядок данных" if pass_i == 0 else "другой порядок", sid])
+					break
+			if scr.phase != "test":
+				err("Гильдия %s: после операций нет проверки под нагрузкой" % jid)
+				continue
+			if pass_i == 1:
+				continue
+			await _finish_tech(scr)
+			if Nav.current_name != "result" or not SaveGame.is_done(jid) or Nav.current._btn.label != "В ГИЛЬДИЮ":
+				err("Гильдия %s: нет итога «В ГИЛЬДИЮ» или прогресс не записан" % jid)
+				continue
+			if int(Nav.current.stars) != int(want.get("stars", 3)):
+				err("Гильдия %s: звёзд %d, в game.py %s" % [jid, Nav.current.stars, want.get("stars")])
+			ok += 1
+		# нарушение after (без шагов безопасности): операция не выполняется, ошибка «Рано! Сначала: …»
+		var scr2: Node = await _open_tech(jid)
+		for st: Dictionary in scr2.job["steps"]:
+			var after: Array = st["after"]
+			if after.is_empty() or after.any(func(a: String) -> bool: return scr2.step_by_id(a)["safety"]):
+				continue
+			scr2.select_tool(st["tool"])
+			scr2.op_clicked(st["id"])
+			if scr2.done_steps.has(st["id"]) or scr2.mistakes != 1 or not Nav.toast.text.begins_with("Рано! Сначала: "):
+				err("Гильдия %s: нарушение порядка (%s) не остановлено" % [jid, st["id"]])
+			break
+		# спеки: без мануала — подсказка, неверное значение — ошибка, верное — шаг
+		for st: Dictionary in job["steps"]:
+			if not st.get("spec") is Dictionary:
+				continue
+			var s3: Node = await _open_tech(jid)
+			_view_all_manual(s3)
+			for o: Dictionary in s3.job["steps"]:              # всё, что раньше этого шага по порядку данных
+				if o["id"] == st["id"]:
+					break
+				await _tech_do(s3, o["id"])
+			s3.manual_viewed.clear()
+			s3.select_tool(st["tool"])
+			s3.op_clicked(st["id"])
+			if s3.spec_dlg == null:
+				err("Гильдия %s: спека %s не открылась" % [jid, st["id"]])
+				continue
+			var opts: Array = s3.spec_dlg.step["spec"]["options"]
+			var right := -1
+			var wrong := -1
+			for i in opts.size():
+				if opts[i][1]:
+					right = i
+				elif wrong < 0:
+					wrong = i
+			s3.choose_spec(right)
+			if s3.done_steps.has(st["id"]) or not Nav.toast.text.begins_with("Сначала открой мануал"):
+				err("Гильдия %s: спека %s принята без мануала" % [jid, st["id"]])
+			s3.manual_viewed[st["spec"]["manual"]] = true
+			var m0: int = s3.mistakes
+			s3.choose_spec(wrong)
+			if s3.mistakes != m0 + 1 or s3.done_steps.has(st["id"]):
+				err("Гильдия %s: неверное значение спеки %s не засчитано ошибкой" % [jid, st["id"]])
+			s3.choose_spec(right)
+			if not s3.done_steps.has(st["id"]):
+				err("Гильдия %s: верное значение спеки %s не принято" % [jid, st["id"]])
+	# провал по каждому шагу безопасности: экран failed с разбором как в game.py, «ЗАНОВО»
+	for key: String in ref.get("fails", {}):
+		var jid := key.get_slice(":", 0)
+		var sid := key.get_slice(":", 1)
+		var scr: Node = await _open_tech(jid)
+		var st: Dictionary = scr.step_by_id(sid)
+		scr.select_tool(st["tool"])
+		scr.op_clicked(sid)
+		await _frames(2)
+		if Nav.current_name != "failed" or Nav.current.msg != ref["fails"][key]["msg"]:
+			err("провал %s: нет экрана failed или разбор не как в game.py" % key)
+			continue
+		await _press(Nav.current.get_node("Retry"), false)
+		await _frames(2)
+		if Nav.current_name != "tech" or Nav.current.job["id"] != jid or not Nav.current.done_steps.is_empty():
+			err("провал %s: «ЗАНОВО» не начал задание заново" % key)
+		fails += 1
+	return [ok, fails]
+
+
+## Экзамен: сдача (exam_passed, экран exam_result), провал по лимиту ошибок, пересдача — новым билетом.
+func _flow_exam() -> void:
+	Nav.go("guild")
+	await _frames(2)
+	if Nav.current.get_node_or_null("Exam") == null:
+		err("экзамен: после всех зачётов нет кнопки")
+		return
+	await _press(Nav.current.get_node("Exam"), false)
+	await _frames(2)
+	var scr: Node = Nav.current
+	if Nav.current_name != "tech" or not scr.exam or scr.get_node_or_null("StepSkip") != null:
+		err("экзамен: не открылся билет (или есть «пропустить»)")
+		return
+	var m := 0
+	for st: Dictionary in scr.job["steps"]:                 # лимит: 4-я ошибка — провал
+		if st["after"].is_empty():
+			for k in 4:
+				var wrong_tool := "lube" if st["tool"] != "lube" else "hands"
+				scr.select_tool(wrong_tool)
+				scr.op_clicked(st["id"])
+				await _frames(1)
+				m += 1
+				if Nav.current_name != "tech":
+					break
+			break
+	if Nav.current_name != "failed" or not Nav.current.exam or not Nav.current.msg.begins_with("Лимит ошибок экзамена"):
+		err("экзамен: 4 ошибки не провалили экзамен (%s)" % Nav.current_name)
+		return
+	if not Nav.toast.text.begins_with("Инструмент не тот.") or Nav.toast.text.contains("Нужен"):
+		err("экзамен: в сообщении об ошибке есть подсказка")
+	await _press(Nav.current.get_node("Retry"), false)
+	await _frames(2)
+	if Nav.current_name != "tech" or not Nav.current.exam:
+		err("экзамен: «ПЕРЕСДАТЬ» не дал новый билет")
+		return
+	scr = Nav.current
+	_view_all_manual(scr)
+	for st: Dictionary in scr.job["steps"]:
+		await _tech_do(scr, st["id"])
+	await _finish_tech(scr)
+	if Nav.current_name != "exam_result" or not SaveGame.exam_passed:
+		err("экзамен: сдача не записала exam_passed / нет exam_result")
+		return
+	await _press(Nav.current.get_node("ToGuild"), false)
+	await _frames(2)
+	if Nav.current_name != "guild" or not str(Nav.current.rank()).begins_with("Сертифицированный"):
+		err("Гильдия после экзамена: нет звания техника")
+
+
+## Про-задание или экзамен событиями: мышью (клики) или клавиатурой (фокус + Enter), мануал — через окно.
+func _flow_tech_events(jid: String, exam: bool, keyboard: bool) -> void:
+	var how := ("клавиатура " if keyboard else "мышь ") + ("экзамен" if exam else jid)
+	if exam:
+		Nav.go("guild")
+		await _frames(2)
+		await _press(Nav.current.get_node("Exam"), keyboard)
+	else:
+		Nav.go("guild")
+		await _frames(2)
+		await _press(Nav.current.get_node("Tech_" + jid), keyboard)
+	await _frames(2)
+	var scr: Node = Nav.current
+	if Nav.current_name != "tech":
+		err("%s: задание не открылось" % how)
+		return
+	await _press(scr.get_node("Manual"), keyboard)              # мануал: все страницы задания
+	await _frames(1)
+	if scr.manual_dlg == null:
+		err("%s: мануал не открылся" % how)
+		return
+	for p: String in scr.manual_dlg.pages:
+		await _press(scr.manual_dlg.get_node("Page_" + p), keyboard)
+	await _press(scr.manual_dlg.get_node("Close"), keyboard)
+	await _frames(1)
+	for st: Dictionary in scr.job["steps"]:
+		await _press(scr.tools.tiles[st["tool"]], keyboard)
+		await _press(scr.get_node("Op_" + st["id"]), keyboard)
+		await _frames(1)
+		if scr.spec_dlg:
+			var opts: Array = st["spec"]["options"]
+			for i in opts.size():
+				if opts[i][1]:
+					await _press(scr.spec_dlg.get_node("Opt_%d" % i), keyboard)
+		if scr.mini:
+			await _mini_events(scr.mini, keyboard, how, jid)
+		await _frames(1)
+		if not scr.done_steps.has(st["id"]) or scr.mistakes != 0:
+			err("%s: операция %s не выполнена (ошибок %d)" % [how, st["id"], scr.mistakes])
+			return
+	await _press(scr.get_node("TestDrive"), keyboard)
+	scr.ride.t0 = scr.ride.t - scr.ride.secs() - 0.01
+	await _frames(2)
+	await _press(scr.get_node("TestDrive"), keyboard)
+	await _frames(2)
+	var want := "exam_result" if exam else "result"
+	if Nav.current_name != want:
+		err("%s: нет экрана %s (%s)" % [how, want, Nav.current_name])
+		return
+	await _press(Nav.current.get_node("ToGuild" if exam else "ToHub"), keyboard)
+	await _frames(2)
+	if Nav.current_name != "guild":
+		err("%s: не вернулись в Гильдию" % how)
+
+
+## Замечание из Гильдии: шаг — «сделано: …», как в game.py.
+func _flow_guild_feedback() -> void:
+	var ref: Dictionary = _gref().get("feedback", {}).get("dispute_tech", {})
+	if ref.is_empty():
+		err("нет эталона замечания из Гильдии")
+		return
+	var lang0 := Loc.code
+	Loc.code = "ru"
+	var scr: Node = await _open_tech("t_battery")
+	_view_all_manual(scr)
+	await _tech_do(scr, ref["_after_step"])
+	scr.select_tool("lube")
+	scr.op_clicked(ref["_wrong_on"])
+	await _frames(2)
+	if not scr._dispute_btn.visible:
+		err("Гильдия: нет «Я НЕ СОГЛАСЕН» после ошибки")
+	await _fb_send(scr._dispute_btn, 1, "Гильдия", {"dispute_tech": ref}, "dispute_tech")
+	if scr.mistakes != int(ref["_mistakes_after"]):
+		err("Гильдия: после замечания ошибок %d, в game.py %d" % [scr.mistakes, ref["_mistakes_after"]])
+	Loc.code = lang0

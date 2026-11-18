@@ -56,7 +56,7 @@ func build() -> void:
 		_leg = LegGag.make(kinds[gags.find(gag) % kinds.size()], Rect2(260, 500, 760, 100))
 		add_child(_leg)
 	_btn = GameButton.make(Rect2(UI.W / 2.0 - 150, UI.H - 110, 300, 56),
-		"НА ВЕЧЕРИНКУ" if party_next() else "В МАСТЕРСКУЮ", UI.AMBER)
+		"В ГИЛЬДИЮ" if job.get("track") == "tech" else ("НА ВЕЧЕРИНКУ" if party_next() else "В МАСТЕРСКУЮ"), UI.AMBER)
 	_btn.name = "ToHub"
 	_btn.pressed.connect(func() -> void:
 		Audio.sfx("tick")
@@ -80,6 +80,9 @@ func party_next() -> bool:
 
 
 func go_back() -> void:
+	if job.get("track") == "tech":
+		Nav.go("guild")
+		return
 	if party_next():
 		SaveGame.ending_seen = true
 		SaveGame.save()
