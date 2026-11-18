@@ -22,6 +22,10 @@ func music_theme() -> String:
 	return "party" if from == "ending" else "workshop"
 
 
+func text_cap() -> float:
+	return 1.25                          # плотная раскладка (TEXT_CAP_SCENES в game.py)
+
+
 func summary() -> String:
 	var out: PackedStringArray = [Loc.t("ТИТРЫ")]
 	for sec: Dictionary in Content.credits:

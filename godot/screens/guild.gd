@@ -13,6 +13,10 @@ func music_theme() -> String:
 	return "guild"
 
 
+func text_cap() -> float:
+	return 1.25                          # плотная раскладка (TEXT_CAP_SCENES в game.py)
+
+
 func summary() -> String:
 	return Loc.t("Гильдия Колёсников") + ". " + Loc.t("Мартин — " + rank())
 

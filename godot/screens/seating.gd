@@ -4,8 +4,8 @@ extends Screen
 ## ошибкой и «ПОКАЗАТЬ НОРМУ»; примерка — 9 клиентов, ползунки (мышь, палец, ←/→ на ползунке в фокусе), список
 ## проверок и «ГОТОВО — ПРОВЕРИТЬ ПОСАДКУ» (seat_done); зачёт — 7 вопросов, после ответа рисунок плавно переходит к
 ## правильной посадке (0,7 с; при неверном — сначала 1,2 с ошибка), 6 верных — зачёт (seat_quiz_ok).
-## Рисунок — SeatFigure (вид сбоку). Виды спереди и сверху (_seat_front, _seat_front_fit, _seat_top) — часть 3:
-## пока вместо них в рамке — заглушка (урок 4, вопросы 6–7, клиенты с перекосом и поворотом таза).
+## Рисунок — SeatFigure: вид сбоку; спереди — примерка (_seat_front_fit) у клиентов с перекосом таза и схема урока 4 и
+## вопросов 6–7 (_seat_front: дуга сколиоза, подкладка, три упора); сверху — поворот таза (_seat_top).
 
 const CV := Rect2(24, 176, 730, 488)
 const BTN := Rect2(780, 612, 476, 48)
@@ -13,7 +13,6 @@ const BACK := Rect2(UI.W - 230, 64, 206, 38)
 const TOGGLE := Rect2(24 + 730 - 238, 176 + 8, 228, 32)
 const BUBBLE := Rect2(96, 110, 658, 60)
 const TAB_NAMES := {"lessons": "УРОКИ", "fit": "ПРИМЕРКА", "quiz": "ПРОВЕРЬ СЕБЯ"}
-const PORT_FRONT := "Вид спереди и сверху появится в следующем шаге переноса."
 
 var tab: String = "lessons"
 var lesson: int = 0
@@ -263,8 +262,8 @@ func go_back() -> void:
 	Nav.go("hub")
 
 
-func _exit_tree() -> void:
-	Settings.text_cap = 0.0
+func text_cap() -> float:
+	return 1.25 if tab == "fit" else 0.0
 
 
 func summary() -> String:
@@ -457,7 +456,6 @@ func _lpose() -> Dictionary:
 # ---------------- кадр ----------------
 
 func tick(_dt: float) -> void:
-	Settings.text_cap = 1.25 if tab == "fit" else 0.0
 	if say != _said:
 		_said = say
 		if Settings.a11y.get("voices", true):
@@ -475,6 +473,12 @@ func _place_figure() -> void:
 	if tab == "lessons":
 		var lp := _lpose()
 		if lp.get("front"):
+			fig.mode = "front"
+			fig.front_corrected = demo_good
+			fig.front_pads = true
+			fig.front_obl = -1.0
+			fig.front_wedge = 0.0
+			fig.place(Rect2(0, 0, UI.W, UI.H), CV)
 			return
 		var d := SeatLogic.demo_pose(lp, demo_good)
 		fig.case = d[0]
@@ -485,9 +489,13 @@ func _place_figure() -> void:
 	elif tab == "fit":
 		var c: Dictionary = cases()[case_i]
 		var lay := _fit_layout()
-		if view != "side":
-			return
 		fig.case = c
+		if view != "side":
+			fig.cfg = cfg
+			fig.pose = SeatLogic.seat_eval(c, cfg)[1]
+			fig.mode = "front_fit" if view == "front" else "top"
+			fig.place(lay[5], lay[4])
+			return
 		if c.get("view"):
 			fig.cfg = SeatLogic.side_cfg(c)
 			fig.pose = SeatLogic.eval_side(c, fig.cfg)[1]
@@ -506,7 +514,22 @@ func _place_figure() -> void:
 			return
 		var q: Dictionary = quiz[quiz_i]
 		var qp: Variant = q.get("pose")
-		if qp is Dictionary and (qp as Dictionary).get("front"):
+		if qp is Dictionary and (qp as Dictionary).get("front"):    # до ответа — без упоров и подписей: не подсказка
+			var ft0 := fix_t()
+			var kind0 := SeatLogic.fix_kind(q)
+			var tt0 := ft0 if (ft0 >= 0.0 and kind0 != "") else 0.0
+			fig.mode = "front"
+			if kind0 == "wedge":
+				fig.front_corrected = false
+				fig.front_pads = false
+				fig.front_obl = -1.0
+				fig.front_wedge = tt0
+			else:
+				fig.front_corrected = tt0 >= 0.5
+				fig.front_pads = tt0 >= 0.5
+				fig.front_obl = 1.0 - 0.88 * tt0
+				fig.front_wedge = 0.0
+			fig.place(Rect2(0, 0, UI.W, UI.H), CV)
 			return
 		if qp is Dictionary:
 			var ft := fix_t()
@@ -597,19 +620,12 @@ func _fit(ci: CanvasItem, s: String, pos: Vector2, width: float, size_: int, col
 	UI.draw_text(ci, f[0], Vector2(pos.x, pos.y + (size_ - int(f[1])) / 2), f[1], col, bold)
 
 
-func _draw_placeholder(ci: CanvasItem) -> void:
-	var s := Loc.t(PORT_FRONT)
-	UI.draw_wrapped(ci, s, Vector2(CV.get_center().x, CV.get_center().y - 10), CV.size.x - 200, 16, UI.GREY, true)
-
-
 func _draw_fg() -> void:
 	var ci := _fg
 	if tab == "lessons":
 		var les: Dictionary = lessons()[lesson]
 		var lp := _lpose()
-		if lp.get("front"):
-			_draw_placeholder(ci)
-		elif lp.get("measure"):
+		if lp.get("measure"):
 			var cap := Loc.t("Жёсткая рулетка: глубина = бедро − 5 см (2″)")
 			var cw := UI.text_width(cap, 14, true) + 14
 			UI.draw_round_rect(ci, Rect2(CV.end.x - 14 - cw, CV.position.y + 46, cw, 22), Color8(16, 12, 24, 215), Color(), 0, 5)
@@ -641,9 +657,7 @@ func _draw_fit(ci: CanvasItem) -> void:
 	var res: Array = SeatLogic.seat_eval(c, cfg)
 	var checks: Array = res[0]
 	var lay := _fit_layout()
-	if view != "side":
-		_draw_placeholder(ci)
-	elif c.get("view"):
+	if view == "side" and c.get("view"):
 		var note := Loc.t("Сбоку посадка ровная — перекос виден только спереди" if c["view"] == "front"
 			else "Сбоку посадка ровная — поворот таза виден только сверху")
 		var nw := UI.text_width(note, 13, true) + 16
@@ -718,8 +732,6 @@ func _draw_quiz(ci: CanvasItem) -> void:
 	var q: Dictionary = quiz[quiz_i]
 	var qp: Variant = q.get("pose")
 	var front := qp is Dictionary and bool((qp as Dictionary).get("front", false))
-	if front:
-		_draw_placeholder(ci)
 	var ft := fix_t()
 	var kind := SeatLogic.fix_kind(q)
 	if ft >= 0.0 and q.get("fix") and (kind == "" or ft >= 1.0):
@@ -769,7 +781,8 @@ func _draw_case_btn(b: GameButton, r: Rect2) -> void:
 	_fit(b, ("✔ " if done else "") + Loc.t(cases()[i]["client"]), r.position + Vector2(10, 8), r.size.x - 20, 14, UI.WHITE)
 
 
-func _draw_option(b: GameButton, r: Rect2) -> void:
+func _draw_option(b: GameButton, _lifted: Rect2) -> void:
+	var r := Rect2(b.slide, b.size)            # текст стоит на месте, кнопка при наведении поднимается (как в pygame)
 	var i := int(b.get_meta("i"))
 	var o: Array = quiz[quiz_i]["options"][i]
 	var ty := UI.draw_wrapped(b, Loc.t(o[0]), r.position + Vector2(14, 8), r.size.x - 28, 15, UI.WHITE)

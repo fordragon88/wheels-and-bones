@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Эталонные снимки экранов pygame-версии (1280×720) для сверки с переносом: godot/tests/ref/<экран>.png
-  python godot/tools/ref_shots.py
+  python godot/tools/ref_shots.py            (--big — текст 150 %, файлы big_<экран>.png)
 Часы подменены, кадры рисуются каждый шаг (иначе сцена «стоит» в первом кадре: появления, печать реплик).
 Пары снимков Godot — godot/tests/shots.gd (те же имена в godot/tests/shots/).
 """
@@ -25,10 +25,13 @@ def run(g, secs, name=None):
         g.update(1 / 30)
         g.draw(S)
     if name:
-        pygame.image.save(S, os.path.join(OUT, name + ".png"))
+        pygame.image.save(S, os.path.join(OUT, ("big_" if BIG else "") + name + ".png"))
         print(name, g.scene, getattr(g, "phase", None))
 
 
+BIG = "--big" in sys.argv
+if BIG:
+    game.A11Y["text"] = 3
 g = game.Game(headless=True)
 game.set_lang("ru")
 run(g, 3, "title")
@@ -291,3 +294,46 @@ run(g, 1.0, "seat_quiz_myth")
 sc.update(quiz_done=True, score=6, say=M["pass"])
 g.seat_quiz_ok = True
 run(g, 2.5, "seat_quiz_pass")
+
+
+# ---- срез 5, часть 3: виды спереди и сверху (верная посадка — перебором по одному ползунку, как в shots.gd) ----
+def seat_solve(case, keys, cfg):
+    cfg = dict(cfg)
+    score = lambda x: sum(1 for c in game.Game.seat_eval(case, x)[0] if c[1])     # noqa: E731
+    total = len(game.Game.seat_eval(case, cfg)[0])
+    for _ in range(6):
+        for k in keys:
+            lo, hi = game.SEAT_SLIDERS[k][2], game.SEAT_SLIDERS[k][3]
+            best, best_v = score(cfg), cfg[k]
+            for v in range(lo, hi + 1):
+                s_ = score(dict(cfg, **{k: v}))
+                if s_ > best:
+                    best, best_v = s_, v
+            cfg[k] = best_v
+        if score(cfg) == total:
+            break
+    return cfg
+
+
+sc.update(tab="fit", quiz_done=False, score=0)
+for ci, nm in ((6, "dryad"), (7, "owl"), (8, "orc")):
+    g._seat_load_case(ci)
+    run(g, 2.5, f"seat_fit_{nm}")
+    c_ = game.SEAT_CASES[ci]
+    keys_ = c_.get("sliders") or ["depth", "leg", "back_h", "back_a"] + (["tilt"] if c_.get("tilt") else [])
+    sc["cfg"].update(seat_solve(c_, keys_, sc["cfg"]))
+    run(g, 0.5, f"seat_fit_{nm}_good")
+sc.update(tab="lessons", lesson=3, demo_good=False, say=M["lesson"][3])
+run(g, 2.5, "seat_lesson_front")
+sc["demo_good"] = True
+run(g, 0.5, "seat_lesson_front_norm")
+sc.update(tab="quiz", quiz=5, picked=None, say=M["quiz"])
+run(g, 2.5, "seat_quiz_wedge")
+g._seat_quiz_pick(next(i for i, o in enumerate(game.SEAT_QUIZ[5]["options"]) if o[1]))
+sc["fix_t0"] = g.t - 5
+run(g, 2.5, "seat_quiz_wedge_after")
+sc.update(quiz=6, picked=None)
+run(g, 1.0, "seat_quiz_pads")
+g._seat_quiz_pick(next(i for i, o in enumerate(game.SEAT_QUIZ[6]["options"]) if not o[1]))
+sc["fix_t0"] = g.t - 5
+run(g, 2.5, "seat_quiz_pads_after")

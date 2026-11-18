@@ -81,6 +81,10 @@ func music_theme() -> String:
 	return "guild"
 
 
+func text_cap() -> float:
+	return 1.25                          # плотная раскладка (TEXT_CAP_SCENES в game.py)
+
+
 func summary() -> String:
 	return Loc.t(("ЭКЗАМЕН: " if exam else "Гильдия: ") + job["title"]) + ". " + Loc.t(job.get("symptom", ""))
 

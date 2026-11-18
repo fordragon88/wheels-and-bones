@@ -53,6 +53,11 @@ func music_theme() -> String:
 	return "workshop"
 
 
+## Потолок крупного текста на экране (text_cap в game.py: плотные экраны — 1,25), 0 — нет.
+func text_cap() -> float:
+	return 0.0
+
+
 ## Сообщение сверху: [левый край, запас справа] (как reserve в _draw_toast).
 func toast_bounds() -> Vector2:
 	return Vector2(54, 164)

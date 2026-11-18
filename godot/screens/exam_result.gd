@@ -18,6 +18,10 @@ func music_theme() -> String:
 	return "guild"
 
 
+func text_cap() -> float:
+	return 1.25                          # плотная раскладка (TEXT_CAP_SCENES в game.py)
+
+
 func items() -> Array:
 	return ["Техника безопасности — без нарушений", "Порядок операций — соблюдён", "Спецификации — по мануалу",
 		"Ошибки — %d из %d допустимых" % [mistakes, int(Content.consts.get("exam_max_mistakes", 3))]]

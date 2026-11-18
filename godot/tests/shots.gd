@@ -1,7 +1,7 @@
 extends Node
 ## Снимки экранов 1280×720 для сверки с pygame-версией (эталоны — tests/ref/, их делает tools/ref_shots.py):
 ##   D:\Godot\Godot_v4.7.2-stable_win64.exe --path godot --audio-driver Dummy -- --test --shots [имя …]
-## Без имён — все; с «--calm» перед «--shots» — «Без анимации», файлы calm_<имя>.png. Снимки: tests/shots/<имя>.png (в git не хранятся). После снимков игра закрывается сама.
+## Без имён — все; с «--calm» перед «--shots» — «Без анимации», файлы calm_<имя>.png; с «--big» — текст 150 %, big_<имя>.png. Снимки: tests/shots/<имя>.png (в git не хранятся). После снимков игра закрывается сама.
 ## Ввод мыши в окне на время снимков выключен (курсор над окном не даёт подсветку наведения).
 
 const ALL := ["title", "title_en", "hub", "job_flat_diagnose", "job_flat_inspected",
@@ -12,7 +12,9 @@ const ALL := ["title", "title_en", "hub", "job_flat_diagnose", "job_flat_inspect
 	"tech_spec", "tech_mini", "tech_failed", "tech_test", "tech_ride", "tech_result", "guild_done", "exam_ticket",
 	"exam_failed", "exam_passed", "guild_diploma", "seat_lessons", "seat_lesson_slump", "seat_lesson_norm",
 	"seat_lesson_measure", "seat_fit_troll", "seat_fit_troll_good", "seat_fit_golem", "seat_fit_dryad_side", "seat_quiz_q1",
-	"seat_quiz_mid", "seat_quiz_wrong", "seat_quiz_right", "seat_quiz_myth", "seat_quiz_pass"]
+	"seat_quiz_mid", "seat_quiz_wrong", "seat_quiz_right", "seat_quiz_myth", "seat_quiz_pass", "seat_fit_dryad",
+	"seat_fit_dryad_good", "seat_fit_owl", "seat_fit_owl_good", "seat_fit_orc", "seat_fit_orc_good", "seat_lesson_front",
+	"seat_lesson_front_norm", "seat_quiz_wedge", "seat_quiz_wedge_after", "seat_quiz_pads", "seat_quiz_pads_after"]
 
 var out_dir := ""
 
@@ -33,7 +35,8 @@ func _shot(name: String) -> void:
 	var img := get_viewport().get_texture().get_image()
 	if img.get_size() != Vector2i(1280, 720):
 		img.resize(1280, 720, Image.INTERPOLATE_LANCZOS)
-	img.save_png(out_dir.path_join(("calm_" if Settings.calm() else "") + name + ".png"))
+	var pre := ("calm_" if Settings.calm() else "") + ("big_" if int(Settings.a11y.get("text", 0)) == 3 else "")
+	img.save_png(out_dir.path_join(pre + name + ".png"))
 	print("shot ", name, " ", Nav.current_name)
 
 
@@ -218,7 +221,70 @@ func _seat_shot(name: String) -> void:
 			scr.say = m["pass"]
 			scr.refresh()
 			await _wait(2.5)
+		"seat_fit_dryad", "seat_fit_owl", "seat_fit_orc":
+			scr.quiz_done = false
+			scr.score = 0
+			scr.tab = "fit"
+			scr.load_case({"seat_fit_dryad": 6, "seat_fit_owl": 7, "seat_fit_orc": 8}[name])
+			scr.refresh()
+			await _wait(2.5)
+		"seat_fit_dryad_good", "seat_fit_owl_good", "seat_fit_orc_good":
+			var c: Dictionary = scr.cases()[scr.case_i]
+			var sol := _seat_solve(c, scr.slider_keys(), scr.cfg)
+			for k: String in sol:
+				scr.cfg[k] = sol[k]
+			await _wait(0.5)
+		"seat_lesson_front":
+			scr.tab = "lessons"
+			scr.refresh()
+			scr.pick_lesson(3)
+			await _wait(2.5)
+		"seat_lesson_front_norm":
+			scr.toggle_demo()
+			await _wait(0.5)
+		"seat_quiz_wedge", "seat_quiz_pads":
+			scr.tab = "quiz"
+			scr.say = m["quiz"]
+			scr.quiz_i = 5 if name == "seat_quiz_wedge" else 6
+			scr.picked = -1
+			scr.refresh()
+			await _wait(2.5 if name == "seat_quiz_wedge" else 1.0)
+		"seat_quiz_wedge_after", "seat_quiz_pads_after":
+			var opts: Array = scr.quiz[scr.quiz_i]["options"]
+			for i in opts.size():
+				if bool(opts[i][1]) == (name == "seat_quiz_wedge_after"):
+					scr.quiz_pick(i)
+					break
+			scr.fix_t0 = scr.t - 5.0
+			await _wait(2.5)
 	Nav.toast.timer = 0.0
+
+
+## Верная посадка перебором по одному ползунку (как seat_solve в ref_shots.py).
+func _seat_solve(c: Dictionary, keys: Array, cfg0: Dictionary) -> Dictionary:
+	var cfg := cfg0.duplicate()
+	var score := func(x: Dictionary) -> int:
+		var n := 0
+		for ch: Array in SeatLogic.seat_eval(c, x)[0]:
+			n += 1 if ch[1] else 0
+		return n
+	var total: int = SeatLogic.seat_eval(c, cfg)[0].size()
+	for _r in 6:
+		for k: String in keys:
+			var sl: Array = SeatLogic.sliders()[k]
+			var best: int = score.call(cfg)
+			var best_v: int = cfg[k]
+			for v in range(int(sl[2]), int(sl[3]) + 1):
+				var x := cfg.duplicate()
+				x[k] = v
+				var sc: int = score.call(x)
+				if sc > best:
+					best = sc
+					best_v = v
+			cfg[k] = best_v
+		if score.call(cfg) == total:
+			break
+	return cfg
 
 
 func _to_repair(jid: String) -> Node:
@@ -249,6 +315,8 @@ func _run() -> void:
 	if want.is_empty():
 		want = ALL
 	seed(1)
+	if "--big" in args:
+		Settings.a11y["text"] = 3
 	Settings.lang = "ru"
 	Loc.code = "ru"
 	get_viewport().gui_disable_input = true

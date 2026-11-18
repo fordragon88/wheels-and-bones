@@ -6,8 +6,12 @@ extends Control
 ## нитями к костям (_draw_necro_puppeteer/_draw_necro_thread), зоны давления с выносками, мерки урока, миф «90-90-90»
 ## (_draw_seat_909090_myth). Сам Control — рамка обрезки (clip_contents), рисунок — в экранных координатах.
 ## «Тело» клиента (_draw_seat_flesh, кукла) в игре выключено (SEAT_BODY_ON = False) — не переносится.
-## Сглаживание: кружки — draw_circle/draw_arc с antialiased, линии и контуры полигонов — draw_polyline с antialiased;
+## Виды спереди (_seat_front_fit — примерка, _seat_front — урок и зачёт: дуга сколиоза, подкладка, три упора) и сверху
+## (_seat_top — поворот таза).
+## Сглаживание: кружки — draw_circle/draw_arc с antialiased, линии и контуры полигонов — draw_line с antialiased;
 ## заливки полигонов без сглаживания, но их край закрыт сглаженным контуром (как aa_* + DR.polygon в pygame).
+## Свечение (add_glow) — аддитивным слоем; чтобы оно ложилось как в pygame (поверх того, что нарисовано раньше, и ПОД
+## тем, что позже), рисунок проходит дважды: до первого свечения — в самом узле, после — в верхнем слое _late.
 
 const BONE := Color8(234, 226, 206)
 const BONE_D := Color8(186, 176, 154)
@@ -18,7 +22,11 @@ const UP := Color8(58, 66, 108)
 const MET := Color8(178, 184, 198)
 const TIRE := Color8(34, 36, 42)
 
-var mode: String = "scene"                # scene | myth | puppet (итог зачёта: одна нить) | none
+var mode: String = "scene"                # scene | myth | puppet (итог зачёта: одна нить) | front_fit | top | front | none
+var front_corrected: bool = false         # front (_seat_front): норма, упоры, перекос 0..1 (-1 — по норме), подкладка 0..1
+var front_pads: bool = true
+var front_obl: float = -1.0
+var front_wedge: float = 0.0
 var targets: Array = []                   # puppet: [x, y, цвет, активна]
 var puppet_bad: bool = false
 var rect: Rect2                           # рамка сцены (экранные координаты)
@@ -30,7 +38,10 @@ var show_necro: bool = true
 var t: float = 0.0
 var _glows: Array = []                    # [центр, радиус, цвет, уровень] — аддитивным слоем
 var _add: Control
+var _late: Control
 var _ci: CanvasItem
+var _phase: int = 0                       # 0 — рисуем до первого свечения, 1 — после (слой _late)
+var _glowed: bool = false
 
 
 func _init() -> void:
@@ -48,6 +59,11 @@ func _ready() -> void:
 	_add.material = mat
 	_add.draw.connect(_draw_glows)
 	add_child(_add)
+	_late = Control.new()
+	_late.size = size
+	_late.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_late.draw.connect(_draw_late)
+	add_child(_late)
 
 
 ## Рамка обрезки и сцены: clip — что видно, scene — где рисовать.
@@ -56,6 +72,7 @@ func place(clip: Rect2, scene: Rect2) -> void:
 	size = clip.size
 	if _add:
 		_add.size = size
+		_late.size = size
 	rect = scene
 
 
@@ -63,12 +80,23 @@ func _process(dt: float) -> void:
 	t += dt
 	queue_redraw()
 	_add.queue_redraw()
+	_late.queue_redraw()
 
 
 func _draw() -> void:
 	_glows.clear()
-	_ci = self
-	draw_set_transform(-position)
+	_render(self, 0)
+
+
+func _draw_late() -> void:
+	_render(_late, 1)
+
+
+func _render(ci: CanvasItem, phase: int) -> void:
+	_ci = ci
+	_phase = phase
+	_glowed = false
+	ci.draw_set_transform(-position)
 	match mode:
 		"scene":
 			draw_scene(rect, case, cfg, pose, highlight, show_necro)
@@ -76,6 +104,12 @@ func _draw() -> void:
 			draw_myth(rect)
 		"puppet":
 			necro_puppeteer(rect, targets, puppet_bad)
+		"front_fit":
+			draw_front_fit(rect, case, cfg, pose, show_necro)
+		"top":
+			draw_top(rect, case, cfg, pose, show_necro)
+		"front":
+			draw_front(rect, front_corrected, front_pads, front_obl, front_wedge)
 
 
 func _draw_glows() -> void:
@@ -96,11 +130,20 @@ static func _pg_width(d: Vector2, w: float) -> float:
 	return maxf(1.0, w * maxf(absf(d.x), absf(d.y)) / ln)
 
 
+## Рисовать ли сейчас: в узле — то, что до первого свечения, в _late — то, что после.
+func _on() -> bool:
+	return _glowed == (_phase == 1)
+
+
 func _line(a: Vector2, b: Vector2, col: Color, w: float) -> void:
+	if not _on():
+		return
 	_ci.draw_line(a, b, col, _pg_width(b - a, w), true)
 
 
 func _lines(pts: Array, col: Color, w: float, closed: bool = false) -> void:
+	if not _on():
+		return
 	var p := PackedVector2Array(pts)
 	if closed:
 		p.append(p[0])
@@ -114,7 +157,7 @@ func _lines(pts: Array, col: Color, w: float, closed: bool = false) -> void:
 func _poly(pts: Array, col: Color, outline_w: float = 0.0) -> void:
 	if outline_w > 0:
 		_lines(pts, col, outline_w, true)
-	else:
+	elif _on():
 		var p := PackedVector2Array(pts)
 		if Geometry2D.triangulate_polygon(p).is_empty():
 			return                             # вырожденный многоугольник — pygame его тоже не закрашивает
@@ -122,7 +165,7 @@ func _poly(pts: Array, col: Color, outline_w: float = 0.0) -> void:
 
 
 func _circle(c: Vector2, r: float, col: Color, w: float = 0.0) -> void:
-	if r <= 0:
+	if r <= 0 or not _on():
 		return
 	if w <= 0 or w >= r:
 		_ci.draw_circle(c, r, col, true, -1.0, true)
@@ -131,7 +174,30 @@ func _circle(c: Vector2, r: float, col: Color, w: float = 0.0) -> void:
 
 
 func _glow(c: Vector2, r: float, col: Color, level: float) -> void:
-	_glows.append([c, r, col, level])
+	if _phase == 0:
+		_glows.append([c, r, col, level])
+	_glowed = true
+
+
+func _rrect(r: Rect2, fill: Color, border: Color = Color(0, 0, 0, 0), width: int = 0, radius: int = 7) -> void:
+	if _on():
+		UI.draw_round_rect(_ci, r, fill, border, width, radius)
+
+
+## aa_rect с дробными координатами: pygame.Rect отбрасывает дробную часть, радиус — не больше половины стороны.
+func _aa_rect(x: float, y: float, w: float, h: float, col: Color, width: int = 0, radius: int = 0) -> void:
+	var r := Rect2(int(x), int(y), int(w), int(h))
+	if r.size.x <= 0 or r.size.y <= 0:
+		return
+	if width > 0:
+		_rrect(r, Color(0, 0, 0, 0), col, width, radius)
+	else:
+		_rrect(r, col, Color(0, 0, 0, 0), 0, radius)
+
+
+static func _layer_col(c: Color, a8: int) -> Color:
+	var a := a8 / 255.0
+	return Color(c.r * a, c.g * a, c.b * a, a)
 
 
 static func _shade(c: Color, k: float) -> Color:
@@ -216,7 +282,8 @@ func necro_puppeteer(r: Rect2, targets: Array, bad_flag: bool) -> void:
 	_ellipse(Rect2(rc.x - 38, rc.y - 5, 76, 10), Color8(118, 80, 166), 1)
 	var tex := Content.texture("mentor_necro.png")
 	if tex:
-		breathe(_ci, tex, Rect2(nx, ny, nw, nh), t, 0.0)
+		if _on():
+			breathe(_ci, tex, Rect2(nx, ny, nw, nh), t, 0.0)
 	var staff := Vector2(nx + int(nw * 0.14), ny + int(nh * 0.08) + int(3.0 * UI.wsin(t * 2.5)))
 	var pulse := 0.65 + 0.35 * UI.wsin(t * 4.5)
 	_glow(staff, int(20 * pulse), UI.PURPLE, 0.85)
@@ -241,12 +308,13 @@ static func breathe(ci: CanvasItem, tex: Texture2D, box: Rect2, tt: float, phase
 	ci.draw_texture_rect_region(tex, Rect2(r.position.x, cut_y - top_h, r.size.x, top_h + 0.5), Rect2(0, 0, ts.x, cut_tex + 0.5))
 
 
-func _text(s: String, pos: Vector2, size_: float, col: Color, bold: bool = false, align: int = 0) -> Rect2:
-	return UI.draw_text(_ci, s, pos, size_, col, bold, align)
+func _text(s: String, pos: Vector2, size_: float, col: Color, bold: bool = false, align: int = 0) -> void:
+	if _on():
+		UI.draw_text(_ci, s, pos, size_, col, bold, align)
 
 
 func _plate(r: Rect2) -> void:
-	UI.draw_round_rect(_ci, r.grow_individual(8, 4, 8, 4), Color8(14, 12, 20, 175), Color(), 0, 8)
+	_rrect(r.grow_individual(8, 4, 8, 4), Color8(14, 12, 20, 175), Color(), 0, 8)
 
 
 # ---------------- сцена сбоку ----------------
@@ -298,9 +366,9 @@ func draw_scene(rect_: Rect2, case_: Dictionary, cfg_: Dictionary, pose_: Dictio
 		var p_b0: Vector2 = W.call(-16, 26)
 		var bw := int((depth + 28) * k)
 		var bh_px := int(18 * k)
-		UI.draw_round_rect(_ci, Rect2(p_b0, Vector2(bw, bh_px)), Color8(44, 46, 56), Color(), 0, maxi(4, int(6 * k)))
-		UI.draw_round_rect(_ci, Rect2(p_b0 + Vector2(4, 3), Vector2(bw - 8, maxi(3, int(5 * k)))), Color8(112, 74, 156), Color(), 0, 3)
-		UI.draw_round_rect(_ci, Rect2(p_b0, Vector2(bw, bh_px)), Color(0, 0, 0, 0), Color8(88, 92, 106), 2, maxi(4, int(6 * k)))
+		_rrect(Rect2(p_b0, Vector2(bw, bh_px)), Color8(44, 46, 56), Color(), 0, maxi(4, int(6 * k)))
+		_rrect(Rect2(p_b0 + Vector2(4, 3), Vector2(bw - 8, maxi(3, int(5 * k)))), Color8(112, 74, 156), Color(), 0, 3)
+		_rrect(Rect2(p_b0, Vector2(bw, bh_px)), Color(0, 0, 0, 0), Color8(88, 92, 106), 2, maxi(4, int(6 * k)))
 		_line(W.call(depth * 0.45, 24), T.call(piv.x, piv.y), Color8(56, 60, 72), maxf(4, int(8 * k)))
 		_line(W.call(depth * 0.45 - 3, 24), T.call(piv.x - 2, piv.y), MET, maxf(2, int(3 * k)))
 		for cr: Array in [[-11.0, 8.5], [depth + 9, 8.5], [depth * 0.42, 16.5]]:
@@ -496,12 +564,14 @@ func draw_scene(rect_: Rect2, case_: Dictionary, cfg_: Dictionary, pose_: Dictio
 			_circle(aa1, maxf(1, int(1.4 * k)), MET)
 		var wc: Vector2 = W.call(2, R)
 		wc = Vector2(int(wc.x), int(wc.y))
+		# в pygame колесо рисуется на прозрачном слое и потом накладывается: на пустом месте цвет смешивается с
+		# чёрным по своей прозрачности (c·a при прозрачности a) — спицы видны сквозь ступицу «звёздочкой»
 		for a_sp in range(0, 360, 20):
 			var ra := deg_to_rad(a_sp)
-			_line(wc, wc + Vector2(cos(ra), sin(ra)) * (R - 3.5) * k, Color8(150, 158, 176, 95), 1)
-		_circle(wc, int(R * k), Color(TIRE, 155 / 255.0), maxf(2, int(3.2 * k)))
-		_circle(wc, int((R - 4) * k), Color(MET, 165 / 255.0), maxf(1, int(1.4 * k)))
-		_circle(wc, maxf(3, int(3.5 * k)), Color(MET, 210 / 255.0))
+			_line(wc, wc + Vector2(cos(ra), sin(ra)) * (R - 3.5) * k, _layer_col(Color8(150, 158, 176), 95), 1)
+		_circle(wc, int(R * k), _layer_col(TIRE, 155), maxf(2, int(3.2 * k)))
+		_circle(wc, int((R - 4) * k), _layer_col(MET, 165), maxf(1, int(1.4 * k)))
+		_circle(wc, maxf(3, int(3.5 * k)), _layer_col(MET, 210))
 	var has_bad: bool = pv > 8 or pose_.get("knee_up", false) or pose_.get("short", false) or pose_.get("deep", false) \
 		or pose_.get("dangle", false)
 	if show_necro_:
@@ -528,7 +598,7 @@ func draw_scene(rect_: Rect2, case_: Dictionary, cfg_: Dictionary, pose_: Dictio
 			badge_col = UI.BAD
 		var st_t := Loc.t(status)
 		var sw := UI.text_width(st_t, 12, true)
-		UI.draw_round_rect(_ci, Rect2(rx + 134, ry + 10, sw + 12, UI.line_height(12, true) + 4), Color8(16, 12, 24, 225), Color(), 0, 4)
+		_rrect(Rect2(rx + 134, ry + 10, sw + 12, UI.line_height(12, true) + 4), Color8(16, 12, 24, 225), Color(), 0, 4)
 		_text(st_t, Vector2(rx + 140, ry + 12), 12, badge_col, true)
 
 	if pose_.get("measure", false):               # урок «Мерки»: где меряют
@@ -593,7 +663,7 @@ func draw_scene(rect_: Rect2, case_: Dictionary, cfg_: Dictionary, pose_: Dictio
 	for lb: Array in labs:
 		var s := Loc.t(lb[2])
 		var tw := UI.text_width(s, 12, true) + 10
-		UI.draw_round_rect(_ci, Rect2(lb[0] - int(tw / 2.0), lb[1] - int(lab_h / 2.0), tw, lab_h), Color8(16, 12, 24, 235), Color(), 0, 4)
+		_rrect(Rect2(lb[0] - int(tw / 2.0), lb[1] - int(lab_h / 2.0), tw, lab_h), Color8(16, 12, 24, 235), Color(), 0, 4)
 		_text(s, Vector2(lb[0], lb[1]), 12, lb[3], true, 1)
 
 
@@ -620,8 +690,399 @@ func draw_myth(r: Rect2) -> void:
 	var targets: Array = []
 	for i in presets.size():
 		var sub := Rect2(r.position.x + 142 + i * w_sub, r.position.y + 42, w_sub - 6, r.size.y - 68)
-		UI.draw_round_rect(_ci, sub, Color8(24, 26, 36), Color8(58, 66, 86), 1, 8)
+		_rrect(sub, Color8(24, 26, 36), Color8(58, 66, 86), 1, 8)
 		draw_scene(sub, presets[i][1], presets[i][2], {"p": 0, "slide": 0}, false, false)
 		_text(Loc.t(presets[i][0]), Vector2(sub.get_center().x, sub.position.y + 10), 12, UI.CYAN, true, 1)
 		targets.append([sub.get_center().x, sub.get_center().y - 20, UI.GHOST if i == 2 else UI.PURPLE, i == 1])
 	necro_puppeteer(r, targets, false)
+
+
+# ---------------- виды спереди и сверху ----------------
+
+func _grid(r: Rect2) -> void:
+	var gx := r.position.x + 20
+	while gx < r.end.x - 10:
+		_line(Vector2(gx, r.position.y + 8), Vector2(gx, r.end.y - 26), Color8(26, 29, 40), 1)
+		gx += 36
+	var gy := r.position.y + 16
+	while gy < r.end.y - 26:
+		_line(Vector2(r.position.x + 10, gy), Vector2(r.end.x - 10, gy), Color8(26, 29, 40), 1)
+		gy += 36
+
+
+## Вид спереди для примерки (_seat_front_fit): основа (гамак/жёсткая), ширина, две подножки, подкладка под седалищную
+## кость; скелет с перекосом таза pose.obl, изгибом позвоночника и наклоном головы pose.lean.
+func draw_front_fit(r: Rect2, case_: Dictionary, cfg_: Dictionary, pose_: Dictionary, show_necro_: bool) -> void:
+	_grid(r)
+	var BN := Color8(234, 226, 206)
+	var BD := Color8(188, 178, 156)
+	var OUT := Color8(38, 32, 44)
+	var b: Dictionary = case_["body"]
+	var fl := float(cfg_.get("foot_l", b["shank"]))
+	var fr := float(cfg_.get("foot_r", b["shank"]))
+	var s := (r.size.y - 34) / float(maxf(fl, fr) + float(b["shoulder"]) + 26)
+	var cx := int(r.get_center().x) + (66 if show_necro_ else 0)
+	var seat_y := r.end.y - 14 - maxf(fl, fr) * s
+	var w := float(cfg_.get("seat_w", float(b["hip"]) + 1))
+	var half := w * s / 2
+	var sling := int(cfg_.get("base", 1)) == 0
+	var sag := 3.0 * s if sling else 0.0
+	var bh := (float(case_["back"][0]) + float(case_["back"][1])) / 2.0
+	_aa_rect(cx - half, seat_y - bh * s - 6 * s, w * s, bh * s + 4 * s, Color8(44, 48, 72), 0, 10)
+	_aa_rect(cx - half, seat_y - bh * s - 6 * s, w * s, bh * s + 4 * s, Color8(76, 84, 122), 2, 10)
+	for sd: int in [-1, 1]:
+		var wx := cx + sd * (half + 6 * s)
+		_aa_rect(wx - 2.4 * s, seat_y - 34 * s, 4.8 * s, 62 * s, Color8(34, 36, 44), 0, 6)
+		_aa_rect(wx - 0.9 * s, seat_y - 32 * s, 1.8 * s, 58 * s, Color8(168, 174, 188), 0, 3)
+		_line(Vector2(cx + sd * half, seat_y - 2 * s), Vector2(cx + sd * half, seat_y + 20 * s), Color8(168, 174, 188),
+			maxf(2, int(0.8 * s)))
+	var base: Array = []
+	for i in 13:
+		base.append(Vector2(cx - half + (2 * half) * i / 12.0, seat_y + sag * sin(PI * i / 12.0)))
+	var cush := 5 * s
+	var top_pts: Array = []
+	for p: Vector2 in base:
+		top_pts.append(Vector2(p.x, p.y - cush))
+	var rb := base.duplicate()
+	rb.reverse()
+	_poly(top_pts + rb, Color8(58, 66, 112))
+	_poly(top_pts + rb, Color8(98, 110, 168), 2)
+	_lines(base, Color8(130, 136, 156) if sling else Color8(210, 186, 130), maxf(3, int(1.0 * s)))
+	if sling:
+		_text(Loc.t("гамак провисает"), Vector2(cx + half + 10 * s, seat_y + sag - 6), 11, UI.AMBER, true)
+	var bld := float(cfg_.get("build", 0))
+	var it_dx := 7.5 * s
+	if bld != 0:
+		var sd := 1 if bld > 0 else -1
+		var bx := cx + sd * it_dx
+		var by_top := seat_y - cush - absf(bld) * s
+		_aa_rect(bx - 5 * s, by_top, 10 * s, absf(bld) * s + 1, UI.CYAN, 0, 3)
+		_aa_rect(bx - 5 * s, by_top, 10 * s, absf(bld) * s + 1, UI.WHITE, 1, 3)
+	var obl := deg_to_rad(float(pose_.get("obl", 0.0)))
+	var pc := Vector2(cx + float(pose_.get("shift", 0.0)) * s, seat_y - cush - 7 * s - sag * 0.5)
+	var rp := func(dx: float, dy: float) -> Vector2:
+		return Vector2(pc.x + dx * cos(-obl) - dy * sin(-obl), pc.y + dx * sin(-obl) + dy * cos(-obl))
+	var ok: bool = pose_.get("ok", false)
+	var p_col := UI.GOOD if ok else UI.AMBER
+	var hw := float(b["hip"]) * 0.38 * s
+	for sd: int in [-1, 1]:
+		var wing := [rp.call(sd * 1.5 * s, -2 * s), rp.call(sd * hw * 0.55, -9 * s), rp.call(sd * hw * 1.05, -11 * s),
+			rp.call(sd * hw * 1.12, -6 * s), rp.call(sd * hw * 0.7, 4 * s), rp.call(sd * 2 * s, 6 * s)]
+		_poly(wing, BN)
+		_poly(wing, OUT, 2)
+		var fo: Vector2 = rp.call(sd * hw * 0.45, 1 * s)
+		_circle(Vector2(int(fo.x), int(fo.y)), maxf(2, int(1.6 * s)), Color8(44, 48, 72))
+	var sac := [rp.call(-3.5 * s, -9 * s), rp.call(3.5 * s, -9 * s), rp.call(0, 4 * s)]
+	_poly(sac, BD)
+	_poly(sac, OUT, 2)
+	_line(rp.call(-hw * 1.05, -11 * s), rp.call(hw * 1.05, -11 * s), p_col, maxf(3, int(0.9 * s)))
+	_line(Vector2(pc.x - hw * 1.3, pc.y - 11 * s), Vector2(pc.x + hw * 1.3, pc.y - 11 * s), Color8(96, 104, 132), 1)
+	var ischia := {-1: rp.call(-it_dx, 6 * s), 1: rp.call(it_dx, 6 * s)}
+	for leg: Array in [[-1, fl], [1, fr]]:
+		var sd: int = leg[0]
+		var foot: float = leg[1]
+		var hp: Vector2 = rp.call(sd * hw * 0.85, 2 * s)
+		var kx := cx + sd * (hw * 0.95)
+		var ky := seat_y - cush + 1 * s
+		var plate_y := seat_y + foot * s
+		var ank := minf(plate_y - 1.2 * s, ky + float(b["shank"]) * s)
+		bone_seg(hp, Vector2(kx, ky), 2.2 * s, 1.9 * s, BN, OUT)
+		bone_seg(Vector2(kx, ky + 1 * s), Vector2(kx, ank), 1.7 * s, 1.4 * s, BN, OUT)
+		_aa_rect(kx - 3 * s, ank - 0.6 * s, 6 * s, 2.4 * s, BN, 0, 3)
+		_aa_rect(kx - 3 * s, ank - 0.6 * s, 6 * s, 2.4 * s, OUT, 1, 3)
+		_aa_rect(kx - 6 * s, plate_y, 12 * s, 2.2 * s, Color8(96, 100, 116), 0, 2)
+		if ank < plate_y - 2 * s:
+			_line(Vector2(kx, ank + 2.5 * s), Vector2(kx, plate_y), UI.AMBER, 2)
+	for sd: int in [-1, 1]:
+		var over: bool = pose_.get("press_l" if sd < 0 else "press_r", false)
+		var ip: Vector2 = ischia[sd]
+		_circle(Vector2(int(ip.x), int(ip.y)), maxf(3, int(1.5 * s)), UI.BAD if over else UI.GOOD)
+		if over:
+			_glow(ip, int(7 * s), Color8(200, 40, 40), 0.85)
+	var lean := float(pose_.get("lean", 0.0))
+	var base_pt: Vector2 = rp.call(0, -9 * s)
+	var sh_c := Vector2(cx + lean * 1.3 * s, seat_y - cush - float(b["shoulder"]) * 0.86 * s)
+	var apex := Vector2(base_pt.x - sin(obl) * 22 * s + lean * 0.3 * s, (base_pt.y + sh_c.y) / 2)
+	var spine: Array = []
+	for i in 15:
+		var tt := i / 14.0
+		var u := 1 - tt
+		spine.append(Vector2(u * u * base_pt.x + 2 * u * tt * apex.x + tt * tt * sh_c.x,
+			u * u * base_pt.y + 2 * u * tt * apex.y + tt * tt * sh_c.y))
+	_lines(spine, BD, maxf(3, int(1.4 * s)))
+	var ri := 0
+	for vi in range(6, 13):
+		var rv: Vector2 = spine[vi]
+		var rw := (11 - absi(ri - 3) * 1.2) * s
+		for sd: int in [-1, 1]:
+			var mid := Vector2(rv.x + sd * rw * 0.95, rv.y + 2.5 * s)
+			var inn := Vector2(rv.x + sd * rw * 0.38, rv.y + 5.5 * s)
+			_lines([rv, mid, inn], OUT, maxf(2, int(1.0 * s)))
+			_lines([rv, mid, inn], BN, maxf(1, int(0.6 * s)))
+		ri += 1
+	for v: Vector2 in spine:
+		var vc := Vector2(int(v.x), int(v.y))
+		_circle(vc, maxf(3, int(1.3 * s)), BN)
+		_circle(vc, maxf(3, int(1.3 * s)), OUT, 1)
+	var tl := deg_to_rad(-lean * 1.1)
+	var shl := Vector2(sh_c.x - 19 * s * cos(tl), sh_c.y - 19 * s * sin(tl))
+	var shr := Vector2(sh_c.x + 19 * s * cos(tl), sh_c.y + 19 * s * sin(tl))
+	bone_seg(Vector2(sh_c.x, sh_c.y + 1 * s), shl, 1.2 * s, 1.3 * s, BN, OUT)
+	bone_seg(Vector2(sh_c.x, sh_c.y + 1 * s), shr, 1.2 * s, 1.3 * s, BN, OUT)
+	for pr: Array in [[shl, -1], [shr, 1]]:
+		var sp: Vector2 = pr[0]
+		bone_seg(sp, Vector2(sp.x + pr[1] * 2 * s, sp.y + 26 * s), 1.5 * s, 1.2 * s, BD, OUT)
+	var hx_ := sh_c.x + lean * 0.9 * s
+	var hy_ := sh_c.y - 13 * s
+	var hr := 8.5 * s
+	var hc := Vector2(int(hx_), int(hy_))
+	_circle(hc, int(hr), BN)
+	_circle(hc, int(hr), OUT, 2)
+	_aa_rect(hx_ - 4.5 * s, hy_ + 2.5 * s, 9 * s, 6.5 * s, BN, 0, 4)
+	_aa_rect(hx_ - 4.5 * s, hy_ + 2.5 * s, 9 * s, 6.5 * s, OUT, 2, 4)
+	for sd: int in [-1, 1]:
+		var e := Vector2(int(hx_ + sd * 2.8 * s), int(hy_ - 0.5 * s))
+		_circle(e, maxf(3, int(1.8 * s)), Color8(26, 22, 34))
+		_circle(e, maxf(1, int(0.7 * s)), UI.GHOST)
+	var gap := float(pose_.get("gap_cm", 0))
+	if gap > 0.4:
+		var sd: int = int(pose_.get("gap_side", 1))
+		var gp: Vector2 = ischia[sd]
+		_line(Vector2(gp.x, gp.y + 1.6 * s), Vector2(gp.x, seat_y - cush), UI.AMBER, 2)
+		_text(Loc.t("зазор под костью %s см" % SeatLogic.fmt0(gap)), Vector2(gp.x + sd * 3 * s, gp.y + 2), 12, UI.AMBER, true,
+			2 if sd < 0 else 0)
+	var status := str(pose_.get("status", ""))
+	if status != "":
+		_text(Loc.t(status), Vector2(r.position.x + 150, r.position.y + 12), 12, UI.GOOD if ok else UI.AMBER, true)
+	if show_necro_:
+		var low := -1 if float(pose_.get("obl", 0)) >= 0 else 1
+		var il: Vector2 = ischia[low]
+		necro_puppeteer(r, [[hx_, hy_ - hr, UI.PURPLE, false], [apex.x, apex.y, UI.CYAN, false],
+			[il.x, il.y, p_col, not ok]], not ok)
+	_text(Loc.t("Вид спереди"), Vector2(r.end.x - 14, r.position.y + 12), 12, UI.GREY, true, 2)
+
+
+## Вид сверху (_seat_top): сиденье (глубина слева и справа своя), спинка, колёса, таз и бёдра; pose.rot — поворот таза.
+func draw_top(r: Rect2, case_: Dictionary, cfg_: Dictionary, pose_: Dictionary, show_necro_: bool) -> void:
+	_grid(r)
+	var BN := Color8(234, 226, 206)
+	var BD := Color8(188, 178, 156)
+	var OUT := Color8(38, 32, 44)
+	var b: Dictionary = case_["body"]
+	var cx := int(r.get_center().x) + (70 if show_necro_ else 0)
+	var top := r.position.y + 64
+	var s := (r.end.y - 36 - top) / 68.0
+	var seat_w := float(cfg_.get("seat_w", float(b["hip"]) + 1))
+	var dl := float(cfg_.get("depth_l", float(b["thigh"]) - 5))
+	var dr := float(cfg_.get("depth_r", float(b["thigh"]) - 5))
+	var half := seat_w * s / 2
+	for sd: int in [-1, 1]:
+		var wx := cx + sd * (half + 5 * s)
+		_aa_rect(wx - 2.2 * s, top - 8 * s, 4.4 * s, 58 * s, Color8(34, 36, 44), 0, 6)
+		_aa_rect(wx - 0.8 * s, top - 6 * s, 1.6 * s, 54 * s, Color8(150, 156, 170), 0, 3)
+		_aa_rect(cx + sd * (half - 1 * s) - 1.6 * s, top + 52 * s, 3.2 * s, 7 * s, Color8(40, 42, 50), 0, 3)
+	_aa_rect(cx - half - 2 * s, top - 8 * s, seat_w * s + 4 * s, 6 * s, Color8(52, 58, 92), 0, 5)
+	_aa_rect(cx - half - 2 * s, top - 8 * s, seat_w * s + 4 * s, 6 * s, Color8(98, 110, 168), 2, 5)
+	for pr: Array in [[-1, dl], [1, dr]]:
+		var x0 := float(cx) if pr[0] > 0 else cx - half
+		_aa_rect(x0, top - 2 * s, half, pr[1] * s, Color8(58, 66, 112), 0, 6)
+		_aa_rect(x0, top - 2 * s, half, pr[1] * s, Color8(98, 110, 168), 2, 6)
+	for sd: int in [-1, 1]:
+		var fx := cx + sd * half * 0.5
+		_aa_rect(fx - 6 * s, top + 58 * s, 12 * s, 5 * s, Color8(90, 94, 108), 0, 3)
+	var rot := deg_to_rad(float(pose_.get("rot", 0.0)))
+	var pc := Vector2(cx + float(pose_.get("shift", 0.0)) * s, top + 7 * s)
+	var hip_hw := (float(b["hip"]) / 2 - 6) * s
+	var rp := func(dx: float, dy: float) -> Vector2:
+		return Vector2(pc.x + dx * cos(rot) - dy * sin(rot), pc.y + dx * sin(rot) + dy * cos(rot))
+	var ok: bool = pose_.get("ok", false)
+	var p_col := UI.GOOD if ok else UI.AMBER
+	for sd: int in [-1, 1]:
+		var crest: Array = []
+		for tt: float in [0.0, 0.25, 0.5, 0.75, 1.0]:
+			crest.append(rp.call(sd * (2 + 13 * tt) * s, (-6 + 9 * tt * tt) * s))
+		_lines(crest, OUT, maxf(5, int(2.2 * s)))
+		_lines(crest, BN, maxf(3, int(1.5 * s)))
+	var sac := [rp.call(-3 * s, -6 * s), rp.call(3 * s, -6 * s), rp.call(0, 2 * s)]
+	_poly(sac, BD)
+	_poly(sac, OUT, 2)
+	var hips := {-1: rp.call(-hip_hw, 3 * s), 1: rp.call(hip_hw, 3 * s)}
+	_line(rp.call(-15 * s, 3 * s), rp.call(15 * s, 3 * s), p_col, maxf(3, int(0.6 * s)))
+	var knees := {}
+	var kp: Dictionary = pose_.get("knee_press", {})
+	for sd: int in [-1, 1]:
+		var L := (float(b.get("thigh_l" if sd < 0 else "thigh_r", b["thigh"])) - 7) * s
+		var hp: Vector2 = hips[sd]
+		knees[sd] = Vector2(hp.x, hp.y + L)
+		var kk: Vector2 = knees[sd]
+		bone_seg(hp, kk, 1.4 * s, 1.1 * s, BN, OUT)
+		var kc := Vector2(int(kk.x), int(kk.y))
+		_circle(kc, maxf(3, int(2.0 * s)), BN)
+		_circle(kc, maxf(3, int(2.0 * s)), OUT, 2)
+		if kp.get(sd, kp.get(str(sd), false)):
+			_glow(Vector2(kk.x, kk.y - 1 * s), int(5 * s), Color8(200, 40, 40), 0.8)
+	var sh_rot := rot * 0.6
+	var shl := Vector2(cx - 18 * s * cos(sh_rot), top - 4 * s - 18 * s * sin(sh_rot))
+	var shr := Vector2(cx + 18 * s * cos(sh_rot), top - 4 * s + 18 * s * sin(sh_rot))
+	bone_seg(shl, shr, 1.1 * s, 1.1 * s, BD, OUT)
+	var hcc := Vector2(int(cx), int(top - 4 * s))
+	_circle(hcc, maxf(4, int(6 * s)), BN)
+	_circle(hcc, maxf(4, int(6 * s)), OUT, 2)
+	var kl: Vector2 = knees[-1]
+	var kr: Vector2 = knees[1]
+	var dk := (kl.y - kr.y) / s
+	if absf(dk) >= 1:
+		var fwd: Vector2 = kl if dk > 0 else kr
+		var back: Vector2 = kr if dk > 0 else kl
+		var lab := Loc.t(("левое колено впереди на %s см" if dk > 0 else "правое колено впереди на %s см") % SeatLogic.fmt0(absf(dk)))
+		var ly := (back.y + fwd.y) / 2 - 8
+		var xl := maxf(kl.x, kr.x) + 7 * s
+		var lw := UI.text_width(lab, 12, true)
+		var lh := UI.line_height(12, true)
+		var left := xl + 2.5 * s + lw > r.end.x - 10
+		if left:
+			xl = minf(kl.x, kr.x) - 7 * s
+		_line(Vector2(xl, back.y), Vector2(xl, fwd.y), UI.AMBER, 2)
+		for yy: float in [back.y, fwd.y]:
+			_line(Vector2(xl - 1.5 * s, yy), Vector2(xl + 1.5 * s, yy), UI.AMBER, 2)
+		var lx: float
+		if left:
+			lx = (kl.x + kr.x) / 2 - lw / 2
+			ly = fwd.y + 3 * s
+		else:
+			lx = xl + 2.5 * s
+		_aa_rect(lx - 5, ly - 2, lw + 10, lh + 4, Color8(16, 12, 24, 220), 0, 4)
+		_text(lab, Vector2(int(lx), int(ly)), 12, UI.AMBER, true)
+	var status := str(pose_.get("status", ""))
+	if status != "":
+		_text(Loc.t(status), Vector2(r.position.x + 150, r.position.y + 12), 12, UI.GOOD if ok else UI.AMBER, true)
+	if show_necro_:
+		necro_puppeteer(r, [[kl.x, kl.y, p_col, not ok], [kr.x, kr.y, p_col, false], [pc.x, pc.y, UI.CYAN, false]], not ok)
+	_text(Loc.t("Вид сверху"), Vector2(r.end.x - 14, r.position.y + 12), 12, UI.GREY, true, 2)
+
+
+## Схема спереди урока и зачёта (_seat_front): перекос таза, дуга сколиоза, грудная клетка, череп, три точки боковой
+## поддержки, Мортимер с нитями. obl — перекос 0..1 (меньше 0 — по corrected), wedge 0..1 — подкладка под высокую
+## сторону без выпрямления таза (неисправимый перекос учитывают).
+func draw_front(r: Rect2, corrected: bool, show_pads: bool, obl: float, wedge: float) -> void:
+	_grid(r)
+	var cx := r.get_center().x + 46
+	var by := r.end.y - 56
+	var k := r.size.y / 310.0
+	var BN := Color8(234, 226, 206)
+	var BD := Color8(188, 178, 156)
+	var OUT := Color8(38, 32, 44)
+	for sd: int in [-1, 1]:
+		var wx := int(cx + sd * 124 * k)
+		_aa_rect(wx - int(6 * k), by - int(78 * k), int(12 * k), int(112 * k), Color8(34, 36, 42), 0, 4)
+		_aa_rect(wx - int(9 * k), by - int(72 * k), int(4 * k), int(98 * k), Color8(168, 174, 188), 0, 2)
+	_aa_rect(cx - 96 * k, by - 236 * k, 192 * k, 228 * k, Color8(44, 48, 72), 0, 10)
+	_aa_rect(cx - 96 * k, by - 236 * k, 192 * k, 228 * k, Color8(76, 84, 122), 2, 10)
+	_aa_rect(cx - 106 * k, by - 14 * k, 212 * k, 22 * k, Color8(58, 66, 112), 0, 7)
+	_aa_rect(cx - 106 * k, by - 14 * k, 212 * k, 22 * k, Color8(98, 110, 168), 2, 7)
+	if obl < 0:
+		obl = 0.12 if corrected else 1.0
+	if wedge > 0.0:
+		var wh := 13.0 * wedge
+		var wpoly := [Vector2(cx + 4 * k, by - 14 * k), Vector2(cx + 100 * k, by - 14 * k), Vector2(cx + 100 * k, by - (14 + wh) * k),
+			Vector2(cx + 4 * k, by - (14 + 2.0 * wedge) * k)]
+		_poly(wpoly, Color8(70, 150, 110))
+		_poly(wpoly, Color8(150, 230, 180), 2)
+	var accom := wedge >= 0.5
+	var pl := Vector2(cx - 58 * k, by - (36 - 8 * (1 - obl)) * k)
+	var pr := Vector2(cx + 58 * k, by - (36 + 14 * obl) * k)
+	var pel := Vector2((pl.x + pr.x) * 0.5, (pl.y + pr.y) * 0.5 + 8 * k)
+	for pair: Array in [[-1, pl], [1, pr]]:
+		var sd: int = pair[0]
+		var pt: Vector2 = pair[1]
+		var wing := [Vector2(pel.x + sd * 12 * k, pel.y - 6 * k), Vector2(pt.x - sd * 6 * k, pt.y - 12 * k),
+			Vector2(pt.x + sd * 8 * k, pt.y + 2 * k), Vector2(pel.x + sd * 42 * k, pel.y + 16 * k),
+			Vector2(pel.x + sd * 10 * k, pel.y + 18 * k)]
+		_poly(wing, BN)
+		_poly(wing, OUT, 2)
+		var fo := Vector2(int(pel.x + sd * 24 * k), int(pel.y + 9 * k))
+		_circle(fo, maxf(2, int(4.2 * k)), Color8(44, 48, 72))
+		_circle(fo, maxf(2, int(4.2 * k)), OUT, 1)
+	var sac := [Vector2(pel.x - 14 * k, pel.y - 10 * k), Vector2(pel.x + 14 * k, pel.y - 10 * k), Vector2(pel.x, pel.y + 14 * k)]
+	_poly(sac, BD)
+	_poly(sac, OUT, 2)
+	var p_col := UI.GOOD if (corrected or accom) else UI.AMBER
+	_line(pl, pr, p_col, maxf(3, int(4 * k)))
+	_circle(Vector2(int(pl.x), int(pl.y)), 4, p_col)
+	_circle(Vector2(int(pr.x), int(pr.y)), 4, p_col)
+	var apex := Vector2(cx + 28 * k * obl, by - 114 * k)
+	var sh_c := Vector2(cx - 8 * k * obl, by - 208 * k)
+	var sp: Array = []
+	for vi in 13:
+		var tt := vi / 12.0
+		var u := 1.0 - tt
+		sp.append(Vector2(u * u * pel.x + 2 * u * tt * apex.x + tt * tt * sh_c.x,
+			u * u * (pel.y - 8 * k) + 2 * u * tt * apex.y + tt * tt * sh_c.y))
+	_lines(sp, BD, maxf(3, int(4.5 * k)))
+	for v: Vector2 in sp:
+		var vc := Vector2(int(v.x), int(v.y))
+		_circle(vc, maxf(3, int(3.8 * k)), BN)
+		_circle(vc, maxf(3, int(3.8 * k)), OUT, 1)
+	var ri := 0
+	for vi: int in [5, 6, 7, 8, 9, 10]:
+		var rv: Vector2 = sp[vi]
+		var rw := (46 - absf(ri - 2.5) * 5.5) * k
+		var tilt_r := 0.16 * obl * (1.0 - 0.1 * ri)
+		for sd: int in [-1, 1]:
+			var mid := Vector2(rv.x + sd * rw * 0.95, rv.y + (sd * rw * tilt_r) + 6 * k)
+			var inn := Vector2(rv.x + sd * rw * 0.38, rv.y + (sd * rw * tilt_r * 0.5) + 14 * k)
+			_lines([rv, mid, inn], OUT, maxf(2, int(2.8 * k)))
+			_lines([rv, mid, inn], BN, maxf(1, int(1.8 * k)))
+		ri += 1
+	var sh_l := Vector2(sh_c.x - 62 * k, sh_c.y + 6 * k * obl)
+	var sh_r := Vector2(sh_c.x + 58 * k, sh_c.y - 8 * k * obl)
+	bone_seg(Vector2(sh_c.x, sh_c.y + 4 * k), sh_l, 2.8 * k, 3.2 * k, BN, OUT)
+	bone_seg(Vector2(sh_c.x, sh_c.y + 4 * k), sh_r, 2.8 * k, 3.2 * k, BN, OUT)
+	for tr: Array in [[-1, sh_l, pl], [1, sh_r, pr]]:
+		var sd: int = tr[0]
+		var ssh: Vector2 = tr[1]
+		var hip: Vector2 = tr[2]
+		bone_seg(ssh, Vector2(ssh.x - sd * 6 * k, ssh.y + 68 * k), 3.2 * k, 2.8 * k, BD, OUT)
+		bone_seg(Vector2(hip.x, hip.y + 10 * k), Vector2(hip.x + sd * 4 * k, by + 12 * k), 4.2 * k, 3.8 * k, BN, OUT)
+	var hc := Vector2(int(sh_c.x - 3 * k * obl), int(sh_c.y - 34 * k))
+	var hr := int(20 * k)
+	_circle(hc, hr, BN)
+	_circle(hc, hr, OUT, 2)
+	_aa_rect(hc.x - int(11 * k), hc.y + int(6 * k), int(22 * k), int(16 * k), BN, 0, 5)
+	_aa_rect(hc.x - int(11 * k), hc.y + int(6 * k), int(22 * k), int(16 * k), OUT, 2, 5)
+	for sd: int in [-1, 1]:
+		var e := Vector2(hc.x + int(sd * 6.5 * k), hc.y - int(1 * k))
+		_circle(e, maxf(3, int(4.2 * k)), Color8(26, 22, 34))
+		_circle(e, maxf(1, int(1.6 * k)), UI.GHOST)
+	_poly([Vector2(hc.x, hc.y + int(3 * k)), Vector2(hc.x - int(2.5 * k), hc.y + int(8 * k)),
+		Vector2(hc.x + int(2.5 * k), hc.y + int(8 * k))], Color8(26, 22, 34))
+	var labels: Array = []
+	if show_pads:
+		var pads := [[Vector2(apex.x + 42 * k, apex.y), -1, "1. Вершина изгиба"],
+			[Vector2(sh_l.x - 18 * k, by - 184 * k), 1, "2. Под мышкой (зазор)"],
+			[Vector2(pl.x - 24 * k, by - 44 * k), 1, "3. Низко у таза"]]
+		for pd: Array in pads:
+			var pp: Vector2 = pd[0]
+			var dir_s: int = pd[1]
+			var pad_r := Rect2(int(pp.x - 8 * k), int(pp.y - 20 * k), int(16 * k), int(40 * k))
+			_rrect(pad_r, UI.CYAN, Color(0, 0, 0, 0), 0, 5)
+			_rrect(pad_r, Color(0, 0, 0, 0), UI.WHITE, 1, 5)
+			_line(Vector2(pp.x - dir_s * 22 * k, pp.y), Vector2(pp.x - dir_s * 10 * k, pp.y), UI.GOOD, 2)
+			var lw := UI.text_width(Loc.t(pd[2]), 12, true)
+			var tx := pp.x + (16 if dir_s < 0 else -16) * k
+			if dir_s > 0:
+				tx = maxf(tx, r.position.x + 8 + lw)
+			else:
+				tx = minf(tx, r.end.x - 8 - lw)
+			labels.append([tx, pp.y, lw, pd[2], dir_s])
+	necro_puppeteer(r, [[hc.x, hc.y - hr, UI.PURPLE, false], [apex.x, apex.y, UI.GOOD if corrected else UI.CYAN, true],
+		[pl.x, pl.y, p_col, not corrected], [sh_l.x, sh_l.y, UI.CYAN, false]], not (corrected or accom))
+	if accom:
+		labels.append([cx + 104 * k, by - 30 * k, UI.text_width(Loc.t("Подкладка"), 12, true), "Подкладка", -1])
+	for lb: Array in labels:
+		var x0: float = lb[0] - lb[2] if lb[4] > 0 else lb[0]
+		_aa_rect(x0 - 4, lb[1] - 9, lb[2] + 8, 20, Color8(16, 12, 24, 215), 0, 4)
+		_text(Loc.t(lb[3]), Vector2(int(lb[0]), int(lb[1] - 7)), 12, UI.CYAN, true, 2 if lb[4] > 0 else 0)
+	var status := "Три точки держат ось позвоночника" if corrected else \
+		("Подкладка заполнила зазор" if accom else "Таз перекошен → дуга сколиоза")
+	_text(Loc.t(status), Vector2(r.position.x + 140, r.position.y + 12), 12, UI.GOOD if (corrected or accom) else UI.AMBER, true)

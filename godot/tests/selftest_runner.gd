@@ -1484,6 +1484,7 @@ func _flow_seating() -> String:
 	# уроки: все карточки, «показать норму» — у уроков с ошибочной позой
 	var n_les: int = Content.seating["lessons"].size()
 	var n_toggle := 0
+	var n_front := 0
 	for i in n_les:
 		await _press(scr.get_node("Dyn/Lesson_%d" % i), i % 2 == 1)
 		await _frames(1)
@@ -1502,13 +1503,19 @@ func _flow_seating() -> String:
 			if not scr.demo_good or (scr.get_node("Dyn/Toggle") as GameButton).label != "ПОЗА: НОРМА ✔":
 				err("посадка: урок %d — норма не показалась" % (i + 1))
 			n_toggle += 1
+		await _frames(1)
+		var want_mode := "front" if lp.get("front") else "scene"
+		if scr.fig.mode != want_mode or (lp.get("front") and scr.fig.front_corrected != scr.demo_good):
+			err("посадка: урок %d — рисунок «%s», нужен «%s»" % [i + 1, scr.fig.mode, want_mode])
+		elif lp.get("front"):
+			n_front += 1
 	# примерка
 	await _press(scr.get_node("Tab_fit"), false)
 	await _frames(1)
 	if scr.tab != "fit" or scr.say != M["fit"]:
 		err("посадка: вкладка «Примерка» не открылась")
 	var n_cases: int = SeatLogic.cases().size()
-	var how := ["kb", "mouse", "kb", "drag"]
+	var how := {0: "kb", 1: "mouse", 3: "drag", 6: "kb", 7: "mouse", 8: "drag"}   # особые клиенты (6–8) — тоже вводом
 	var n_views := 0
 	for i in n_cases:
 		var c: Dictionary = SeatLogic.cases()[i]
@@ -1527,6 +1534,9 @@ func _flow_seating() -> String:
 			await _frames(1)
 			if scr.view != v0 or scr.say != M["view_" + v0]:
 				err("посадка %s: вид %s не вернулся" % [c["id"], v0])
+			await _frames(1)
+			if scr.fig.mode != ("front_fit" if v0 == "front" else "top"):
+				err("посадка %s: рисунок вида %s — «%s»" % [c["id"], v0, scr.fig.mode])
 			n_views += 1
 		# сначала «Готово» как есть — стартовая посадка неверна
 		var bad0: Array = []
@@ -1540,7 +1550,7 @@ func _flow_seating() -> String:
 			err("посадка %s: неверная посадка принята (или нет «Ещё не так»)" % c["id"])
 		var keys: Array = scr.slider_keys()
 		var sol := _seat_solution(c, keys, scr.cfg)
-		var mode: String = how[i] if i < how.size() else "direct"
+		var mode: String = how.get(i, "direct")
 		for k: String in keys:
 			var v: int = sol[k]
 			if mode == "kb":
@@ -1624,6 +1634,17 @@ func _flow_seating() -> String:
 			err("посадка: вопрос %d — верный ответ не засчитан" % (q + 1))
 		if SeatLogic.fix_kind(scr.quiz[q]) != "" and not Settings.calm() and absf(scr.fix_t0 - scr.t) > 0.1:
 			err("посадка: вопрос %d — после верного ответа переход не сразу" % (q + 1))
+		var fk := SeatLogic.fix_kind(scr.quiz[q])
+		if fk in ["wedge", "pads"]:                # вид спереди: переход к норме — подкладка / упоры и выпрямление
+			scr.fix_t0 = scr.t - 5.0
+			await _frames(2)
+			var f: SeatFigure = scr.fig
+			var done_ok: bool = f.mode == "front" and (f.front_wedge == 1.0 and not f.front_pads if fk == "wedge"
+				else f.front_corrected and f.front_pads and absf(f.front_obl - 0.12) < 1e-6)
+			if not done_ok:
+				err("посадка: вопрос %d (%s) — рисунок спереди не пришёл к норме" % [q + 1, fk])
+			else:
+				n_front += 1
 		await _press(scr.get_node("Dyn/Next"), kb)
 		await _frames(1)
 	if not scr.quiz_done or scr.score != nq or not SaveGame.seat_quiz_ok or scr.say != M["pass"]:
@@ -1655,4 +1676,4 @@ func _flow_seating() -> String:
 		var sb: GameButton = Nav.current.get_node("Seating")
 		if not sb.sub.contains("%d/%d" % [n_cases, n_cases]) or not sb.sub.contains("зачёт ✔"):
 			err("посадка: на кнопке мастерской «%s»" % sb.sub)
-	return "уроки %d/%d (норма — у %d), примерки %d/%d (особые клиенты — вид сбоку и обратно: %d; клавиатурой, щелчками и перетаскиванием), зачёт (провал 0/%d и сдача %d/%d)" % [n_les, n_les, n_toggle, SaveGame.seat_done.size(), n_cases, n_views, nq, nq, nq]
+	return "уроки %d/%d (норма — у %d), виды спереди: урок и вопросы зачёта — %d, примерки %d/%d (особые клиенты спереди/сверху и сбоку: %d — клавиатурой, щелчками и перетаскиванием, как и обычные), зачёт (провал 0/%d и сдача %d/%d)" % [n_les, n_les, n_toggle, n_front, SaveGame.seat_done.size(), n_cases, n_views, nq, nq, nq]

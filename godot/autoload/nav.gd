@@ -224,6 +224,13 @@ func _process(dt: float) -> void:
 		_esc_t -= dt
 	if current != null:
 		toast.bounds = current.toast_bounds()
+	# потолок крупного текста 125 % (text_cap в game.py): плотные экраны, окно настроек, окно мини-игры
+	var cap: float = current.text_cap() if current != null else 0.0
+	if settings != null or (current != null and current.get("mini") != null):
+		cap = 1.25
+	if cap != Settings.text_cap:              # подписи кнопок рисуются один раз — перерисовать всё новым размером
+		Settings.text_cap = cap
+		get_tree().root.propagate_call("queue_redraw")
 
 
 func _input(e: InputEvent) -> void:
