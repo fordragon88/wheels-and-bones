@@ -62,7 +62,7 @@ func build() -> void:
 	seat.update_a11y()
 	seat.pressed.connect(func() -> void:
 		if seat_ok:
-			Nav.flash("Кабинет посадки появится в следующих шагах переноса.", UI.CYAN, 3.0)
+			Nav.go("seating")
 		else:
 			Nav.flash("Кабинет посадки откроется после первого ремонта.", UI.CYAN, 3.0))
 	add_child(seat)

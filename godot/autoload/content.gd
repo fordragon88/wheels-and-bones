@@ -16,6 +16,7 @@ var manual: Dictionary = {}
 var manual_notes: Dictionary = {}
 var credits: Array = []
 var talk: Dictionary = {}              # client{job:{intro,worry,…}}, barty{…}, martin{…}, leg_gags[]
+var seating: Dictionary = {}           # Кабинет посадки: cases, lessons, quiz, mentor (seating/*.json)
 var consts: Dictionary = {}            # game_consts.json: цвета, правила, громкости (из game.py)
 var errors: PackedStringArray = []
 var _by_id: Dictionary = {}
@@ -36,6 +37,9 @@ func load_all() -> void:
 	manual_notes = _read("manual_notes.json", {})
 	credits = _read("credits.json", [])
 	talk = _read("talk.json", {})
+	seating = {}
+	for nm: String in ["cases", "lessons", "quiz", "mentor"]:
+		seating[nm] = _read("seating/%s.json" % nm, {} if nm == "mentor" else [])
 	var index: Dictionary = _read("jobs/index.json", {})
 	for group: String in ["jobs", "folk"]:
 		for jid: String in index.get(group, []):

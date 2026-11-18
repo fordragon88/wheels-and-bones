@@ -53,6 +53,7 @@ MUSE_3D_TASK.md
 
 *.tmp
 tools/
+!godot/tools/
 art_tests/meshy_ref/
 meshy_models/*.glb
 # сторонние скиллы HyperFrames (ставятся командой, см. AGENTS.md «Идеи»)

@@ -167,6 +167,8 @@ func _run() -> void:
 	await _flow_tech_events("", true, false)
 	await _flow_tech_events("", true, true)
 	await _flow_guild_feedback()
+	var seat_n: Array = await _seat_logic()
+	var seat_line: String = await _flow_seating()
 	Loc.audit = false
 	var n_audit: int = Loc.audited.size()
 	var dump := OS.get_cmdline_user_args().find("--dump-tr")
@@ -199,7 +201,7 @@ func _run() -> void:
 	SaveGame.reset()
 	await _flow_mouse()
 	await _flow_keyboard()
-	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], n_gd, n_audit,
+	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, n_gd, n_audit,
 		"" if _drawn > 0 else " (без окна _draw не вызывается — проверены строки данных и обработчиков)"],
 		n_jobs, n_var, n_tech)
 
@@ -1304,3 +1306,353 @@ func _flow_guild_feedback() -> void:
 	if scr.mistakes != int(ref["_mistakes_after"]):
 		err("Гильдия: после замечания ошибок %d, в game.py %d" % [scr.mistakes, ref["_mistakes_after"]])
 	Loc.code = lang0
+
+
+# ======================= Кабинет посадки =======================
+
+func _sref() -> Dictionary:
+	if not FileAccess.file_exists("res://content/seat_ref.json"):
+		err("нет content/seat_ref.json — запусти tools/sync_content.py")
+		return {}
+	return JSON.parse_string(FileAccess.get_file_as_string("res://content/seat_ref.json"))
+
+
+static func _same(a: Variant, b: Variant) -> bool:
+	if (a is float or a is int) and (b is float or b is int):
+		return absf(float(a) - float(b)) < 1e-6
+	if a is bool or b is bool:
+		return bool(a) == bool(b)
+	if a is Array and b is Array:
+		if a.size() != b.size():
+			return false
+		for i in a.size():
+			if not _same(a[i], b[i]):
+				return false
+		return true
+	if a is Dictionary and b is Dictionary:
+		if a.size() != b.size():
+			return false
+		for k: Variant in a:
+			var kb: Variant = k if b.has(k) else str(k)          # ключи-числа в JSON — строки
+			if not b.has(kb) or not _same(a[k], b[kb]):
+				return false
+		return true
+	return str(a) == str(b)
+
+
+## Правила посадки против game.py: каждый случай на сетке ползунков, вид сбоку особых клиентов, строка мерок,
+## поза уроков и вопросов (кадры перехода 0…1). Возврат: [случаев, строк сетки, кадров позы].
+func _seat_logic() -> Array:
+	var ref := _sref()
+	if ref.is_empty():
+		return [0, 0, 0]
+	var lang0 := Loc.code
+	Loc.code = "ru"
+	var n_rows := 0
+	var by_id := {}
+	for c: Dictionary in SeatLogic.cases():
+		by_id[c["id"]] = c
+	if by_id.size() != ref["cases"].size():
+		err("посадка: случаев %d, в game.py %d" % [by_id.size(), ref["cases"].size()])
+	if not _same(SeatLogic.sliders(), ref["sliders"]):
+		err("посадка: ползунки не как SEAT_SLIDERS")
+	Nav.go("seating")
+	await _frames(1)
+	var scr: Node = Nav.current
+	for cid: String in ref["cases"]:
+		var rc: Dictionary = ref["cases"][cid]
+		var c: Dictionary = by_id.get(cid, {})
+		if c.is_empty():
+			err("посадка: нет случая " + cid)
+			continue
+		scr.load_case(SeatLogic.cases().find(c))
+		if not _same(scr.slider_keys(), rc["keys"]):
+			err("посадка %s: ползунки %s, в game.py %s" % [cid, scr.slider_keys(), rc["keys"]])
+		if SeatLogic.measure_text(c) != rc["measure"]:
+			err("посадка %s: мерки «%s», в game.py «%s»" % [cid, SeatLogic.measure_text(c), rc["measure"]])
+		for row: Dictionary in rc["rows"]:
+			n_rows += 1
+			var got: Array = SeatLogic.seat_eval(c, row["cfg"])
+			if not _same(got[0], row["checks"]):
+				err("посадка %s %s: проверки %s, в game.py %s" % [cid, row["cfg"], got[0], row["checks"]])
+			if not _same(got[1], row["pose"]):
+				err("посадка %s %s: поза %s, в game.py %s" % [cid, row["cfg"], got[1], row["pose"]])
+		if rc["side"] is Dictionary:
+			var scfg := SeatLogic.side_cfg(c)
+			if not _same(scfg, rc["side"]["cfg"]) or not _same(SeatLogic.eval_side(c, scfg)[1], rc["side"]["pose"]):
+				err("посадка %s: вид сбоку не как в game.py" % cid)
+	var n_fr := 0
+	for d: Dictionary in ref["demo"]:
+		var src: Array = Content.seating["lessons"] if d["src"] == "lesson" else Content.seating["quiz"]
+		var spec: Dictionary = src[int(d["i"])]["pose"]
+		for tt: String in d["frames"]:
+			n_fr += 1
+			var fr: Dictionary = d["frames"][tt]
+			var got := SeatLogic.fix_pose(spec, float(tt))
+			if not (_same(got[0]["seat_h"], fr["seat_h"]) and got[0]["kind"] == fr["kind"] and _same(got[1], fr["cfg"])
+					and _same(got[2], fr["pose"])):
+				err("посадка: %s %d, кадр %s — %s, в game.py %s" % [d["src"], d["i"], tt, [got[0]["seat_h"], got[1], got[2]], fr])
+	Loc.code = lang0
+	return [ref["cases"].size(), n_rows, n_fr]
+
+
+## Положение ползунков, при котором все проверки случая верны (перебор по одному ползунку, пока есть улучшение).
+func _seat_solution(c: Dictionary, keys: Array, cfg0: Dictionary) -> Dictionary:
+	var cfg := cfg0.duplicate()
+	var score := func(x: Dictionary) -> int:
+		var n := 0
+		for ch: Array in SeatLogic.seat_eval(c, x)[0]:
+			n += 1 if ch[1] else 0
+		return n
+	var total: int = SeatLogic.seat_eval(c, cfg)[0].size()
+	for round_i in 6:
+		for k: String in keys:
+			var sl: Array = SeatLogic.sliders()[k]
+			var best: int = score.call(cfg)
+			var best_v: int = cfg[k]
+			for v in range(int(sl[2]), int(sl[3]) + 1):
+				var x := cfg.duplicate()
+				x[k] = v
+				var s: int = score.call(x)
+				if s > best:
+					best = s
+					best_v = v
+			cfg[k] = best_v
+		if score.call(cfg) == total:
+			break
+	return cfg
+
+
+func _mouse_ev(pos: Vector2, button: int) -> void:
+	if button < 0:
+		var m := InputEventMouseMotion.new()
+		m.position = pos
+		m.global_position = pos
+		m.button_mask = MOUSE_BUTTON_MASK_LEFT
+		get_viewport().push_input(m, true)
+	else:
+		var e := InputEventMouseButton.new()
+		e.button_index = MOUSE_BUTTON_LEFT
+		e.pressed = button == 1
+		e.position = pos
+		e.global_position = pos
+		get_viewport().push_input(e, true)
+	await get_tree().process_frame
+
+
+## Ползунок мышью: щелчок по дорожке (click) или перетаскивание ручки с уходом мыши с дорожки (drag).
+func _seat_mouse_slider(scr: Node, key: String, v: int, how: String) -> void:
+	var tr: Rect2 = scr.slider_rect(scr.slider_keys().find(key))
+	var sl: Array = SeatLogic.sliders()[key]
+	var x := tr.position.x + tr.size.x * (v - float(sl[2])) / (float(sl[3]) - float(sl[2]))
+	var y := tr.get_center().y
+	if how == "click":
+		await _click(Vector2(x, y))
+		return
+	var cur: float = tr.position.x + tr.size.x * (float(scr.cfg[key]) - float(sl[2])) / (float(sl[3]) - float(sl[2]))
+	await _mouse_ev(Vector2(cur, y), 1)
+	await _mouse_ev(Vector2((cur + x) / 2, y + 6), -1)
+	await _mouse_ev(Vector2(x, y + 12), -1)
+	await _mouse_ev(Vector2(x, y + 12), 0)
+
+
+## Кабинет посадки событиями ввода: доступ из мастерской, уроки, все примерки (две — клавиатурой, по одной — щелчками
+## и перетаскиванием, остальные — напрямую), зачёт (провал и сдача, мышью и клавиатурой), сохранение, замечание, Esc.
+func _flow_seating() -> String:
+	var M: Dictionary = Content.seating["mentor"]
+	SaveGame.reset()
+	Nav.go("hub")
+	await _frames(2)
+	var hb: GameButton = Nav.current.get_node("Seating")
+	if hb.enabled:
+		err("посадка: кнопка доступна до первого ремонта")
+	await _press(hb, false)
+	await _frames(1)
+	if Nav.current_name != "hub" or not _toast_is(UI.CYAN, "откроется после первого ремонта"):
+		err("посадка до первого ремонта: нет объяснения или пустили")
+	SaveGame.done["flat"] = true
+	Nav.go("hub")
+	await _frames(2)
+	await _press(Nav.current.get_node("Seating"), true)
+	await _frames(2)
+	if Nav.current_name != "seating":
+		err("посадка: кнопка в мастерской не открыла кабинет")
+		return ""
+	var scr: Node = Nav.current
+	if scr.tab != "lessons" or scr.say != M["intro"]:
+		err("посадка: вход не на «Уроки» или не та реплика Мортимера")
+	# уроки: все карточки, «показать норму» — у уроков с ошибочной позой
+	var n_les: int = Content.seating["lessons"].size()
+	var n_toggle := 0
+	for i in n_les:
+		await _press(scr.get_node("Dyn/Lesson_%d" % i), i % 2 == 1)
+		await _frames(1)
+		if scr.lesson != i or scr.say != M["lesson"][i % M["lesson"].size()]:
+			err("посадка: урок %d не открылся (или не та реплика)" % (i + 1))
+		var tg: Node = scr.get_node_or_null("Dyn/Toggle")
+		var lp: Dictionary = Content.seating["lessons"][i].get("pose", {})
+		var want_tg := false
+		for k: String in ["p", "slide", "deep", "knee_up", "dangle", "front"]:
+			want_tg = want_tg or lp.has(k)
+		if (tg != null) != want_tg:
+			err("посадка: урок %d — кнопка «показать норму» %s" % [i + 1, "лишняя" if tg else "пропала"])
+		if tg:
+			await _press(tg, i % 2 == 0)
+			await _frames(1)
+			if not scr.demo_good or (scr.get_node("Dyn/Toggle") as GameButton).label != "ПОЗА: НОРМА ✔":
+				err("посадка: урок %d — норма не показалась" % (i + 1))
+			n_toggle += 1
+	# примерка
+	await _press(scr.get_node("Tab_fit"), false)
+	await _frames(1)
+	if scr.tab != "fit" or scr.say != M["fit"]:
+		err("посадка: вкладка «Примерка» не открылась")
+	var n_cases: int = SeatLogic.cases().size()
+	var how := ["kb", "mouse", "kb", "drag"]
+	var n_views := 0
+	for i in n_cases:
+		var c: Dictionary = SeatLogic.cases()[i]
+		await _press(scr.get_node("Dyn/Case_%d" % i), false)
+		await _frames(1)
+		if scr.case_i != i or scr.solved:
+			err("посадка: клиент %s не выбрался" % c["id"])
+			continue
+		if c.get("view"):
+			var v0: String = scr.view
+			await _press(scr.get_node("Dyn/Toggle"), true)
+			await _frames(1)
+			if scr.view != "side" or scr.say != M["side_ok"]:
+				err("посадка %s: вид сбоку не включился" % c["id"])
+			await _press(scr.get_node("Dyn/Toggle"), false)
+			await _frames(1)
+			if scr.view != v0 or scr.say != M["view_" + v0]:
+				err("посадка %s: вид %s не вернулся" % [c["id"], v0])
+			n_views += 1
+		# сначала «Готово» как есть — стартовая посадка неверна
+		var bad0: Array = []
+		for ch: Array in SeatLogic.seat_eval(c, scr.cfg)[0]:
+			if not ch[1]:
+				bad0.append(ch[2])
+		await _press(scr.get_node("Dyn/Check"), false)
+		await _frames(1)
+		if bad0.is_empty() or scr.solved or scr.fails != 1 or scr.say != M["fail"] \
+				or Nav.toast.text != "Ещё не так: " + str(bad0[0]) or Nav.toast.color != UI.BAD:
+			err("посадка %s: неверная посадка принята (или нет «Ещё не так»)" % c["id"])
+		var keys: Array = scr.slider_keys()
+		var sol := _seat_solution(c, keys, scr.cfg)
+		var mode: String = how[i] if i < how.size() else "direct"
+		for k: String in keys:
+			var v: int = sol[k]
+			if mode == "kb":
+				(scr.sliders[k] as Control).grab_focus()
+				await _frames(1)
+				var d: int = v - int(scr.cfg[k])
+				for s in absi(d):
+					await _key(KEY_RIGHT if d > 0 else KEY_LEFT)
+			elif mode == "mouse" or mode == "drag":
+				await _seat_mouse_slider(scr, k, v, "click" if mode == "mouse" else "drag")
+			else:
+				scr.set_value(k, v)
+			if int(scr.cfg[k]) != v:
+				err("посадка %s: ползунок %s (%s) — %s, нужно %d" % [c["id"], k, mode, scr.cfg[k], v])
+		if scr.drag != "":
+			err("посадка %s: перетаскивание не закончилось" % c["id"])
+		var ok_all := true
+		for ch: Array in SeatLogic.seat_eval(c, scr.cfg)[0]:
+			ok_all = ok_all and ch[1]
+		if not ok_all:
+			err("посадка %s: перебор не нашёл верной посадки (%s)" % [c["id"], scr.cfg])
+			continue
+		await _press(scr.get_node("Dyn/Check"), mode == "kb")
+		await _frames(1)
+		if not scr.solved or not SaveGame.seat_done.has(c["id"]) or scr.say != M["solved"] or not _toast_is(UI.GOOD):
+			err("посадка %s: верная посадка не засчитана" % c["id"])
+		var cfg_solved: Dictionary = scr.cfg.duplicate()
+		await _click(_center(scr.sliders[keys[0]]) - Vector2(140, 0))      # после «готово» ползунки стоят
+		(scr.sliders[keys[0]] as Control).grab_focus()
+		await _frames(1)
+		await _key(KEY_LEFT)
+		if not _same(scr.cfg, cfg_solved):
+			err("посадка %s: ползунок сдвинулся после «готово»" % c["id"])
+	if SaveGame.seat_done.size() != n_cases:
+		err("посадка: засчитано %d примерок из %d" % [SaveGame.seat_done.size(), n_cases])
+	if (SaveGame.to_dict().get("seat_done", []) as Array).size() != n_cases:
+		err("посадка: примерки не попали в сохранение")
+	await _press(scr.get_node("Dyn/Check"), false)      # «следующий клиент» после последнего — к первому
+	await _frames(1)
+	if scr.case_i != 0 or scr.solved:
+		err("посадка: «Следующий клиент» после последнего не вернул к первому")
+	# зачёт: сначала провал (все ответы неверные, мышью), потом сдача (через один — клавиатурой)
+	await _press(scr.get_node("Tab_quiz"), true)
+	await _frames(1)
+	if scr.tab != "quiz" or scr.say != M["quiz"]:
+		err("посадка: вкладка «Проверь себя» не открылась")
+	var nq: int = scr.quiz.size()
+	for q in nq:
+		var opts: Array = scr.quiz[q]["options"]
+		var wi := -1
+		for j in opts.size():
+			if not opts[j][1]:
+				wi = j
+				break
+		await _press(scr.get_node("Dyn/Opt_%d" % wi), false)
+		await _frames(1)
+		if scr.picked != wi or scr.say != M["wrong"] or scr.score != 0:
+			err("посадка: вопрос %d — неверный ответ не отмечен" % (q + 1))
+		if SeatLogic.fix_kind(scr.quiz[q]) != "" and not Settings.calm() and scr.fix_t() != 0.0:
+			err("посадка: вопрос %d — переход к норме начался без паузы после ошибки" % (q + 1))
+		if (scr.get_node("Dyn/Opt_%d" % wi) as GameButton).color != UI.BAD:
+			err("посадка: вопрос %d — выбранный неверный ответ не красный" % (q + 1))
+		await _press(scr.get_node("Dyn/Next"), false)
+		await _frames(1)
+	if not scr.quiz_done or scr.score != 0 or SaveGame.seat_quiz_ok or scr.say != M["nopass"]:
+		err("посадка: провал зачёта (0 из %d) не так" % nq)
+	await _press(scr.get_node("Dyn/Again"), true)
+	await _frames(1)
+	if scr.quiz_done or scr.quiz_i != 0 or scr.score != 0:
+		err("посадка: «Пройти ещё раз» не сбросил зачёт")
+	for q in nq:
+		var opts: Array = scr.quiz[q]["options"]
+		var ri := -1
+		for j in opts.size():
+			if opts[j][1]:
+				ri = j
+		var kb := q % 2 == 0
+		await _press(scr.get_node("Dyn/Opt_%d" % ri), kb)
+		await _frames(1)
+		if scr.picked != ri or scr.say != M["right"] or scr.score != q + 1:
+			err("посадка: вопрос %d — верный ответ не засчитан" % (q + 1))
+		if SeatLogic.fix_kind(scr.quiz[q]) != "" and not Settings.calm() and absf(scr.fix_t0 - scr.t) > 0.1:
+			err("посадка: вопрос %d — после верного ответа переход не сразу" % (q + 1))
+		await _press(scr.get_node("Dyn/Next"), kb)
+		await _frames(1)
+	if not scr.quiz_done or scr.score != nq or not SaveGame.seat_quiz_ok or scr.say != M["pass"]:
+		err("посадка: сдача зачёта (%d из %d) не так" % [scr.score, nq])
+	if not bool(SaveGame.to_dict().get("seat_quiz_ok", false)):
+		err("посадка: зачёт не попал в сохранение")
+	scr.quiz_again()                           # переход к норме: середина — ровно на половине SEAT_FIX_DUR
+	scr.quiz_pick(0)
+	var dur: float = Content.consts["seat_fix"][0]
+	scr.fix_t0 = scr.t - dur / 2.0
+	if absf(scr.fix_t() - 0.5) > 1e-6:
+		err("посадка: середина перехода — %f" % scr.fix_t())
+	# замечание из кабинета: как game.py (флажок на «Примерке»), в сеть — ничего
+	var ref := _sref()
+	if ref.has("feedback"):
+		var lang0 := Loc.code
+		Loc.code = "ru"
+		scr.set_tab("fit")
+		await _frames(1)
+		await _fb_send(scr.get_node("Flag"), 2, "Посадка", {"seat": ref["feedback"]}, "seat")
+		Loc.code = lang0
+	else:
+		err("в seat_ref.json нет замечания")
+	await _key(KEY_ESCAPE)                     # Esc — в мастерскую; на кнопке — «примерки 9/9 · зачёт ✔»
+	await _frames(2)
+	if Nav.current_name != "hub":
+		err("посадка: Esc не вернул в мастерскую")
+	else:
+		var sb: GameButton = Nav.current.get_node("Seating")
+		if not sb.sub.contains("%d/%d" % [n_cases, n_cases]) or not sb.sub.contains("зачёт ✔"):
+			err("посадка: на кнопке мастерской «%s»" % sb.sub)
+	return "уроки %d/%d (норма — у %d), примерки %d/%d (особые клиенты — вид сбоку и обратно: %d; клавиатурой, щелчками и перетаскиванием), зачёт (провал 0/%d и сдача %d/%d)" % [n_les, n_les, n_toggle, SaveGame.seat_done.size(), n_cases, n_views, nq, nq, nq]

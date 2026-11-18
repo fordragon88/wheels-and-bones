@@ -10,7 +10,9 @@ const ALL := ["title", "title_en", "hub", "job_flat_diagnose", "job_flat_inspect
 	"intro_5", "garage", "garage_open", "ending", "credits", "feedback_general", "feedback_dispute", "help",
 	"settings_sound", "settings_graphics", "settings_access", "settings_game", "guild_open", "tech_ops", "tech_manual",
 	"tech_spec", "tech_mini", "tech_failed", "tech_test", "tech_ride", "tech_result", "guild_done", "exam_ticket",
-	"exam_failed", "exam_passed", "guild_diploma"]
+	"exam_failed", "exam_passed", "guild_diploma", "seat_lessons", "seat_lesson_slump", "seat_lesson_norm",
+	"seat_lesson_measure", "seat_fit_troll", "seat_fit_troll_good", "seat_fit_golem", "seat_fit_dryad_side", "seat_quiz_q1",
+	"seat_quiz_mid", "seat_quiz_wrong", "seat_quiz_right", "seat_quiz_myth", "seat_quiz_pass"]
 
 var out_dir := ""
 
@@ -137,6 +139,88 @@ func _tech_shot(name: String) -> void:
 			await _wait(3.0)
 
 
+## Кабинет посадки — те же состояния, что в ref_shots.py (варианты ответов зачёта — в порядке данных).
+func _seat_shot(name: String) -> void:
+	if Nav.current_name != "seating":
+		SaveGame.done.clear()
+		SaveGame.done["flat"] = true
+		SaveGame.seat_done.clear()
+		SaveGame.seat_quiz_ok = false
+		Nav.go("seating")
+		await _wait(0.1)
+		Nav.current.quiz = Content.seating["quiz"].duplicate(true)
+		Nav.current.refresh()
+	var scr: Node = Nav.current
+	var m: Dictionary = Content.seating["mentor"]
+	match name:
+		"seat_lessons":
+			await _wait(2.5)
+		"seat_lesson_slump":
+			scr.pick_lesson(1)
+			await _wait(2.5)
+		"seat_lesson_norm":
+			scr.toggle_demo()
+			await _wait(0.5)
+		"seat_lesson_measure":
+			scr.pick_lesson(5)
+			await _wait(2.5)
+		"seat_fit_troll":
+			scr.tab = "fit"
+			scr.load_case(0)
+			scr.refresh()
+			await _wait(2.5)
+		"seat_fit_troll_good":
+			var c0: Dictionary = scr.cases()[0]
+			scr.cfg["depth"] = int(c0["body"]["thigh"]) - 5
+			scr.cfg["leg"] = int(c0["body"]["shank"])
+			scr.cfg["back_h"] = (int(c0["back"][0]) + int(c0["back"][1])) / 2
+			scr.cfg["back_a"] = (int(c0["angle"][0]) + int(c0["angle"][1])) / 2
+			await _wait(0.5)
+		"seat_fit_golem":
+			scr.pick_case(3)
+			await _wait(2.5)
+		"seat_fit_dryad_side":
+			scr.pick_case(6)
+			scr.toggle_view()
+			await _wait(2.5)
+		"seat_quiz_q1":
+			scr.set_tab("quiz")
+			await _wait(2.5)
+		"seat_quiz_mid":
+			for i in scr.quiz[0]["options"].size():
+				if not scr.quiz[0]["options"][i][1]:
+					scr.quiz_pick(i)
+					break
+			await _wait(0.5)
+			scr.fix_t0 = scr.t - 0.31             # середина перехода (у эталона — чуть меньше 0,5: флаги ошибки ещё видны)
+			await get_tree().process_frame
+			await get_tree().process_frame
+		"seat_quiz_wrong":
+			scr.fix_t0 = scr.t - 5.0
+			scr.tick(0.0)
+			await _wait(2.5)
+		"seat_quiz_right":
+			scr.quiz_i = 1
+			scr.picked = -1
+			for i in scr.quiz[1]["options"].size():
+				if scr.quiz[1]["options"][i][1]:
+					scr.quiz_pick(i)
+					break
+			await _wait(2.5)
+		"seat_quiz_myth":
+			scr.quiz_i = 3
+			scr.picked = -1
+			scr.refresh()
+			await _wait(1.0)
+		"seat_quiz_pass":
+			scr.quiz_done = true
+			scr.score = 6
+			scr.say = m["pass"]
+			scr.refresh()
+			await _wait(2.5)
+	Nav.toast.timer = 0.0
+
+
 func _to_repair(jid: String) -> Node:
 	Nav.go("job", {"job": jid, "variant": 0})
 	Frames.want_loop("barty_wave")
@@ -199,6 +283,9 @@ func _run() -> void:
 			Frames.want_loop("barty_wave")
 			Frames.flush()
 			await _wait(2.0)
+			await _shot(name)
+		elif name.begins_with("seat_"):
+			await _seat_shot(name)
 			await _shot(name)
 		elif name.begins_with("tech_") or name.begins_with("exam_"):
 			await _tech_shot(name)

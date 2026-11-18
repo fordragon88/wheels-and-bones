@@ -19,8 +19,9 @@ const SCREENS := {
 	"tech": "res://screens/tech.tscn",
 	"failed": "res://screens/failed.tscn",
 	"exam_result": "res://screens/exam_result.tscn",
+	"seating": "res://screens/seating.tscn",
 }
-const FALLBACK := {"seating": "hub"}
+const FALLBACK := {}
 
 var current: Screen
 var current_name: String = ""
