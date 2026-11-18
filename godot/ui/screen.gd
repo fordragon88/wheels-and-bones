@@ -63,6 +63,12 @@ func handle_key(_e: InputEventKey) -> bool:
 	return false
 
 
+## Для флажка ⚑: где игрок (как open_feedback в game.py).
+func feedback_context() -> Dictionary:
+	return {"kind": "general", "job": "", "title": "", "phase": screen_name, "step": "", "expected": "", "got": "",
+		"msg": "", "scene": screen_name}
+
+
 ## Что сказать чтецу при входе на экран (a11y_summary) — пока коротко.
 func summary() -> String:
 	return ""

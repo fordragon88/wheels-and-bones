@@ -17,6 +17,11 @@ func say(text: String, interrupt: bool = false) -> void:
 		history = history.slice(history.size() - 60)
 
 
+## Чем говорит (Speech.label() в game.py): пока озвучки нет — «недоступна».
+func label() -> String:
+	return "недоступна"
+
+
 func stop() -> void:
 	pass
 

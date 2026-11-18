@@ -30,6 +30,10 @@ func _init() -> void:
 	var i := args.find("--lang")
 	if i >= 0 and i + 1 < args.size():
 		lang = "ru" if args[i + 1] == "ru" else "en"
+	if not a11y.get("calm_set", false) and OS.has_feature("web") and not args.has("--test"):
+		# «Без анимации» по системе: в браузере — prefers-reduced-motion (в Godot 4.7 своего API нет; на Windows —
+		# SPI_GETCLIENTAREAANIMATION, из GDScript недоступно — остаётся выбор игрока)
+		a11y["calm"] = bool(JavaScriptBridge.eval("!!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)", true))
 	if args.has("--calm"):
 		a11y["calm"] = true
 

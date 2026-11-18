@@ -41,6 +41,7 @@ var talk_used: Dictionary = {}
 var esc_t: float = 0.0
 var inspect_req: int = 2
 var log_actions: Array = []              # [инструмент, деталь, итог] — для проверок
+var dispute: Dictionary = {}             # последняя засчитанная ошибка — её можно оспорить («Я НЕ СОГЛАСЕН»)
 
 var chair: ChairView
 var tools: ToolPanel
@@ -63,6 +64,8 @@ var _m3d_state: Dictionary = {}          # ракурс коляски пере�
 var _ok_t: float = -9.0
 var _ok_pos: Vector2
 var _portrait_state: Array = []
+var _bar: TopBar
+var _dispute_btn: GameButton
 
 
 func _ready() -> void:
@@ -93,7 +96,9 @@ func summary() -> String:
 
 
 func toast_bounds() -> Vector2:
-	if _skip != null:
+	if dispute_visible():
+		return Vector2(54, UI.W - (UI.W - 340) + 6)
+	if _skip != null and _skip.visible:
 		return Vector2(54, UI.W - _skip.position.x + 6)
 	return Vector2(54, 164)
 
@@ -174,6 +179,7 @@ func build() -> void:
 		bar.brand = false
 		bar.right_edge = _skip.position.x - 12
 	add_child(bar)
+	_bar = bar
 	var c: Dictionary = Content.consts.get("magic", {})
 	var pb: Array = c.get("box", [24, 70, 150, 190])
 	portrait = MagicPortrait.make(job["client_art"], Rect2(pb[0], pb[1], pb[2], pb[3]), float(c.get("top", 55)), false)
@@ -249,6 +255,11 @@ func build() -> void:
 	add_child(_fx)
 	if _skip:
 		add_child(_skip)
+	_dispute_btn = GameButton.make(Rect2(UI.W - 340, 10, 176, 34), "Я НЕ СОГЛАСЕН", UI.PURPLE)
+	_dispute_btn.name = "Dispute"
+	_dispute_btn.visible = false
+	_dispute_btn.pressed.connect(open_dispute)
+	add_child(_dispute_btn)
 	Chrome.add(self, true, true, false)
 
 
@@ -418,6 +429,11 @@ func choose_diagnosis(idx: int) -> bool:
 	mistakes += 1
 	Audio.sfx("bad")
 	var fb: String = opt.get("feedback", "")
+	var right_text := ""
+	for o: Dictionary in job["diagnosis"]:
+		if o.get("correct", false):
+			right_text = o["text"]
+	note_dispute("diagnosis", right_text, opt["text"], fb)
 	Nav.flash(fb if fb != "" else "Не похоже. Осмотри ещё раз.", UI.BAD, 4.0)
 	react_mistake()
 	return false
@@ -453,6 +469,8 @@ func do_action(tid: String, pid: String) -> String:
 	log_actions.append([tid, pid, "wrong"])
 	mistakes += 1
 	Audio.sfx("bad")
+	note_dispute("repair", "%s → %s" % [Content.tools[st_["tool"]]["name"], Content.part_name(st_["part"])],
+		"%s → %s" % [Content.tools.get(tid, {"name": tid})["name"], Content.part_name(pid)], st_.get("wrongmsg", ""))
 	action.start(tid, false, act_pos(pid), pid)
 	var msg: String = st_.get("wrongmsg", "")
 	if msg == "":
@@ -462,6 +480,7 @@ func do_action(tid: String, pid: String) -> String:
 			msg = Loc.fmt("Инструмент верный, но не та деталь. Цель: {0}.", [Content.part_name(st_["part"])])
 		else:
 			msg = "Не то. Перечитай шаг и подсказку."
+	dispute["msg"] = msg
 	Nav.flash(msg, UI.BAD, 4.0, true)
 	react_mistake()
 	return "wrong"
@@ -505,6 +524,8 @@ func miss(msg: String, secs: float = 4.0) -> void:
 	mistakes += 1
 	Audio.sfx("bad")
 	Nav.flash(msg, UI.BAD, secs, true)
+	if dispute.is_empty() or dispute["t"] != t:
+		note_dispute("mistake", "", "", msg)
 	react_mistake()
 
 
@@ -554,6 +575,45 @@ func react_good() -> void:
 		talk_later = [t + 1.8, "client", "good"]
 	elif r < 0.42:
 		talk_later = [t + 1.8, "barty", "good"]
+
+
+# ---------------- замечания: «Я НЕ СОГЛАСЕН» ----------------
+
+## Запомнить засчитанную ошибку — игрок может оспорить её 25 с (note_dispute).
+func note_dispute(kind: String, expected: String, got: String, msg: String) -> void:
+	var step := ""
+	if phase == "repair" and step_idx < steps().size():
+		step = cur_step()["instr"]
+	dispute = {"kind": kind, "job": job["id"], "title": job.get("title", ""), "phase": phase,
+		"variant": job.get("_variant"), "step": step, "expected": expected, "got": got, "msg": msg, "t": t,
+		"sent": false, "scene": "job"}
+
+
+func dispute_visible() -> bool:
+	return not dispute.is_empty() and not dispute["sent"] and t - float(dispute["t"]) < 25.0 and Nav.feedback == null 		and not (ride != null and ride.riding())
+
+
+func open_dispute() -> void:
+	var d := dispute
+	Nav.open_feedback(d, func(sent: bool, online: bool) -> void:
+		if not sent:
+			return
+		d["sent"] = true
+		var refunded := false
+		if mistakes > 0:                       # спорная ошибка не засчитывается
+			mistakes -= 1
+			refunded = true
+		Nav.flash(("Спасибо! Замечание отправляется разработчикам." if online else
+			"Спасибо! Замечание сохранено — его проверят и поправят игру.")
+			+ (" Эта ошибка не засчитана." if refunded else ""), UI.GOOD, 5.0))
+
+
+func feedback_context() -> Dictionary:
+	var step := ""
+	if phase == "repair" and step_idx < steps().size():
+		step = cur_step()["instr"]
+	return {"kind": "general", "job": job["id"], "title": job.get("title", ""), "phase": phase, "step": step,
+		"expected": "", "got": "", "msg": "", "scene": "job"}
 
 
 # ---------------- обучение (первое задание) ----------------
@@ -862,6 +922,13 @@ func tick(dt: float) -> void:
 		var hero := RideView.hero_loop(job["client_art"])
 		if hero != "" and not Settings.calm():
 			Frames.want_loop(hero)             # пока читают «Тест-драйв» — подгрузить кадры проезда
+	var dv := dispute_visible()               # «Я НЕ СОГЛАСЕН» — в шапке на месте «КОЛЁСА И КОСТИ»
+	_dispute_btn.visible = dv
+	if _skip:
+		_skip.visible = not dv
+	_bar.brand = not dv and _skip == null
+	_bar.right_edge = (UI.W - 340 - 12.0) if dv else (_skip.position.x - 12 if _skip else UI.W - 170.0)
+	_bar.queue_redraw()
 	_client_bubble.visible = not riding
 	_mentor.visible = not riding
 	action.visible = not riding

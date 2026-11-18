@@ -39,7 +39,7 @@ func build() -> void:
 	_credits.name = "Credits"
 	_credits.pressed.connect(func() -> void:
 		Audio.sfx("tick")
-		Nav.flash("Титры появятся в следующих шагах переноса.", UI.GHOST, 3.0))
+		Nav.go("credits", {"from": "title"}))
 	add_child(_credits)
 	_support = GameButton.make(Rect2(UI.W / 2.0 + 15, 520, 200, 40), "ПОДДЕРЖАТЬ GOAT ♥", UI.AMBER)
 	_support.name = "Support"
@@ -101,7 +101,7 @@ func _draw_start(b: GameButton, r: Rect2) -> void:
 func _draw_deco() -> void:
 	for p: Array in [[UI.W / 2.0 - 510, 1.0], [UI.W / 2.0 + 510, -1.0]]:
 		_spin_wheel(Vector2(p[0], 205), 50, t * 1.3 * p[1], UI.ease_back((st - 0.7) / 0.6))
-	_wave_title("КОЛЁСА И КОСТИ", Vector2(UI.W / 2.0, 210), 76, UI.AMBER, 2 * 510 - 140)
+	UI.wave_title(_deco, "КОЛЁСА И КОСТИ", Vector2(UI.W / 2.0, 210), 76, UI.AMBER, st, t, 2 * 510 - 140)
 	var c1 := UI.GHOST
 	c1.a = UI.appear(st, 0.9, 0.6)
 	UI.draw_text(_deco, Loc.t("ремонтная мастерская Мартина"), Vector2(UI.W / 2.0, 285), 26, c1, false, 1)
@@ -118,29 +118,6 @@ func _draw_deco() -> void:
 		UI.draw_text(_deco, h1, Vector2(UI.W / 2.0, UI.H - 36), 15, UI.GREY, false, 1)
 		UI.draw_text(_deco, Loc.t("F1 — управление с клавиатуры · F2 — озвучка для незрячих"),
 			Vector2(UI.W / 2.0, UI.H - 62), 15, UI.CYAN, false, 1)
-
-
-## Заголовок: буквы падают по очереди с перелётом, потом мягко «дышат» волной (_wave_title).
-func _wave_title(text_ru: String, center: Vector2, size: int, color: Color, max_w: float) -> void:
-	var text := Loc.t(text_ru)
-	while size > 30 and UI.text_width(text, size, true) > max_w:
-		size -= 2
-	var f := UI.font(true)
-	var px := UI.fs(size)
-	var x := center.x - floorf(UI.text_width(text, size, true) / 2.0)
-	var asc := f.get_ascent(px)
-	var hh := floorf(UI.px_height(px, true) / 2.0)
-	for i in text.length():
-		var ch := text[i]
-		var d := 0.05 * i
-		var k := UI.ease_back((st - d) / 0.55)
-		var a := 1.0 if Settings.calm() else clampf((st - d) / 0.2, 0.0, 1.0)
-		var y := center.y - hh - int(70 * (1 - k)) + 4 * UI.wsin(t * 2.2 + i * 0.55)
-		if a > 0 and ch != " ":
-			_deco.draw_string(f, Vector2(x + 3, y + 4 + asc), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, px,
-				Color(Color8(20, 14, 10), a * 0.5))
-			_deco.draw_string(f, Vector2(x, y + asc), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, px, Color(color, a))
-		x += f.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
 
 
 ## Вращающееся колесо коляски: шина, обод, 12 спиц, ступица (draw_spin_wheel).
@@ -173,10 +150,7 @@ func start() -> void:
 
 
 func _open_support() -> void:
-	Audio.sfx("tick")
-	if not Nav.test_mode:
-		OS.shell_open(str(Content.consts.get("support_url", "")))
-	Nav.flash("Спасибо! Страница пожертвований GOAT (Zeffy) открывается в браузере.", UI.GOOD, 3.0)
+	Nav.open_support()
 
 
 func _gui_input(e: InputEvent) -> void:

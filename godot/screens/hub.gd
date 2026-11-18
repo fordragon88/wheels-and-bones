@@ -82,13 +82,15 @@ func build() -> void:
 	var garage := GameButton.make(Rect2(UI.W - 360, UI.H - 150, 300, 54), "ГАРАЖ-КОЛЛЕКЦИЯ", UI.PURPLE)
 	garage.name = "Garage"
 	garage.pressed.connect(func() -> void:
-		Nav.flash("Гараж-коллекция появится в следующих шагах переноса.", UI.PURPLE, 3.0))
+		Audio.sfx("tick")
+		Nav.go("garage"))
 	add_child(garage)
 	if SaveGame.user_done_count() >= Content.jobs.size():
 		var party := GameButton.make(Rect2(UI.W - 360, UI.H - 80, 300, 54), "НА ВЕЧЕРИНКУ! ", UI.GOOD)
 		party.name = "Party"
 		party.pressed.connect(func() -> void:
-			Nav.flash("Вечеринка появится в следующих шагах переноса.", UI.GOOD, 3.0))
+			Audio.sfx("tick")
+			Nav.go("ending"))
 		add_child(party)
 	_note = Control.new()
 	_note.name = "Note"

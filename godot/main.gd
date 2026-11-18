@@ -9,7 +9,12 @@ extends Node
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.has("--shots"):
-		var runner: Node = (load("res://tests/shots.gd") as GDScript).new()
+		var gd := load("res://tests/shots.gd") as GDScript
+		if gd == null or not gd.can_instantiate():
+			push_error("tests/shots.gd не компилируется")
+			get_tree().quit(1)                 # не висеть с открытым окном
+			return
+		var runner: Node = gd.new()
 		add_child(runner)
 		return
 	var i := args.find("--job")

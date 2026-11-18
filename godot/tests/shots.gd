@@ -6,7 +6,9 @@ extends Node
 
 const ALL := ["title", "title_en", "hub", "job_flat_diagnose", "job_flat_inspected",
 	"job_joystick_diagnose", "job_joystick_inspected", "job_flat_repair", "mini_pump", "mini_gap", "mini_ping",
-	"mini_meter", "ride_martin", "ride_zix", "result_lift", "hub_done", "settings"]
+	"mini_meter", "ride_martin", "ride_zix", "result_lift", "hub_done", "intro_1", "intro_2", "intro_3", "intro_4",
+	"intro_5", "garage", "garage_open", "ending", "credits", "feedback_general", "feedback_dispute", "help",
+	"settings_sound", "settings_graphics", "settings_access", "settings_game"]
 
 var out_dir := ""
 
@@ -81,6 +83,80 @@ func _run() -> void:
 			Frames.flush()
 			await _wait(3.0)
 			await _shot(name)
+		elif name.begins_with("intro_"):
+			if Nav.current_name != "intro":
+				Nav.go("intro")
+				Frames.want_loop("barty_wave")
+				Frames.flush()
+			Nav.current.idx = int(name.trim_prefix("intro_")) - 1
+			Nav.current._typing = ["", 0.0]
+			Nav.current._update_a11y()
+			await _wait(2.6)
+			await _shot(name)
+		elif name.begins_with("garage"):
+			SaveGame.garage.clear()
+			SaveGame.done.clear()
+			for gi in 10:
+				var jid: String = Content.jobs[gi]["id"]
+				SaveGame.garage.append([jid, [3, 2, 1][gi % 3]])
+				SaveGame.done[jid] = true
+			Nav.go("garage")
+			await _wait(2.0)
+			if name == "garage_open":
+				Nav.current.open_card(0)
+				await _wait(0.5)
+			await _shot(name)
+		elif name == "ending":
+			Nav.go("ending")
+			Frames.want_loop("barty_wave")
+			Frames.flush()
+			await _wait(3.0)
+			await _shot(name)
+		elif name == "credits":
+			Nav.go("credits", {"from": "title"})
+			await _wait(3.0)
+			await _shot(name)
+		elif name == "feedback_general":
+			Nav.go("hub")
+			await _wait(0.5)
+			Nav.open_flag()
+			await _wait(0.1)
+			Nav.feedback.reason = 1
+			Nav.feedback._update()
+			Nav.feedback.text.text = "Карточка съехала"
+			await _wait(0.4)
+			await _shot(name)
+			Nav.feedback.close()
+		elif name == "feedback_dispute":
+			Nav.go("job", {"job": "flat", "variant": 0})
+			await _wait(0.5)
+			var scr: Node = Nav.current
+			for pid: String in scr.job["parts"].slice(0, 2):
+				scr.inspect_part(pid)
+			for k in scr.job["diagnosis"].size():
+				if str(scr.job["diagnosis"][k]["text"]).begins_with("Погнут обод"):
+					scr.choose_diagnosis(k)
+			Nav.toast.timer = 0.0
+			scr.open_dispute()
+			await _wait(0.5)
+			await _shot(name)
+			Nav.feedback.close()
+		elif name == "help":
+			Nav.go("hub")
+			await _wait(0.5)
+			Nav.toggle_help()
+			await _wait(0.5)
+			await _shot(name)
+			Nav.toggle_help()
+		elif name.begins_with("settings_"):
+			if Nav.current_name != "hub":
+				Nav.go("hub")
+				await _wait(0.5)
+			SettingsDialog.tab = name.trim_prefix("settings_")
+			Nav.open_settings()
+			await _wait(0.5)
+			await _shot(name)
+			Nav.close_settings()
 		elif name == "settings":
 			Nav.go("hub")
 			await _wait(1.0)

@@ -263,6 +263,29 @@ static func lerp_color(a: Color, b: Color, k: float) -> Color:
 	return a.lerp(b, clampf(k, 0.0, 1.0))
 
 
+## Заголовок: буквы падают по очереди с перелётом, потом мягко «дышат» волной (_wave_title в game.py).
+static func wave_title(ci: CanvasItem, text_ru: String, center: Vector2, size: int, color: Color, st: float, t: float,
+		max_w: float = 0.0) -> void:
+	var text := Loc.t(text_ru)
+	while max_w > 0 and size > 30 and text_width(text, size, true) > max_w:
+		size -= 2
+	var f := font(true)
+	var px := fs(size)
+	var x := center.x - floorf(text_width(text, size, true) / 2.0)
+	var asc := f.get_ascent(px)
+	var hh := floorf(px_height(px, true) / 2.0)
+	for i in text.length():
+		var ch := text[i]
+		var d := 0.05 * i
+		var k := ease_back((st - d) / 0.55)
+		var a := 1.0 if Settings.calm() else clampf((st - d) / 0.2, 0.0, 1.0)
+		var y := center.y - hh - int(70 * (1 - k)) + 4 * wsin(t * 2.2 + i * 0.55)
+		if a > 0 and ch != " ":
+			ci.draw_string(f, Vector2(x + 3, y + 4 + asc), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, px, Color(Color8(20, 14, 10), a * 0.5))
+			ci.draw_string(f, Vector2(x, y + asc), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, px, Color(color, a))
+		x += f.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+
+
 ## Картинка вписана в прямоугольник с сохранением пропорций, по центру (load_image(name, size)).
 static func fit_rect(tex_size: Vector2, box: Rect2) -> Rect2:
 	var k := minf(box.size.x / tex_size.x, box.size.y / tex_size.y)

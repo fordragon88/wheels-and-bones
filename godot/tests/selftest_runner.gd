@@ -154,6 +154,10 @@ func _run() -> void:
 	var kb_jobs: Array = ev_jobs.duplicate()
 	for key: String in kb_jobs:
 		await _flow_repair(key, true)
+	await _flow_intro()
+	await _flow_garage_ending()
+	await _flow_feedback()
+	await _flow_help_settings()
 	Loc.audit = false
 	var n_audit: int = Loc.audited.size()
 	var dump := OS.get_cmdline_user_args().find("--dump-tr")
@@ -186,7 +190,7 @@ func _run() -> void:
 	SaveGame.reset()
 	await _flow_mouse()
 	await _flow_keyboard()
-	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), n_gd, n_audit,
+	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), n_gd, n_audit,
 		"" if _drawn > 0 else " (без окна _draw не вызывается — проверены строки данных и обработчиков)"],
 		n_jobs, n_var, n_tech)
 
@@ -218,7 +222,7 @@ func _key(code: Key, shift: bool = false) -> void:
 		e.physical_keycode = code
 		e.shift_pressed = shift
 		e.pressed = pressed
-		Input.parse_input_event(e)
+		get_viewport().push_input(e)
 	await get_tree().process_frame
 
 
@@ -715,3 +719,272 @@ func _mini_events(m: MiniGame, keyboard: bool, how: String, key: String) -> void
 			for i in opts.size():
 				if opts[i][1]:
 					await _press(m.get_node("Opt_%d" % i), keyboard)
+
+
+# ======================= срез 3: вокруг заданий =======================
+
+## Новая игра: титул → вступление (5 слайдов, Enter) → первое задание; и отдельно — «Пропустить обучение».
+func _flow_intro() -> void:
+	SaveGame.reset()
+	Nav.go("title")
+	await _frames(2)
+	Nav.current.st = 3.0
+	await _frames(2)
+	await _click(Vector2(640, 620))
+	await _frames(2)
+	if Nav.current_name != "intro":
+		err("новая игра: титул не открыл вступление (%s)" % Nav.current_name)
+		return
+	var n: int = Nav.current.slides().size()
+	for i in n * 2 + 2:
+		if Nav.current_name != "intro":
+			break
+		await _press(Nav.current.get_node("Next"), true)       # Enter: допечатать, потом — дальше
+	if Nav.current_name != "job" or Nav.current.job.get("id") != "flat":
+		err("вступление не привело в первое задание (%s)" % Nav.current_name)
+		return
+	if Nav.current.get_node_or_null("SkipTutorial") == null:
+		err("первое задание: нет «Пропустить обучение»")
+	var scr: Node = Nav.current
+	for pid: String in scr.job["parts"].slice(0, 2):
+		scr.inspect_part(pid)
+	scr.choose_diagnosis(_correct_diag(scr))
+	await _frames(1)
+	if Nav.current.tutor_want().is_empty():
+		err("обучение: в первом ремонте нет подсветки нужного инструмента")
+	Nav.go("hub")
+	await _frames(2)
+	if Nav.current._cards.size() != 1:
+		err("до обучения в мастерской %d карточек (нужна одна — Мартин)" % Nav.current._cards.size())
+	# пропустить обучение со вступления
+	SaveGame.reset()
+	Nav.go("intro")
+	await _frames(2)
+	await _click(_center(Nav.current.get_node("SkipTutorial")))
+	await _frames(2)
+	if Nav.current_name != "hub" or not SaveGame.tutorial_skipped or Nav.current._cards.size() != 8:
+		err("«Пропустить обучение»: нет мастерской со всеми клиентами")
+
+
+## Гараж после починки, финал после всех 21, титры с титула и с вечеринки.
+func _flow_garage_ending() -> void:
+	SaveGame.reset()
+	SaveGame.tutorial_skipped = true
+	Nav.go("hub")
+	await _frames(2)
+	await _press(Nav.current.get_node("Garage"), false)
+	await _frames(2)
+	if Nav.current_name != "garage" or Nav.current._cards.size() != 0:
+		err("пустой гараж не открылся")
+	# все 21, кроме одного, уже починены — последний ведёт на вечеринку
+	for j: Dictionary in Content.jobs:
+		if j["id"] != "flat":
+			SaveGame.done[j["id"]] = true
+			SaveGame.garage.append([j["id"], 2])
+	var scr: Node = await _open_job("flat:0")
+	for pid: String in scr.job["parts"].slice(0, 2):
+		scr.inspect_part(pid)
+	scr.choose_diagnosis(_correct_diag(scr))
+	await _frames(1)
+	scr = Nav.current
+	while scr.phase == "repair":
+		var st: Dictionary = scr.cur_step()
+		scr.select_tool(st["tool"])
+		scr.part_clicked(st["part"])
+		if scr.mini:
+			_solve_mini(scr.mini)
+		await _frames(1)
+	scr.start_ride()
+	scr.ride.t0 = scr.ride.t - scr.ride.secs() - 0.01
+	await _frames(2)
+	scr._test_pressed()
+	await _frames(2)
+	if Nav.current_name != "result" or Nav.current._btn.label != "НА ВЕЧЕРИНКУ":
+		err("итог последнего ремонта: нет «НА ВЕЧЕРИНКУ»")
+	await _press(Nav.current.get_node("ToHub"), false)
+	await _frames(2)
+	if Nav.current_name != "ending" or not SaveGame.ending_seen:
+		err("вечеринка не открылась (или не отмечена ending_seen)")
+		return
+	await _press(Nav.current.get_node("Credits"), false)
+	await _frames(2)
+	if Nav.current_name != "credits" or Nav.current.from != "ending":
+		err("титры с вечеринки не открылись")
+	Nav.current.scroll(1e6)
+	if Nav.current.scroll_y <= 0.0:
+		err("титры не листаются")
+	await _key(KEY_ESCAPE)
+	await _frames(2)
+	if Nav.current_name != "ending":
+		err("Esc в титрах не вернул на вечеринку")
+	await _click(Vector2(640, 660))                 # клик по пустому месту вечеринки — гараж
+	await _frames(2)
+	if Nav.current_name != "garage" or Nav.current._cards.size() != 9 or Nav.current.pages() != 3:
+		err("гараж после вечеринки: ждали 9 карточек на странице и 3 страницы")
+		return
+	await _press(Nav.current._cards[0], false)
+	if Nav.current.open_idx != 0:
+		err("гараж: карточка не открыла урок")
+	await _key(KEY_ESCAPE)
+	if Nav.current.open_idx != -1 or Nav.current_name != "garage":
+		err("гараж: Esc не закрыл окно урока")
+	await _press(Nav.current.get_node("Next"), false)
+	if Nav.current.page != 1:
+		err("гараж: «▶» не листает")
+	# повтор задания после вечеринки — в мастерскую; кнопка «НА ВЕЧЕРИНКУ!» в мастерской
+	Nav.go("hub")
+	await _frames(2)
+	if Nav.current.get_node_or_null("Party") == null:
+		err("мастерская: после всех 21 нет «НА ВЕЧЕРИНКУ!»")
+	Nav.go("title")
+	await _frames(2)
+	Nav.current.st = 3.0
+	await _frames(2)
+	await _press(Nav.current.get_node("Credits"), false)
+	await _frames(2)
+	if Nav.current_name != "credits" or Nav.current.from != "title":
+		err("«ТИТРЫ» на титуле не открыли титры")
+	var n0: int = Nav.support_opened
+	await _press(Nav.current.get_node("Support"), false)
+	if Nav.support_opened != n0 + 1:
+		err("«ПОДДЕРЖАТЬ GOAT»: нет действия")
+	await _press(Nav.current.get_node("BackBtn"), false)
+	await _frames(2)
+	if Nav.current_name != "title":
+		err("«НАЗАД» в титрах не вернул на титул")
+
+
+## Замечания: окно из флажка и из «Я НЕ СОГЛАСЕН»; запрос — как у game.py (content/feedback_ref.json), в сеть — ничего.
+func _flow_feedback() -> void:
+	if Feedback.url != "":
+		err("тестовый режим: адрес таблицы замечаний не пуст — отправка запрещена")
+		return
+	var ref: Dictionary = {}
+	if FileAccess.file_exists("res://content/feedback_ref.json"):
+		ref = JSON.parse_string(FileAccess.get_file_as_string("res://content/feedback_ref.json"))
+	else:
+		err("нет content/feedback_ref.json — запусти tools/sync_content.py")
+		return
+	var lang0 := Loc.code
+	Loc.code = "ru"
+	SaveGame.tutorial_skipped = true
+	Nav.go("hub")
+	await _frames(2)
+	await _fb_send(Nav.current.get_node("Flag"), 1, "Проверка: карточка съехала", ref, "general_hub")
+	var scr: Node = await _open_job("flat:0")
+	for pid: String in scr.job["parts"].slice(0, 2):
+		scr.inspect_part(pid)
+	var wrong := -1
+	for i in scr.job["diagnosis"].size():
+		if str(scr.job["diagnosis"][i]["text"]).begins_with("Погнут обод"):
+			wrong = i
+	scr.choose_diagnosis(wrong)
+	await _frames(2)
+	if not scr._dispute_btn.visible:
+		err("«Я НЕ СОГЛАСЕН» не появилась после неверного диагноза")
+	await _fb_send(scr._dispute_btn, 0, "Мой вариант", ref, "dispute_diagnosis")
+	if scr.mistakes != int(ref["dispute_diagnosis"]["_mistakes_after"]):
+		err("«Я не согласен»: ошибка не списана (%d)" % scr.mistakes)
+	if scr._dispute_btn.visible:
+		err("«Я НЕ СОГЛАСЕН» осталась после отправки")
+	scr.choose_diagnosis(_correct_diag(scr))
+	await _frames(1)
+	scr = Nav.current
+	scr.select_tool("hands")
+	scr.part_clicked("brake")
+	await _frames(2)
+	await _fb_send(scr._dispute_btn, 2, "", ref, "dispute_repair")
+	scr.select_tool("pump")
+	scr.part_clicked("valve")
+	await _frames(2)
+	await _fb_send(scr._dispute_btn, 1, "x", ref, "dispute_repair_tool")
+	Loc.code = "en"
+	Nav.go("garage")
+	await _frames(2)
+	await _fb_send(Nav.current.get_node("Flag"), 3, "Garage note", ref, "general_garage_en")
+	Loc.code = lang0
+
+
+func _fb_send(opener: Control, reason: int, comment: String, ref: Dictionary, case: String) -> void:
+	var n0: int = Feedback.captured.size()
+	await _press(opener, false)
+	await _frames(2)
+	var dlg: FeedbackDialog = Nav.feedback
+	if dlg == null:
+		err("замечание %s: окно не открылось" % case)
+		return
+	await _press(dlg.get_node("Reason_%d" % reason), false)
+	dlg.text.text = comment
+	await _press(dlg.get_node("Send"), false)
+	await _frames(2)
+	if Feedback.captured.size() != n0 + 1:
+		err("замечание %s: запрос не собран" % case)
+		return
+	var got: Dictionary = Feedback.captured[-1]
+	var want: Dictionary = ref.get(case, {})
+	for k: String in want:
+		if k.begins_with("_"):
+			continue
+		if str(got.get(k, "<нет>")) != str(want[k]):
+			err("замечание %s: поле %s = «%s», в game.py «%s»" % [case, k, got.get(k, "<нет>"), want[k]])
+	for k: String in ["time", "uid", "platform"]:
+		if str(got.get(k, "")) == "":
+			err("замечание %s: пустое поле %s" % [case, k])
+	if not str(got.get("platform", "")).begins_with("godot-"):
+		err("замечание %s: platform «%s»" % [case, got.get("platform")])
+
+
+## F1 — справка; полное окно настроек: все вкладки и пункты доступности.
+func _flow_help_settings() -> void:
+	Nav.go("hub")
+	await _frames(2)
+	await _key(KEY_F1)
+	if Nav.help == null:
+		err("F1 не открыла справку")
+	await _frames(2)
+	await _key(KEY_ESCAPE)
+	if Nav.help != null or Nav.current_name != "hub":
+		err("Esc не закрыл справку (или ушёл с экрана)")
+	await _press(Nav.current.get_node("Gear"), false)
+	await _frames(2)
+	if Nav.settings == null:
+		err("шестерёнка не открыла настройки")
+		return
+	for tb: String in SettingsDialog.TABS:
+		await _press(Nav.settings.get_node("Tab_" + tb), false)
+		await _frames(2)
+		if SettingsDialog.tab != tb:
+			err("настройки: вкладка %s не открылась" % tb)
+	await _press(Nav.settings.get_node("Tab_access"), false)
+	await _frames(1)
+	for k: String in SettingsDialog.ACCESS_ROWS:
+		var before: Variant = Settings.a11y.get(k)
+		await _press(Nav.settings.get_node("Acc_" + k), true)
+		await _frames(1)
+		if k not in ["quiet", "barty"] and Settings.a11y.get(k) == before:
+			err("настройки: «%s» не переключается" % k)
+	for k: String in SettingsDialog.ACCESS_ROWS:                  # вернуть как было
+		if k == "rate":
+			Settings.a11y["rate"] = 0
+		elif k == "text":
+			Settings.a11y["text"] = 0
+		else:
+			Settings.a11y[k] = k == "barty"
+	Settings.a11y["quiet_set"] = false
+	Settings.changed.emit("text")
+	await _press(Nav.settings.get_node("Tab_sound"), false)
+	await _frames(1)
+	var sl: VolSlider = Nav.settings.get_node("Vol_music")
+	var v0: float = Settings.vol["music"]
+	sl.grab_focus()
+	await _key(KEY_RIGHT)
+	if is_equal_approx(float(Settings.vol["music"]), v0) and v0 < 1.0:
+		err("настройки: ползунок музыки не двигается с клавиатуры")
+	Settings.vol["music"] = v0
+	await _press(Nav.settings.get_node("Tab_game"), false)
+	await _press(Nav.settings.get_node("Reset"), false)
+	await _press(Nav.settings.get_node("ResetNo"), false)
+	await _press(Nav.settings.get_node("Done"), false)
+	await _frames(2)
+	if Nav.settings != null:
+		err("«ГОТОВО» не закрыл настройки")

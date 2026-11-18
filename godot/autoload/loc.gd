@@ -114,6 +114,11 @@ func t(s: String) -> String:
 	return _translate(s)
 
 
+## Строка по-английски при любом языке интерфейса (tr_en: таблица замечаний — на английском).
+func to_en(s: String) -> String:
+	return _translate(s)
+
+
 ## Шаблон с подстановкой: Loc.tf("Починено: {0}/{1}", [3, 21]) — как f-строка + tr() в game.py.
 func tf(template: String, args: Array) -> String:
 	return t(fmt(template, args))

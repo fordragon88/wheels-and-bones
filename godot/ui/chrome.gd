@@ -14,7 +14,7 @@ static func add(parent: Control, back: bool, flag: bool, lang: bool) -> void:
 		var f := IconButton.make_icon(IconButton.Kind.FLAG)
 		f.pressed.connect(func() -> void:
 			Audio.sfx("tick")
-			Nav.flash("Окно замечаний появится в следующих шагах переноса.", UI.PURPLE, 3.0))
+			Nav.open_flag())
 		parent.add_child(f)
 	if lang:
 		var l := IconButton.make_icon(IconButton.Kind.LANG)

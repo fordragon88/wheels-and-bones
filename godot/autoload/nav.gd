@@ -11,8 +11,12 @@ const SCREENS := {
 	"hub": "res://screens/hub.tscn",
 	"job": "res://screens/job.tscn",
 	"result": "res://screens/result.tscn",
+	"intro": "res://screens/intro.tscn",
+	"garage": "res://screens/garage.tscn",
+	"ending": "res://screens/ending.tscn",
+	"credits": "res://screens/credits.tscn",
 }
-const FALLBACK := {"intro": "hub", "guild": "hub", "garage": "hub", "seating": "hub", "credits": "title"}
+const FALLBACK := {"guild": "hub", "seating": "hub"}
 
 var current: Screen
 var current_name: String = ""
@@ -23,9 +27,12 @@ var host: Control                         # здесь живёт текущий
 var overlay: CanvasLayer                  # поверх: сообщение, настройки, переход
 var toast: Toast
 var settings: SettingsDialog
+var feedback: FeedbackDialog
+var help: HelpOverlay
 var _fade: TextureRect
 var _fade_t: float = -1.0
-var _esc_t: float = 0.0                   # «ещё раз Esc — выйти»
+var _esc_t: float = 0.0
+var support_opened: int = 0               # сколько раз нажали «Поддержать» (тесты)                   # «ещё раз Esc — выйти»
 
 
 func _ready() -> void:
@@ -86,6 +93,12 @@ func go(name: String, p: Dictionary = {}, remember: bool = true) -> void:
 
 
 func back() -> void:
+	if help != null:
+		toggle_help()
+		return
+	if feedback != null:
+		feedback.close()
+		return
 	if settings != null:
 		close_settings()
 		return
@@ -133,6 +146,51 @@ func open_settings() -> void:
 	overlay.get_node("Top").move_child(toast, -1)
 	var f := settings.first_focus()
 	UI.focus_later(f)
+
+
+## Окно замечания: d — что за замечание (kind general — флажок ⚑, иначе — «Я не согласен» с ошибкой);
+## on_done(sent, online) — после закрытия. Снимок экрана — до открытия окна.
+func open_feedback(d: Dictionary, on_done: Callable = Callable()) -> void:
+	if feedback != null:
+		return
+	var shot: Image = null
+	if DisplayServer.get_name() != "headless":
+		shot = get_viewport().get_texture().get_image()
+	feedback = FeedbackDialog.make(d, shot)
+	feedback.closed.connect(func(sent: bool, online: bool) -> void:
+		feedback = null
+		UI.set_focus_enabled(host, true)
+		if settings == null and current != null:
+			current._focus_default()
+		if sent and d.get("kind", "general") == "general":
+			flash("Спасибо! Замечание отправляется разработчикам." if online else
+				"Спасибо! Замечание сохранено — его проверят и поправят игру.", UI.GOOD, 5.0)
+		if on_done.is_valid():
+			on_done.call(sent, online))
+	UI.set_focus_enabled(host, false)
+	overlay.get_node("Top").add_child(feedback)
+	overlay.get_node("Top").move_child(toast, -1)
+	Audio.sfx("tick")
+
+
+## Флажок ⚑: замечание о любой неточности на текущем экране.
+func open_flag() -> void:
+	var d: Dictionary = current.feedback_context() if current != null else {}
+	open_feedback(d)
+
+
+## F1 — справка по клавишам (модально; Esc или F1 — закрыть).
+func toggle_help() -> void:
+	if help != null:
+		help.queue_free()
+		help = null
+		UI.set_focus_enabled(host, true)
+		if current != null:
+			current._focus_default()
+		return
+	help = HelpOverlay.new()
+	UI.set_focus_enabled(host, false)
+	overlay.get_node("Top").add_child(help)
 
 
 func close_settings() -> void:
@@ -186,6 +244,20 @@ func _redraw_focus() -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventKey and e.pressed:
 		var k := e as InputEventKey
+		if k.keycode == KEY_F1 and not k.echo:
+			toggle_help()
+			get_viewport().set_input_as_handled()
+			return
+		if help != null:
+			if k.keycode == KEY_ESCAPE:
+				toggle_help()
+			get_viewport().set_input_as_handled()
+			return
+		if feedback != null:
+			if k.keycode == KEY_ESCAPE:
+				feedback.close()
+				get_viewport().set_input_as_handled()
+			return
 		if settings != null:
 			if k.keycode == KEY_ESCAPE:
 				close_settings()
@@ -235,6 +307,15 @@ func shutdown() -> void:
 		current = null
 	UI.clear_font_cache()
 	UI._glow_tex = null
+
+
+## «Поддержать GOAT ♥»: страница пожертвований в браузере (в тестах не открывается).
+func open_support() -> void:
+	Audio.sfx("tick")
+	support_opened += 1
+	if not test_mode:
+		OS.shell_open(str(Content.consts.get("support_url", "")))
+	flash("Спасибо! Страница пожертвований GOAT (Zeffy) открывается в браузере.", UI.GOOD, 3.0)
 
 
 ## Выход из игры по второму Esc на титуле.

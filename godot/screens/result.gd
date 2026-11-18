@@ -55,11 +55,12 @@ func build() -> void:
 		var kinds: Array = Content.consts.get("leg_gag_kind", ["drop", "peek", "roll", "hop"])
 		_leg = LegGag.make(kinds[gags.find(gag) % kinds.size()], Rect2(260, 500, 760, 100))
 		add_child(_leg)
-	_btn = GameButton.make(Rect2(UI.W / 2.0 - 150, UI.H - 110, 300, 56), "В МАСТЕРСКУЮ", UI.AMBER)
+	_btn = GameButton.make(Rect2(UI.W / 2.0 - 150, UI.H - 110, 300, 56),
+		"НА ВЕЧЕРИНКУ" if party_next() else "В МАСТЕРСКУЮ", UI.AMBER)
 	_btn.name = "ToHub"
 	_btn.pressed.connect(func() -> void:
 		Audio.sfx("tick")
-		Nav.go("hub"))
+		go_back())
 	add_child(_btn)
 	Chrome.add(self, true, true, false)
 
@@ -73,7 +74,17 @@ func summary() -> String:
 		Loc.t("ЧТО ТЫ УЗНАЛ (по-настоящему):") + " " + Loc.t(job.get("fact", ""))
 
 
+## Вечеринка — один раз, после последнего ремонта (_party_next); переигрывание ведёт в мастерскую.
+func party_next() -> bool:
+	return SaveGame.user_done_count() >= Content.jobs.size() and not SaveGame.ending_seen
+
+
 func go_back() -> void:
+	if party_next():
+		SaveGame.ending_seen = true
+		SaveGame.save()
+		Nav.go("ending")
+		return
 	Nav.go("hub")
 
 
