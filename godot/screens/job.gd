@@ -1,20 +1,31 @@
 extends Screen
-## Экран задания (draw_job/click_job из game.py) для ЛЮБОГО задания из данных. Фазы: diagnose (сделано),
-## repair/test/result — следующие шаги переноса (сейчас вместо ремонта — заглушка с кнопкой «в мастерскую»).
-## Диагностика: шапка (название, модель коляски), портрет клиента с именем и пузырём реплики, симптом, коляска на
-## кадрах поворота с кружками деталей, «ОСМОТРЕТЬ» справа, «ДИАГНОЗ» (открывается после INSPECT_REQ осмотров),
-## пузырь Барти внизу, улики и ошибки — сообщением сверху (как flash в game.py).
-## Параметры: {"job": id, "variant": индекс варианта поломки или −1 — случайный}.
+## Экран задания (draw_job/click_job и логика задания из game.py) для ЛЮБОГО задания из данных, без кода под задание.
+## Фазы: diagnose → repair → test, потом экран итога (result).
+##   diagnose — симптом, коляска на кадрах поворота с кружками, «ОСМОТРЕТЬ», «ДИАГНОЗ» (после INSPECT_REQ осмотров).
+##   repair   — шаг k/n с точками, «◂» (шаг назад) и «ШАГ ▸» (пропуск = 2 ошибки), инструкция, «ДЕТАЛЬ» со сносками
+##              (книжка), панель инструментов: выбрать инструмент → деталь (кружок или список); верно — анимация
+##              инструмента и следующий шаг, мини-игра шага (mini) — окном; неверно — ошибка (wrongmsg или «не тот
+##              инструмент/деталь»), реакции клиента и Барти. Обучение в первом задании (flat): нужное — в зелёной рамке.
+##   test     — «ТЕСТ-ДРАЙВ», текст test, «ПРОКАТИТЬ И ПРОВЕРИТЬ» → проезд героя → «ГОТОВО ▸» → итог.
+## Улики, итоги ходов и ошибки — сообщением сверху (flash). Параметры: {"job": id, "variant": индекс или −1}.
 
 const CHAIR_CX := 575.0                  # центр зоны коляски: между портретом и правой колонкой
 const QUIP_IDLE := [35.0, 50.0]          # пауза между шутками Барти на диагностике
 const CLIENT_IDLE := [22.0, 32.0]        # пауза между репликами клиента
 const TALK_GAP := 5.0                    # между репликами персонажей — не меньше
+const PREV_RECT := Rect2(836, 58, 40, 30)
+const SKIP_RECT := Rect2(882, 58, 88, 30)
+const TEST_BTN := Rect2(UI.W / 2.0 - 170, 560, 340, 64)
 
 var job: Dictionary = {}
 var phase: String = "diagnose"
 var inspected: Dictionary = {}
 var mistakes: int = 0
+var step_idx: int = 0
+var sel_tool: String = ""
+var last_note: String = ""
+var note_pin: String = ""
+var ride_done: bool = false
 var ghost_line: String = ""
 var ghost_quip: String = ""
 var ghost_quip_until: float = 0.0
@@ -29,19 +40,29 @@ var talk_n: int = 0
 var talk_used: Dictionary = {}
 var esc_t: float = 0.0
 var inspect_req: int = 2
+var log_actions: Array = []              # [инструмент, деталь, итог] — для проверок
 
 var chair: ChairView
+var tools: ToolPanel
+var mini: MiniGame
+var notes: NotesDialog
+var action: ToolAction
+var ride: RideView
+var portrait: MagicPortrait
 var _deco: Control
-var _top: Control
+var _fx: Control
 var _part_btns: Array[GameButton] = []
 var _diag_btns: Array[GameButton] = []
 var _client_bubble: SpeechBubble
 var _mentor: SpeechBubble
 var _skip: GameButton
-var _zin: GameButton
-var _zout: GameButton
+var _test_btn: GameButton
+var _prev_btn: GameButton
 var _dsize: int = 14
 var _m3d_state: Dictionary = {}          # ракурс коляски переживает пересборку экрана
+var _ok_t: float = -9.0
+var _ok_pos: Vector2
+var _portrait_state: Array = []
 
 
 func _ready() -> void:
@@ -78,15 +99,26 @@ func toast_bounds() -> Vector2:
 
 
 func first_focus() -> Control:
+	if mini:
+		return mini.first_focus()
 	if phase == "diagnose" and not _part_btns.is_empty():
 		return _part_btns[0]
-	var b := get_node_or_null("ToHub")
-	return b as Control
+	if phase == "repair" and tools:
+		return tools.tiles.get(sel_tool if sel_tool != "" else "hands")
+	return _test_btn
 
 
 ## Первое задание (Мартин), пока обучение не пройдено: в шапке — «Пропустить обучение».
 func tutorial_skip_shown() -> bool:
 	return job.get("id") == "flat" and not SaveGame.tutorial_ok()
+
+
+func steps() -> Array:
+	return job.get("steps", [])
+
+
+func cur_step() -> Dictionary:
+	return steps()[step_idx] if step_idx < steps().size() else {}
 
 
 # ---------------- раскладка (как в game.py) ----------------
@@ -130,6 +162,9 @@ func build() -> void:
 	_part_btns.clear()
 	_diag_btns.clear()
 	_skip = null
+	_test_btn = null
+	_prev_btn = null
+	tools = null
 	add_child(BgLayer.make("bg_workshop.png"))
 	var bar := TopBar.make(job["title"], job.get("chair_name", ""))
 	if tutorial_skip_shown():
@@ -139,9 +174,14 @@ func build() -> void:
 		bar.brand = false
 		bar.right_edge = _skip.position.x - 12
 	add_child(bar)
-	var face := Figure.make(job["client_art"], Vector2(24, 70), Vector2(150, 190), "breathe")
-	face.name = "Client"
-	add_child(face)
+	var c: Dictionary = Content.consts.get("magic", {})
+	var pb: Array = c.get("box", [24, 70, 150, 190])
+	portrait = MagicPortrait.make(job["client_art"], Rect2(pb[0], pb[1], pb[2], pb[3]), float(c.get("top", 55)), false)
+	if not _portrait_state.is_empty():                       # пересборка: волшебство не начинается заново
+		portrait.t = _portrait_state[0]
+		portrait.auto = _portrait_state[1]
+		portrait.enter_t = 0.0
+	add_child(portrait)
 	_deco = Control.new()
 	_deco.name = "Deco"
 	_deco.size = size
@@ -155,58 +195,80 @@ func build() -> void:
 	add_child(_client_bubble)
 	_mentor = SpeechBubble.make(SpeechBubble.Kind.MENTOR)
 	_mentor.job = job
+	if phase != "diagnose":                                  # в ремонте — узкий пузырь в правой колонке
+		var top := right_col_top() + 10
+		_mentor.col = Rect2(980, top, 280, 552 - top)
 	_mentor.say(ghost_text())
 	add_child(_mentor)
 	chair = ChairView.new()
-	chair.show_spots = phase == "diagnose"
-	chair.setup(job["chair_art"], job["parts"], chair_rect(), inspected)
+	chair.show_spots = phase in ["diagnose", "repair"]
+	chair.pulse = phase == "diagnose"
+	chair.setup(job["chair_art"], job["parts"], chair_rect(), inspected if phase == "diagnose" else {})
 	if not _m3d_state.is_empty():
 		chair.yaw = _m3d_state["yaw"]
 		chair.zoom_k = _m3d_state["zoom_k"]
 		chair.t0 = -1e9
 	chair.part_pressed.connect(part_clicked)
+	chair.visible = not ride_done
 	add_child(chair)
 	var cr := chair_rect()
-	if chair.has_frames():
-		_zin = GameButton.make(Rect2(cr.end.x - 44, cr.position.y + 4, 40, 36), "+", UI.CYAN)
-		_zin.name = "ZoomIn"
-		_zin.accessibility_name = Loc.t("Крупнее")
-		_zin.pressed.connect(zoom.bind(1))
-		add_child(_zin)
-		_zout = GameButton.make(Rect2(cr.end.x - 44, cr.position.y + 44, 40, 36), "−", UI.CYAN)
-		_zout.name = "ZoomOut"
-		_zout.accessibility_name = Loc.t("Мельче")
-		_zout.pressed.connect(zoom.bind(-1))
-		add_child(_zout)
-	if phase == "diagnose":
-		_build_diagnose()
-	else:
-		_build_repair_stub()
+	if chair.has_frames() and phase in ["diagnose", "repair"]:
+		var zin := GameButton.make(Rect2(cr.end.x - 44, cr.position.y + 4, 40, 36), "+", UI.CYAN)
+		zin.name = "ZoomIn"
+		zin.accessibility_name = Loc.t("Крупнее")
+		zin.pressed.connect(zoom.bind(1))
+		add_child(zin)
+		var zout := GameButton.make(Rect2(cr.end.x - 44, cr.position.y + 44, 40, 36), "−", UI.CYAN)
+		zout.name = "ZoomOut"
+		zout.accessibility_name = Loc.t("Мельче")
+		zout.pressed.connect(zoom.bind(-1))
+		add_child(zout)
+	match phase:
+		"diagnose":
+			_build_diagnose()
+		"repair":
+			_build_repair()
+		_:
+			_build_test()
 	if not Content.job_notes(job).is_empty() and phase in ["diagnose", "repair"]:
 		var nb := GameButton.make(Rect2(UI.W - 24 - 180, UI.H - 44, 180, 34), "СНОСКИ МАНУАЛА", UI.PURPLE)
 		nb.name = "Notes"
-		nb.pressed.connect(func() -> void:
-			Audio.sfx("tick")
-			Nav.flash("Сноски мануала появятся в следующих шагах переноса.", UI.PURPLE, 3.0))
+		nb.pressed.connect(open_notes)
 		add_child(nb)
+	action = ToolAction.new()
+	add_child(action)
+	ride = RideView.new()
+	ride.art = job["client_art"]
+	ride.stop_x = chair_rect().get_center().x
+	add_child(ride)
+	_fx = Control.new()
+	_fx.name = "Fx"
+	_fx.size = size
+	_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fx.draw.connect(_draw_fx)
+	add_child(_fx)
 	if _skip:
 		add_child(_skip)
 	Chrome.add(self, true, true, false)
 
 
+func _part_row(i: int, pid: String) -> GameButton:
+	var b := GameButton.make(part_rect(i), "", UI.AMBER)
+	b.name = "Part_" + pid
+	b.plain = true
+	b.set_meta("pid", pid)
+	b.set_meta("i", i)
+	b.on_draw = _draw_part_row
+	b.pressed.connect(_part_row_pressed.bind(b))
+	add_child(b)
+	_part_btns.append(b)
+	return b
+
+
 func _build_diagnose() -> void:
 	var parts: Array = job["parts"]
 	for i in parts.size():
-		var pid: String = parts[i]
-		var b := GameButton.make(part_rect(i), "", UI.AMBER)
-		b.name = "Part_" + pid
-		b.plain = true
-		b.set_meta("pid", pid)
-		b.set_meta("i", i)
-		b.on_draw = _draw_part_row
-		b.pressed.connect(part_clicked.bind(pid))
-		add_child(b)
-		_part_btns.append(b)
+		_part_row(i, parts[i])
 	var rects := diag_rects()
 	_dsize = 11
 	for s: int in [14, 13, 12, 11]:
@@ -230,30 +292,51 @@ func _build_diagnose() -> void:
 	_update_a11y()
 
 
-func _build_repair_stub() -> void:
-	var p := PanelBox.make(Rect2(330, 220, 620, 190), "Ремонт — следующий шаг переноса",
-		"Диагноз поставлен верно. Шаги ремонта, мини-игры и тест-драйв появятся в следующих шагах переноса.")
-	p.name = "RepairStub"
-	add_child(p)
-	var b := GameButton.make(Rect2(330 + 310 - 120, 220 + 190 - 62, 240, 44), "В МАСТЕРСКУЮ", UI.AMBER)
-	b.name = "ToHub"
-	b.pressed.connect(func() -> void:
-		Audio.sfx("tick")
-		Nav.go("hub"))
-	add_child(b)
+func _build_repair() -> void:
+	tools = ToolPanel.new()
+	tools.job_screen = self
+	tools.tool_pressed.connect(select_tool)
+	add_child(tools)
+	var parts: Array = job["parts"]
+	for i in parts.size():
+		_part_row(i, parts[i])
+	_prev_btn = GameButton.make(PREV_RECT, "◂", UI.CYAN)
+	_prev_btn.name = "StepBack"
+	_prev_btn.label_size = 17
+	_prev_btn.pressed.connect(step_back)
+	add_child(_prev_btn)
+	var sk := GameButton.make(SKIP_RECT, "ШАГ ▸", UI.AMBER)
+	sk.name = "StepSkip"
+	sk.pressed.connect(step_skip)
+	add_child(sk)
+	_update_a11y()
+
+
+func _build_test() -> void:
+	_test_btn = GameButton.make(TEST_BTN, "ГОТОВО ▸" if ride_done else "ПРОКАТИТЬ И ПРОВЕРИТЬ", UI.GOOD)
+	_test_btn.name = "TestDrive"
+	_test_btn.pressed.connect(_test_pressed)
+	add_child(_test_btn)
 
 
 func _update_a11y() -> void:
 	var unlocked := inspected.size() >= inspect_req
 	for b in _part_btns:
 		var pid: String = b.get_meta("pid")
-		b.accessibility_name = "%d. %s%s" % [int(b.get_meta("i")) + 1, Loc.t(Content.part_name(pid)),
-			" ✔" if inspected.has(pid) else ""]
+		var nm := "%d. %s" % [int(b.get_meta("i")) + 1, Loc.t(Content.part_name(pid))]
+		if phase == "diagnose" and inspected.has(pid):
+			nm += " ✔"
+		if phase == "repair" and _part_note(pid).size() > 0:
+			nm += ". " + ToolPanel.note_head(_part_note(pid)) + ": " + Loc.t(_part_note(pid)["text"])
+		b.accessibility_name = nm
 	for b in _diag_btns:
 		b.enabled = unlocked
 		b.color = UI.CYAN if unlocked else UI.DIM
 		b.accessibility_name = Loc.t(job["diagnosis"][int(b.get_meta("i"))]["text"]) + \
 			("" if unlocked else " (" + Loc.t("недоступно") + ")")
+	if _prev_btn:
+		_prev_btn.enabled = step_idx > 0
+		_prev_btn.accessibility_name = Loc.t("Шаг назад")
 	if chair:
 		for pid: String in job["parts"]:
 			var hb := chair.spot_button(pid)
@@ -264,15 +347,44 @@ func _update_a11y() -> void:
 func rebuild() -> void:
 	if chair:
 		_m3d_state = {"yaw": chair.view_yaw(), "zoom_k": chair.zoom_k}
+	if portrait:
+		_portrait_state = [portrait.t, portrait.auto]
+	var keep: Array[Control] = []                            # окна мини-игры и сносок переживают пересборку
+	for w: Control in [mini, notes]:
+		if w and w.get_parent() == self:
+			remove_child(w)
+			keep.append(w)
 	super.rebuild()
+	for w in keep:
+		add_child(w)
+	if not keep.is_empty():
+		UI.set_focus_enabled(self, false)
+		for w in keep:
+			UI.set_focus_enabled(w, true)
+			UI.focus_later((w as Variant).first_focus())
 
 
-# ---------------- действия ----------------
+# ---------------- диагностика ----------------
 
-## Клик по детали (кружок, строка списка): осмотр в диагнозе.
+func _part_row_pressed(b: GameButton) -> void:
+	var pid: String = b.get_meta("pid")
+	if phase == "repair" and not UI.kb_active and b.get_local_mouse_position().x >= b.size.x - 30 \
+			and _part_note(pid).size() > 0:          # книжка: закрепить сноску (отзыв 93)
+		note_pin = "" if note_pin == pid else pid
+		Audio.sfx("tick")
+		return
+	part_clicked(pid)
+
+
+## Клик по детали (кружок, строка списка): осмотр в диагнозе, инструмент — в ремонте.
 func part_clicked(pid: String) -> void:
 	if phase == "diagnose":
 		inspect_part(pid)
+	elif phase == "repair":
+		if sel_tool == "":
+			Nav.flash("Сначала выбери инструмент внизу.", UI.AMBER, 2.5)
+		else:
+			do_action(sel_tool, pid)
 
 
 func inspect_part(pid: String) -> void:
@@ -293,11 +405,12 @@ func choose_diagnosis(idx: int) -> bool:
 	var opt: Dictionary = job["diagnosis"][idx]
 	if opt.get("correct", false):
 		phase = "repair"
+		step_idx = 0
+		sel_tool = ""
+		last_note = ""
 		Audio.sfx("ok")
 		Nav.flash("Диагноз верный! Приступаем к ремонту.", UI.GOOD, 3.0)
-		var steps: Array = job.get("steps", [])
-		if not steps.is_empty():
-			ghost_line = steps[0].get("ghost", "")
+		_set_step_ghost()
 		client_queue.clear()
 		talk_later = [t + 1.8, "client", "good"]
 		rebuild()
@@ -310,10 +423,292 @@ func choose_diagnosis(idx: int) -> bool:
 	return false
 
 
-func zoom(steps: int) -> void:
+# ---------------- ремонт ----------------
+
+func _set_step_ghost() -> void:
+	if step_idx < steps().size():
+		ghost_line = cur_step().get("ghost", "")
+
+
+func select_tool(tid: String) -> void:
+	sel_tool = tid
+	Audio.sfx(Content.consts.get("tool_sound", {}).get(tid, "tool_metal"))
+	Speech.say(Loc.tf("В руке: {0}", [Loc.t(Content.tools[tid]["name"])]), true)
+
+
+## Применить (инструмент, деталь) к текущему шагу: "ok" | "mini" | "wrong".
+func do_action(tid: String, pid: String) -> String:
+	if phase != "repair":
+		return "wrong"
+	var st_: Dictionary = cur_step()
+	var tool_ok: bool = tid == st_["tool"] or tid in st_.get("alt_tools", [])
+	var part_ok: bool = pid == st_["part"] or pid in st_.get("alt", [])
+	if tool_ok and part_ok:
+		log_actions.append([tid, pid, "mini" if st_.get("mini") else "ok"])
+		if st_.get("mini") is Dictionary:
+			start_mini(st_)
+			return "mini"
+		complete_base_step(st_)
+		return "ok"
+	log_actions.append([tid, pid, "wrong"])
+	mistakes += 1
+	Audio.sfx("bad")
+	action.start(tid, false, act_pos(pid), pid)
+	var msg: String = st_.get("wrongmsg", "")
+	if msg == "":
+		if tid != st_["tool"] and pid == st_["part"]:
+			msg = Loc.fmt("Деталь верная, но инструмент не тот. Нужен: {0}.", [Content.tools[st_["tool"]]["name"]])
+		elif tid == st_["tool"] and pid != st_["part"]:
+			msg = Loc.fmt("Инструмент верный, но не та деталь. Цель: {0}.", [Content.part_name(st_["part"])])
+		else:
+			msg = "Не то. Перечитай шаг и подсказку."
+	Nav.flash(msg, UI.BAD, 4.0, true)
+	react_mistake()
+	return "wrong"
+
+
+## Экранная точка детали: кружок на коляске, иначе строка списка.
+func act_pos(pid: String) -> Vector2:
+	if chair and chair.visible:
+		var s := chair.spot_of(pid)
+		if not s.is_empty():
+			return Vector2(s[1], s[2])
+	var i: int = job["parts"].find(pid)
+	if i >= 0:
+		var r := part_rect(i)
+		return Vector2(r.position.x - 30, r.get_center().y)
+	return Vector2(UI.W / 2.0, 300)
+
+
+func complete_base_step(st_: Dictionary) -> void:
+	action.start(st_["tool"], true, act_pos(st_["part"]))
+	last_note = st_.get("note", "")
+	Audio.sfx("ok")
+	Nav.flash("Шаг выполнен. " + last_note, UI.GOOD, 4.0, true)
+	_ok_t = t
+	_ok_pos = get_local_mouse_position()
+	step_idx += 1
+	sel_tool = ""
+	if step_idx >= steps().size():
+		phase = "test"
+		ghost_line = "Бартоломью: «Кажется, всё. Прокатим — проверим!»"
+		talk_later = [t + 1.5, "client", "test"]
+		rebuild()
+	else:
+		_set_step_ghost()
+		react_good()
+		_update_a11y()
+
+
+## Ошибка игрока (мини-игры): сообщение, счётчик, реакция.
+func miss(msg: String, secs: float = 4.0) -> void:
+	mistakes += 1
+	Audio.sfx("bad")
+	Nav.flash(msg, UI.BAD, secs, true)
+	react_mistake()
+
+
+## «◂»: прошлый шаг снова текущий (ошибки не списываются).
+func step_back() -> void:
 	Audio.sfx("tick")
-	if not chair.zoom(steps):
-		Nav.flash("Крупнее нельзя." if steps > 0 else "Мельче нельзя.", UI.GHOST, 1.5)
+	if phase != "repair":
+		return
+	if step_idx <= 0:
+		Nav.flash("Это первый шаг.", UI.GHOST, 2.5)
+		return
+	step_idx -= 1
+	close_mini()
+	sel_tool = ""
+	last_note = steps()[step_idx - 1].get("note", "") if step_idx > 0 else ""
+	_set_step_ghost()
+	var prev := cur_step()
+	var msg := "%s: %s (%s → %s)" % [Loc.t("Шаг назад"), Loc.t(prev["instr"]), Loc.t(Content.tools[prev["tool"]]["name"]),
+		Loc.t(Content.part_name(prev["part"]))]
+	if prev.get("note", "") != "":
+		msg += " ✔ " + Loc.t(prev["note"])
+	Nav.flash(msg, UI.CYAN, 7.0, true)
+	_update_a11y()
+
+
+## «ШАГ ▸»: игра сама делает шаг и показывает правильный ход; пропуск = две ошибки.
+func step_skip() -> void:
+	if phase != "repair":
+		return
+	var st_ := cur_step()
+	close_mini()
+	mistakes += 2
+	log_actions.append([st_["tool"], st_["part"], "skip"])
+	complete_base_step(st_)
+	var msg := "%s: %s → %s." % [Loc.t("Шаг пропущен — правильно"), Loc.t(Content.tools[st_["tool"]]["name"]),
+		Loc.t(Content.part_name(st_["part"]))]
+	if st_.get("note", "") != "":
+		msg += " " + Loc.t(st_["note"])
+	Nav.flash(msg, UI.AMBER, 6.0, true)
+
+
+func react_good() -> void:
+	if Settings.quiet_talk():
+		return
+	var r := randf()
+	if r < 0.3:
+		talk_later = [t + 1.8, "client", "good"]
+	elif r < 0.42:
+		talk_later = [t + 1.8, "barty", "good"]
+
+
+# ---------------- обучение (первое задание) ----------------
+
+## Шаг, чей инструмент и деталь подсвечиваются (flat, пока не пройдено), или {}.
+func tutor_step() -> Dictionary:
+	if job.get("id") != "flat" or SaveGame.is_done("flat") or phase != "repair" or mini != null:
+		return {}
+	return cur_step()
+
+
+## ["tool", [инструменты]] пока нужный не в руке, потом ["part", [детали]]; [] — подсветки нет.
+func tutor_want() -> Array:
+	var st_ := tutor_step()
+	if st_.is_empty():
+		return []
+	var ts: Array = [st_["tool"]] + st_.get("alt_tools", [])
+	if not sel_tool in ts:
+		return ["tool", ts]
+	return ["part", [st_["part"]] + st_.get("alt", [])]
+
+
+# ---------------- сноски мануала ----------------
+
+func _part_note(pid: String) -> Dictionary:
+	return Content.manual_notes.get(job["id"], {}).get(pid, {})
+
+
+## Деталь со сноской: закреплённая книжкой, в фокусе клавиатуры, под мышью (строка или кружок); "" — нет.
+func note_part_at() -> String:
+	if phase != "repair" or mini != null:
+		return ""
+	if note_pin != "" and _part_note(note_pin).size() > 0:
+		return note_pin
+	var f := get_viewport().gui_get_focus_owner()
+	if UI.kb_active and f != null and f.has_meta("pid"):
+		return f.get_meta("pid") if _part_note(f.get_meta("pid")).size() > 0 else ""
+	if UI.kb_active and f is HotspotButton:
+		return (f as HotspotButton).pid if _part_note((f as HotspotButton).pid).size() > 0 else ""
+	for b in _part_btns:
+		if b.is_hovered():
+			return b.get_meta("pid") if _part_note(b.get_meta("pid")).size() > 0 else ""
+	if chair:
+		for pid: String in job["parts"]:
+			var hb := chair.spot_button(pid)
+			if hb and hb.is_hovered():
+				return pid if _part_note(pid).size() > 0 else ""
+	return ""
+
+
+func open_notes() -> void:
+	Audio.sfx("tick")
+	if notes:
+		return
+	notes = NotesDialog.make(job)
+	notes.closed.connect(close_notes)
+	UI.set_focus_enabled(self, false)
+	add_child(notes)
+
+
+func close_notes() -> void:
+	if notes:
+		notes.queue_free()
+		notes = null
+		UI.set_focus_enabled(self, true)
+		_focus_default()
+
+
+# ---------------- мини-игры ----------------
+
+func start_mini(st_: Dictionary) -> void:
+	close_mini()
+	mini = MiniGame.make(st_)
+	mini.solved.connect(_mini_solved)
+	mini.missed.connect(func(msg: String, secs: float) -> void: miss(msg, secs))
+	mini.closed.connect(close_mini)
+	UI.set_focus_enabled(self, false)
+	add_child(mini)
+
+
+func close_mini() -> void:
+	if mini:
+		mini.queue_free()
+		mini = null
+		UI.set_focus_enabled(self, true)
+		_focus_default()
+
+
+func _mini_solved() -> void:
+	var st_: Dictionary = mini.step
+	close_mini()
+	complete_base_step(st_)
+
+
+# ---------------- тест-драйв ----------------
+
+func _test_pressed() -> void:
+	if ride.riding():
+		return
+	if ride_done:
+		finish_test()
+	else:
+		start_ride()
+
+
+func start_ride() -> void:
+	ride.start(ride.t)
+	if Settings.calm():                          # без анимации — проверка сразу, без проезда
+		ride.t0 = ride.t - ride.secs()
+	Audio.sfx("whoosh")
+	chair.visible = false
+	portrait.paused = true
+	_test_btn.visible = false
+
+
+func _ride_finished() -> void:
+	ride.active = false
+	ride_done = true
+	portrait.paused = false
+	ghost_line = "Бартоломью: «Едет как надо! Дочитаешь — жми ГОТОВО.»"
+	_test_btn.visible = true
+	_test_btn.set_label("ГОТОВО ▸")
+	UI.focus_later(_test_btn)
+
+
+@warning_ignore("integer_division")
+func finish_test() -> void:
+	Audio.sfx("fanfare")
+	var stars := maxi(1, 3 - mistakes / 2)
+	var jid: String = job["id"]
+	SaveGame.done[jid] = true
+	var found := false
+	for g: Array in SaveGame.garage:
+		if g[0] == jid:
+			found = true
+			if stars > int(g[1]):              # переигрывание: в гараже — лучшая оценка
+				g[1] = stars
+	if not found:
+		SaveGame.garage.append([jid, stars])
+	var gag := ""
+	if randf() < 0.5:                          # то нога отвалится, то Мартин сам себя похвалит/подколет
+		var legs: Array = Content.talk.get("leg_gags", []).filter(func(g: String) -> bool:
+			return Settings.barty_on() or not g.begins_with("Бартоломью"))
+		gag = legs.pick_random() if not legs.is_empty() else ""
+	else:
+		var pool: Array = Content.talk.get("martin", {}).get("good" if mistakes == 0 else "mistake", [])
+		gag = pool.pick_random() if not pool.is_empty() else ""
+	SaveGame.save()
+	Nav.go("result", {"job": job, "stars": stars, "gag": gag, "mistakes": mistakes})
+
+
+func zoom(steps_: int) -> void:
+	Audio.sfx("tick")
+	if not chair.zoom(steps_):
+		Nav.flash("Крупнее нельзя." if steps_ > 0 else "Мельче нельзя.", UI.GHOST, 1.5)
 
 
 func skip_tutorial() -> void:
@@ -325,6 +720,12 @@ func skip_tutorial() -> void:
 
 
 func go_back() -> void:
+	if notes:
+		close_notes()
+		return
+	if mini:
+		close_mini()
+		return
 	if esc_t > 0.0:
 		esc_t = 0.0
 		Nav.go("hub")
@@ -334,10 +735,12 @@ func go_back() -> void:
 
 
 func handle_key(e: InputEventKey) -> bool:
-	if e.keycode in [KEY_PLUS, KEY_EQUAL, KEY_KP_ADD] and chair and chair.has_frames():
+	if mini or notes:
+		return false
+	if e.keycode in [KEY_PLUS, KEY_EQUAL, KEY_KP_ADD] and chair and chair.has_frames() and phase != "test":
 		zoom(1)
 		return true
-	if e.keycode in [KEY_MINUS, KEY_KP_SUBTRACT] and chair and chair.has_frames():
+	if e.keycode in [KEY_MINUS, KEY_KP_SUBTRACT] and chair and chair.has_frames() and phase != "test":
 		zoom(-1)
 		return true
 	if (e.keycode == KEY_LEFT or e.keycode == KEY_RIGHT) and chair and get_viewport().gui_get_focus_owner() == null:
@@ -407,6 +810,8 @@ func ghost_text() -> String:
 
 
 func _talk_tick() -> void:
+	if (ride and ride.riding()) or mini != null or notes != null:
+		return
 	var toast := Nav.toast
 	var toast_fresh := toast.active() and (not toast.sticky or toast.t - toast.t0 < 3.0)
 	var quiet := t - last_talk_t < TALK_GAP or toast_fresh
@@ -428,6 +833,8 @@ func _talk_tick() -> void:
 		else:
 			client_say(later[2])
 		return
+	if phase == "test":                        # перед проверкой — только отложенная реплика
+		return
 	if t >= client_next and not quiet:
 		if not client_queue.is_empty():
 			_show_client(client_queue.pop_front())
@@ -448,6 +855,16 @@ func tick(dt: float) -> void:
 	if esc_t > 0.0:
 		esc_t -= dt
 	_talk_tick()
+	var riding := ride.riding()
+	if ride.active and not riding:
+		_ride_finished()
+	if phase == "test" and not ride_done and not riding:
+		var hero := RideView.hero_loop(job["client_art"])
+		if hero != "" and not Settings.calm():
+			Frames.want_loop(hero)             # пока читают «Тест-драйв» — подгрузить кадры проезда
+	_client_bubble.visible = not riding
+	_mentor.visible = not riding
+	action.visible = not riding
 	if _mentor.say(ghost_text()) and _mentor.shown():
 		Audio.sfx("ghost")
 	if _client_bubble.line != client_line:
@@ -457,24 +874,95 @@ func tick(dt: float) -> void:
 		b.slide = Vector2(int(160 * (1 - UI.appear(st, 0.05 * i, 0.35))), 0)
 		i += 1
 	_deco.queue_redraw()
+	_fx.queue_redraw()
 
 
 func _draw_deco() -> void:
 	UI.draw_text(_deco, Loc.t(job["client"]), Vector2(24, 266), 16, UI.WHITE, true)
-	if phase == "diagnose":
-		var cr := chair_rect()
-		UI.draw_text(_deco, Loc.t("ДИАГНОСТИКА"), Vector2(360, 70), 20, UI.CYAN, true)
-		UI.draw_wrapped(_deco, Loc.t(job["symptom"]), Vector2(360, 100), 560, 17, UI.WHITE)
-		var unlocked := inspected.size() >= inspect_req
-		var touch := OS.has_feature("mobile")
-		var tip := Loc.t("Улики собраны — выбери диагноз:") if unlocked else Loc.tf(
-			"Осмотри детали (тап по коляске или списку): {0}/{1}" if touch else "Осмотри детали (клик по коляске или списку): {0}/{1}",
-			[inspected.size(), inspect_req])
-		UI.draw_text(_deco, tip, Vector2(360, cr.end.y + 4), 15, UI.GREY if unlocked else UI.AMBER, not unlocked)
-		UI.draw_text(_deco, Loc.t("ДИАГНОЗ"), Vector2(980, right_col_top() + 6), 16, UI.CYAN if unlocked else UI.DIM, true)
-		UI.draw_text(_deco, Loc.t("ОСМОТРЕТЬ"), Vector2(980, 70), 16, UI.AMBER, true)
-	else:
-		UI.draw_text(_deco, Loc.t("РЕМОНТ"), Vector2(360, 70), 20, UI.AMBER, true)
+	match phase:
+		"diagnose":
+			var cr := chair_rect()
+			UI.draw_text(_deco, Loc.t("ДИАГНОСТИКА"), Vector2(360, 70), 20, UI.CYAN, true)
+			UI.draw_wrapped(_deco, Loc.t(job["symptom"]), Vector2(360, 100), 560, 17, UI.WHITE)
+			var unlocked := inspected.size() >= inspect_req
+			var tip := Loc.t("Улики собраны — выбери диагноз:") if unlocked else Loc.tf(
+				"Осмотри детали (клик по коляске или списку): {0}/{1}", [inspected.size(), inspect_req])
+			UI.draw_text(_deco, tip, Vector2(360, cr.end.y + 4), 15, UI.GREY if unlocked else UI.AMBER, not unlocked)
+			UI.draw_text(_deco, Loc.t("ДИАГНОЗ"), Vector2(980, right_col_top() + 6), 16, UI.CYAN if unlocked else UI.DIM, true)
+			UI.draw_text(_deco, Loc.t("ОСМОТРЕТЬ"), Vector2(980, 70), 16, UI.AMBER, true)
+		"repair":
+			var n := steps().size()
+			var hdr := UI.draw_text(_deco, Loc.tf("РЕМОНТ — шаг {0}/{1}", [mini_safe_idx() + 1, n]), Vector2(360, 70), 20,
+				UI.AMBER, true)
+			_draw_step_dots(n, Vector2(hdr.end.x + 22, hdr.get_center().y), PREV_RECT.position.x - 18)
+			UI.draw_wrapped(_deco, Loc.t(cur_step().get("instr", "")), Vector2(360, 100), 560, 19, UI.WHITE)
+			UI.draw_text(_deco, Loc.t("ДЕТАЛЬ"), Vector2(980, 70), 16, UI.AMBER, true)
+		"test":
+			UI.draw_text(_deco, Loc.t("ТЕСТ-ДРАЙВ"), Vector2(360, 70), 20, UI.GOOD, true)
+			UI.draw_wrapped(_deco, Loc.t(job.get("test", "")), Vector2(360, 100), 560, 19, UI.WHITE)
+			if ride_done:                       # клиент в починенной коляске
+				var tex := Content.texture(job["client_art"])
+				if tex:
+					var cr := chair_rect()
+					_deco.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(cr.get_center() - Vector2(115, 125),
+						Vector2(230, 250))), false)
+				var lbl := Loc.t("✔ Проверка пройдена")
+				var w := UI.text_width(lbl, 17, true)
+				var c := Vector2(TEST_BTN.get_center().x, TEST_BTN.position.y - 22)
+				UI.draw_round_rect(_deco, Rect2(c - Vector2(w / 2 + 8, UI.line_height(17, true) / 2 + 4),
+					Vector2(w + 16, UI.line_height(17, true) + 8)), Color8(14, 12, 20, 175), Color(), 0, 8)
+				UI.draw_text(_deco, lbl, c, 17, UI.GOOD, true, 1)
+
+
+func mini_safe_idx() -> int:
+	return mini_idx_clamp(step_idx)
+
+
+func mini_idx_clamp(i: int) -> int:
+	return clampi(i, 0, maxi(0, steps().size() - 1))
+
+
+func _draw_step_dots(n: int, at: Vector2, right: float) -> void:
+	var step := 22.0
+	if at.x + (n - 1) * 22 > right:
+		step = maxf(6.0, (right - at.x - 8) / maxf(1, n - 1))
+	var r := 7.0 if step >= 22 else maxf(3, int(step / 3))
+	UI.draw_round_rect(_deco, Rect2(at.x - r - 7, at.y - r - 6, roundf((n - 1) * step) + 2 * r + 14, 2 * r + 12),
+		Color8(14, 12, 20, 190), Color(), 0, int(r + 6))
+	for i in n:
+		var c := Vector2(roundf(at.x + i * step), at.y)
+		var col := UI.GOOD if i < step_idx else (UI.AMBER if i == step_idx else UI.DIM)
+		_deco.draw_circle(c, r, col, true, -1, true)
+		if i > step_idx:
+			UI.draw_ring(_deco, c, r, Color8(150, 150, 170), 1)
+		if i == step_idx:
+			UI.draw_ring(_deco, c, r + 3, UI.AMBER, 2)
+
+
+## Поверх всего: зелёный кружок обучения у нужной детали, инструмент в руке у курсора, вспышка верного шага.
+func _draw_fx() -> void:
+	if phase == "repair" and chair and chair.visible:
+		var want := tutor_want()
+		if not want.is_empty() and want[0] == "part":
+			var s := chair.spot_of(tutor_step()["part"])
+			if not s.is_empty():
+				TutorRing.draw_circle_ring(_fx, Vector2(s[1], s[2]), s[3], t)
+	var m := get_local_mouse_position()
+	if t - _ok_t < 0.7 and not Settings.calm():     # верный шаг — вспышка искр у курсора
+		var ph := (t - _ok_t) / 0.7
+		for i in 12:
+			var a := i * TAU / 12 + 0.3
+			_fx.draw_circle(_ok_pos + Vector2(cos(a), sin(a)) * 60 * UI.ease_out(ph), 4 * (1 - ph), Color(UI.GOOD, 1 - ph))
+	if sel_tool == "" or phase != "repair" or mini != null or notes != null or UI.kb_active:
+		return
+	for b: GameButton in tools.tiles.values():
+		if b.is_hovered():
+			return
+	var tex := Content.texture("tool_%s.png" % sel_tool)
+	if tex:
+		_fx.draw_set_transform(m + Vector2(22, 20), deg_to_rad(12 - 4 * UI.wsin(t * 4)))
+		_fx.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(-17, -17, 34, 34)), false)
+		_fx.draw_set_transform(Vector2.ZERO)
 
 
 func _draw_part_row(b: GameButton, _r: Rect2) -> void:
@@ -482,7 +970,10 @@ func _draw_part_row(b: GameButton, _r: Rect2) -> void:
 	var i: int = b.get_meta("i")
 	var hov := b.is_hovered()
 	var r := Rect2(b.slide, b.size)
-	UI.draw_round_rect(b, r, UI.PANEL2 if hov else UI.PANEL, UI.AMBER if hov else UI.DIM, 2, 6)
+	var want := tutor_want()
+	var tut: bool = not want.is_empty() and want[0] == "part" and pid == tutor_step()["part"]
+	UI.draw_round_rect(b, r, UI.PANEL2 if hov else UI.PANEL, UI.GOOD if tut else (UI.AMBER if hov else UI.DIM),
+		3 if tut else 2, 6)
 	var nc := r.position + Vector2(17, r.size.y / 2.0)
 	b.draw_circle(nc, 11, UI.INK, true, -1, true)
 	UI.draw_ring(b, nc, 11, UI.GOOD if (phase == "diagnose" and inspected.has(pid)) else UI.AMBER, 2)
@@ -492,6 +983,8 @@ func _draw_part_row(b: GameButton, _r: Rect2) -> void:
 	UI.draw_text(b, f[0], Vector2(r.position.x + 34, nc.y - fh + floorf((16 - int(f[1])) / 2.0)), f[1], UI.WHITE)
 	if phase == "diagnose" and inspected.has(pid):
 		UI.draw_text(b, "✔", Vector2(r.end.x - 10, nc.y - 9), 15, UI.GOOD, false, 2)
+	elif phase == "repair" and _part_note(pid).size() > 0:
+		BookIcon.draw_icon(b, Vector2(r.end.x - 16, nc.y), 9, UI.CYAN if hov or note_pin == pid else UI.GHOST)
 
 
 func _draw_diag(b: GameButton, r: Rect2) -> void:

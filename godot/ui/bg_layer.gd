@@ -22,6 +22,7 @@ func _init() -> void:
 
 
 func _ready() -> void:
+	Audio.ambient(image)                     # фоновая петля сцены (как set_ambient в _bg)
 	_amb = Control.new()
 	_amb.size = size
 	_amb.mouse_filter = Control.MOUSE_FILTER_IGNORE

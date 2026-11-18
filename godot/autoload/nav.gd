@@ -10,6 +10,7 @@ const SCREENS := {
 	"title": "res://screens/title.tscn",
 	"hub": "res://screens/hub.tscn",
 	"job": "res://screens/job.tscn",
+	"result": "res://screens/result.tscn",
 }
 const FALLBACK := {"intro": "hub", "guild": "hub", "garage": "hub", "seating": "hub", "credits": "title"}
 

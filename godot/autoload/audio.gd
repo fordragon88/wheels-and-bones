@@ -2,7 +2,9 @@ extends Node
 ## Звук: Audio.sfx("ok") — эффекты из content/sfx/*.wav (выгружены из синтезатора pygame-версии);
 ## музыка сцен из content/music с плавной сменой (старая тема гаснет ~0,7 с, новая вступает ~1,5 с — как
 ## music_update) и приглушением в рабочих сценах (полная громкость первые 45 с, потом за 12 с — в тихий фон 18 %).
-## Громкости — из Settings.vol (master/music/sfx, on). Атмосферные петли (amb) pygame синтезирует кодом — пока нет.
+## Громкости — из Settings.vol (master/music/sfx/amb, on). Фоновые петли сцен (set_ambient) — amb_<фон>.wav
+## (выгружены из синтезатора pygame), по фону экрана: старая гаснет 0,4 с, новая вступает 0,9 с.
+## Тон насоса по давлению (snd_pitch) — pitch_00…pitch_20.wav.
 
 const SFX_DIR := "res://content/sfx/"
 const MUSIC_DIR := "res://content/music/"
@@ -23,6 +25,11 @@ var _full := 45.0
 var _fade := 12.0
 var _bed := 0.18
 var played: Array[String] = []          # последние эффекты (для тестов)
+var _amb: AudioStreamPlayer
+var _amb_old: AudioStreamPlayer
+var _amb_name := ""
+var _amb_k := 0.0                        # вступление новой петли 0..1
+var _amb_old_k := 0.0
 
 
 func _ready() -> void:
@@ -40,6 +47,12 @@ func _ready() -> void:
 	_music = AudioStreamPlayer.new()
 	_music.bus = "Music"
 	add_child(_music)
+	_amb = AudioStreamPlayer.new()
+	_amb.bus = "Sfx"
+	add_child(_amb)
+	_amb_old = AudioStreamPlayer.new()
+	_amb_old.bus = "Sfx"
+	add_child(_amb_old)
 	var m: Dictionary = Content.consts.get("music", {})
 	_full = float(m.get("full", _full))
 	_fade = float(m.get("fade", _fade))
@@ -84,9 +97,47 @@ func stop_all() -> void:
 		p.stream = null
 	_music.stop()
 	_music.stream = null
+	for p in [_amb, _amb_old]:
+		p.stop()
+		p.stream = null
+	_amb_name = ""
 	_sfx.clear()
 	_cur_theme = ""
 	_want_theme = ""
+
+
+## Тон по значению 0..1 (давление насоса): чем больше, тем выше — слышно без экрана.
+func pitch(frac: float) -> void:
+	sfx("pitch_%02d" % clampi(int(frac * 20), 0, 20))
+
+
+## Фоновая петля под фон сцены (set_ambient): bg — имя картинки фона («bg_workshop.png»), "" — тишина.
+func ambient(bg: String) -> void:
+	if bg == _amb_name:
+		return
+	_amb_name = bg
+	if _amb.playing:                          # старая гаснет 0,4 с
+		_amb_old.stream = _amb.stream
+		_amb_old.play(_amb.get_playback_position())
+		_amb_old_k = 1.0
+	_amb.stop()
+	var key := "amb_" + bg.get_basename()
+	var st: AudioStreamWAV = _sfx.get(key) as AudioStreamWAV
+	if st == null:
+		return
+	if st.loop_mode == AudioStreamWAV.LOOP_DISABLED:
+		st.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		st.loop_begin = 0
+		st.loop_end = int(st.get_length() * st.mix_rate)
+	_amb.stream = st
+	_amb_k = 0.0
+	_amb.volume_db = -80.0
+	_amb.play()
+
+
+func amb_level() -> float:
+	var v: Dictionary = Settings.vol
+	return float(v["master"]) * float(v.get("amb", 0.45)) if v.get("on", true) else 0.0
 
 
 func toggle_sound() -> bool:
@@ -126,6 +177,11 @@ func _process(dt: float) -> void:
 	if not _scene in _loud_scenes and _scene_t >= _full:
 		want = maxf(_bed, 1.0 - (_scene_t - _full) / _fade * (1.0 - _bed))
 	_duck = minf(want, _duck + dt / 2.5) if want > _duck else want
+	_amb_k = minf(1.0, _amb_k + dt / 0.9)
+	if _amb_old_k > 0.0:
+		_amb_old_k = maxf(0.0, _amb_old_k - dt / 0.4)
+		if _amb_old_k <= 0.0:
+			_amb_old.stop()
 	apply_volume()
 
 
@@ -139,3 +195,5 @@ func apply_volume() -> void:
 		var lvl := music_level()
 		_music.volume_db = linear_to_db(maxf(0.0001, lvl))
 		_music.stream_paused = lvl <= 0.0001 and _music.playing
+		_amb.volume_db = linear_to_db(maxf(0.0001, amb_level() * _amb_k))
+		_amb_old.volume_db = linear_to_db(maxf(0.0001, amb_level() * _amb_old_k))

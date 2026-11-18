@@ -15,6 +15,7 @@ var t0: float = 0.0
 var bottom: float = 572.0                 # CLIENT: нижняя граница (в ремонте — выше)
 var top_y: float = 584.0                  # MENTOR: верх пузыря
 var job: Dictionary = {}                  # MENTOR: чей портрет у реплики клиента
+var col: Rect2 = Rect2()                  # MENTOR: узкий пузырь в правой колонке (ремонт); пусто — внизу
 var _typing: Array = ["", 0.0]
 var _live: Label
 
@@ -123,6 +124,9 @@ func _draw_client() -> void:
 
 
 func _draw_mentor() -> void:
+	if col.size != Vector2.ZERO:
+		_draw_mentor_col()
+		return
 	var img := speaker_img(line)
 	var tex: Texture2D = Frames.loop_frame("barty_wave", t) if img == "ghost.png" else null
 	if tex == null:
@@ -148,3 +152,29 @@ func _draw_mentor() -> void:
 			break
 	UI.draw_wrapped(self, text, bubble.position + Vector2(14, 10), bubble.size.x - 28, sz, UI.GHOST, false, 2,
 		typed(text, 90), maxi(1, int((bubble.size.y - 20) / lh)))
+
+
+## Узкий пузырь наставника в правой колонке (ремонт): портрет 46×56 и текст рядом.
+func _draw_mentor_col() -> void:
+	var img := speaker_img(line)
+	draw_rect(col, Color8(24, 30, 36, 220))
+	UI.draw_round_rect(self, col, Color(0, 0, 0, 0), UI.CYAN, 2, 8)
+	var tex: Texture2D = Frames.loop_frame("barty_wave", t) if img == "ghost.png" else null
+	if tex == null:
+		tex = Content.texture(img)
+	if tex:
+		var bx := Rect2(col.position + Vector2(6, 6), Vector2(46, 56))
+		var r := UI.fit_rect(tex.get_size(), bx)
+		var dy := 7.0 * UI.wsin(t * 1.6 + 1.3)
+		var ang := 2.5 * UI.wsin(t * 1.1 + 1.3)
+		draw_set_transform(bx.get_center() + Vector2(0, dy), deg_to_rad(-ang))
+		draw_texture_rect(tex, Rect2(r.position - bx.get_center(), r.size), false)
+		draw_set_transform(Vector2.ZERO)
+	var text := Loc.t(line)
+	var tw := col.size.x - 70
+	var sz := 12
+	for s: int in [15, 14, 13, 12]:
+		sz = s
+		if UI.wrap_lines(text, tw, s).size() * (UI.line_height(s) + 2) <= col.size.y - 16:
+			break
+	UI.draw_wrapped(self, text, col.position + Vector2(60, 8), tw, sz, UI.GHOST, false, 2, typed(text, 90))

@@ -276,9 +276,9 @@ static func focus_later(c: Control) -> void:
 		_focus_now.call_deferred(c)
 
 
-static func _focus_now(c: Control) -> void:
-	if is_instance_valid(c) and c.is_inside_tree() and c.is_visible_in_tree() and c.focus_mode != Control.FOCUS_NONE:
-		c.grab_focus()
+static func _focus_now(c: Variant) -> void:
+	if is_instance_valid(c) and c is Control and (c as Control).is_inside_tree() and (c as Control).is_visible_in_tree() 			and (c as Control).focus_mode != Control.FOCUS_NONE:
+		(c as Control).grab_focus()
 
 
 ## Включить/выключить фокус у всех элементов поддерева (модальное окно поверх экрана: Tab не уходит под него).

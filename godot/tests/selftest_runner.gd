@@ -136,6 +136,24 @@ func _run() -> void:
 		if Nav.current.job["diagnosis"][i]["correct"]:
 			Nav.current.choose_diagnosis(i)
 	await _frames(3)
+	# --- бот: все задания и варианты поломок от входа до записи прогресса, сверка с pygame ---
+	SaveGame.reset()
+	var bot: Array = await _bot_all()
+	await _negatives()
+	SaveGame.reset()
+	var ev_jobs: Array = []
+	for kind: String in ["pump", "ping", "gap", "meter"]:
+		var key := _ref_with_mini(kind)
+		if key == "":
+			err("в эталоне нет задания с мини-игрой " + kind)
+			continue
+		if key not in ev_jobs:
+			ev_jobs.append(key)
+	for key: String in ev_jobs:
+		await _flow_repair(key, false)
+	var kb_jobs: Array = ev_jobs.duplicate()
+	for key: String in kb_jobs:
+		await _flow_repair(key, true)
 	Loc.audit = false
 	var n_audit: int = Loc.audited.size()
 	var dump := OS.get_cmdline_user_args().find("--dump-tr")
@@ -168,7 +186,7 @@ func _run() -> void:
 	SaveGame.reset()
 	await _flow_mouse()
 	await _flow_keyboard()
-	_finish("%d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [n_gd, n_audit,
+	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), n_gd, n_audit,
 		"" if _drawn > 0 else " (без окна _draw не вызывается — проверены строки данных и обработчиков)"],
 		n_jobs, n_var, n_tech)
 
@@ -256,7 +274,7 @@ func _flow_mouse() -> void:
 		err("мышь: нет сообщения об ошибке диагноза")
 	await _click(_center(scr.get_node("Diag_%d" % right)))
 	await _frames(2)
-	if Nav.current.phase != "repair" or Nav.current.get_node_or_null("ToHub") == null:
+	if Nav.current.phase != "repair" or Nav.current.tools == null:
 		err("мышь: верный диагноз не перевёл в ремонт")
 	var played: Array = Audio.played
 	for s: String in ["inspect", "bad", "ok"]:
@@ -338,3 +356,362 @@ func _finish(extra: String = "", n_jobs: int = 0, n_var: int = 0, n_tech: int = 
 	else:
 		printerr("GODOT SELFTEST FAILED: %d ошибок" % errors.size())
 		get_tree().quit(1)
+
+
+# ======================= бот прохождения =======================
+
+func _ref() -> Dictionary:
+	var p := "res://content/walkthrough_ref.json"
+	if not FileAccess.file_exists(p):
+		err("нет content/walkthrough_ref.json — запусти tools/sync_content.py")
+		return {}
+	return JSON.parse_string(FileAccess.get_file_as_string(p))
+
+
+func _ref_with_mini(kind: String) -> String:
+	var ref := _ref()
+	for key: String in ref:
+		for st: Array in ref[key]["steps"]:
+			if st[2] == kind:
+				return key
+	return ""
+
+
+static func _sig(st: Dictionary) -> Array:
+	var alt: Array = st.get("alt", []).duplicate()
+	alt.sort()
+	var alt_t: Array = st.get("alt_tools", []).duplicate()
+	alt_t.sort()
+	var mk: String = (st["mini"] as Dictionary).get("kind", "") if st.get("mini") is Dictionary else ""
+	return [st["tool"], st["part"], mk, alt, alt_t]
+
+
+func _open_job(key: String) -> Node:
+	var jid := key.get_slice(":", 0)
+	var v := int(key.get_slice(":", 1))
+	var base := Content.job_by_id(jid)
+	Nav.go("job", {"job": jid, "variant": v if base.has("variants") else -1})
+	await _frames(2)
+	return Nav.current
+
+
+func _solve_mini(m: MiniGame) -> void:
+	match m.kind:
+		"pump":
+			m.value = int(m.cfg["lo"])
+			m.pump_done()
+		"gap":
+			m.gap_set(int(m.cfg["lo"]))
+			m.gap_check()
+		"ping":
+			for i: int in m.dull.keys():
+				m.ping(i)
+		"meter":
+			var opts: Array = m.cfg["options"]
+			for i in opts.size():
+				if opts[i][1]:
+					m.meter(i)
+					return
+
+
+func _correct_diag(scr: Node) -> int:
+	var d: Array = scr.job["diagnosis"]
+	for i in d.size():
+		if d[i]["correct"]:
+			return i
+	return -1
+
+
+## Все задания мастерской и все варианты: обработчики напрямую. Возврат [вариантов пройдено, шагов].
+func _bot_all() -> Array:
+	var ref := _ref()
+	var ok := 0
+	var total := 0
+	for job: Dictionary in Content.jobs:
+		for v in maxi(1, job.get("variants", []).size()):
+			var key := "%s:%d" % [job["id"], v]
+			var scr: Node = await _open_job(key)
+			var mine: Array = []
+			for st: Dictionary in scr.job["steps"]:
+				mine.append(_sig(st))
+			if not ref.has(key):
+				err("бот %s: нет в эталоне pygame" % key)
+			elif JSON.stringify(mine) != JSON.stringify(ref[key]["steps"]):
+				err("бот %s: шаги не как в pygame:\n    godot  %s\n    pygame %s" % [key, mine, ref[key]["steps"]])
+			for pid: String in scr.job["parts"].slice(0, 2):
+				scr.inspect_part(pid)
+			if not scr.choose_diagnosis(_correct_diag(scr)):
+				err("бот %s: верный диагноз не принят" % key)
+				continue
+			await _frames(1)
+			scr = Nav.current
+			var n: int = scr.job["steps"].size()
+			var failed := false
+			for i in n:
+				var st: Dictionary = scr.job["steps"][i]
+				scr.select_tool(st["tool"])
+				scr.part_clicked(st["part"])
+				if scr.mini != null:
+					await _frames(1)
+					_solve_mini(scr.mini)
+				await _frames(1)
+				if scr.mistakes != 0 or (i + 1 < n and scr.step_idx != i + 1):
+					err("бот %s: шаг %d (%s → %s) не выполнен" % [key, i + 1, st["tool"], st["part"]])
+					failed = true
+					break
+			if failed:
+				continue
+			total += n
+			if scr.phase != "test":
+				err("бот %s: после шагов нет тест-драйва" % key)
+				continue
+			scr.start_ride()
+			scr.ride.t0 = scr.ride.t - scr.ride.secs() - 0.01
+			await _frames(2)
+			if not scr.ride_done:
+				err("бот %s: проезд не закончился" % key)
+				continue
+			scr._test_pressed()
+			await _frames(2)
+			if Nav.current_name != "result" or not SaveGame.is_done(job["id"]):
+				err("бот %s: нет итога или прогресс не записан" % key)
+				continue
+			if ref.has(key) and int(Nav.current.stars) != int(ref[key]["stars"]):
+				err("бот %s: звёзд %d, в pygame %d" % [key, Nav.current.stars, ref[key]["stars"]])
+			ok += 1
+	if SaveGame.user_done_count() != Content.jobs.size():
+		err("бот: в прогрессе %d заданий из %d" % [SaveGame.user_done_count(), Content.jobs.size()])
+	Nav.go("hub")
+	await _frames(2)
+	if not str(Nav.current.get_node("Card_flat").accessibility_name).contains("✔"):
+		err("мастерская: у пройденного задания нет отметки")
+	return [ok, total]
+
+
+func _toast_is(col: Color, part: String = "") -> bool:
+	return Nav.toast.active() and Nav.toast.color == col and (part == "" or Nav.toast.text.contains(part))
+
+
+## Негативные случаи: не тот инструмент, не та деталь, без инструмента, пропуск/назад, ловушка Барти, перекачал.
+func _negatives() -> void:
+	# сноски мануала: окно открывается, Esc закрывает; книжка у детали — сноска в карточке
+	var nk := ""
+	for job: Dictionary in Content.jobs:
+		if nk == "" and not Content.job_notes(Content.resolve_job(job, 0, false)).is_empty():
+			nk = "%s:0" % job["id"]
+	var ns: Node = await _open_job(nk)
+	for pid: String in ns.job["parts"].slice(0, 2):
+		ns.inspect_part(pid)
+	ns.choose_diagnosis(_correct_diag(ns))
+	await _frames(1)
+	ns.note_pin = Content.job_notes(ns.job)[0][0]
+	await _frames(2)
+	if ns.note_part_at() != ns.note_pin:
+		err("сноска детали не показывается в карточке")
+	ns.open_notes()
+	await _frames(2)
+	if ns.notes == null or ns.notes.lines().is_empty():
+		err("окно сносок мануала пустое")
+	ns.go_back()
+	await _frames(1)
+	if ns.notes != null:
+		err("Esc не закрыл окно сносок")
+	var scr: Node = await _open_job("flat:0")
+	scr.inspect_part("tire")
+	scr.inspect_part("tube")
+	scr.choose_diagnosis(_correct_diag(scr))
+	await _frames(1)
+	var st: Dictionary = scr.cur_step()
+	var other_tool := "pump" if st["tool"] != "pump" else "hands"
+	var other_part := "brake" if st["part"] != "brake" else "rim"
+	scr.select_tool(other_tool)
+	scr.part_clicked(st["part"])
+	if scr.mistakes != 1 or scr.step_idx != 0 or not _toast_is(UI.BAD):
+		err("не тот инструмент: ошибка не засчитана")
+	if st.get("wrongmsg", "") == "" and not _toast_is(UI.BAD, "Деталь верная, но инструмент не тот"):
+		err("не тот инструмент: нет сообщения «инструмент не тот»")
+	scr.select_tool(st["tool"])
+	scr.part_clicked(other_part)
+	if scr.mistakes != 2 or scr.step_idx != 0:
+		err("не та деталь: ошибка не засчитана")
+	scr.sel_tool = ""
+	scr.part_clicked(st["part"])
+	if not _toast_is(UI.AMBER) or scr.mistakes != 2:
+		err("деталь без инструмента: нет подсказки «сначала выбери инструмент»")
+	scr.step_skip()
+	if scr.mistakes != 4 or scr.step_idx != 1:
+		err("«ШАГ ▸»: пропуск должен дать шаг и 2 ошибки")
+	scr.step_back()
+	if scr.step_idx != 0:
+		err("«◂»: шаг назад не сработал")
+	# ловушка Барти: пузырь показывает совет шага (неверный); последовать ему — ошибка
+	var trap_key := ""
+	var trap_i := -1
+	for job: Dictionary in Content.jobs:
+		for c: Dictionary in Content.cases(job):
+			for i in c.get("steps", []).size():
+				if c["steps"][i].get("ghost_wrong", false) and c["steps"][i].get("wrongmsg", "") != "" and trap_key == "":
+					trap_key = "%s:%d" % [job["id"], int(c.get("_variant", 0))]
+					trap_i = i
+	if trap_key == "":
+		err("в данных нет ловушек Барти (ghost_wrong с wrongmsg)")
+		return
+	scr = await _open_job(trap_key)
+	for pid: String in scr.job["parts"].slice(0, 2):
+		scr.inspect_part(pid)
+	scr.choose_diagnosis(_correct_diag(scr))
+	await _frames(1)
+	for i in trap_i:
+		var s2: Dictionary = scr.cur_step()
+		scr.select_tool(s2["tool"])
+		scr.part_clicked(s2["part"])
+		if scr.mini:
+			_solve_mini(scr.mini)
+		await _frames(1)
+	var trap: Dictionary = scr.cur_step()
+	scr.ghost_quip = ""
+	await _frames(2)
+	if trap.get("ghost", "") == "" or scr._mentor.line != trap["ghost"]:
+		err("ловушка Барти %s шаг %d: в пузыре нет совета шага" % [trap_key, trap_i + 1])
+	var m0: int = scr.mistakes
+	var wt := "hands" if trap["tool"] != "hands" and not "hands" in trap.get("alt_tools", []) else "lever"
+	scr.select_tool(wt)
+	scr.part_clicked(trap["part"])
+	if scr.mistakes != m0 + 1:
+		err("ловушка Барти: неверный ход не засчитан")
+	if Nav.toast.text != trap["wrongmsg"]:
+		err("ловушка Барти: нет объяснения wrongmsg")
+	# мини-игра: перекачал / мало — ошибки, Esc закрывает окно
+	scr = await _open_job(_ref_with_mini("pump"))
+	for pid: String in scr.job["parts"].slice(0, 2):
+		scr.inspect_part(pid)
+	scr.choose_diagnosis(_correct_diag(scr))
+	await _frames(1)
+	while scr.phase == "repair" and not scr.cur_step().get("mini") is Dictionary:
+		scr.step_skip()
+	var s3: Dictionary = scr.cur_step()
+	scr.select_tool(s3["tool"])
+	scr.part_clicked(s3["part"])
+	await _frames(1)
+	if scr.mini == null or scr.mini.kind != "pump":
+		err("насос: мини-игра не открылась")
+		return
+	var m1: int = scr.mistakes
+	scr.mini.value = int(scr.mini.cfg["hi"]) + 1
+	scr.mini.pump_done()
+	if scr.mistakes != m1 + 1 or scr.mini.value >= int(scr.mini.cfg["lo"]):
+		err("насос: «перекачал» не засчитан ошибкой")
+	scr.mini.value = 0
+	scr.mini.pump_done()
+	if scr.mistakes != m1 + 2:
+		err("насос: «мало» не засчитан ошибкой")
+	scr.go_back()
+	await _frames(1)
+	if scr.mini != null:
+		err("Esc не закрыл мини-игру")
+
+
+func _press(c: Control, keyboard: bool) -> void:
+	if keyboard:
+		c.grab_focus()
+		await _frames(1)
+		await _key(KEY_ENTER)
+	else:
+		await _click(_center(c))
+
+
+## Задание целиком событиями ввода: мышью (клики по центрам элементов) или клавиатурой (фокус + Enter, стрелки).
+func _flow_repair(key: String, keyboard: bool) -> void:
+	var how := "клавиатура" if keyboard else "мышь"
+	var scr: Node = await _open_job(key)
+	for pid: String in scr.job["parts"].slice(0, 2):
+		await _press(scr.get_node("Part_" + pid), keyboard)
+	await _press(scr.get_node("Diag_%d" % _correct_diag(scr)), keyboard)
+	await _frames(2)
+	scr = Nav.current
+	if scr.phase != "repair":
+		err("%s %s: не начался ремонт" % [how, key])
+		return
+	var n: int = scr.job["steps"].size()
+	for i in n:
+		var st: Dictionary = scr.job["steps"][i]
+		await _press(scr.tools.tiles[st["tool"]], keyboard)
+		if scr.sel_tool != st["tool"]:
+			err("%s %s шаг %d: инструмент не взят" % [how, key, i + 1])
+			return
+		var spot: HotspotButton = scr.chair.spot_button(st["part"])
+		if i == 0 and spot != null:                  # первый шаг — кружком на коляске, дальше — списком
+			await _frames(3)
+			await _press(spot, keyboard)
+		else:
+			await _press(scr.get_node("Part_" + st["part"]), keyboard)
+		await _frames(1)
+		if scr.mini != null:
+			await _mini_events(scr.mini, keyboard, how, key)
+			await _frames(1)
+		if scr.mistakes != 0 or (i + 1 < n and scr.step_idx != i + 1):
+			err("%s %s шаг %d (%s → %s): не выполнен (ошибок %d)" % [how, key, i + 1, st["tool"], st["part"], scr.mistakes])
+			return
+	if scr.phase != "test":
+		err("%s %s: нет тест-драйва" % [how, key])
+		return
+	await _frames(2)
+	var hero := RideView.hero_loop(scr.job["client_art"])
+	if hero != "":
+		Frames.want_loop(hero)
+		Frames.flush()
+	await _press(scr.get_node("TestDrive"), keyboard)
+	if hero != "" and scr.ride.loop_name != hero:
+		err("%s %s: проезд не петлёй %s" % [how, key, hero])
+	await _frames(3)
+	if scr.ride.drawn == 0:
+		err("%s %s: кадры проезда не рисуются" % [how, key])
+	scr.ride.t0 = scr.ride.t - scr.ride.secs() - 0.01
+	await _frames(2)
+	await _press(scr.get_node("TestDrive"), keyboard)
+	await _frames(2)
+	if Nav.current_name != "result":
+		err("%s %s: нет итога" % [how, key])
+		return
+	await _press(Nav.current.get_node("ToHub"), keyboard)
+	await _frames(2)
+	if Nav.current_name != "hub" or not SaveGame.is_done(key.get_slice(":", 0)):
+		err("%s %s: не вернулись в мастерскую с отметкой" % [how, key])
+
+
+func _mini_events(m: MiniGame, keyboard: bool, how: String, key: String) -> void:
+	match m.kind:
+		"pump":
+			var lo := int(m.cfg["lo"])
+			var hi := int(m.cfg["hi"])
+			for _i in 80:
+				if m.value >= lo and m.value <= hi:
+					break
+				await _press(m.get_node("Pump" if m.value < lo else "Release"), keyboard)
+			await _press(m.get_node("Done"), keyboard)
+		"gap":
+			var tr: GapTrack = m.get_node("Track")
+			var lo := int(m.cfg["lo"])
+			if keyboard:
+				tr.grab_focus()
+				await _frames(1)
+				for _i in 400:
+					if m.value == lo:
+						break
+					await _key(KEY_RIGHT if m.value < lo else KEY_LEFT)
+			else:
+				var mn := float(m.cfg["mn"])
+				var frac := (lo - mn) / (float(m.cfg["mx"]) - mn)
+				await _click(tr.get_global_rect().position + Vector2(frac * tr.size.x + 0.5, tr.size.y / 2))
+			if m.value != lo:
+				err("%s %s: шкала зазора выставлена в %d вместо %d" % [how, key, m.value, lo])
+			await _press(m.get_node("Check"), keyboard)
+		"ping":
+			for i: int in m.dull.keys():
+				if is_instance_valid(m) and m.is_inside_tree():
+					await _press(m.get_node("Spoke_%d" % i), keyboard)
+		"meter":
+			var opts: Array = m.cfg["options"]
+			for i in opts.size():
+				if opts[i][1]:
+					await _press(m.get_node("Opt_%d" % i), keyboard)

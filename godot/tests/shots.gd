@@ -5,7 +5,8 @@ extends Node
 ## Ввод мыши в окне на время снимков выключен (курсор над окном не даёт подсветку наведения).
 
 const ALL := ["title", "title_en", "hub", "job_flat_diagnose", "job_flat_inspected",
-	"job_joystick_diagnose", "job_joystick_inspected", "job_flat_repair", "settings"]
+	"job_joystick_diagnose", "job_joystick_inspected", "job_flat_repair", "mini_pump", "mini_gap", "mini_ping",
+	"mini_meter", "ride_martin", "ride_zix", "result_lift", "hub_done", "settings"]
 
 var out_dir := ""
 
@@ -30,6 +31,24 @@ func _shot(name: String) -> void:
 	print("shot ", name, " ", Nav.current_name)
 
 
+func _to_repair(jid: String) -> Node:
+	Nav.go("job", {"job": jid, "variant": 0})
+	Frames.want_loop("barty_wave")
+	Frames.flush()
+	await _wait(0.5)
+	var scr: Node = Nav.current
+	for pid: String in scr.job["parts"].slice(0, 2):
+		scr.inspect_part(pid)
+	for i in scr.job["diagnosis"].size():
+		if scr.job["diagnosis"][i]["correct"]:
+			scr.choose_diagnosis(i)
+			break
+	Nav.toast.timer = 0.0
+	await _wait(1.0)
+	return Nav.current
+
+
+@warning_ignore("integer_division")
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
 	var want: Array = []
@@ -70,15 +89,61 @@ func _run() -> void:
 			await _shot(name)
 			Nav.close_settings()
 		elif name == "job_flat_repair":
-			Nav.go("job", {"job": "flat", "variant": 0})
+			var scr: Node = await _to_repair("flat")
+			var st: Dictionary = scr.cur_step()
+			scr.select_tool(st["tool"])
+			scr.do_action(st["tool"], "brake")      # не та деталь: сообщение, инструмент в руке
 			await _wait(1.0)
-			var scr: Node = Nav.current
-			scr.inspect_part("tire")
-			scr.inspect_part("tube")
-			for k in scr.job["diagnosis"].size():
-				if scr.job["diagnosis"][k]["correct"]:
-					scr.choose_diagnosis(k)
-			await _wait(1.5)
+			await _shot(name)
+		elif name.begins_with("mini_"):
+			var kind := name.trim_prefix("mini_")
+			var jid: String = {"pump": "flat", "gap": "brake", "ping": "spokes", "meter": "lift"}[kind]
+			var scr: Node = await _to_repair(jid)
+			while scr.phase == "repair" and not (scr.cur_step().get("mini") is Dictionary and scr.cur_step()["mini"]["kind"] == kind):
+				scr.step_skip()
+			Nav.toast.timer = 0.0
+			var st: Dictionary = scr.cur_step()
+			scr.select_tool(st["tool"])
+			scr.part_clicked(st["part"])
+			var m: MiniGame = scr.mini
+			if kind == "pump":
+				m.value = (int(m.cfg["lo"]) + int(m.cfg["hi"])) / 2
+			elif kind == "ping":
+				m.dull = {1: true, 5: true}
+				m.tested = {0: true, 1: true}
+			await _wait(0.6)
+			await _shot(name)
+		elif name.begins_with("ride_"):
+			var jid := "flat" if name == "ride_martin" else "lift"
+			var scr: Node = await _to_repair(jid)
+			while scr.phase == "repair":
+				scr.step_skip()
+			scr.mistakes = 0
+			Nav.toast.timer = 0.0
+			var hero := RideView.hero_loop(scr.job["client_art"])
+			Frames.want_loop(hero)
+			Frames.flush()
+			await _wait(1.0)
+			scr.start_ride()
+			await _wait(2.0)
+			await _shot(name)
+		elif name == "result_lift":
+			var scr: Node = await _to_repair("lift")
+			while scr.phase == "repair":
+				scr.step_skip()
+			var pool: Array = Content.talk["martin"]["good"]
+			Nav.go("result", {"job": scr.job, "stars": 3, "gag": pool[0], "mistakes": 0})
+			SaveGame.done["lift"] = true
+			Frames.want_loop("magic_zix")
+			Frames.flush()
+			await _wait(3.7)
+			await _shot(name)
+		elif name == "hub_done":
+			SaveGame.done["lift"] = true
+			Nav.go("hub")
+			Frames.want_loop("barty_wave")
+			Frames.flush()
+			await _wait(3.0)
 			await _shot(name)
 		elif name.begins_with("job_"):
 			var jid := name.trim_prefix("job_").trim_suffix("_diagnose").trim_suffix("_inspected")
