@@ -1,0 +1,106 @@
+class_name Screen
+extends Control
+## Основа экрана: корневой Control 1280×720; содержимое собирает build() кодом. При смене языка, размера текста
+## или шрифта экран пересобирается (rebuild) — состояние экрана живёт в его переменных, не в элементах.
+## Nav зовёт go_back() на Esc/«назад», music_theme() — тема музыки, toast_bounds() — где сообщение сверху.
+
+var params: Dictionary = {}
+var screen_name: String = ""
+var st: float = 0.0                       # секунд с начала экрана (появления, как self.st в game.py)
+var t: float = 0.0                        # общие часы экрана (качание, мерцание)
+
+
+func _init() -> void:
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_PASS
+	focus_mode = Control.FOCUS_NONE
+
+
+func _ready() -> void:
+	Loc.changed.connect(_on_lang)
+	Settings.changed.connect(_on_settings)
+	build()
+	_focus_default()
+
+
+func _process(dt: float) -> void:
+	st += dt
+	t += dt
+	tick(dt)
+
+
+## Собрать содержимое (переопределяется).
+func build() -> void:
+	pass
+
+
+## Логика экрана каждый кадр (переопределяется).
+func tick(_dt: float) -> void:
+	pass
+
+
+## Элемент, который получает фокус при входе (клавиатура/геймпад/чтец экрана); null — никакой.
+func first_focus() -> Control:
+	return null
+
+
+## Esc / кнопка «назад».
+func go_back() -> void:
+	pass
+
+
+func music_theme() -> String:
+	return "workshop"
+
+
+## Сообщение сверху: [левый край, запас справа] (как reserve в _draw_toast).
+func toast_bounds() -> Vector2:
+	return Vector2(54, 164)
+
+
+## Клавиши экрана (до общих: Esc, M). true — обработано.
+func handle_key(_e: InputEventKey) -> bool:
+	return false
+
+
+## Что сказать чтецу при входе на экран (a11y_summary) — пока коротко.
+func summary() -> String:
+	return ""
+
+
+func rebuild() -> void:
+	var fo := get_viewport().gui_get_focus_owner() if is_inside_tree() else null
+	var path := get_path_to(fo) if fo != null and is_ancestor_of(fo) else NodePath()
+	for c in get_children():
+		remove_child(c)
+		c.queue_free()
+	build()
+	if not path.is_empty() and has_node(path):
+		var n := get_node(path)
+		if n is Control and (n as Control).focus_mode != Control.FOCUS_NONE:
+			UI.focus_later(n as Control)
+			return
+	_focus_default()
+
+
+func _focus_default() -> void:
+	var f := first_focus()
+	UI.focus_later(f)
+
+
+func _on_lang() -> void:
+	UI.clear_font_cache()                 # шрифт для лёгкого чтения — только в английском
+	rebuild()
+
+
+func _on_settings(key: String) -> void:
+	if key in ["text", "font", "contrast", "calm", "barty"]:
+		UI.clear_font_cache()
+		rebuild()
+
+
+## Подпись для чтеца экрана (accessibility_name), переведённая.
+static func a11y(ctl: Control, ru: String, desc: String = "") -> void:
+	ctl.accessibility_name = Loc.t(ru)
+	if desc != "":
+		ctl.accessibility_description = Loc.t(desc)

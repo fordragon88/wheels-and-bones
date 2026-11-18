@@ -1,0 +1,58 @@
+; Engine configuration file.
+; «Колёса и Кости» — перенос на Godot 4.7 (ветка godot-port). План и устройство — PORT_PLAN.md.
+
+config_version=5
+
+[application]
+
+config/name="Колёса и Кости // Wheels & Bones"
+config/description="Обучающий симулятор ремонта инвалидных колясок в фэнтези-мире"
+config/version="0.5-godot"
+run/main_scene="res://main.tscn"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="WheelsAndBonesGodot"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+boot_splash/bg_color=Color(0.0941176, 0.0862745, 0.117647, 1)
+config/icon="res://content/img/ghost.png"
+
+[autoload]
+
+Settings="*res://autoload/settings.gd"
+Loc="*res://autoload/loc.gd"
+Content="*res://autoload/content.gd"
+SaveGame="*res://autoload/save_game.gd"
+Audio="*res://autoload/audio.gd"
+Frames="*res://autoload/frames.gd"
+Speech="*res://autoload/speech.gd"
+Nav="*res://autoload/nav.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+window/handheld/orientation=4
+
+[gui]
+
+common/drop_mouse_on_gui_input_disabled=true
+
+[importer_defaults]
+
+texture={
+"mipmaps/generate": true
+}
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=false
+pointing/emulate_mouse_from_touch=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+renderer/rendering_method.web="gl_compatibility"
+textures/canvas_textures/default_texture_filter=2
+environment/defaults/default_clear_color=Color(0.0941176, 0.0862745, 0.117647, 1)

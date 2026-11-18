@@ -94,6 +94,7 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 | `assets/fonts/` | шрифты и их лицензии |
 | `tools/` | portable Blender, `render_in/`/`render_out/` кадров; не в git |
 | `CLAUDE.md`, `GEMINI.md`, `MUSE_3D_TASK.md` | указатели для агентов (читать AGENTS.md); задание для Muse по 3D (архив) |
+| `godot/` (ветка `godot-port`) | **перенос на Godot 4.7.2**: проект, план и состояние — `godot/PORT_PLAN.md`; содержание берётся из `assets/` скриптом `godot/tools/sync_content.py` (`godot/content/` не в git); самопроверка `tests/selftest.gd`, снимки `tests/shots.gd`, эталоны pygame `tests/ref/` |
 
 ## 4. Устройство game.py (по разделам сверху вниз)
 
@@ -685,6 +686,23 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-18 — Claude (Opus 5.5), ветка `godot-port` — **перенос на Godot: каркас и первые экраны** (`godot/`).
+  `project.godot` (1280×720, canvas_items/keep, альбомная, Compatibility для ПК/телефона/браузера, Linear Mipmap,
+  касание → мышь, user:// = `%APPDATA%\WheelsAndBonesGodot`); автозагрузки `Settings` (settings.json с ключами
+  pygame-версии), `Loc` (порт `tr()`: точное → шаблон → шаблон в склейке → куски; + `i18n/lang_en_port.json`),
+  `Content` (задания/варианты/Гильдия из `assets/data`, `_folk_ready`, «насос → ниппель», проверка целостности),
+  `SaveGame` (формат save.json, копия `save.prev.json`), `Audio` (WAV-эффекты, музыка с переходом и приглушением),
+  `Frames` (WebP кадров поворота и петель в потоках/по кадру, выгрузка), `Speech` (заглушка `say`), `Nav` (экраны,
+  растворение, Esc, сообщение сверху, окно настроек); `ui/` — тема и общие элементы (кнопка, значки, шапка, панель,
+  карточка клиента, пузыри, коляска на кадрах поворота с кружками — порт `_m3d_spots`/`project_point`); экраны
+  `title`, `hub`, `job` (диагностика любого задания; ремонт — заглушка). `tools/sync_content.py` теперь выгружает и
+  `game_consts.json` (больше цветов и правил, PART_CENTER_FIX) и `talk.json` (CLIENT_TALK/BARTY_TALK/MARTIN_TALK);
+  `tools/ref_shots.py` рисует каждый кадр (раньше снимок был первым кадром сцены) и снимает «после осмотра»;
+  `tools/check_tr.py` — сверка перевода с pygame. Проверено: `selftest.gd -- --test` → «GODOT SELFTEST OK — 21
+  заданий (27 вариантов поломок) + 6 про-заданий; 30 .gd, кадры поворота у всех 21 коляски, перевод: 871 строк»
+  (там же прохождение мышью и клавиатурой, кружки flat = pygame ±1 px); check_tr — 871 строка, 0 расхождений;
+  снимки 9 экранов сверены с эталонами (средняя разница 2,5–5,5/255; расхождения — PORT_PLAN.md); импорт без
+  ошибок. `game.py` и `assets/` не менялись.
 - 2026-11-16 — Claude (Fable 5.2) — **версия игры 0.5** (решение владельца): `GAME_VERSION = "0.5"` — в замечаниях
   игроков (столбец version), в кодах результата (`gv`) и в отладочном состоянии выпуск 16.11 теперь отличим от 0.4.
   Название GitHub Release (v0.4) не менялось. Выложено на сайт (`build_web.py --deploy`, Pages 062d5dd7, архив
