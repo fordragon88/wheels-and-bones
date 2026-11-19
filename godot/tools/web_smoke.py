@@ -418,6 +418,25 @@ async def sc_links(b):
         const r=f.getBoundingClientRect(); return [getComputedStyle(f).display, r.left, r.top, r.width, r.height,
         document.activeElement===f]})()""")
     check(vis is not None and vis[0] == "block" and vis[3] > 100, f"{p.name}: поле ввода кода — <input> поверх холста {vis}")
+    if vis:                                               # поле — внутри игровой картинки, по центру окна
+        g, _, _ = await game_rect(p)
+        cx, cy = vis[1] + vis[3] / 2, vis[2] + vis[4] / 2
+        check(g[0] < vis[1] and vis[1] + vis[3] < g[0] + g[2] and g[1] < cy < g[1] + g[3] and abs(cx - (g[0] + g[2] / 2)) < 40,
+              f"{p.name}: поле кода внутри картинки игры ({vis[1]:.0f},{vis[2]:.0f} {vis[3]:.0f}×{vis[4]:.0f}; "
+              f"игра {g[0]:.0f},{g[1]:.0f} {g[2]:.0f}×{g[3]:.0f})")
+        # ресайз окна при открытом поле — поле едет за картинкой
+        await p.pg.set_viewport_size({"width": 1000, "height": 700})
+        await p.pg.wait_for_timeout(1200)
+        v2 = await p.pg.evaluate("(()=>{const r=document.getElementById('wnb-field').getBoundingClientRect();"
+                                 "return [r.left, r.top, r.width, r.height]})()")
+        g2, _, _ = await game_rect(p)
+        rel = lambda v, g: ((v[0] - g[0]) / g[2], (v[1] - g[1]) / g[3], v[2] / g[2])
+        a, z = rel(vis[1:5], g), rel(v2, g2)
+        check(all(abs(x - y) < 0.01 for x, y in zip(a, z)),
+              f"{p.name}: окно 1000×700 — поле на том же месте картинки ({[round(x, 3) for x in a]} → "
+              f"{[round(x, 3) for x in z]})")
+        await p.pg.set_viewport_size({"width": 1280, "height": 720})
+        await p.pg.wait_for_timeout(1000)
     await p.shot("3_paste_field")
     if vis and clip.startswith("P."):
         await p.pg.fill("#wnb-field", clip)
@@ -688,6 +707,78 @@ async def sc_rotate(b):
     await t.ctx.close()
 
 
+STALE_JS = """(([k, v]) => { Object.defineProperty(window, k, { configurable: true, get: () => v }); })"""
+
+
+async def game_rect(p):
+    """Прямоугольник игровой картинки 16:9 на странице (CSS px): холст (положение, CSS-размер, буфер) + окно Godot и
+    сдвиг/масштаб растяжения из wnbState (win, game); без них — как Godot кладёт 1280×720 с полями в буфер холста."""
+    c = await p.canvas()
+    st = await p.state()
+    W, H = (st.get("win") or [c[4], c[5]])
+    g = st.get("game")
+    if not g:
+        s = min(W / 1280, H / 720)
+        g = [(W - 1280 * s) / 2, (H - 720 * s) / 2, 1280 * s, 720 * s]
+    kx, ky = c[2] / max(1, c[4]), c[3] / max(1, c[5])
+    return [c[0] + g[0] * kx, c[1] + g[1] * ky, g[2] * kx, g[3] * ky], c, st
+
+
+async def check_fit(p, vw, vh, what):
+    """Игра 16:9 целиком в видимом окне vw×vh и занимает его по высоте (окно шире 16:9)."""
+    r, c, st = await game_rect(p)
+    inside = r[0] >= -1 and r[1] >= -1 and r[0] + r[2] <= vw + 1 and r[1] + r[3] <= vh + 1
+    full_h = abs(r[3] - min(vh, vw * 9 / 16)) <= 2
+    diag = await p.pg.evaluate("window.wnbView ? wnbView.line() : ''")
+    return check(inside and full_h, f"{p.name}: {what}: картинка {r[0]:.0f},{r[1]:.0f} {r[2]:.0f}×{r[3]:.0f} в окне "
+                                    f"{vw}×{vh} (холст CSS {c[2]:.0f}×{c[3]:.0f} в {c[0]:.0f},{c[1]:.0f}, буфер "
+                                    f"{c[4]}×{c[5]}, Godot {st.get('win')}) {diag}")
+
+
+async def sc_stale(b):
+    """Телефон владельца (Mate 20 Pro, 780×360 CSS, dpr 3): после полного экрана и поворота window.innerHeight
+    остался книжным (780) — игра была сдвинута вниз на 170 px. Здесь: открыть в книжной (заслонка), «повернуть» и
+    подменить innerHeight = 780; потом обратный случай — innerWidth = 360 с самой загрузки в альбомной."""
+    p = await new_page(b, "stale", touch=True, mobile=True, w=360, h=780, dpr=3,
+                       legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+    await orient(p, 360, 780, False)
+    await p.pg.goto(URL + "?test=1&fps=1")
+    await p.wait(lambda s: s.get("screen") == "title", "титул под заслонкой", 90)
+    await orient(p, 780, 360, True)
+    await p.pg.evaluate(STALE_JS, ["innerHeight", 780])
+    await p.pg.evaluate("window.dispatchEvent(new Event('resize'))")
+    await p.wait(lambda s: s.get("covered") is False, "заслонка снята после поворота", 10)
+    await p.pg.wait_for_timeout(2000)
+    await p.shot("1_landscape_stale_innerHeight")
+    await check_fit(p, 780, 360, "innerHeight остался 780 после поворота")
+    await p.press("Start", None, 1200)
+    st = await p.wait(lambda s: s.get("screen") == "hub", "касание «начать» при старом innerHeight", 10)
+    check(bool(st), f"{p.name}: касание «начать» попало (мастерская)")
+    await p.pg.wait_for_timeout(1500)
+    await p.shot("2_hub")
+    await check_fit(p, 780, 360, "мастерская")
+    diag = await p.pg.evaluate("(()=>{const d=document.getElementById('wnb-diag');if(!d)return null;"
+                               "const r=d.getBoundingClientRect();return [d.textContent, r.top, r.height]})()")
+    check(bool(diag) and diag[1] <= 1 and "screen" in diag[0] and "godot" in diag[0],
+          f"{p.name}: ?fps=1 — строка размеров страницы у верхнего края: {diag}")
+    p.check_console()
+    await p.ctx.close()
+    # обратный случай: innerWidth = 360 (книжная) с самого начала, окно альбомное
+    q = await new_page(b, "stale_w", touch=True, mobile=True, w=780, h=360, dpr=3,
+                       legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+    await q.ctx.add_init_script("Object.defineProperty(window, 'innerWidth', {configurable: true, get: () => 360});")
+    await orient(q, 780, 360, True)
+    await q.boot()
+    await q.pg.wait_for_timeout(1500)
+    await q.shot("1_title_stale_innerWidth")
+    await check_fit(q, 780, 360, "innerWidth = 360 при альбомном окне")
+    await q.press("Start", None, 1200)
+    st = await q.wait(lambda s: s.get("screen") == "hub", "касание «начать» при старом innerWidth", 10)
+    check(bool(st), f"{q.name}: касание «начать» попало (мастерская)")
+    q.check_console()
+    await q.ctx.close()
+
+
 async def sc_a11y(b):
     """prefers-reduced-motion → «Без анимации»; полный экран из настроек (в headless может не включиться)."""
     p = await new_page(b, "calm", motion="reduce")
@@ -705,6 +796,9 @@ async def sc_a11y(b):
     info(f"{p.name}: полный экран из настроек: document.fullscreenElement={fs}, игра видит {st.get('fullscreen')}")
     check(fs or st.get("fullscreen") is not None, f"{p.name}: кнопка полного экрана не падает")
     if fs:
+        await p.pg.wait_for_timeout(800)
+        await p.shot("2_fullscreen")
+        await check_fit(p, 1280, 720, "полный экран на компьютере")
         await p.press("Fullscreen", wait=800)
     p.check_console()
     await p.ctx.close()
@@ -860,7 +954,7 @@ async def sc_fpshud(b):
 
 
 SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
-             "guild": sc_guild, "phone": sc_phone, "a11y": sc_a11y, "fps": sc_fpshud, "perf": sc_perf,
+             "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "perf": sc_perf,
              "prof": sc_prof}
 
 

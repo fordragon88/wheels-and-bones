@@ -389,9 +389,11 @@ game_consts.json); ближняя к низу экрана точка детал
   wnb-godot:lang`) или язык браузера (ru → русский, иначе английский), потом игра сообщает свой (`wnbLang`). Заставка
   загрузки — тоже на этом языке.
 - **Плашка `?fps=1`** на сенсорном экране — шрифт 24 (а не 13) и две строки; вторая: холст в px, окно в CSS-пикселях,
-  devicePixelRatio (и «→ эффективный (res N)», если сработал потолок), кадры.
-- **Потолок разрешения холста `?res=N`** — высота игровой картинки 16:9 в пикселях холста; страница подменяет
-  `window.devicePixelRatio` (из него Godot считает размер холста), CSS-размер тот же, браузер растягивает. По
+  devicePixelRatio (и «→ эффективный (res N)», если сработал потолок), кадры. Плюс строка страницы у верхнего края
+  (HTML, 11 px): `inner · vv · screen · canvas css · buf · godot · fs · ориентация` — видна, даже если холст уехал.
+- **Потолок разрешения холста `?res=N`** — высота игровой картинки 16:9 в пикселях холста; страница считает буфер
+  холста как CSS-размер × эффективный dpr (политика холста 0, см. «Грабли браузерного экспорта»; `devicePixelRatio`
+  подменён тем же числом), CSS-размер тот же, браузер растягивает. По
   умолчанию 1080 и не ниже 1: на телефоне 360 CSS px × dpr 3 = 1080 — без изменений; планшеты и экраны с большой
   плотностью (картинка выше 1080 px) — до 1080: арт игры 1280×720 (фоны — 1:1), выше 1,5× логического размера
   выигрыша нет, а пикселей для видеокарты в 1,5–3 раза больше. `?res=720` — в 2,25 раза меньше пикселей (для замера на
@@ -532,8 +534,27 @@ game_consts.json); ближняя к низу экрана точка детал
   `.godot/`): «Identifier "Prof" not declared», и самопроверка висит.
 - Пауза под заслонкой: `get_tree().paused` + `RenderingServer.render_loop_enabled = false`; JS зовёт игру через
   `JavaScriptBridge.create_callback` (ссылку на колбэк держать в переменной узла).
-- Размер холста Godot считает из `window.devicePixelRatio` (`GodotDisplayScreen.getPixelRatio`) — потолок
-  разрешения делается подменой этого свойства на странице до старта движка; касания попадают верно.
+- **Размер холста ведёт страница (политика холста 0), а не движок по innerWidth/innerHeight.** При
+  `html/canvas_resize_policy=2` движок каждый кадр (`GodotDisplayScreen.updateSize`) брал окно =
+  `window.innerWidth/innerHeight × devicePixelRatio` и сам писал холсту `style.width/height`. На телефоне владельца
+  (Huawei Mate 20 Pro, Chrome, 780×360 CSS, dpr 3) после полного экрана и `orientation.lock('landscape')` из книжной
+  `innerHeight` оставался 780: окно Godot 780×780, картинка 16:9 (780×439) с полями сверху 170 px — шапка внизу
+  чёрной полосы, низ игры за экраном. В эмуляции Playwright не видно (там innerHeight честный). Теперь пресет — политика
+  0: движок только сверяет `canvas.width/height` с прошлым размером и, если изменились, берёт их как окно
+  (`desired_size`, `_updateGL`), CSS не трогает; касания и мышь считаются по `getBoundingClientRect()` и
+  `canvas.width/rect.width` — от политики не зависят. Страница (`wnbView` в shell.html): видимый размер — по раскладке
+  CSS (невидимый `#wnb-vp` `position: fixed; inset: 0`), не больше `visualViewport` (кроме набора в поле — экранная
+  клавиатура) и на сенсорном экране не больше `screen.width/height` (короткая/длинная сторона по
+  `screen.orientation.type` — так и на iPhone, где screen не поворачивается); целые CSS px, буфер = CSS × effDpr
+  (потолок `?res=`). Холст `position: fixed` в левом верхнем углу, документ не раздвигает; в `<meta viewport>`
+  `minimum-scale=1, maximum-scale=1`. Пересчёт: resize, visualViewport resize, ResizeObserver мерки, раз в 0,5 с; после
+  orientationchange / `screen.orientation` change / fullscreenchange / снятия заслонки / удачного `lock` — ещё 8 раз за
+  1,5 с (размеры на Android приходят с опозданием и по одному). Поле кода переставляется за холстом
+  (`wnbField.relayout`). `window.devicePixelRatio` подменён тем же effDpr (Godot `screen_get_scale`).
+  Проверка — web_smoke `stale`: окно 780×360, `innerHeight` подменён на 780 после «поворота» из книжной (и `innerWidth`
+  = 360 с загрузки): до правки картинка была в 0,171 780×439 (как на снимке владельца), после — 70,0 640×360.
+  `?fps=1` — строка `inner · vv · screen · canvas css/buf · godot · fs · ориентация` у верхнего края страницы
+  (HTML, поверх холста): по снимку видно, какое из значений врёт.
 - Playwright: `page.screenshot()` возвращает свой размер окна и сбрасывает `Emulation.setDeviceMetricsOverride` —
   «поворот телефона» в web_smoke делается `set_viewport_size` + CDP (screen и orientation); окно в полном экране
   (после первого касания на телефоне) Playwright не ресайзит — сначала `document.exitFullscreen()`.
@@ -565,7 +586,7 @@ python godot/tools/ref_shots.py                         # эталоны pygame-
 # сразу экран/задание для отладки: … --path godot -- --screen hub   |   -- --job joystick --variant 0
 #   … -- --fps — плашка кадров/с (как ?fps=1 в браузере);  -- --prof — профиль кадра в stdout раз в 3 с (как ?prof=1)
 python godot/tools/build_web.py [--base-url https://…/godot/] [--serve 8060]   # браузерная сборка → godot/build/web/
-python godot/tools/web_smoke.py [--no-build] [--only boot,play,links,migrate,net404,guild,phone,a11y,fps,perf,prof]
+python godot/tools/web_smoke.py [--no-build] [--only boot,play,links,migrate,net404,guild,phone,stale,a11y,fps,perf,prof]
 #   WNB_PERF_RES=720 — в perf ещё проход телефона с ?res=720; адрес: ?fps=1 плашка, ?prof=1 профиль (с ?test/?fps),
 #   ?res=720|1080|0 — потолок высоты картинки в px холста (по умолчанию 1080)
 #   «WEB SMOKE: N ok, 0 FAIL»; снимки godot/tests/web_shots/; звук браузера выключен (--mute-audio), голос — заглушка

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#18161e">
 <title>$GODOT_PROJECT_NAME</title>
 <!-- Страница браузерной Godot-версии «Колёс и Костей» (пресет export_presets.cfg → html/custom_html_shell).
@@ -12,8 +12,14 @@
 html, body, #canvas { margin: 0; padding: 0; border: 0; }
 html, body { width: 100%; height: 100%; background: #18161e; overflow: hidden; touch-action: none;
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
-#canvas { display: block; }
+/* холст: размер ведёт страница (wnbView ниже), в левом верхнем углу, документ не раздвигает */
+#canvas { display: block; position: fixed; left: 0; top: 0; width: 100px; height: 100px; }
 #canvas:focus { outline: none; }
+/* мерка видимого окна по раскладке CSS (не по window.innerWidth/innerHeight) */
+#wnb-vp { position: fixed; left: 0; top: 0; right: 0; bottom: 0; visibility: hidden; pointer-events: none; z-index: -1; }
+#wnb-diag { position: fixed; left: 0; right: 0; top: 0; z-index: 10001; pointer-events: none; padding: 1px 4px;
+  background: rgba(0,0,0,.62); color: #fff; font: 11px/1.3 Consolas, "DejaVu Sans Mono", monospace; text-align: center;
+  white-space: normal; }
 #wnb-load { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center;
   justify-content: flex-end; padding-bottom: 8vh; box-sizing: border-box; color: #f0b85a; transition: opacity .6s;
   background: linear-gradient(to bottom, rgba(0,0,0,0) 45%, rgba(10,8,14,.75) 100%), #1d1b24 url(splash.jpg) center / cover no-repeat; }
@@ -184,8 +190,19 @@ html, body, #canvas { overscroll-behavior: none; }
 
   // --- поле ввода кода поверх холста (окно «Вставить код» и имя в конструкторе ссылки): настоящее <input>, чтобы на
   // телефоне появлялась экранная клавиатура и работала вставка долгим нажатием. Игра рисует рамку, текст — здесь.
-  var fld = { el: null, enter: 0, esc: 0, key: '' };
+  var fld = { el: null, enter: 0, esc: 0, key: '', at: null };
+  // координаты игры (пиксели буфера холста) → CSS страницы; зовётся и при смене размера холста (wnbView)
+  function place() {
+    var f = fld.el, a = fld.at;
+    if (!f || !a || f.style.display === 'none') return;
+    var c = document.getElementById('canvas'), r = c.getBoundingClientRect();
+    var kx = r.width / (c.width || 1), ky = r.height / (c.height || 1);
+    f.style.left = (r.left + a[0] * kx) + 'px'; f.style.top = (r.top + a[1] * ky) + 'px';
+    f.style.width = (a[2] * kx) + 'px'; f.style.height = (a[3] * ky) + 'px';
+    f.style.fontSize = Math.max(12, a[4] * ky) + 'px';
+  }
   window.wnbField = {
+    relayout: place,
     show: function (key, x, y, w, h, value, maxLen, ph, fontPx) {
       var f = fld.el;
       if (!f) {
@@ -200,15 +217,13 @@ html, body, #canvas { overscroll-behavior: none; }
         f.addEventListener('keyup', function (e) { e.stopPropagation(); });
         document.body.appendChild(f);
       }
-      var c = document.getElementById('canvas'), r = c.getBoundingClientRect(), k = r.width / (c.width || 1);
-      f.style.left = (r.left + x * k) + 'px'; f.style.top = (r.top + y * k) + 'px';
-      f.style.width = (w * k) + 'px'; f.style.height = (h * k) + 'px';
-      f.style.fontSize = Math.max(12, fontPx * k) + 'px';
+      fld.at = [x, y, w, h, fontPx];
       f.maxLength = maxLen; f.placeholder = ph || '';
       f.setAttribute('aria-label', ph || key);
+      if (fld.key !== key) f.style.display = 'block';
+      place();
       if (fld.key !== key) {
         fld.key = key; f.value = value || ''; fld.enter = 0; fld.esc = 0;
-        f.style.display = 'block';
         var coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
         if (!coarse) setTimeout(function () { f.focus(); }, 0);   // на телефоне клавиатуру открывает касание
       }
@@ -257,16 +272,19 @@ html, body, #canvas { overscroll-behavior: none; }
   document.documentElement.lang = lang;
 
   // --- потолок разрешения холста: ?res=N — высота игровой картинки 16:9 в пикселях холста (0 — без потолка).
-  // Godot берёт масштаб холста из window.devicePixelRatio (GodotDisplayScreen.getPixelRatio) — подменяем его на
-  // меньший, если картинка выходит выше потолка; CSS-размер холста тот же, браузер растягивает. По умолчанию —
+  // Буфер холста = CSS-размер × effDpr() (считает wnbView ниже: политика холста 0, Godot размер не трогает); если
+  // картинка выходит выше потолка, effDpr меньше настоящего, CSS-размер тот же, браузер растягивает. По умолчанию —
   // RES_DEFAULT и не ниже 1 (только убирает лишнее на экранах с большой плотностью); с ?res= — как задано.
+  // window.devicePixelRatio подменён тем же effDpr — чтобы и Godot (screen_get_scale) видел тот же масштаб.
   var RES_DEFAULT = 1080;
   var qr = /[?&]res=(\d+)/.exec(location.search);
   var res = qr ? +qr[1] : RES_DEFAULT;
   var dprDesc = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio') ||
                 Object.getOwnPropertyDescriptor(Window.prototype, 'devicePixelRatio');
   function realDpr() { try { return (dprDesc && dprDesc.get ? dprDesc.get.call(window) : 1) || 1; } catch (e) { return 1; } }
-  function gameCssH() { return Math.max(1, Math.min(window.innerHeight, window.innerWidth * 9 / 16)); }
+  // размер видимого окна — из wnbView (мерка по раскладке CSS); до её появления — innerWidth/innerHeight
+  function viewCss() { return window.wnbView ? window.wnbView.size() : [window.innerWidth, window.innerHeight]; }
+  function gameCssH() { var v = viewCss(); return Math.max(1, Math.min(v[1], v[0] * 9 / 16)); }
   function effDpr() {
     var d = realDpr();
     if (res > 0 && gameCssH() * d > res) d = Math.max(qr ? 0.25 : 1, Math.min(d, res / gameCssH()));
@@ -293,7 +311,90 @@ $GODOT_HEAD_INCLUDE
 </head>
 <body>
 <canvas id="canvas">Your browser does not support the canvas tag.</canvas>
+<div id="wnb-vp" aria-hidden="true"></div>
 <noscript>Your browser does not support JavaScript.</noscript>
+<script>
+// Размер холста ведёт страница (пресет: html/canvas_resize_policy=0 — Godot берёт окно = canvas.width × canvas.height
+// и сам их не меняет). Раньше (политика 2) движок брал размер из window.innerWidth/innerHeight, а на телефоне после
+// полного экрана и поворота (Huawei Mate 20 Pro, Chrome) innerHeight оставался книжным (780 при 780×360): окно Godot
+// 780×780, картинка 16:9 уезжала вниз на 170 px. Теперь видимый размер — по раскладке CSS (#wnb-vp: position fixed,
+// inset 0), не больше visualViewport (кроме времени набора в поле — экранная клавиатура) и, на сенсорном экране, не
+// больше экрана (screen.width/height: короткая/длинная сторона по ориентации). Пересчёт — по событиям окна, экрана,
+// полного экрана, ResizeObserver, раз в 0,5 с и очередью попыток в течение 1,5 с после поворота/полного экрана.
+(function () {
+  'use strict';
+  var c = document.getElementById('canvas'), probe = document.getElementById('wnb-vp');
+  var touch = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  var cur = { w: 0, h: 0 };
+  function orientName() {
+    var o = screen.orientation && screen.orientation.type;
+    if (o) return o;
+    if (typeof window.orientation === 'number') return Math.abs(window.orientation) === 90 ? 'landscape' : 'portrait';
+    return '';
+  }
+  function typing() { var a = document.activeElement; return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
+  function measure() {
+    var r = probe.getBoundingClientRect(), w = r.width, h = r.height;
+    if (!(w > 0 && h > 0)) {
+      var de = document.documentElement;
+      w = de.clientWidth || window.innerWidth; h = de.clientHeight || window.innerHeight;
+    }
+    var vv = window.visualViewport;
+    if (vv && vv.width > 0 && vv.height > 0 && !typing()) { w = Math.min(w, vv.width); h = Math.min(h, vv.height); }
+    var sw = screen.width, sh = screen.height;
+    if (touch && sw > 0 && sh > 0) {
+      var lo = Math.min(sw, sh), hi = Math.max(sw, sh), o = orientName();
+      var land = o ? o.indexOf('landscape') === 0 : w > h;
+      if (land) { w = Math.min(w, hi); h = Math.min(h, lo); } else { w = Math.min(w, lo); h = Math.min(h, hi); }
+    }
+    return [Math.max(1, Math.floor(w)), Math.max(1, Math.floor(h))];
+  }
+  function fit() {
+    var m = measure();
+    cur.w = m[0]; cur.h = m[1];
+    var d = window.wnbRes ? window.wnbRes.eff() : (window.devicePixelRatio || 1);
+    var bw = Math.max(1, Math.round(m[0] * d)), bh = Math.max(1, Math.round(m[1] * d));
+    var sw = m[0] + 'px', sh = m[1] + 'px', changed = false;
+    if (c.style.width !== sw || c.style.height !== sh) { c.style.width = sw; c.style.height = sh; changed = true; }
+    if (c.width !== bw || c.height !== bh) { c.width = bw; c.height = bh; changed = true; }   // Godot подхватит в кадре
+    if (changed && window.wnbField && window.wnbField.relayout) window.wnbField.relayout();
+    if (diag) diagLine();
+    return changed;
+  }
+  var burstT = [];
+  function burst() {               // размеры на Android приходят с опозданием и по одному — проверить ещё несколько раз
+    burstT.forEach(clearTimeout);
+    burstT = [0, 60, 150, 300, 500, 750, 1000, 1500].map(function (t) { return setTimeout(fit, t); });
+  }
+  // строка для владельца (?fps=1): что видит страница — сверху, поверх всего, не в холсте
+  var diag = null;
+  if (/[?&]fps(=(?!(0|no|off|false)(&|#|$))[^&#]*)?(&|#|$)/i.test(location.search)) {   // как Web.flag("fps")
+    diag = document.createElement('div'); diag.id = 'wnb-diag'; diag.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(diag);
+  }
+  function fsOn() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  function line() {
+    var vv = window.visualViewport, g = window.wnbGodotSize || '?';
+    return 'inner ' + window.innerWidth + '×' + window.innerHeight +
+      ' · vv ' + (vv ? Math.round(vv.width) + '×' + Math.round(vv.height) : '-') +
+      ' · screen ' + screen.width + '×' + screen.height +
+      ' · canvas css ' + cur.w + '×' + cur.h + ' buf ' + c.width + '×' + c.height +
+      ' · godot ' + g + ' · fs ' + (fsOn() ? 1 : 0) + ' · ' + (orientName() || '-');
+  }
+  function diagLine() { var t = line(); if (diag.textContent !== t) diag.textContent = t; }
+  window.wnbView = { size: function () { return cur.w > 0 ? [cur.w, cur.h] : measure(); }, fit: fit, burst: burst, line: line };
+
+  fit();
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', burst);
+  if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', burst);
+  document.addEventListener('fullscreenchange', burst); document.addEventListener('webkitfullscreenchange', burst);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
+  if (window.ResizeObserver) new ResizeObserver(function () { fit(); }).observe(probe);
+  document.addEventListener('focusout', function () { setTimeout(fit, 0); });   // поле кода закрыто — снова по vv
+  setInterval(fit, 500);
+})();
+</script>
 <div id="wnb-live" aria-live="assertive" role="status"></div>
 <div id="wnb-load">
   <div class="t">Wheels &amp; Bones</div>
@@ -321,6 +422,7 @@ $GODOT_HEAD_INCLUDE
     if (v === cover.on) return;
     cover.on = v;
     cover.cbs.forEach(function (cb) { try { cb(v); } catch (e) {} });
+    if (!v && window.wnbView) window.wnbView.burst();          // игра снова видна — размер холста перепроверить
   }
   function full() {
     var f = de.requestFullscreen || de.webkitRequestFullscreen;
@@ -328,7 +430,11 @@ $GODOT_HEAD_INCLUDE
     try {
       var p = f.call(de);
       if (p && p.then) p.then(function () {
-        try { screen.orientation.lock('landscape').catch(function () {}); } catch (e) {}
+        if (window.wnbView) window.wnbView.burst();
+        try {
+          var l = screen.orientation.lock('landscape');
+          if (l && l.then) l.then(function () { if (window.wnbView) window.wnbView.burst(); }, function () {});
+        } catch (e) {}
       }).catch(function () {});
     } catch (e) {}
   }

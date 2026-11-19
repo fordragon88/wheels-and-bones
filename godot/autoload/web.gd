@@ -217,6 +217,8 @@ func _process(dt: float) -> void:
 			var page := ""
 			if on:                               # окно в CSS-пикселях, devicePixelRatio (→ с потолком ?res)
 				page = str(JavaScriptBridge.eval("window.wnbRes ? wnbRes.line() : ''", true))
+				# размер окна Godot — в строку размеров страницы (wnbView.line, сверху над игрой)
+				JavaScriptBridge.eval("window.wnbGodotSize = '%d\\u00d7%d'" % [ws.x, ws.y], true)
 			var a := "fps %.0f · min10s %.0f · max %.0f ms%s" % [fps, fps_min10, _worst_ms, " · touch" if _touch else ""]
 			var b := "%s %d×%d%s · %s" % [Loc.t("холст"), ws.x, ws.y, (" · " + page) if page != "" else "", Frames.status_line()]
 			_hud.text = (a + "
@@ -252,6 +254,12 @@ func state() -> Dictionary:
 		"fullscreen": DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN,
 		"text_k": Settings.a11y.get("text", 0), "speech_on": Settings.a11y.get("on", false),
 		"music": Audio._cur_theme, "buttons": _buttons(), "hint": [], "covered": covered, "paused": get_tree().paused}
+	# окно Godot (= буфер холста) и где в нём игровая картинка 1280×720 после растяжения (x, y, ш, в) — для проверки,
+	# что картинка целиком на экране (web_smoke stale)
+	var ws := DisplayServer.window_get_size()
+	var gr := get_tree().root.get_final_transform() * Rect2(0, 0, 1280, 720)
+	d["win"] = [ws.x, ws.y]
+	d["game"] = [snappedf(gr.position.x, 0.1), snappedf(gr.position.y, 0.1), snappedf(gr.size.x, 0.1), snappedf(gr.size.y, 0.1)]
 	if prof_on:
 		d["prof"] = Prof.summary
 	if scr != null:
