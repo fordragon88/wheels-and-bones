@@ -4,10 +4,15 @@ extends Control
 ## героя): въезд из-за левого края, полный ход 60 % времени, плавное торможение по косинусу до центра зоны коляски;
 ## кадр петли — по пройденному пути (колёса не проскальзывают), предел ускорения из ride.json. Без петли — скользящий
 ## портрет (4 с, RIDE_FLIP — отражённый). Линии скорости и пыль из-под колёс.
+## Гильдия (RIDE_ANIM_TECH, 19.11): петля по id про-задания (Бренна в коляске задания, Тавр пешком, Аэлин), свой срок
+## (RIDE_ANIM_T: Тавр — 7 с), въезд слева и остановка справа от кнопки (RIDE_TECH_STOP), после проезда герой стоит
+## там (stay — последний кадр петли). Нет петли или «Без анимации» — прежнее: коляска скользит, Бренна парит.
 
 var art: String = ""
 var chair_art: String = ""                 # Гильдия: едет коляска задания, Бренна парит рядом
 var tech: bool = false
+var job_id: String = ""                    # Гильдия: петля — по заданию
+var stay: bool = false                     # Гильдия: проезд кончился — герой стоит на месте остановки
 var loop_name: String = ""                 # выбрано при старте проезда — до конца проезда
 var stop_x: float = 575.0
 var t: float = 0.0
@@ -42,13 +47,22 @@ static func hero_loop(client_art: String) -> String:
 	return n if Frames.loop_count(n) > 0 else ""
 
 
-## Сколько длится проезд: с петлёй 4,6 с, без — 4,0 с.
+## Петля проезда про-задания Гильдии (по id задания) или "".
+static func tech_loop(jid: String) -> String:
+	var n: String = Frames.ride.get("anim_tech", {}).get(jid, "")
+	return n if Frames.loop_count(n) > 0 else ""
+
+
+## Сколько длится проезд: с петлёй 4,6 с (у петли может быть свой срок — Тавр 7 с), без — 4,0 с.
 func secs() -> float:
-	return float(_r.get("secs", 4.6)) if loop_name != "" else float(_r.get("secs_plain", 4.0))
+	if loop_name != "":
+		return float(_r.get("anim_t", {}).get(loop_name, _r.get("secs", 4.6)))
+	return float(_r.get("secs_plain", 4.0))
 
 
 func start(at: float) -> void:
-	var n := "" if tech else hero_loop(art)
+	stay = false
+	var n := tech_loop(job_id) if tech else hero_loop(art)
 	loop_name = n if n != "" and not Settings.calm() and Frames.loop_ready(n) else ""
 	t0 = at
 	active = true
@@ -61,7 +75,7 @@ func riding() -> bool:
 
 func _process(dt: float) -> void:
 	t += dt
-	if active:
+	if active or stay:
 		queue_redraw()
 		_add.queue_redraw()
 
@@ -88,16 +102,29 @@ func _anim_state() -> Array:
 		v = cos(PI / 2 * u)
 	var sz := anim_size(loop_name)
 	var x0 := -sz.x / 2
-	var P := stop_x - x0
+	var ts: Array = _r.get("tech_stop", [1040, 560])
+	var P := (float(ts[0]) if tech else stop_x) - x0
 	var lp: Array = _r.get("loop", {}).get(loop_name, [12, 0.25, 2.4])
 	var roll := float(lp[1]) * sz.y
 	var peak := P / (dist * T)
 	var tau := e * P / maxf(roll, peak / float(lp[2]))
-	return [x0 + P * e - sz.x / 2, float(_r.get("floor", 534)) - sz.y, v, tau, float(lp[0])]
+	return [x0 + P * e - sz.x / 2, floor_y() - sz.y, v, tau, float(lp[0])]
+
+
+func floor_y() -> float:
+	return float((_r.get("tech_stop", [1040, 560]) as Array)[1]) if tech else float(_r.get("floor", 534))
+
+
+## Где герой стоит после проезда петлёй (Гильдия): рамка последнего кадра; пустая — не стоит.
+func stay_rect() -> Rect2:
+	if not stay or loop_name == "":
+		return Rect2()
+	var s := _anim_state()
+	return Rect2(roundf(s[0]), s[1], anim_size(loop_name).x, anim_size(loop_name).y)
 
 
 func _draw() -> void:
-	if not active:
+	if not active and not stay:
 		return
 	if loop_name != "":
 		var s := _anim_state()
@@ -105,7 +132,7 @@ func _draw() -> void:
 		var x: float = s[0]
 		var y: float = s[1]
 		var v: float = s[2]
-		if v > 0.35:                                  # линии скорости — пока едет быстро
+		if v > 0.35 and active:                       # линии скорости — пока едет быстро
 			for i in 6:
 				var ly := y + sz.y * 0.3 + i * 26
 				var ln := (60 + 40 * BgLayer._h01(i, 3)) * v
@@ -114,7 +141,8 @@ func _draw() -> void:
 		var tex := Frames.loop_frame(loop_name, s[3], s[4])
 		if tex:
 			draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(roundf(x), y, sz.x, sz.y)), false)
-			drawn += 1
+			if active:
+				drawn += 1
 		return
 	var k := clampf((t - t0) / secs(), 0.0, 1.0)
 	var e := k * k * (3 - 2 * k)
@@ -155,7 +183,7 @@ func _draw() -> void:
 
 
 func _draw_add() -> void:
-	if not active or not Settings.glow:
+	if not active or not Settings.glow:                # стоит после проезда — без пыли (как в game.py)
 		return
 	if loop_name != "":
 		var s := _anim_state()

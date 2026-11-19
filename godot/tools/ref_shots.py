@@ -178,8 +178,14 @@ def tech_do(sid):
         g.choose_spec(next(i for i, o in enumerate(st["spec"]["options"]) if o[1]))
     elif r == "mini":
         m = g.mini_pending
-        m["value"] = m["cfg"].get("lo", 0)
-        g.mini_gap_check() if m["kind"] == "gap" else g.mini_pump_done()
+        if m["kind"] == "meter":
+            g.mini_meter(next(i for i, o in enumerate(m["cfg"]["options"]) if o[1]))
+        elif m["kind"] == "ping":
+            for i in list(m["dull"]):
+                g.mini_ping(i)
+        else:
+            m["value"] = m["cfg"].get("lo", 0)
+            g.mini_gap_check() if m["kind"] == "gap" else g.mini_pump_done()
 
 
 g.done = {j["id"] for j in game.JOBS[:5]}
@@ -423,3 +429,18 @@ g.open_share("paste")
 scan_shot("scan_share", "sfield")
 g.share_ui = None
 game.A11Y["scan"] = 0
+
+
+# ---- проезд в Гильдии петлёй (RIDE_ANIM_TECH): середина и «после проезда» — t_q6brake (Бренна), toe (Тавр) ----
+game.A11Y["scan"] = 0
+for jid_ in ("t_q6brake", "toe"):
+    tech(jid_)
+    for s_ in g.cur["steps"]:
+        tech_do(s_["id"])
+    g.mistakes = 0
+    g.toast_timer = 0
+    run(g, 1.0)
+    g.start_ride()
+    secs_ = g.ride_secs()
+    run(g, secs_ / 2, f"tech_ride_{jid_}_mid")
+    run(g, secs_ / 2 + 1.0, f"tech_ride_{jid_}_after")

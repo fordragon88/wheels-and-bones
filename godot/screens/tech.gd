@@ -222,6 +222,7 @@ func build() -> void:
 	ride.tech = true
 	ride.art = job["client_art"]
 	ride.chair_art = job["chair_art"]
+	ride.job_id = job["id"]
 	add_child(ride)
 	_dispute_btn = GameButton.make(Rect2(UI.W - 340, 10, 176, 34), "Я НЕ СОГЛАСЕН", UI.PURPLE)
 	_dispute_btn.name = "Dispute"
@@ -349,6 +350,8 @@ func complete_tech_step(st: Dictionary) -> void:
 	_update_a11y()
 	if done_steps.size() >= job["steps"].size():
 		phase = "test"
+		if RideView.tech_loop(job["id"]) != "":       # пока читают — подгрузить кадры петли проезда (anim_prefetch)
+			Frames.want_loop(RideView.tech_loop(job["id"]))
 		ghost_line = "Экзамен: сборка окончена. Финальная проверка." if exam \
 			else "Бренна: «Закончил? Слова дешёвые. Проверим под нагрузкой.»"
 		if not exam:
@@ -689,7 +692,8 @@ func tick(dt: float) -> void:
 		ride.active = false
 		ride_done = true
 		ghost_line = "Бренна: «Проверка пройдена. Дочитаешь — жми ГОТОВО.»"
-		chair.visible = true
+		ride.stay = ride.loop_name != "" and not Settings.calm()   # проехал(а) и стоит справа, а не пустая коляска
+		chair.visible = not ride.stay
 		_test_btn.visible = true
 		_test_btn.set_label("ГОТОВО ▸")
 		UI.focus_later(_test_btn)

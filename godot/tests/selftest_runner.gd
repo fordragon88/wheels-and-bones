@@ -183,6 +183,7 @@ func _run() -> void:
 	var sp_res: Array = await _speech_ref()
 	var sw_line: String = await _flow_switch(["flat:0", "brake:0", "spokes:0"], ["truing"])
 	var pad_line: String = await _flow_pad(["flat:0", "brake:0", "lift:0"], ["truing"])
+	var ride_line: String = await _flow_tech_rides()
 	Loc.audit = false
 	var n_audit: int = Loc.audited.size()
 	var dump := OS.get_cmdline_user_args().find("--dump-tr")
@@ -215,7 +216,7 @@ func _run() -> void:
 	SaveGame.reset()
 	await _flow_mouse()
 	await _flow_keyboard()
-	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; Коды и ссылки: кодов game.py прочитано %d (P/J/R, те же данные), битых отвергнуто %d, ссылок и разборов = game.py %d, своих кодов и ссылок для check_share.py %d; прогресс: копировать → сбросить → вставить → тот же, «вернуть прежний»; %s; «продолжить / обычная игра»; итог в таблицу = game.py (в сеть — ничего); Озвучка: %d/%d сводок, подписей фокуса и фраз клавиш = game.py (RU/EN), в тестах голос не звучит; %s; %s; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, sh[0], sh[1], sh[2], share_out.size(), sh_line, sp_res[0], sp_res[1], sw_line, pad_line, n_gd, n_audit,
+	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; Коды и ссылки: кодов game.py прочитано %d (P/J/R, те же данные), битых отвергнуто %d, ссылок и разборов = game.py %d, своих кодов и ссылок для check_share.py %d; прогресс: копировать → сбросить → вставить → тот же, «вернуть прежний»; %s; «продолжить / обычная игра»; итог в таблицу = game.py (в сеть — ничего); Озвучка: %d/%d сводок, подписей фокуса и фраз клавиш = game.py (RU/EN), в тестах голос не звучит; %s; %s; %s; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, sh[0], sh[1], sh[2], share_out.size(), sh_line, sp_res[0], sp_res[1], sw_line, pad_line, ride_line, n_gd, n_audit,
 		"" if _drawn > 0 else " (без окна _draw не вызывается — проверены строки данных и обработчиков)"],
 		n_jobs, n_var, n_tech)
 
@@ -2440,6 +2441,8 @@ func _only(what: String) -> void:
 				for v in maxi(1, job.get("variants", []).size()):
 					all.append("%s:%d" % [job["id"], v])
 			line = await _flow_switch(all, Content.tech_jobs.map(func(j: Dictionary) -> String: return j["id"]))
+		"rides":
+			line = await _flow_tech_rides()
 		"pad":
 			line = await _flow_pad(["flat:0", "brake:0", "lift:0"], ["truing"])
 	Nav.shutdown()
@@ -2698,3 +2701,55 @@ func _flow_pad(jobs: Array, techs: Array) -> String:
 	ctl_mode = ""
 	return "Геймпад: %d заданий + %d про-заданий, примерка, настройки, крестовина/LB/RB/Start/Back/Y/B — нажатий %d" % [
 		jobs.size(), techs.size(), Nav.pad_presses]
+
+
+## Гильдия: проезд петлёй по id про-задания (RIDE_ANIM_TECH): нужная петля, свой срок, остановка справа, после проезда
+## герой стоит; «Без анимации» — прежнее (коляска по центру). Возврат: строка для итога.
+func _flow_tech_rides() -> String:
+	var at: Dictionary = Frames.ride.get("anim_tech", {})
+	var ts: Array = Frames.ride.get("tech_stop", [1040, 560])
+	var ok := 0
+	for jid: String in at:
+		var name: String = at[jid]
+		if Frames.loop_count(name) < 2:
+			err("проезд Гильдии %s: нет кадров петли %s" % [jid, name])
+			continue
+		var scr: Node = await _open_tech(jid)
+		while scr.phase == "repair":
+			scr.step_skip()
+		await _frames(1)
+		Frames.want_loop(name)
+		Frames.flush()
+		scr._test_pressed()
+		await _frames(2)
+		if scr.ride.loop_name != name:
+			err("проезд Гильдии %s: петля «%s», нужна %s" % [jid, scr.ride.loop_name, name])
+			continue
+		var want_t: float = float(Frames.ride.get("anim_t", {}).get(name, Frames.ride.get("secs", 4.6)))
+		if not is_equal_approx(scr.ride.secs(), want_t):
+			err("проезд Гильдии %s: срок %.1f с, нужно %.1f" % [jid, scr.ride.secs(), want_t])
+		if scr.ride.drawn == 0:
+			err("проезд Гильдии %s: кадры петли не рисуются" % jid)
+		scr.ride.t0 = scr.ride.t - scr.ride.secs() - 0.01
+		await _frames(3)
+		var r: Rect2 = scr.ride.stay_rect()
+		if not scr.ride_done or r.size == Vector2.ZERO or scr.chair.visible:
+			err("проезд Гильдии %s: после проезда герой не стоит (или видна пустая коляска)" % jid)
+			continue
+		if absf(r.get_center().x - float(ts[0])) > 2 or absf(r.end.y - float(ts[1])) > 1:
+			err("проезд Гильдии %s: остановка %s, нужно центр x=%d, пол %d" % [jid, r, ts[0], ts[1]])
+			continue
+		ok += 1
+	# «Без анимации» — прежнее: без петли, коляска по центру после проверки
+	var calm0: bool = Settings.a11y.get("calm", false)
+	Settings.a11y["calm"] = true
+	var sc2: Node = await _open_tech("toe")
+	while sc2.phase == "repair":
+		sc2.step_skip()
+	await _frames(1)
+	sc2._test_pressed()
+	await _frames(3)
+	if sc2.ride.loop_name != "" or not sc2.ride_done or sc2.ride.stay or not sc2.chair.visible:
+		err("проезд Гильдии «Без анимации»: не прежнее поведение")
+	Settings.a11y["calm"] = calm0
+	return "проезд Гильдии петлёй: %d/%d про-заданий (петля, срок, остановка справа, стоит после), «Без анимации» — прежнее" % [ok, at.size()]

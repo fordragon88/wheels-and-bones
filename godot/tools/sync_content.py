@@ -141,7 +141,8 @@ def game_tables():
         ride = {"anim": G.RIDE_ANIM, "loop": {k: list(v) for k, v in G.RIDE_LOOP.items()},
                 "scale": getattr(G, "RIDE_SCALE", {}), "aspect": getattr(G, "RIDE_ASPECT", {}),
                 "secs": G.RIDE_ANIM_SECS, "secs_plain": G.RIDE_SECS, "height": G.RIDE_ANIM_H, "floor": G.RIDE_FLOOR,
-                "cruise": G.RIDE_CRUISE, "flip": sorted(getattr(G, "RIDE_FLIP", [])), "anim_fps": game.ANIM_FPS}
+                "cruise": G.RIDE_CRUISE, "anim_tech": dict(G.RIDE_ANIM_TECH), "anim_t": dict(G.RIDE_ANIM_T),
+                "tech_stop": list(G.RIDE_TECH_STOP), "flip": sorted(getattr(G, "RIDE_FLIP", [])), "anim_fps": game.ANIM_FPS}
         json.dump(ride, open(os.path.join(DST, "frames", "ride.json"), "w", encoding="utf-8"), ensure_ascii=False,
                   indent=1, sort_keys=True)
         # звуки: синтез pygame-версии → WAV 22 050 Гц моно 16 бит

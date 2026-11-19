@@ -16,7 +16,8 @@ const ALL := ["title", "title_en", "hub", "job_flat_diagnose", "job_flat_inspect
 	"seat_fit_dryad_good", "seat_fit_owl", "seat_fit_owl_good", "seat_fit_orc", "seat_fit_orc_good", "seat_lesson_front",
 	"seat_lesson_front_norm", "seat_quiz_wedge", "seat_quiz_wedge_after", "seat_quiz_pads", "seat_quiz_pads_after",
 	"share_paste", "share_confirm", "share_builder", "hub_assign", "share_summary", "share_result", "share_resume",
-	"scan_hub", "scan_job", "scan_settings", "scan_seat", "scan_share"]
+	"scan_hub", "scan_job", "scan_settings", "scan_seat", "scan_share", "tech_ride_t_q6brake_mid",
+	"tech_ride_t_q6brake_after", "tech_ride_toe_mid", "tech_ride_toe_after"]
 
 var out_dir := ""
 
@@ -66,11 +67,21 @@ func _tech_do(scr: Node, sid: String) -> void:
 			if st["spec"]["options"][i][1]:
 				scr.choose_spec(i)
 	if scr.mini:
-		scr.mini.value = int(scr.mini.cfg.get("lo", 0))
-		if scr.mini.kind == "gap":
-			scr.mini.gap_check()
+		var m: MiniGame = scr.mini
+		if m.kind == "meter":
+			for i in m.cfg["options"].size():
+				if m.cfg["options"][i][1]:
+					m.meter(i)
+					break
+		elif m.kind == "ping":
+			for i: int in m.dull.keys():
+				m.ping(i)
 		else:
-			scr.mini.pump_done()
+			m.value = int(m.cfg.get("lo", 0))
+			if m.kind == "gap":
+				m.gap_check()
+			else:
+				m.pump_done()
 
 
 func _tech_shot(name: String) -> void:
@@ -112,6 +123,30 @@ func _tech_shot(name: String) -> void:
 			scr.select_tool(st["tool"])
 			scr.op_clicked("p_disc_neg")
 			await _wait(1.2)
+		"tech_ride_t_q6brake_mid", "tech_ride_toe_mid", "tech_ride_t_q6brake_after", "tech_ride_toe_after":
+			var jid := "t_q6brake" if name.contains("t_q6brake") else "toe"
+			if not (Nav.current_name == "tech" and Nav.current.job["id"] == jid):
+				scr = await _tech_open(jid)
+				for p: String in scr.job.get("manual", []):
+					scr.manual_viewed[p] = true
+				for st: Dictionary in scr.job["steps"]:
+					_tech_do(Nav.current, st["id"])
+				scr = Nav.current
+				scr.mistakes = 0
+				Frames.want_loop(RideView.tech_loop(jid))
+				Frames.flush()
+				Nav.toast.timer = 0.0
+				await _wait(1.0)
+				scr._test_pressed()
+			scr = Nav.current
+			var secs: float = scr.ride.secs()
+			if name.ends_with("_mid"):
+				scr.ride.t0 = scr.ride.t - secs / 2 + 0.03
+			else:
+				scr.ride.t0 = scr.ride.t - secs - 1.0
+				await _wait(0.3)
+			await get_tree().process_frame
+			await get_tree().process_frame
 		"tech_test", "tech_ride", "tech_result":
 			scr = await _tech_open("truing")
 			for p: String in scr.job.get("manual", []):
@@ -123,6 +158,8 @@ func _tech_shot(name: String) -> void:
 			Nav.toast.timer = 0.0
 			await _wait(1.0)
 			if name != "tech_test":
+				Frames.want_loop(RideView.tech_loop("truing"))
+				Frames.flush()
 				scr._test_pressed()
 				await _wait(2.0)
 			if name == "tech_result":
@@ -420,6 +457,10 @@ func _run() -> void:
 	get_viewport().gui_disable_input = true
 	SaveGame.tutorial_skipped = true          # как в ref_shots.py
 	for name: String in want:
+		if not name.begins_with("scan_") and Settings.a11y.get("scan", 0):   # после снимков «одной кнопки» — обычный режим
+			Settings.a11y["scan"] = 0
+			A11y.scan_sub = {}
+			Share._close_dlg()
 		if name.begins_with("title"):
 			Settings.lang = "en" if name.ends_with("_en") else "ru"
 			Loc.code = Settings.lang
