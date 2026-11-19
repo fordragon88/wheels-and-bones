@@ -694,6 +694,13 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-19 — Claude (Fable 5.2), ветка `godot-port` — **Godot-версия выложена на тестовый адрес**:
+  https://fordragon88.github.io/wheels-and-bones-test/godot/ (репозиторий `wheels-and-bones-test`, подпапка `godot/`,
+  коммит eefd5b5; сборка из 5e4206a: `python godot/tools/build_web.py`, папка `godot/build/web` целиком, 124 МБ с кадрами).
+  Pages отдаёт .wasm и .pck сжатыми (10,2 и 8,9 МБ). `WNB_URL=<адрес> python godot/tools/web_smoke.py --no-build --only
+  boot,play,guild,perf` по живому адресу — 25 ok, 0 FAIL (локально полный прогон — 60 ok). Шаблоны экспорта: tpz в
+  `D:\Godot	emplates_dl\`, установлены только web_*. Pygame-тест в корне того же адреса не тронут (его выкладка
+  подпапку `godot/` не стирает). Не проверено: настоящий телефон (замер владельца, `?fps=1`), звук на слух, iOS/Safari.
 - 2026-11-19 — Claude (Fable 5.2), ветка `godot-port` — **Godot: экспорт в браузер (шаг 5)**. Пресет
   `godot/export_presets.cfg` «Web» (однопоточный, Compatibility, своя страница `godot/web/shell.html`); сборка
   `python godot/tools/build_web.py [--base-url URL]` → `godot/build/web/` (не в git; копия проекта `build/web_stage/`,
