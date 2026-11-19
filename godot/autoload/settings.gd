@@ -38,12 +38,29 @@ func _init() -> void:
 		a11y["calm"] = true
 
 
+## Браузер: файл pygame-версии с того же сайта (она хранит save.json/settings.json в localStorage «wnb:<имя>»,
+## game.web_persist); "" — нет. Только читаем — старое не трогаем.
+static func web_legacy(name: String) -> String:
+	if not OS.has_feature("web"):
+		return ""
+	var v: Variant = JavaScriptBridge.eval("(function(){try{return localStorage.getItem(%s)||''}catch(e){return ''}})()" %
+		JSON.stringify("wnb:" + name), true)
+	return str(v) if v != null else ""
+
+
 func _load() -> void:
-	if not FileAccess.file_exists(PATH):
-		return
-	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(PATH))
+	var text := ""
+	var legacy := false
+	if FileAccess.file_exists(PATH):
+		text = FileAccess.get_file_as_string(PATH)
+	else:
+		text = web_legacy("settings.json")       # первый запуск в браузере — настройки pygame-версии, если были
+		legacy = text != ""
+	var data: Variant = JSON.parse_string(text) if text != "" else null
 	if not data is Dictionary:
 		return
+	if legacy:
+		save.call_deferred()                     # дальше — свой файл
 	var d: Dictionary = data
 	for k: String in d:
 		if not k in ["volume", "lang", "glow", "a11y"]:

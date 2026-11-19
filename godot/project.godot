@@ -32,6 +32,7 @@ Nav="*res://autoload/nav.gd"
 Feedback="*res://autoload/feedback.gd"
 Share="*res://autoload/share.gd"
 A11y="*res://autoload/a11y.gd"
+Web="*res://autoload/web.gd"
 
 [display]
 

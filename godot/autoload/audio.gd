@@ -5,6 +5,9 @@ extends Node
 ## Громкости — из Settings.vol (master/music/sfx/amb, on). Фоновые петли сцен (set_ambient) — amb_<фон>.wav
 ## (выгружены из синтезатора pygame), по фону экрана: старая гаснет 0,4 с, новая вступает 0,9 с.
 ## Тон насоса по давлению (snd_pitch) — pitch_00…pitch_20.wav.
+## Браузер: эффекты и фоновые петли — режим Sample (Web Audio, по умолчанию с 4.3: без треска в однопоточной сборке);
+## музыка — не через AudioStreamPlayer, а элементом <audio> страницы (Web.music_*): файл рядом с игрой (в пакете
+## её нет — первая загрузка легче), браузер декодирует поток сам, а Sample распаковал бы всю тему в память разом.
 
 const SFX_DIR := "res://content/sfx/"
 const MUSIC_DIR := "res://content/music/"
@@ -97,6 +100,8 @@ func stop_all() -> void:
 		p.stream = null
 	_music.stop()
 	_music.stream = null
+	if Web.on:
+		Web.music_stop()
 	for p in [_amb, _amb_old]:
 		p.stop()
 		p.stream = null
@@ -163,7 +168,13 @@ func _process(dt: float) -> void:
 			_cur_theme = _want_theme
 			_music.stop()
 			var path := MUSIC_DIR + _cur_theme + ".mp3"
-			if _cur_theme != "" and ResourceLoader.exists(path):
+			if Web.on:                                   # браузер: музыка — <audio> страницы, файлом рядом с игрой
+				_xf = 0.0
+				if _cur_theme != "":
+					Web.music_play(_cur_theme)
+				else:
+					Web.music_stop()
+			elif _cur_theme != "" and ResourceLoader.exists(path):
 				var st := load(path) as AudioStreamMP3
 				if st:
 					st = st.duplicate() as AudioStreamMP3
@@ -193,6 +204,8 @@ func music_level() -> float:
 func apply_volume() -> void:
 	if _music:
 		var lvl := music_level()
+		if Web.on:
+			Web.music_volume(lvl)
 		_music.volume_db = linear_to_db(maxf(0.0001, lvl))
 		_music.stream_paused = lvl <= 0.0001 and _music.playing
 		_amb.volume_db = linear_to_db(maxf(0.0001, amb_level() * _amb_k))

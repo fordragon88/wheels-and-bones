@@ -37,7 +37,8 @@ var help: HelpOverlay
 var _fade: TextureRect
 var _fade_t: float = -1.0
 var _esc_t: float = 0.0
-var support_opened: int = 0               # сколько раз нажали «Поддержать» (тесты)                   # «ещё раз Esc — выйти»
+var _touch_as_mouse: bool = bool(ProjectSettings.get_setting("input_devices/pointing/emulate_mouse_from_touch", true))
+var support_opened: int = 0              # сколько раз нажали «Поддержать» (тесты)                   # «ещё раз Esc — выйти»
 
 
 func _ready() -> void:
@@ -351,6 +352,14 @@ func _input(e: InputEvent) -> void:
 			UI.kb_active = true
 		get_viewport().set_input_as_handled()
 		return
+	if (e is InputEventScreenTouch or e is InputEventScreenDrag) and _touch_as_mouse:
+		# касание уже пришло событием мыши (emulate_mouse_from_touch) — само касание интерфейсу не отдаём: кнопки
+		# Godot 4.7 нажимаются и им, одно касание давало ДВА нажатия (браузер на телефоне: «начать» → мастерская →
+		# сразу карточка под пальцем)
+		if e is InputEventScreenTouch and e.is_pressed():
+			toast.on_input()
+		get_viewport().set_input_as_handled()
+		return
 	if (e is InputEventJoypadButton or e is InputEventJoypadMotion) and _pad(e):
 		if not UI.kb_active:
 			UI.kb_active = true
@@ -432,8 +441,10 @@ func _unhandled_input(e: InputEvent) -> void:
 
 
 func _toggle_fullscreen() -> void:
-	if OS.has_feature("web") or test_mode:
+	if test_mode:
 		return
+	# браузер: полный экран можно включить только из обработчика нажатия — Godot сам вызывает это внутри события
+	# страницы (кнопка настроек, F11 на холсте); иначе браузер молча откажет
 	var fs := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if fs else DisplayServer.WINDOW_MODE_FULLSCREEN)
 

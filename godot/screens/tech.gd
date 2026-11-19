@@ -704,6 +704,8 @@ func tick(dt: float) -> void:
 		esc_t -= dt
 	_talk_tick()
 	var riding := ride.riding()
+	if Frames.net and phase == "test" and not ride_done and not riding and RideView.tech_loop(job["id"]) != "":
+		Frames.want_loop(RideView.tech_loop(job["id"]))   # браузер: петля качается по сети — держать, пока читают
 	if ride.active and not riding:
 		ride.active = false
 		ride_done = true

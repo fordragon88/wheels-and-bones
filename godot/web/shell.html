@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#18161e">
+<title>$GODOT_PROJECT_NAME</title>
+<!-- Страница браузерной Godot-версии «Колёс и Костей» (пресет export_presets.cfg → html/custom_html_shell).
+     Собирает godot/tools/build_web.py: он же переименовывает файлы движка и пакета с меткой версии (против кеша)
+     и правит GODOT_CONFIG. Помощники для игры (window.wnb*) — ниже, их зовёт autoload/web.gd через JavaScriptBridge. -->
+<style>
+html, body, #canvas { margin: 0; padding: 0; border: 0; }
+html, body { width: 100%; height: 100%; background: #18161e; overflow: hidden; touch-action: none;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+#canvas { display: block; }
+#canvas:focus { outline: none; }
+#wnb-load { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-end; padding-bottom: 8vh; box-sizing: border-box; color: #f0b85a; transition: opacity .6s;
+  background: linear-gradient(to bottom, rgba(0,0,0,0) 45%, rgba(10,8,14,.75) 100%), #1d1b24 url(splash.jpg) center / cover no-repeat; }
+#wnb-load .t { font: bold clamp(30px, 6vw, 60px) Georgia, "Times New Roman", serif; letter-spacing: 2px;
+  text-shadow: 0 2px 16px #000, 0 0 3px #000; margin-bottom: 10px; }
+#wnb-load progress { width: min(460px, 80vw); height: 14px; accent-color: #e8a33d; }
+#wnb-load .m { font: bold 15px sans-serif; color: #ece6d4; text-shadow: 0 1px 6px #000; margin-top: 10px; min-height: 20px;
+  text-align: center; padding: 0 16px; }
+#wnb-load .e { display: none; max-width: 640px; margin: 12px 16px 0; padding: 12px; border-radius: 8px;
+  background: #5b3943; border: 1px solid #9b3943; color: #eee; font: 14px sans-serif; text-align: center; }
+#wnb-field { position: fixed; z-index: 5; display: none; box-sizing: border-box; margin: 0; border: 0; outline: none;
+  background: transparent; color: #f2f2f2; caret-color: #7fe3ff; font-family: "DejaVu Sans", Verdana, sans-serif;
+  padding: 0 10px; -webkit-user-select: text; user-select: text; touch-action: auto; }
+#wnb-field::placeholder { color: #6a6a78; }
+#wnb-live { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; overflow: hidden; }
+@media (max-height: 480px) { #wnb-load { padding-bottom: 3vh; } #wnb-load .t { margin-bottom: 4px; } }
+</style>
+<script>
+// Помощники для игры. Всё, что игра зовёт из GDScript (autoload/web.gd, frames.gd, audio.gd, share_dialog.gd).
+(function () {
+  'use strict';
+  // --- сеть: кадры поворота и петли (frames/…), музыка — файлами рядом с игрой. fetch в браузере идёт параллельно
+  // и мимо игрового кадра; игра раз в кадр забирает готовое (next/take), декодирует WebP сама.
+  var net = { want: [], active: 0, max: 6, done: [], bufs: {}, dims: {}, ok: 0, fail: 0, bytes: 0, dec: 0, decMs: 0,
+              worker: null, mode: 'worker' };
+  // Кадры (WebP) распаковывает фоновый поток страницы (Worker): createImageBitmap → WebGL2 → readPixels даёт
+  // RGBA как есть (без домножения на прозрачность — цвет под прозрачными пикселями не теряется, как при чтении через
+  // 2D-холст). Игре остаётся скопировать готовые пиксели и построить mipmaps — в игровом кадре втрое-вчетверо меньше
+  // работы, чем распаковка WebP в WebAssembly. Нет Worker/OffscreenCanvas/WebGL2 — игра распаковывает сама (сырые байты).
+  function workerSrc() {
+    var gl = null;
+    function viaGL(bmp) {
+      if (gl === null) {
+        try { gl = new OffscreenCanvas(1, 1).getContext('webgl2', { premultipliedAlpha: false, antialias: false }) || false; }
+        catch (e) { gl = false; }
+      }
+      if (!gl) return null;
+      var w = bmp.width, h = bmp.height, tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
+      var fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      var px = new Uint8Array(w * h * 4);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.deleteFramebuffer(fb);
+      gl.deleteTexture(tex);
+      return px;
+    }
+    onmessage = function (e) {
+      var d = e.data, t0 = performance.now();
+      createImageBitmap(new Blob([d.buf]), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }).then(function (bmp) {
+        var px = viaGL(bmp), w = bmp.width, h = bmp.height;
+        bmp.close();
+        if (!px) throw new Error('no webgl2');
+        postMessage({ u: d.u, w: w, h: h, px: px.buffer, ms: performance.now() - t0 }, [px.buffer]);
+      }).catch(function () {
+        postMessage({ u: d.u, w: 0, h: 0, px: d.buf, ms: 0, raw: true }, [d.buf]);
+      });
+    };
+  }
+  try {
+    if (window.Worker && window.OffscreenCanvas && window.createImageBitmap && !/[?&]decode=godot/.test(location.search)) {
+      net.worker = new Worker(URL.createObjectURL(new Blob(['(' + workerSrc + ')()'], { type: 'text/javascript' })));
+      net.worker.onmessage = function (e) {
+        var m = e.data;
+        net.bufs[m.u] = m.px;
+        if (m.w > 0) { net.dims[m.u] = m.w + ',' + m.h; net.dec++; net.decMs += m.ms; }
+        else if (m.raw) net.mode = 'godot';        // фоновая распаковка не вышла — дальше игра распаковывает сама
+        net.done.push(m.u);
+      };
+      net.worker.onerror = function () { net.worker = null; net.mode = 'godot'; };
+    } else net.mode = 'godot';
+  } catch (e) { net.worker = null; net.mode = 'godot'; }
+  function pump() {
+    while (net.active < net.max && net.want.length) {
+      var u = net.want.shift();
+      net.active++;
+      fetch(u).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.arrayBuffer();
+      }).then(function (b) {
+        net.ok++; net.bytes += b.byteLength;
+        if (net.worker && net.mode === 'worker' && /\.webp(\?|$)/.test(this)) {
+          net.worker.postMessage({ u: this, buf: b }, [b]);
+        } else {
+          net.bufs[this] = b; net.done.push(this);
+        }
+      }.bind(u), function () {
+        net.bufs[this] = null; net.fail++; net.done.push(this);
+      }.bind(u)).then(function () { net.active--; pump(); });
+    }
+  }
+  window.wnbNet = {
+    get: function (u) { net.want.push(u); pump(); },
+    // готовые адреса через \n (за один вызов из игры), пусто — ничего нового
+    next: function () { var d = net.done; net.done = []; return d.join('\n'); },
+    // "ш,в" — пиксели RGBA уже распакованы фоновым потоком; "" — сырые байты файла (распаковывает игра)
+    dims: function (u) { return net.dims[u] || ''; },
+    take: function (u) { var b = net.bufs[u]; delete net.bufs[u]; delete net.dims[u]; return b ? new Uint8Array(b) : null; },
+    drop: function (prefix) { net.want = net.want.filter(function (u) { return u.indexOf(prefix) !== 0; }); },
+    // проверка (web_smoke): распаковать файл тем же фоновым способом → {w, h, b64} (RGBA в base64)
+    probe: function (u) {
+      return fetch(u).then(function (r) { return r.arrayBuffer(); }).then(function (b) {
+        return new Promise(function (res) {
+          var w = new Worker(URL.createObjectURL(new Blob(['(' + workerSrc + ')()'], { type: 'text/javascript' })));
+          w.onmessage = function (e) {
+            w.terminate();
+            var a = new Uint8Array(e.data.px), s = '';
+            for (var i = 0; i < a.length; i += 32768) s += String.fromCharCode.apply(null, a.subarray(i, i + 32768));
+            res({ w: e.data.w, h: e.data.h, b64: btoa(s) });
+          };
+          w.postMessage({ u: u, buf: b }, [b]);
+        });
+      });
+    },
+    stats: function () {
+      return JSON.stringify({ ok: net.ok, fail: net.fail, bytes: net.bytes, active: net.active, queued: net.want.length,
+        mode: net.mode, worker_decoded: net.dec, worker_ms: net.dec ? +(net.decMs / net.dec).toFixed(2) : 0 });
+    }
+  };
+
+  // --- музыка: элемент <audio> страницы. Браузер сам качает и декодирует поток (не в игровом кадре, без треска в
+  // однопоточной сборке и без распаковки всей темы в память, как сделал бы режим Sample). Играть можно только после
+  // жеста игрока: при каждом нажатии/клавише пробуем запустить, если игра хочет музыку.
+  var mus = { a: null, src: '', want: false, vol: 1 };
+  function el() {
+    if (!mus.a) { mus.a = new Audio(); mus.a.loop = true; mus.a.preload = 'auto'; }
+    return mus.a;
+  }
+  function tryPlay() {
+    if (mus.want && mus.a && mus.a.paused && !document.hidden) {
+      var p = mus.a.play();
+      if (p && p.catch) p.catch(function () {});
+    }
+  }
+  ['pointerdown', 'keydown', 'touchend', 'mousedown'].forEach(function (e) { document.addEventListener(e, tryPlay, true); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { if (mus.a) mus.a.pause(); } else tryPlay();
+  });
+  window.wnbMusic = {
+    play: function (u) { var a = el(); if (mus.src !== u) { mus.src = u; a.src = u; } mus.want = true; tryPlay(); },
+    stop: function () { mus.want = false; if (mus.a) mus.a.pause(); },
+    volume: function (v) { el().volume = Math.max(0, Math.min(1, v)); },
+    state: function () { return mus.a ? ((mus.a.paused ? 'paused' : 'playing') + ' ' + mus.src) : 'none'; }
+  };
+
+  // --- поле ввода кода поверх холста (окно «Вставить код» и имя в конструкторе ссылки): настоящее <input>, чтобы на
+  // телефоне появлялась экранная клавиатура и работала вставка долгим нажатием. Игра рисует рамку, текст — здесь.
+  var fld = { el: null, enter: 0, esc: 0, key: '' };
+  window.wnbField = {
+    show: function (key, x, y, w, h, value, maxLen, ph, fontPx) {
+      var f = fld.el;
+      if (!f) {
+        f = fld.el = document.createElement('input');
+        f.id = 'wnb-field'; f.type = 'text'; f.autocomplete = 'off'; f.spellcheck = false;
+        f.setAttribute('autocapitalize', 'off'); f.setAttribute('autocorrect', 'off');
+        f.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { fld.enter++; e.preventDefault(); }
+          else if (e.key === 'Escape') { fld.esc++; e.preventDefault(); }
+          e.stopPropagation();
+        });
+        f.addEventListener('keyup', function (e) { e.stopPropagation(); });
+        document.body.appendChild(f);
+      }
+      var c = document.getElementById('canvas'), r = c.getBoundingClientRect(), k = r.width / (c.width || 1);
+      f.style.left = (r.left + x * k) + 'px'; f.style.top = (r.top + y * k) + 'px';
+      f.style.width = (w * k) + 'px'; f.style.height = (h * k) + 'px';
+      f.style.fontSize = Math.max(12, fontPx * k) + 'px';
+      f.maxLength = maxLen; f.placeholder = ph || '';
+      f.setAttribute('aria-label', ph || key);
+      if (fld.key !== key) {
+        fld.key = key; f.value = value || ''; fld.enter = 0; fld.esc = 0;
+        f.style.display = 'block';
+        var coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+        if (!coarse) setTimeout(function () { f.focus(); }, 0);   // на телефоне клавиатуру открывает касание
+      }
+    },
+    hide: function () {
+      if (fld.el) { fld.el.style.display = 'none'; fld.el.blur(); }
+      fld.key = '';
+      var c = document.getElementById('canvas'); if (c) c.focus();
+    },
+    // значение и счётчики Enter/Esc одним вызовом: JSON
+    poll: function () {
+      var r = JSON.stringify({ v: fld.el ? fld.el.value : '', enter: fld.enter, esc: fld.esc });
+      fld.enter = 0; fld.esc = 0;
+      return r;
+    },
+    set: function (v) { if (fld.el) fld.el.value = v; }
+  };
+
+  // --- время загрузки: игра отмечает первый кадр титула (wnbMark('title')), страница — начало загрузки.
+  window.wnbTimes = { start: performance.now() };
+  window.wnbMark = function (k) { if (!(k in window.wnbTimes)) window.wnbTimes[k] = performance.now(); };
+})();
+</script>
+$GODOT_HEAD_INCLUDE
+</head>
+<body>
+<canvas id="canvas">Your browser does not support the canvas tag.</canvas>
+<noscript>Your browser does not support JavaScript.</noscript>
+<div id="wnb-live" aria-live="assertive" role="status"></div>
+<div id="wnb-load">
+  <div class="t">Wheels &amp; Bones</div>
+  <progress id="wnb-bar"></progress>
+  <div class="m" id="wnb-msg">Loading the workshop…</div>
+  <div class="e" id="wnb-err"></div>
+</div>
+<script src="$GODOT_URL"></script>
+<script>
+const GODOT_CONFIG = $GODOT_CONFIG;
+const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
+const engine = new Engine(GODOT_CONFIG);
+(function () {
+  const load = document.getElementById('wnb-load');
+  const bar = document.getElementById('wnb-bar');
+  const msg = document.getElementById('wnb-msg');
+  const errBox = document.getElementById('wnb-err');
+  function fail(err) {
+    console.error(err);
+    errBox.textContent = (err && err.message) ? err.message : String(err || 'An unknown error occurred.');
+    errBox.style.display = 'block';
+    msg.textContent = 'The game could not start.';
+  }
+  const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
+  if (missing.length !== 0) {
+    fail('Your browser is missing features the game needs:\n' + missing.join('\n'));
+    return;
+  }
+  engine.startGame({
+    onProgress: function (cur, total) {
+      if (cur > 0 && total > 0) {
+        bar.max = total; bar.value = cur;
+        msg.textContent = 'Loading the workshop… ' + (cur / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1) + ' MB';
+      } else {
+        bar.removeAttribute('value');
+      }
+    },
+  }).then(function () {
+    window.wnbTimes.started = performance.now();
+    bar.max = 1; bar.value = 1;
+    msg.textContent = 'Starting…';
+    // заставка гаснет, когда игра нарисовала титул (или через 4 с — что раньше)
+    const t0 = performance.now();
+    (function wait() {
+      if (window.wnbTimes.title || performance.now() - t0 > 4000) {
+        load.style.opacity = '0';
+        setTimeout(function () { load.remove(); }, 700);
+        return;
+      }
+      setTimeout(wait, 100);
+    })();
+  }, fail);
+}());
+</script>
+</body>
+</html>

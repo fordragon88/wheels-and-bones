@@ -95,7 +95,7 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 | `assets/fonts/` | шрифты и их лицензии |
 | `tools/` | portable Blender, `render_in/`/`render_out/` кадров; не в git |
 | `CLAUDE.md`, `GEMINI.md`, `MUSE_3D_TASK.md` | указатели для агентов (читать AGENTS.md); задание для Muse по 3D (архив) |
-| `godot/` (ветка `godot-port`) | **перенос на Godot 4.7.2**: проект, план и состояние — `godot/PORT_PLAN.md`; содержание берётся из `assets/` скриптом `godot/tools/sync_content.py` (`godot/content/` не в git); самопроверка `tests/selftest.gd`, снимки `tests/shots.gd`, эталоны pygame `tests/ref/` |
+| `godot/` (ветка `godot-port`) | **перенос на Godot 4.7.2**: проект, план и состояние — `godot/PORT_PLAN.md`; содержание берётся из `assets/` скриптом `godot/tools/sync_content.py` (`godot/content/` не в git); самопроверка `tests/selftest.gd`, снимки `tests/shots.gd`, эталоны pygame `tests/ref/`; браузерная сборка — `python godot/tools/build_web.py [--base-url …]` → `godot/build/web/` (не в git; выкладывать папку целиком), проверка в Chromium — `python godot/tools/web_smoke.py` (скриншоты `godot/tests/web_shots/`) |
 
 ## 4. Устройство game.py (по разделам сверху вниз)
 
@@ -693,6 +693,25 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-11-19 — Claude (Fable 5.2), ветка `godot-port` — **Godot: экспорт в браузер (шаг 5)**. Пресет
+  `godot/export_presets.cfg` «Web» (однопоточный, Compatibility, своя страница `godot/web/shell.html`); сборка
+  `python godot/tools/build_web.py [--base-url URL]` → `godot/build/web/` (не в git; копия проекта `build/web_stage/`,
+  картинки ≥150 КБ — WebP с потерями, фоны без mipmaps, `share.base_url` из `--base-url`, файлы движка/пакета по хэшу,
+  кадры и музыка — `?v=`). Кадры и все петли — файлами рядом с игрой (`frames/`), качает fetch страницы, WebP
+  распаковывает Worker (WebGL2 readPixels = PIL байт в байт), игре 0,35 мс/кадр вместо 3,6; запасной вид при 404.
+  Музыка — `<audio>` страницы (`music/*.mp3` моно, не в пакете). Новый autoload `Web` (`?fps=1` — плашка и
+  `[wnb] fps` в консоль, `?test=1` — `window.wnbState` с кнопками и подсказкой), перенос прогресса и настроек из
+  localStorage pygame-версии (`SaveGame.migrate_web`, `Settings.web_legacy`, старое не трогается), поле ввода кода —
+  `<input>` поверх холста (экранная клавиатура), полный экран из настроек. **Найдено и исправлено:** на сенсорном
+  экране одно касание давало два нажатия (кнопка получает и касание, и мышь из него) — Nav._input не отдаёт касания
+  интерфейсу. Размеры: .wasm 37,7 МБ (gzip 9,65), .pck 9,5 МБ (было 27), первая загрузка ≈18,3 МБ против pygame-apk
+  15,3 МБ; frames/ 66,8 МБ по требованию, music/ 3,7 МБ. Проверка `python godot/tools/web_smoke.py` (Chromium,
+  `--mute-audio`, видеокарта, голос — заглушка): `WEB SMOKE: 60 ok, 0 FAIL`; кадры/с ×6 CPU: титул 58, мастерская
+  25–28, задание 21–22 (×4: 60/45/34), титул за 1,0 с (×6 — 8,2 с). GODOT SELFTEST OK, check_tr 0 расхождений, check_share 0.
+  game.py не менялся. (godot/export_presets.cfg, godot/web/shell.html, godot/autoload/web.gd, frames.gd, audio.gd,
+  save_game.gd, settings.gd, nav.gd, speech.gd, godot/ui/share_dialog.gd, godot/screens/job.gd, tech.gd,
+  godot/tools/build_web.py, web_smoke.py, godot/tests/selftest_runner.gd, godot/project.godot, PORT_PLAN.md, .gitignore)
 
 - 2026-11-19 — Claude (Fable 5.2), ветка `godot-port` — **Godot: Бренна «живая» и проезд Гильдии переживает
   пересборку**. Слита `test-build` (f7eaa96, петля `brenna_wave`), `sync_content.py` выгружает в `game_consts.json`

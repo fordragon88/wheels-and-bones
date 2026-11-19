@@ -24,10 +24,36 @@ var _extra: Dictionary = {}            # прочие ключи — обрат�
 var _bak_mem: Variant = null           # тесты: копия прогресса в памяти
 
 
+var migrated: bool = false            # браузер: прогресс взят из pygame-версии (localStorage) в этом запуске
+
+
 func _ready() -> void:
 	persist = not OS.get_cmdline_user_args().has("--test")
 	if persist:
-		load_file(PATH)
+		if FileAccess.file_exists(PATH):
+			load_file(PATH)
+		elif OS.has_feature("web"):
+			migrate_web()
+
+
+## Браузер, первый запуск Godot-версии: прогресс pygame-версии с того же сайта (localStorage «wnb:save.json» — формат
+## тот же) берём один раз в свой user://save.json; копию «wnb:save.bak.json» — в save.bak.json («Вернуть прежний
+## прогресс»). Старое не стираем: pygame-версия продолжает работать как была.
+func migrate_web() -> bool:
+	var text := Settings.web_legacy("save.json")
+	var data: Variant = JSON.parse_string(text) if text != "" else null
+	if not data is Dictionary:
+		return false
+	apply_dict(data)
+	migrated = true
+	var bak := Settings.web_legacy("save.bak.json")
+	if bak.begins_with("{") and JSON.parse_string(bak) is Dictionary:
+		var f := FileAccess.open(BAK, FileAccess.WRITE)
+		if f != null:
+			f.store_string(bak)
+			f.close()
+	save()
+	return true
 
 
 func load_file(path: String) -> void:

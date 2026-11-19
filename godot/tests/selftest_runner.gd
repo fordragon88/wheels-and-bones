@@ -375,8 +375,8 @@ func _check_scripts(dir: String) -> int:
 			if s == null or not s.can_instantiate():
 				err("скрипт не компилируется: " + dir.path_join(f))
 	for sub in d.get_directories():
-		if sub.begins_with(".") or sub in ["content", "tools"]:
-			continue
+		if sub.begins_with(".") or sub in ["content", "tools", "build"] or FileAccess.file_exists(dir.path_join(sub).path_join(".gdignore")):
+			continue                              # build/ — копия проекта для браузерной сборки (build_web.py)
 		n += _check_scripts(dir.path_join(sub))
 	return n
 

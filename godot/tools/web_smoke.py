@@ -1,0 +1,716 @@
+# -*- coding: utf-8 -*-
+"""Проверка браузерной Godot-версии в настоящем браузере (Playwright, Chromium) — по образцу art_tests/web_smoke.py.
+
+  python godot/tools/web_smoke.py              — собрать (build_web.py), проверить, всё закрыть
+  python godot/tools/web_smoke.py --no-build   — проверить готовую godot/build/web/
+  python godot/tools/web_smoke.py --only boot,play   — только эти сценарии
+  WNB_URL=https://…/godot/ python godot/tools/web_smoke.py --no-build --only boot,play,perf  — выложенный сайт
+
+Локальный сервер — на своём порту (WNB_PORT, по умолчанию 8061; не 8000/8188/8797), закрывается в конце.
+Браузер — Chromium без окна, с --mute-audio (у владельца в наушниках НИЧЕГО не звучит; голос браузера speechSynthesis
+подменён заглушкой — на Windows он шёл бы мимо --mute-audio, через SAPI) и с видеокартой (ANGLE D3D11), чтобы кадры/с
+были похожи на настоящие. Игра открывается с ?test=1: раз в 0,25 с кладёт состояние в window.wnbState (autoload/web.gd):
+экран, фаза, кадры/с, кадры (скачано/в очереди/ошибки), видимые кнопки с прямоугольниками и подсказку «что нажать».
+Тест жмёт кнопки НАСТОЯЩИМИ кликами/касаниями по их прямоугольникам. В сеть наружу ничего не уходит (всё, что не
+127.0.0.1, обрывается). Скриншоты — godot/tests/web_shots/ (не в git), их надо открыть и посмотреть.
+Код выхода 1 — что-то не так."""
+import asyncio
+import json
+import os
+import sys
+import time
+import urllib.parse
+
+from playwright.async_api import async_playwright
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import build_web  # noqa: E402
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+GODOT = os.path.dirname(HERE)
+SHOTS = os.path.join(GODOT, "tests", "web_shots")
+PORT = int(os.environ.get("WNB_PORT", "8061"))
+URL = os.environ.get("WNB_URL", f"http://127.0.0.1:{PORT}/")
+GPU_ARGS = ["--mute-audio", "--autoplay-policy=user-gesture-required", "--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist"]
+fails, notes, metrics = [], [], {}
+
+# Прогресс pygame-версии (localStorage «wnb:save.json» — тот же формат, что save.json)
+LEGACY_SAVE = {"done": ["flat", "caster", "brake", "spokes", "lift", "joystick"],
+               "garage": [["flat", 3], ["caster", 2], ["brake", 3], ["spokes", 1], ["lift", 3], ["joystick", 2]],
+               "exam_passed": False, "seat_done": ["seat_bomm"], "seat_quiz_ok": False, "tutorial_skipped": True,
+               "ending_seen": False, "pygame_only_key": 7}
+LEGACY_SETTINGS = {"volume": {"master": 0.5, "music": 0.3, "sfx": 0.7, "amb": 0.4, "on": True}, "lang": "ru",
+                   "glow": True, "a11y": {"text": 1, "text_set": True}, "fullscreen": True}
+
+INIT_JS = """
+(() => {
+  // голос браузера — заглушка: фразы копятся в window.__spoken, ничего не звучит
+  const said = window.__spoken = [];
+  const fake = { speak(u) { said.push(u.text); }, cancel() {}, pause() {}, resume() {}, getVoices() { return []; },
+                 speaking: false, pending: false, onvoiceschanged: null, addEventListener() {} };
+  try { Object.defineProperty(window, 'speechSynthesis', { value: fake, configurable: true }); } catch (e) {}
+})();
+"""
+
+
+def check(ok, what):
+    (notes if ok else fails).append(("ok   " if ok else "FAIL ") + what)
+    print(("  ok   " if ok else "  FAIL ") + what, flush=True)
+    return ok
+
+
+def info(what):
+    print("  ..   " + what, flush=True)
+
+
+class Page:
+    def __init__(self, ctx, pg, name, touch=False):
+        self.ctx, self.pg, self.name, self.touch = ctx, pg, name, touch
+        self.errors, self.console = [], []
+        self.allow = []                                   # подстроки ожидаемых ошибок (404 в сценарии обрыва)
+        pg.on("console", self._console)
+        pg.on("pageerror", lambda e: self.errors.append(f"pageerror: {e}"[:300]))
+
+    def _console(self, m):
+        t = m.text
+        self.console.append(f"{m.type}: {t}"[:300])
+        if m.type == "error" and not any(a in t for a in self.allow):
+            self.errors.append(t[:300])
+
+    async def state(self):
+        s = await asyncio.wait_for(self.pg.evaluate("window.wnbState || ''"), 15)
+        return json.loads(s) if s else {}
+
+    async def wait(self, pred, what, timeout=30, quiet=False):
+        st = {}
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            st = await self.state()
+            if st and pred(st):
+                return st
+            await self.pg.wait_for_timeout(150)
+        if not quiet:
+            st.pop("buttons", None)
+            check(False, f"{self.name}: {what} (состояние: {json.dumps(st, ensure_ascii=False)[:600]})")
+        return {}
+
+    async def fresh(self, after):
+        """Состояние, снятое позже момента after (мс игры)."""
+        return await self.wait(lambda s: s.get("t", 0) > after, "состояние обновилось", 10)
+
+    async def canvas(self):
+        return await self.pg.evaluate("(()=>{const c=document.getElementById('canvas');const r=c.getBoundingClientRect();"
+                                      "return [r.left,r.top,r.width,r.height,c.width,c.height,devicePixelRatio,"
+                                      "innerWidth,innerHeight]})()")
+
+    async def at(self, x, y):
+        """Логические 1280×720 → точка страницы (холст растянут на окно, игра — 16:9 с полями, canvas_items/keep)."""
+        c = await self.canvas()
+        W, H = c[4], c[5]
+        s = min(W / 1280, H / 720)
+        ox, oy = (W - 1280 * s) / 2, (H - 720 * s) / 2
+        k = c[2] / W
+        return c[0] + (ox + x * s) * k, c[1] + (oy + y * s) * k
+
+    async def tap_xy(self, x, y):
+        px, py = await self.at(x, y)
+        if self.touch:
+            await self.pg.touchscreen.tap(px, py)
+        else:
+            await self.pg.mouse.click(px, py)
+
+    async def press(self, name, st=None, wait=250):
+        """Нажать кнопку по имени (верхнюю из видимых) настоящим кликом/касанием по центру её прямоугольника."""
+        st = st or await self.state()
+        hits = [b for b in st.get("buttons", []) if b[0] == name]
+        t0 = time.time()
+        while not hits and time.time() - t0 < 6:          # кнопка может появиться не сразу («начать» — через 1,6 с)
+            await self.pg.wait_for_timeout(150)
+            st = await self.state()
+            hits = [b for b in st.get("buttons", []) if b[0] == name]
+        if not hits:
+            check(False, f"{self.name}: нет кнопки {name} на экране {st.get('screen')} "
+                         f"(есть: {[b[0] for b in st.get('buttons', [])][:40]})")
+            return False
+        b = hits[-1]
+        await self.tap_xy(b[1] + b[3] / 2, b[2] + b[4] / 2)
+        await self.pg.wait_for_timeout(wait)
+        return True
+
+    async def key(self, k, wait=300):
+        await self.pg.keyboard.press(k)
+        await self.pg.wait_for_timeout(wait)
+
+    async def shot(self, tag):
+        try:
+            await self.pg.screenshot(path=os.path.join(SHOTS, f"{self.name}_{tag}.png"), timeout=20000)
+        except Exception as e:
+            info(f"{self.name}: снимок {tag} не снят ({type(e).__name__})")
+
+    async def boot(self, query="", what="титул"):
+        t0 = time.time()
+        await self.pg.goto(URL + "?test=1" + query)
+        st = await self.wait(lambda s: s.get("screen") in ("title", "hub", "intro", "job"), what, 90)
+        secs = time.time() - t0
+        times = await self.pg.evaluate("JSON.stringify(window.wnbTimes || {})")
+        return st, secs, json.loads(times)
+
+    def check_console(self):
+        check(not self.errors, f"{self.name}: ошибок в консоли браузера нет"
+              + (f" — {self.errors[:3]}" if self.errors else ""))
+
+
+async def new_page(b, name, touch=False, mobile=False, w=1280, h=720, dpr=1.0, legacy=None, motion="no-preference",
+                   block_frames=False):
+    opts = dict(viewport={"width": w, "height": h}, device_scale_factor=dpr, reduced_motion=motion)
+    if mobile:
+        opts.update(is_mobile=True, has_touch=True)
+    ctx = await b.new_context(**opts)
+    u = urllib.parse.urlsplit(URL)
+    await ctx.grant_permissions(["clipboard-read", "clipboard-write"], origin=f"{u.scheme}://{u.netloc}")
+    await ctx.add_init_script(INIT_JS)
+    if legacy:
+        js = "".join(f"localStorage.setItem({json.dumps('wnb:' + k)}, {json.dumps(json.dumps(v))});"
+                     for k, v in legacy.items())
+        await ctx.add_init_script("if (!sessionStorage.getItem('wnb-test-seeded')) {" + js +
+                                  "sessionStorage.setItem('wnb-test-seeded', '1');}")
+    host = urllib.parse.urlsplit(URL).netloc
+
+    async def route(r):
+        u = urllib.parse.urlsplit(r.request.url)
+        if u.netloc != host:
+            await r.abort()                            # наружу — ничего (таблица замечаний, счётчики)
+        elif block_frames and "/frames/" in u.path:
+            await r.fulfill(status=404, body="not found")
+        else:
+            await r.continue_()
+    await ctx.route("**/*", route)
+    pg = await ctx.new_page()
+    p = Page(ctx, pg, name, touch)
+    if block_frames:
+        p.allow += ["404", "Frames: кадры", "at: push_warning"]   # ожидаемо: файл не найден, кадры — запасным видом
+    return p
+
+
+# ---------------- прохождение ----------------
+
+async def follow_hints(p, until, timeout=240, on_state=None, max_steps=400):
+    """Жать подсказку игры (state.hint), пока until(state) не станет истиной."""
+    t0 = time.time()
+    last = None
+    st = await p.state()
+    for _ in range(max_steps):
+        if until(st):
+            return st
+        if time.time() - t0 > timeout:
+            break
+        if on_state:
+            r = await on_state(st)
+            if r == "skip":
+                st = await p.fresh(st.get("t", 0))
+                continue
+        hint = st.get("hint", [])
+        if hint:
+            names = [b[0] for b in st.get("buttons", [])]
+            target = next((h for h in hint if h in names), None)
+            if target is None:
+                await p.pg.wait_for_timeout(300)
+            else:
+                await p.press(target, st, 120)
+                last = target
+        else:
+            await p.pg.wait_for_timeout(300)
+        st = await p.fresh(st.get("t", 0))
+        if not st:
+            break
+    st.pop("buttons", None)
+    check(False, f"{p.name}: не дошли до цели (последнее нажатие {last}; {json.dumps(st, ensure_ascii=False)[:500]})")
+    return st
+
+
+async def play_job(p, jid, expect_loop, shots=True):
+    """Задание jid до итога по подсказкам: осмотр, диагноз, шаги инструментами, мини-игры, проезд, итог."""
+    st = await p.wait(lambda s: s.get("screen") == "job" and s.get("job") == jid, f"открыто задание {jid}", 30)
+    if not st:
+        return {}
+    if shots:
+        await p.pg.wait_for_timeout(2500)
+        await p.shot(f"{jid}_1_diagnose")
+    seen_magic = {"ready": False, "playing": False}
+
+    async def watch(s):
+        m = s.get("magic") or {}
+        seen_magic["ready"] |= bool(m.get("ready"))
+        seen_magic["playing"] |= bool(m.get("playing"))
+        if s.get("mini") and shots and not seen_magic.get("mini_shot"):
+            seen_magic["mini_shot"] = True
+            await p.shot(f"{jid}_2_mini")
+        return None
+
+    st = await follow_hints(p, lambda s: s.get("phase") == "test", 240, watch)
+    if st.get("phase") != "test":
+        return st
+    check(st.get("mistakes", 0) == 0, f"{p.name}: {jid} пройдено без ошибок по подсказкам ({st.get('mistakes')})")
+    loop_key = f"loop:{expect_loop}" if expect_loop else ""
+    if expect_loop:
+        st = await p.wait(lambda s: (s["frames"]["sets"].get(loop_key, [0, 1])[0] == s["frames"]["sets"].get(loop_key, [0, 1])[1]),
+                          f"петля {expect_loop} скачалась", 60)
+        check(bool(st), f"{p.name}: петля проезда {expect_loop} скачалась ({st.get('frames', {}).get('sets', {}).get(loop_key)})")
+    await p.press("TestDrive")
+    st = await p.wait(lambda s: (s.get("ride") or {}).get("riding"), "проезд начался", 10)
+    await p.pg.wait_for_timeout(1500)
+    st = await p.state()
+    ride = st.get("ride") or {}
+    if shots:
+        await p.shot(f"{jid}_3_ride")
+    if expect_loop:
+        check(ride.get("loop") == expect_loop and ride.get("drawn", 0) > 0,
+              f"{p.name}: проезд петлёй {expect_loop}, кадров нарисовано {ride.get('drawn')}")
+    else:
+        check(ride.get("loop") == "", f"{p.name}: проезд без петли (запасной вид: скользящий портрет) — {ride}")
+    st = await p.wait(lambda s: s.get("ride_done"), "проезд закончился", 20)
+    await p.press("TestDrive")
+    st = await p.wait(lambda s: s.get("screen") == "result", "итог задания", 15)
+    if st:
+        await p.pg.wait_for_timeout(2500)
+        if shots:
+            await p.shot(f"{jid}_4_result")
+        m = (await p.state()).get("magic") or {}
+        info(f"{p.name}: волшебство на портрете: в задании готово={seen_magic['ready']} играло={seen_magic['playing']}, "
+             f"на итоге {m}")
+        await p.press("ToHub")
+        st = await p.wait(lambda s: s.get("screen") == "hub", "в мастерскую", 15)
+        check(jid in st.get("done", []), f"{p.name}: {jid} отмечено в прогрессе")
+    return st
+
+
+async def measure_fps(p, secs=5.0):
+    vals = []
+    t0 = time.time()
+    while time.time() - t0 < secs:
+        st = await p.state()
+        if st.get("fps"):
+            vals.append(st["fps"])
+        await p.pg.wait_for_timeout(1000)
+    st = await p.state()
+    return (sum(vals[1:]) / max(1, len(vals) - 1)) if len(vals) > 1 else (vals[0] if vals else 0), st.get("worst_ms", 0)
+
+
+# ---------------- сценарии ----------------
+
+async def sc_boot(b):
+    """Первая загрузка до титула, кадры петель титула, музыка ждёт первого нажатия, поля 16:9, ресайз окна."""
+    p = await new_page(b, "boot")
+    st, secs, times = await p.boot()
+    check(st.get("screen") == "title", f"{p.name}: титул ({st.get('screen')})")
+    t_title = (times.get("title", 0) - times.get("start", 0)) / 1000
+    metrics["boot_title_s"] = round(t_title, 2)
+    info(f"{p.name}: титул через {t_title:.2f} с от начала страницы (движок запущен через "
+         f"{(times.get('started', 0) - times.get('start', 0)) / 1000:.2f} с)")
+    st = await p.wait(lambda s: s["frames"]["sets"].get("loop:martin_wave", [0, 1])[0] == 36 and
+                      s["frames"]["sets"].get("loop:barty_wave", [0, 1])[0] == 36, "петли титула скачались", 30)
+    check(bool(st), f"{p.name}: машущие Мартин и Барти скачались ({st.get('frames', {}).get('decoded')} кадров, "
+                    f"декодирование {st.get('frames', {}).get('decode_ms')} мс/кадр)")
+    await p.pg.wait_for_timeout(1500)
+    await p.shot("1_title")
+    net = st.get("net", {})
+    check(net.get("mode") == "worker" and net.get("worker_decoded", 0) >= 72,
+          f"{p.name}: кадры распаковывает фоновый поток страницы ({net.get('mode')}, {net.get('worker_decoded')} кадров, "
+          f"{net.get('worker_ms')} мс/кадр в потоке; в игровом кадре — {st.get('frames', {}).get('decode_ms')} мс)")
+    # пиксели фоновой распаковки = распаковка WebP как есть (PIL): цвет под прозрачными пикселями не потерян
+    import base64
+    import io
+    from PIL import Image
+    for rel in ("turntable/chair_aeroz_00.webp", "anim/barty_wave/00.webp"):
+        r = await p.pg.evaluate("(u) => wnbNet.probe(u)", "frames/" + rel)
+        got = base64.b64decode(r["b64"])
+        ref = Image.open(os.path.join(GODOT, "content", "frames", *rel.split("/"))).convert("RGBA")
+        same_size = (r["w"], r["h"]) == ref.size
+        diff = max(abs(a - b) for a, b in zip(got[::7], ref.tobytes()[::7])) if same_size else 999
+        check(same_size and diff <= 2, f"{p.name}: фоновая распаковка {rel} = PIL (размер {r['w']}×{r['h']}, "
+                                       f"наибольшая разница {diff})")
+    mus = await p.pg.evaluate("wnbMusic.state()")
+    act = await p.pg.evaluate("navigator.userActivation.hasBeenActive")
+    # Playwright помечает страницу «уже нажатой» (userActivation.hasBeenActive = true) — запрет автозапуска звука
+    # здесь не проверить; без жеста страница только пробует play() и ждёт pointerdown/keydown (wnbMusic.tryPlay)
+    info(f"{p.name}: музыка на титуле: {mus} (страница активирована Playwright: {act})")
+    c = await p.canvas()
+    check(abs(c[2] - c[7]) < 2 and abs(c[3] - c[8]) < 2, f"{p.name}: холст на всё окно ({c[2]}×{c[3]} при {c[7]}×{c[8]})")
+    # ресайз окна: холст за окном, картинка 16:9 с полями
+    await p.pg.set_viewport_size({"width": 900, "height": 800})
+    await p.pg.wait_for_timeout(1200)
+    c = await p.canvas()
+    check(abs(c[2] - 900) < 2 and abs(c[3] - 800) < 2, f"{p.name}: после ресайза холст {c[2]:.0f}×{c[3]:.0f} = окно 900×800")
+    await p.shot("2_resize_900x800")
+    x, y = await p.at(640, 360)
+    check(abs(x - 450) < 2 and abs(y - 400) < 2, f"{p.name}: центр игры в центре окна ({x:.0f},{y:.0f})")
+    await p.pg.set_viewport_size({"width": 1280, "height": 720})
+    await p.pg.wait_for_timeout(800)
+    p.check_console()
+    await p.ctx.close()
+
+
+async def sc_play(b):
+    """Новая игра: титул → вступление → задание Мартина целиком (проезд петлёй, итог); музыка; перезагрузка —
+    прогресс и настройки на месте (IndexedDB); F2 — голос браузера и aria-live."""
+    p = await new_page(b, "play")
+    st, _, _ = await p.boot()
+    await p.wait(lambda s: "Start" in [x[0] for x in s.get("buttons", [])], "кнопка «начать»", 10)
+    await p.press("Start", wait=800)
+    st = await p.wait(lambda s: s.get("screen") == "intro", "вступление", 10)
+    mus = await p.pg.evaluate("wnbMusic.state()")
+    check(mus.startswith("playing"), f"{p.name}: после первого нажатия музыка играет ({mus})")
+    await p.shot("1_intro")
+    st = await follow_hints(p, lambda s: s.get("screen") == "job", 60)
+    st = await play_job(p, "flat", "ride_martin")
+    await p.shot("5_hub")
+    # F2: озвучка — голос браузера (заглушка) и скрытая область aria-live
+    await p.key("F2", 800)
+    st = await p.state()
+    spoken = await p.pg.evaluate("window.__spoken.slice(-3)")
+    live = await p.pg.evaluate("(document.getElementById('wnb-live')||{}).textContent || ''")
+    check(st.get("speech_on") is True, f"{p.name}: F2 включил озвучку")
+    check(bool(live), f"{p.name}: текст в aria-live: «{live[:80]}»")
+    check(bool(spoken), f"{p.name}: голос браузера вызван (заглушка): {spoken[:2]}")
+    await p.key("F2", 500)
+    # настройки: M — звук выкл (сохраняется сразу), перезагрузка через 0,4 с — запись должна дойти до IndexedDB
+    await p.key("m", 400)
+    st = await p.state()
+    check(st.get("sound") is False, f"{p.name}: M выключил звук")
+    await p.pg.reload()
+    st = await p.wait(lambda s: s.get("screen") in ("title", "hub"), "после перезагрузки", 60)
+    check("flat" in st.get("done", []), f"{p.name}: после перезагрузки прогресс на месте ({st.get('done')})")
+    check(st.get("sound") is False, f"{p.name}: после перезагрузки настройка «звук выкл» на месте")
+    await p.key("m", 400)
+    p.check_console()
+    await p.ctx.close()
+
+
+async def sc_links(b):
+    """?jobs=flat,caster&from=… — задание по ссылке; копирование кода в буфер; ?load=код — вопрос один раз
+    (wnb:load_seen); поле вставки кода — настоящее <input> поверх холста."""
+    p = await new_page(b, "links", legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+    st, _, _ = await p.boot("&jobs=flat,caster&from=" + urllib.parse.quote("Анна"))
+    st = await p.wait(lambda s: s.get("assign"), "задание из ссылки принято", 15)
+    check(bool(st.get("assign")), f"{p.name}: ?jobs=flat,caster — задание {st.get('assign')}, экран {st.get('screen')}")
+    await p.press("Start", wait=1200)
+    st = await p.wait(lambda s: s.get("screen") == "hub", "мастерская задания", 10)
+    await p.shot("1_assign_hub")
+    names = [x[0] for x in st.get("buttons", [])]
+    check("Card_flat" in names and "Card_caster" in names and "Card_brake" not in names,
+          f"{p.name}: в мастерской только назначенные (flat, caster)")
+    # обычная игра: выйти из задания, скопировать код прогресса (настройки → ИГРА)
+    await p.press("ExitAssign", wait=800)
+    await p.press("Gear", wait=600)
+    await p.press("Tab_game", wait=400)
+    await p.shot("2_settings_game")
+    await p.press("Share_code", wait=800)
+    st = await p.state()
+    clip = await p.pg.evaluate("navigator.clipboard.readText().catch(e => 'ERR ' + e)")
+    check(clip.startswith("P."), f"{p.name}: «Скопировать код» положил код в буфер обмена ({clip[:24]}…)")
+    await p.key("Escape", 400)
+    # вставка кода: поле страницы поверх рамки
+    await p.press("Share_paste", wait=800)
+    vis = await p.pg.evaluate("""(()=>{const f=document.getElementById('wnb-field'); if(!f) return null;
+        const r=f.getBoundingClientRect(); return [getComputedStyle(f).display, r.left, r.top, r.width, r.height,
+        document.activeElement===f]})()""")
+    check(vis is not None and vis[0] == "block" and vis[3] > 100, f"{p.name}: поле ввода кода — <input> поверх холста {vis}")
+    await p.shot("3_paste_field")
+    if vis and clip.startswith("P."):
+        await p.pg.fill("#wnb-field", clip)
+        await p.pg.press("#wnb-field", "Enter")
+        st = await p.wait(lambda s: s.get("share_dlg") == "confirm", "вопрос «загрузить прогресс?»", 10)
+        check(st.get("share_dlg") == "confirm", f"{p.name}: код из поля распознан — вопрос о загрузке")
+        await p.shot("4_paste_confirm")
+        await p.key("Escape", 500)
+        gone = await p.pg.evaluate("getComputedStyle(document.getElementById('wnb-field')).display")
+        check(gone == "none", f"{p.name}: окно закрыто — поле страницы спрятано ({gone})")
+    p.check_console()
+    await p.ctx.close()
+    # ?load=<код> — вопрос; «Нет» — после перезагрузки не спрашивает (wnb:load_seen)
+    if clip.startswith("P."):
+        q = await new_page(b, "load")
+        st, _, _ = await q.boot("&load=" + urllib.parse.quote(clip))
+        st = await q.wait(lambda s: s.get("share_dlg") == "confirm", "вопрос о прогрессе из ссылки", 15)
+        check(st.get("share_dlg") == "confirm", f"{q.name}: ?load= — вопрос «загрузить прогресс?»")
+        await q.pg.wait_for_timeout(800)
+        await q.shot("1_load_confirm")
+        await q.press("Btn_no", wait=800)
+        seen = await q.pg.evaluate("localStorage.getItem('wnb:load_seen')")
+        check(bool(seen) and clip.endswith(seen), f"{q.name}: ответ запомнен (wnb:load_seen = {seen})")
+        await q.pg.reload()
+        st = await q.wait(lambda s: s.get("screen") == "title", "титул после перезагрузки", 60)
+        await q.pg.wait_for_timeout(1500)
+        st = await q.state()
+        check(st.get("share_dlg") == "", f"{q.name}: после перезагрузки тот же ?load= больше не спрашивает")
+        q.check_console()
+        await q.ctx.close()
+
+
+async def sc_migrate(b):
+    """localStorage pygame-версии (wnb:save.json, wnb:settings.json) → прогресс и настройки подхвачены один раз."""
+    p = await new_page(b, "migrate", legacy={"save.json": LEGACY_SAVE, "settings.json": LEGACY_SETTINGS})
+    st, _, _ = await p.boot()
+    check(st.get("migrated") is True, f"{p.name}: прогресс pygame-версии перенесён (migrated)")
+    check(sorted(st.get("done", [])) == sorted(LEGACY_SAVE["done"]), f"{p.name}: done = {st.get('done')}")
+    check(st.get("lang") == "ru", f"{p.name}: настройки перенесены (язык {st.get('lang')})")
+    old = await p.pg.evaluate("localStorage.getItem('wnb:save.json')")
+    check(old and json.loads(old) == LEGACY_SAVE, f"{p.name}: старое сохранение pygame не тронуто")
+    await p.press("Start", wait=1200)
+    st = await p.wait(lambda s: s.get("screen") == "hub", "мастерская", 10)
+    await p.shot("1_hub")
+    await p.pg.reload()
+    st = await p.wait(lambda s: s.get("screen") == "title", "титул после перезагрузки", 60)
+    check(st.get("migrated") is False and sorted(st.get("done", [])) == sorted(LEGACY_SAVE["done"]),
+          f"{p.name}: второй запуск — своё сохранение, без повторного переноса")
+    p.check_console()
+    await p.ctx.close()
+
+
+async def sc_net404(b):
+    """Кадры на сайте недоступны (404): коляска — рисунком, проезд — скользящим портретом, игра живёт."""
+    p = await new_page(b, "net404", legacy={"save.json": {"done": [], "tutorial_skipped": True}}, block_frames=True)
+    st, _, _ = await p.boot()
+    await p.press("Start", wait=1000)
+    st = await p.wait(lambda s: s.get("screen") == "hub", "мастерская", 10)
+    await p.press("Card_flat", wait=800)
+    st = await p.wait(lambda s: s.get("screen") == "job", "задание", 10)
+    await p.pg.wait_for_timeout(4000)
+    st = await p.state()
+    fr = st.get("frames", {})
+    check(fr.get("failed", 0) > 0 and fr.get("loaded", 0) == 0, f"{p.name}: кадров нет (неудачных {fr.get('failed')})")
+    await p.shot("1_job_no_frames")
+    st = await play_job(p, "flat", "", shots=False)
+    await p.shot("2_hub")
+    check(st.get("screen") == "hub", f"{p.name}: задание пройдено без кадров")
+    p.check_console()
+    await p.ctx.close()
+
+
+async def sc_guild(b):
+    """Про-задание Гильдии: Бренна «живая» (петля brenna_wave), «Проверка под нагрузкой» — петля проезда."""
+    p = await new_page(b, "guild", legacy={"save.json": LEGACY_SAVE})
+    st, _, _ = await p.boot()
+    await p.press("Start", wait=1000)
+    await p.wait(lambda s: s.get("screen") == "hub", "мастерская", 10)
+    await p.press("Guild", wait=800)
+    st = await p.wait(lambda s: s.get("screen") == "guild", "Гильдия", 10)
+    st = await p.wait(lambda s: s["frames"]["sets"].get("loop:brenna_wave", [0, 1])[0] ==
+                      s["frames"]["sets"].get("loop:brenna_wave", [0, 1])[1], "петля Бренны скачалась", 30)
+    check(bool(st), f"{p.name}: Бренна — петля brenna_wave скачалась")
+    await p.pg.wait_for_timeout(800)
+    await p.shot("1_guild")
+    techs = [x[0] for x in st.get("buttons", []) if x[0].startswith("Tech_")]
+    jid = "t_q6brake" if "Tech_t_q6brake" in techs else (techs[0][5:] if techs else "")   # Бренна в коляске Q6 Edge
+    if not jid:
+        check(False, f"{p.name}: нет карточек про-заданий")
+        await p.ctx.close()
+        return
+    await p.press("Tech_" + jid, wait=1000)
+    st = await p.wait(lambda s: s.get("screen") == "tech", "про-задание", 10)
+    await p.shot("2_tech")
+    st = await follow_hints(p, lambda s: s.get("phase") == "test", 120)
+    sets = st.get("frames", {}).get("sets", {})
+    loop = next((k[5:] for k in sets if k.startswith("loop:ride_")), "")
+    if loop:
+        st = await p.wait(lambda s: s["frames"]["sets"].get("loop:" + loop, [0, 1])[0] ==
+                          s["frames"]["sets"].get("loop:" + loop, [0, 1])[1], f"петля {loop}", 60)
+    await p.press("TestDrive")
+    st = await p.wait(lambda s: (s.get("ride") or {}).get("riding"), "проверка под нагрузкой", 10)
+    await p.pg.wait_for_timeout(2000)
+    st = await p.state()
+    await p.shot("3_tech_ride")
+    check((st.get("ride") or {}).get("loop", "") == ("ride_brenna_q6edge" if jid == "t_q6brake" else loop)
+          and (st.get("ride") or {}).get("drawn", 0) > 0,
+          f"{p.name}: проезд Гильдии петлёй {(st.get('ride') or {}).get('loop')}")
+    st = await p.wait(lambda s: s.get("ride_done"), "проезд закончился", 20)
+    await p.pg.wait_for_timeout(500)
+    await p.shot("4_tech_after")
+    p.check_console()
+    await p.ctx.close()
+
+
+async def sc_phone(b):
+    """Телефон (альбом 740×360, касания, dpr 3): титул, касание «начать», холст на всё окно, поле кода по касанию."""
+    p = await new_page(b, "phone", touch=True, mobile=True, w=740, h=360, dpr=3,
+                       legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+    st, secs, times = await p.boot()
+    await p.pg.wait_for_timeout(1500)
+    await p.shot("1_title")
+    c = await p.canvas()
+    check(abs(c[2] - 740) < 2 and abs(c[3] - 360) < 2 and c[4] >= 2000,
+          f"{p.name}: холст {c[2]:.0f}×{c[3]:.0f} CSS = окно, {c[4]}×{c[5]} px (dpr {c[6]})")
+    await p.press("Start", wait=1200)
+    st = await p.wait(lambda s: s.get("screen") == "hub", "касание «начать» → мастерская", 10)
+    await p.shot("2_hub")
+    await p.press("Card_flat", wait=1500)
+    st = await p.wait(lambda s: s.get("screen") == "job", "касание карточки → задание", 10)
+    await p.pg.wait_for_timeout(3000)
+    await p.shot("3_job")
+    # касание пункта списка деталей — осмотр
+    await p.press((st.get("hint") or ["?"])[0], wait=600)
+    st = await p.state()
+    check(st.get("phase") == "diagnose", f"{p.name}: касание детали в задании ({st.get('hint')})")
+    await p.key("Escape", 600)
+    await p.key("Escape", 600)
+    st = await p.wait(lambda s: s.get("screen") == "hub", "Esc → мастерская", 10)
+    await p.press("Gear", wait=600)
+    await p.press("Tab_game", wait=400)
+    await p.press("Share_paste", wait=800)
+    f = await p.pg.evaluate("(()=>{const f=document.getElementById('wnb-field');if(!f)return null;const r=f.getBoundingClientRect();"
+                            "return [r.left+r.width/2, r.top+r.height/2, document.activeElement===f]})()")
+    if f:
+        check(f[2] is False, f"{p.name}: на телефоне поле не забирает фокус само (клавиатура — по касанию)")
+        await p.pg.touchscreen.tap(f[0], f[1])
+        await p.pg.wait_for_timeout(400)
+        focused = await p.pg.evaluate("document.activeElement && document.activeElement.id")
+        check(focused == "wnb-field", f"{p.name}: касание поля кода — фокус в <input> (экранная клавиатура)")
+    else:
+        check(False, f"{p.name}: нет поля кода")
+    await p.shot("4_paste")
+    p.check_console()
+    await p.ctx.close()
+
+
+async def sc_a11y(b):
+    """prefers-reduced-motion → «Без анимации»; полный экран из настроек (в headless может не включиться)."""
+    p = await new_page(b, "calm", motion="reduce")
+    st, _, _ = await p.boot()
+    check(st.get("calm") is True, f"{p.name}: prefers-reduced-motion: reduce → «Без анимации»")
+    await p.pg.wait_for_timeout(1500)
+    st = await p.state()
+    check("loop:martin_wave" not in st["frames"]["sets"], f"{p.name}: без анимации петли титула не качаются")
+    await p.shot("1_title_calm")
+    await p.press("Gear", wait=600)
+    await p.press("Tab_graphics", wait=400)
+    await p.press("Fullscreen", wait=1200)
+    fs = await p.pg.evaluate("!!document.fullscreenElement")
+    st = await p.state()
+    info(f"{p.name}: полный экран из настроек: document.fullscreenElement={fs}, игра видит {st.get('fullscreen')}")
+    check(fs or st.get("fullscreen") is not None, f"{p.name}: кнопка полного экрана не падает")
+    if fs:
+        await p.press("Fullscreen", wait=800)
+    p.check_console()
+    await p.ctx.close()
+
+
+async def sc_perf(b):
+    """Замер: загрузка до титула и кадры/с на титуле и в задании — без замедления, с замедлением процессора ×4 и ×6
+    (CDP Emulation.setCPUThrottlingRate) и в мобильном окне — грубая оценка телефона."""
+    rows = []
+    for label, rate, mobile in (("desktop x1", 1, False), ("desktop x4", 4, False), ("desktop x6", 6, False),
+                                ("phone x6", 6, True)):
+        p = await new_page(b, "perf", touch=mobile, mobile=mobile, w=740 if mobile else 1280, h=360 if mobile else 720,
+                           dpr=3 if mobile else 1, legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+        cdp = await p.ctx.new_cdp_session(p.pg)
+        await cdp.send("Network.enable")
+        await cdp.send("Network.setCacheDisabled", {"cacheDisabled": True})
+        await cdp.send("Emulation.setCPUThrottlingRate", {"rate": rate})
+        st, secs, times = await p.boot()
+        t_title = (times.get("title", 0) - times.get("start", 0)) / 1000
+        await p.wait(lambda s: s["frames"]["sets"].get("loop:barty_wave", [0, 1])[0] == 36, "петли титула", 120, quiet=True)
+        f_title, w_title = await measure_fps(p, 5)
+        await p.press("Start", wait=1500)
+        await p.wait(lambda s: s.get("screen") == "hub", "мастерская", 30, quiet=True)
+        f_hub, _ = await measure_fps(p, 4)
+        await p.press("Card_flat", wait=1500)
+        await p.wait(lambda s: s.get("screen") == "job", "задание", 30, quiet=True)
+        t0 = time.time()
+        st = await p.wait(lambda s: s["frames"]["sets"].get("tt:chair_basic.png", [0, 1])[0] ==
+                          s["frames"]["sets"].get("tt:chair_basic.png", [0, 1])[1] or
+                          all(v[0] == v[1] for k, v in s["frames"]["sets"].items() if k.startswith("tt:")),
+                          "кадры поворота", 120, quiet=True)
+        t_tt = time.time() - t0
+        await p.wait(lambda s: s["frames"]["queue"] == 0 and s["frames"]["inflight"] == 0 and s["frames"]["wait"] == 0,
+                     "все кадры задания (поворот, волшебство, проезд)", 120, quiet=True)
+        t_all = time.time() - t0
+        info(f"{label}: все кадры задания (поворот + волшебство + проезд) за {t_all:.1f} с")
+        f_job, w_job = await measure_fps(p, 6)
+        dec = (await p.state()).get("frames", {}).get("decode_ms")
+        rows.append((label, t_title, f_title, w_title, f_hub, f_job, w_job, t_tt, dec))
+        info(f"{label}: титул {t_title:.1f} с, fps титул {f_title:.0f} (худший кадр {w_title:.0f} мс), мастерская "
+             f"{f_hub:.0f}, задание {f_job:.0f} (худший {w_job:.0f} мс); кадры поворота за {t_tt:.1f} с, "
+             f"декодирование {dec} мс/кадр")
+        await p.shot(f"{label.replace(' ', '_')}_job")
+        await p.ctx.close()
+    metrics["perf"] = rows
+    check(all(r[5] > 0 for r in rows), "perf: замер кадров/с снят")
+
+
+async def sc_fpshud(b):
+    """?fps=1 — плашка и строка «[wnb] fps …» в консоли; в ссылки-задания fps не попадает."""
+    p = await new_page(b, "fps")
+    await p.pg.goto(URL + "?test=1&fps=1")
+    await p.wait(lambda s: s.get("screen") == "title", "титул", 60)
+    await p.pg.wait_for_timeout(3800)
+    lines = [c for c in p.console if "[wnb] fps" in c]
+    check(bool(lines), f"{p.name}: строка в консоли браузера: {lines[-1][:120] if lines else '—'}")
+    await p.shot("1_title_fps")
+    # «Ссылка с прогрессом» при ?fps=1&test=1: в ссылку параметры замера не попадают, адрес — из сборки (--base-url)
+    await p.press("Gear", wait=600)
+    await p.press("Tab_game", wait=400)
+    await p.press("Share_link", wait=800)
+    link = await p.pg.evaluate("navigator.clipboard.readText().catch(e => 'ERR ' + e)")
+    info_ = json.load(open(os.path.join(build_web.OUT, "build_info.json"), encoding="utf-8"))
+    keys = set(urllib.parse.parse_qs(urllib.parse.urlsplit(link).query))
+    check(link.startswith(info_["base_url"] + "?load=P.") and keys == {"load"},
+          f"{p.name}: ссылка с прогрессом ведёт на сборку и без ?fps/?test (ключи {sorted(keys)}): {link[:70]}…")
+    p.check_console()
+    await p.ctx.close()
+
+
+SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
+             "guild": sc_guild, "phone": sc_phone, "a11y": sc_a11y, "fps": sc_fpshud, "perf": sc_perf}
+
+
+async def main(only):
+    os.makedirs(SHOTS, exist_ok=True)
+    open(os.path.join(SHOTS, ".gdignore"), "w").close()     # снимки внутри проекта — редактору не импортировать
+    for f in os.listdir(SHOTS):
+        if f != ".gdignore" and (not only or any(f.startswith(n) for n in only)):
+            os.remove(os.path.join(SHOTS, f))
+    async with async_playwright() as pw:
+        # Playwright сам добавляет --autoplay-policy=no-user-gesture-required — убираем (страницу он всё равно помечает
+        # «нажатой», так что запрет автозапуска звука в этой проверке не виден)
+        b = await pw.chromium.launch(args=GPU_ARGS, ignore_default_args=["--autoplay-policy=no-user-gesture-required"])
+        try:
+            for name, fn in SCENARIOS.items():
+                if only and name not in only:
+                    continue
+                print(f"— {name}", flush=True)
+                try:
+                    await asyncio.wait_for(fn(b), 600)
+                except Exception as e:
+                    check(False, f"{name}: {e!r}"[:400])
+        finally:
+            await b.close()
+
+
+if __name__ == "__main__":
+    only = []
+    if "--only" in sys.argv:
+        only = sys.argv[sys.argv.index("--only") + 1].split(",")
+    if "--no-build" not in sys.argv and "WNB_URL" not in os.environ:
+        build_web.build()
+    srv = None
+    if "WNB_URL" not in os.environ:
+        srv, _ = build_web.make_server(build_web.OUT, PORT)
+    try:
+        asyncio.run(main(only))
+    finally:
+        if srv:
+            srv.shutdown()
+            srv.server_close()
+    if metrics.get("perf"):
+        print("\nЗамер (Chromium без окна, видеокарта; замедление процессора через CDP):")
+        print("  режим        титул,с  fps титул  худший мс  fps мастерская  fps задание  худший мс  кадры поворота,с  декод мс")
+        for r in metrics["perf"]:
+            print(f"  {r[0]:<12} {r[1]:>6.1f}  {r[2]:>9.0f}  {r[3]:>9.0f}  {r[4]:>14.0f}  {r[5]:>11.0f}  {r[6]:>9.0f}  "
+                  f"{r[7]:>16.1f}  {r[8]}")
+    print(f"\nWEB SMOKE: {len(notes)} ok, {len(fails)} FAIL. Скриншоты: godot/tests/web_shots/ — открой и посмотри.")
+    for f in fails:
+        print("  ", f)
+    sys.exit(1 if fails else 0)

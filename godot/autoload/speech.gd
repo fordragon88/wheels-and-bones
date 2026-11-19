@@ -4,7 +4,7 @@ extends Node
 ## Чем говорит (как в game.py: чтец игрока важнее голоса системы):
 ##   test   — самопроверка и снимки (--test): НИЧЕГО не звучит, фразы только пишутся в журнал (history);
 ##   web    — браузер: фраза всегда уходит в скрытую область aria-live страницы (её читает чтец страницы), голосом
-##            браузера (Web Speech через DisplayServer.tts_*) — только при F2 (как wnbSay); не проверено до экспорта;
+##            браузера (Web Speech, wnbSay) — только при F2; проверено web_smoke (текст в #wnb-live, вызов голоса);
 ##   reader — на компьютере работает чтец экрана (NVDA, JAWS, Экранный диктор): фразы — в «живую область» Godot
 ##            (AccessKit), фокус чтец читает сам по именам элементов — своим голосом фокус НЕ дублируем;
 ##   tts    — чтеца нет: голос системы (Windows — SAPI/OneCore) на языке игры, скорость из настроек;
@@ -163,14 +163,18 @@ func last() -> String:
 	return history[-1] if not history.is_empty() else ""
 
 
-## Браузер: скрытая область aria-live + голос браузера по F2 (wnbSay в game.py; не проверено до экспорта).
+## Браузер: скрытая область aria-live + голос браузера по F2 (wnbSay в game.py; проверено web_smoke: текст появляется
+## в #wnb-live, голос — speechSynthesis, в проверке подменён заглушкой).
 func _web_setup() -> void:
 	JavaScriptBridge.eval("""(function(){
 	  if (window.wnbSay) return;
-	  var live = document.createElement('div');
-	  live.id = 'wnb-live'; live.setAttribute('aria-live', 'assertive'); live.setAttribute('role', 'status');
-	  live.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden';
-	  document.body.appendChild(live);
+	  var live = document.getElementById('wnb-live');   // есть в странице сборки (web/shell.html)
+	  if (!live) {
+	    live = document.createElement('div');
+	    live.id = 'wnb-live'; live.setAttribute('aria-live', 'assertive'); live.setAttribute('role', 'status');
+	    live.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden';
+	    document.body.appendChild(live);
+	  }
 	  window.wnbSay = function(t, intr, voice){
 	    live.textContent = ''; setTimeout(function(){ live.textContent = t; }, 30);
 	    if (!voice || !window.speechSynthesis) return;

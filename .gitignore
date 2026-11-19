@@ -73,3 +73,5 @@ godot/tests/out/
 godot/content/
 godot/export/
 godot/tests/shots/
+godot/tests/web_shots/
+godot/build/

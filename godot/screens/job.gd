@@ -995,10 +995,11 @@ func tick(dt: float) -> void:
 	var riding := ride.riding()
 	if ride.active and not riding:
 		_ride_finished()
-	if phase == "test" and not ride_done and not riding:
+	if (phase == "test" or Frames.net) and not ride_done and not riding:
 		var hero := RideView.hero_loop(job["client_art"])
 		if hero != "" and not Settings.calm():
-			Frames.want_loop(hero)             # пока читают «Тест-драйв» — подгрузить кадры проезда
+			Frames.want_loop(hero)             # пока читают «Тест-драйв» — подгрузить кадры проезда (браузер — с
+			                                   # начала задания, после кадров поворота: качаются по сети, как AnimWeb)
 	var dv := dispute_visible()               # «Я НЕ СОГЛАСЕН» — в шапке на месте «КОЛЁСА И КОСТИ»
 	_dispute_btn.visible = dv
 	if _skip:

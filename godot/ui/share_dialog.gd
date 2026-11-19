@@ -398,6 +398,45 @@ class ShareField extends Control:
 	func _process(dt: float) -> void:
 		_t += dt
 		queue_redraw()
+		if _web():
+			_web_sync()
+
+	# Браузер: поверх рамки — настоящее поле страницы (wnbField в web/shell.html): на телефоне по касанию открывается
+	# экранная клавиатура, работает вставка долгим нажатием и Ctrl+V. Текст живёт в поле страницы, сюда — опросом.
+	var _placed: Rect2 = Rect2()
+	var _wid: String = ""
+
+	func _web() -> bool:
+		return OS.has_feature("web") and not Share.test_mode
+
+	func _web_sync() -> void:
+		var xf := get_viewport().get_final_transform() * get_global_transform_with_canvas()
+		var r := xf * Rect2(Vector2.ZERO, size)
+		if _wid == "" or not r.is_equal_approx(_placed):
+			var first := _wid == ""
+			_wid = "%s_%d" % [key, get_instance_id()]
+			_placed = r
+			JavaScriptBridge.eval("wnbField.show(%s, %f, %f, %f, %f, %s, %d, %s, %f)" % [JSON.stringify(_wid), r.position.x,
+				r.position.y, r.size.x, r.size.y, JSON.stringify(value()), max_len,
+				JSON.stringify(Loc.t("Код или ссылка") if key == "text" else Loc.t("Имя")), float(UI.fs(16)) * xf.get_scale().y], true)
+			if first:
+				return
+		var p: Variant = JSON.parse_string(str(JavaScriptBridge.eval("wnbField.poll()", true)))
+		if not p is Dictionary:
+			return
+		var v := str(p.get("v", ""))
+		for z: String in Share.ZW:
+			v = v.replace(z, "")
+		if v != value():
+			set_value(v)
+		if int(p.get("esc", 0)) > 0:
+			Nav.back()
+		elif int(p.get("enter", 0)) > 0:
+			dlg.action("apply" if key == "text" else "make")
+
+	func _exit_tree() -> void:
+		if _wid != "":
+			JavaScriptBridge.eval("wnbField.hide()", true)
 
 	func _gui_input(e: InputEvent) -> void:
 		if e is InputEventMouseButton and e.pressed:
@@ -429,7 +468,9 @@ class ShareField extends Control:
 		var text := value()
 		var ph := "" if OS.has_feature("web") else ("Ctrl+V — вставить" if key == "text" else "Имя учителя")
 		var lh := UI.line_height(16)
-		if text == "" and ph != "":
+		if _web():
+			pass                                    # текст рисует поле страницы поверх рамки
+		elif text == "" and ph != "":
 			UI.draw_text(self, Loc.t(ph), Vector2(10, r.get_center().y - floorf(lh / 2)), 16, UI.DIM)
 		else:
 			var s := text + ("|" if int(_t * 2) % 2 == 0 else " ")
