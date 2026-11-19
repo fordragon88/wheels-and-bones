@@ -65,6 +65,18 @@ for name in anims:
             bad.append(f"anim/{name}: нет маски {os.path.basename(a)}")
         elif pygame.image.load(a).get_size() != pygame.image.load(f"{d}/{f}").get_size():
             bad.append(f"anim/{name}: маска {os.path.basename(a)} не того размера")
+# «живые» персонажи вместо картинки (game.IDLE_LOOPS: Бренна — brenna_wave): петля есть, картинка есть,
+# пропорции кадра — как у картинки (кадр = холст картинки + поле IDLE_PAD с каждой стороны)
+for art, name in sorted(getattr(g, "IDLE_LOOPS", {}).items()):
+    if name not in anims:
+        bad.append(f"IDLE_LOOPS: нет петли assets/anim/{name} для {art}")
+    elif not os.path.exists(f"assets/{art}"):
+        bad.append(f"IDLE_LOOPS {name}: нет картинки assets/{art}")
+    else:
+        fw, fh = pygame.image.load(f"{ANIM}/{name}/00.jpg").get_size()
+        aw, ah = pygame.image.load(f"assets/{art}").get_size()
+        if abs(fw / fh - aw / ah) > 0.01:
+            bad.append(f"IDLE_LOOPS {name}: пропорции кадра {fw}×{fh} не как у {art} {aw}×{ah}")
 # «волшебство» на портрете: assets/anim/magic_index.json (art_tests/magic_frames.py) — петля есть, кадров и размер как
 # в индексе, портрет героя существует, прямоугольник портрета внутри кадра
 mi = f"{ANIM}/magic_index.json"

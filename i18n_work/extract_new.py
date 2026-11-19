@@ -25,7 +25,7 @@ def add(ru, node, fmt):
     out.append(dict(ru=ru, line=node.lineno, fmt=fmt, context=lines[node.lineno - 1].strip()[:200]))
 
 
-SKIP_FN = {"run_selftest", "print_assets", "main", "_selftest_play"}
+SKIP_FN = {"run_selftest", "print_assets", "main", "_selftest_play", "_idle_selftest"}
 
 
 class V(ast.NodeVisitor):
