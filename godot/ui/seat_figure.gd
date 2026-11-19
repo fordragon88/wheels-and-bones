@@ -17,6 +17,9 @@ extends Control
 ## перерисовываются только тогда; каждый кадр — лишь Мортимер (_n0/_n1) и свечение. Порядок слоёв = порядок рисования:
 ##   узел (до первого свечения) → _n0 (дыхание Мортимера, если свечений до него не было) → _add (свечение) →
 ##   _s1a (после свечения, до Мортимера) → _n1 (дыхание, если свечение было раньше, и нити) → _s1b (после Мортимера).
+## Скорость (20.11): фигуры слоя (линии, ломаные, заливки, круги, кольца) — не отдельными draw_*, а одной пачкой
+## треугольников на отрезок между текстами/плашками (см. «пачка фигур» ниже): было 300–800 вызовов рисования WebGL на
+## кадр, стало 70–130. Пока тянут ползунок, повторяющиеся куски (сетка, контур кости, ломаная) берутся из памяти.
 
 const BONE := Color8(234, 226, 206)
 const BONE_D := Color8(186, 176, 154)
@@ -49,10 +52,21 @@ var _n1: Control
 var _s1b: Control
 var _ops: Array = [[], [], []]            # команды рисования неподвижной части: узел, _s1a, _s1b
 var _anim: Array = []                     # Мортимер: [рамка, цели нитей, «плохо», было ли свечение до него]
-var _anim_ci: CanvasItem                  # рисуем «живое» прямо в этот слой (а не в список команд)
+var _live: CanvasItem                     # нити Мортимера (_necro_live): каждый кадр прямо в этот слой, мимо памяти
 var _sig: Array = []
 var _glowed: bool = false
 var _necro_done: bool = false
+var _mp := PackedVector2Array()           # пачка фигур (треугольники) текущего слоя, ещё не закрытая
+var _mc := PackedColorArray()
+var _mseg: int = 0
+static var _pat := {}                      # кольца (_m_arc) вокруг (0, 0): [r, n, w, цвет] → [вершины, цвета]
+static var _patc := {}                     # цвет → цвета 18 треугольников линии
+static var _cpat := {}                     # круг: радиус → вершины вокруг (0, 0); _ccol: сегментов → цвет → цвета
+static var _ccol := {}
+static var _lmemo := {}                    # уже посчитанные линии/ломаные: [концы, толщина] → вершины
+static var _lmemo_v: int = 0
+static var _cmemo := {}                    # куски (_chunk_hit): ключ → [вершины, цвета]
+static var _cmemo_v: int = 0               # …вершин в них всего
 
 
 func _init() -> void:
@@ -101,7 +115,10 @@ func _process(dt: float) -> void:
 	if changed:
 		var had := [not _ops[1].is_empty(), not _ops[2].is_empty()]
 		_sig = sig.duplicate(true)
+		var p0 := Prof.t0() if Prof.on else 0
 		_build()
+		if Prof.on:
+			Prof.add("seat_build", p0)
 		queue_redraw()
 		if had[0] or not _ops[1].is_empty():
 			_s1a.queue_redraw()
@@ -118,9 +135,11 @@ func _build() -> void:
 	_ops = [[], [], []]
 	_glows.clear()
 	_anim = []
-	_anim_ci = null
 	_glowed = false
 	_necro_done = false
+	_mseg = 0
+	_mp = PackedVector2Array()
+	_mc = PackedColorArray()
 	match mode:
 		"scene":
 			draw_scene(rect, case, cfg, pose, highlight, show_necro)
@@ -134,6 +153,7 @@ func _build() -> void:
 			draw_top(rect, case, cfg, pose, show_necro)
 		"front":
 			draw_front(rect, front_corrected, front_pads, front_obl, front_wedge)
+	_mesh_flush()
 
 
 func _draw() -> void:
@@ -154,22 +174,16 @@ func _replay(ci: CanvasItem, seg: int) -> void:
 		_emit(ci, o)
 
 
+## Команды списка слоя: плашка, текст, пачка фигур (линии, ломаные, заливки, круги и кольца — 0..4 в _op —
+## в список не попадают, а собираются в пачку).
 static func _emit(ci: CanvasItem, o: Array) -> void:
 	match int(o[0]):
-		0:
-			ci.draw_line(o[1], o[2], o[3], o[4], true)
-		1:
-			ci.draw_polyline(o[1], o[2], 1.0, true)
-		2:
-			ci.draw_colored_polygon(o[1], o[2])
-		3:
-			ci.draw_circle(o[1], o[2], o[3], true, -1.0, true)
-		4:
-			ci.draw_arc(o[1], o[2], 0, TAU, o[3], o[4], o[5], true)
 		5:
 			UI.draw_round_rect(ci, o[1], o[2], o[3], o[4], o[5])
 		6:
 			UI.draw_text(ci, o[1], o[2], o[3], o[4], o[5], o[6])
+		7:                                       # пачка фигур одним вызовом (_mesh_flush)
+			RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), PackedInt32Array(), o[1], o[2])
 
 
 func _draw_n0() -> void:
@@ -205,17 +219,64 @@ static func _pg_width(d: Vector2, w: float) -> float:
 	return maxf(1.0, w * maxf(absf(d.x), absf(d.y)) / ln)
 
 
-## Команда рисования: «живое» (Мортимер) — сразу в слой, неподвижное — в список своего слоя (до первого свечения —
-## узел, после — _s1a до Мортимера и _s1b после).
+## Команда рисования неподвижной части — в пачку фигур (_mp/_mc) или, текст и плашка, в список своего слоя (до
+## первого свечения — узел, после — _s1a до Мортимера и _s1b после). Нити Мортимера (_live) — сразу в слой.
 func _op(o: Array) -> void:
-	if _anim_ci != null:
-		_emit(_anim_ci, o)
+	if _live != null and int(o[0]) == 1:
+		_live_flush()
+		_live.draw_polyline(o[1], o[2], 1.0, true)
 		return
-	_ops[0 if not _glowed else (2 if _necro_done else 1)].append(o)
+	_mseg_now()
+	var seg := _mseg
+	match int(o[0]):
+		0:
+			_m_line(o[1], o[2], o[3], o[4])
+		1:
+			_m_polyline(o[1], o[2], 1.0)
+		2:
+			var idx: PackedInt32Array = o[3]
+			var p: PackedVector2Array = o[1]
+			var tri := PackedVector2Array()
+			tri.resize(idx.size())
+			for i in idx.size():
+				tri[i] = p[idx[i]]
+			_mp.append_array(tri)
+			_mc.append_array(_solid(o[2], idx.size()))
+		3:
+			_m_circle(o[1], o[2], o[3])
+		4:
+			_m_arc(o[1], o[2], o[3], o[4], o[5])
+		_:                                        # текст и плашки — свои вызовы, пачка до них закрывается
+			_mesh_flush()
+			_ops[seg].append(o)
+
+
+## Слой неподвижной части для следующей фигуры (до первого свечения — узел, …); сменился — закрыть пачку.
+func _mseg_now() -> void:
+	if _live != null:
+		return
+	var seg := 0 if not _glowed else (2 if _necro_done else 1)
+	if seg != _mseg:
+		_mesh_flush()
+		_mseg = seg
 
 
 func _line(a: Vector2, b: Vector2, col: Color, w: float) -> void:
-	_op([0, a, b, col, _pg_width(b - a, w)])
+	if _live != null:
+		_live_flush()
+		_live.draw_line(a, b, col, _pg_width(b - a, w), true)
+		return
+	_mseg_now()
+	_m_line(a, b, col, _pg_width(b - a, w))
+
+
+## Нити: круги копятся пачкой (у каждого круга было 2 вызова рисования), линии и ломаные — родные (линии движок и
+## так склеивает); перед родной фигурой пачка уходит в слой, чтобы порядок перекрытия не менялся.
+func _live_flush() -> void:
+	if not _mp.is_empty():
+		RenderingServer.canvas_item_add_triangle_array(_live.get_canvas_item(), PackedInt32Array(), _mp, _mc)
+		_mp = PackedVector2Array()
+		_mc = PackedColorArray()
 
 
 func _lines(pts: Array, col: Color, w: float, closed: bool = false) -> void:
@@ -225,12 +286,19 @@ func _lines(pts: Array, col: Color, w: float, closed: bool = false) -> void:
 	if w <= 1.0 or p.size() < 2:
 		_op([1, p, col])
 		return
-	if _anim_ci != null:                      # нити Мортимера — каждый кадр, без списка команд
+	if _live != null:                         # нити Мортимера — каждый кадр, без памяти
+		_live_flush()
 		for i in p.size() - 1:
-			_anim_ci.draw_line(p[i], p[i + 1], col, _pg_width(p[i + 1] - p[i], w), true)
+			_live.draw_line(p[i], p[i + 1], col, _pg_width(p[i + 1] - p[i], w), true)
+		return
+	_mseg_now()
+	var key := ["lines", p, col, w]
+	var p0 := _chunk_hit(key)
+	if p0 < 0:
 		return
 	for i in p.size() - 1:                    # как DR.lines: каждый отрезок своей толщины
-		_op([0, p[i], p[i + 1], col, _pg_width(p[i + 1] - p[i], w)])
+		_m_line_raw(p[i], p[i + 1], col, _pg_width(p[i + 1] - p[i], w))
+	_chunk_save(key, p0)
 
 
 func _poly(pts: Array, col: Color, outline_w: float = 0.0) -> void:
@@ -238,19 +306,18 @@ func _poly(pts: Array, col: Color, outline_w: float = 0.0) -> void:
 		_lines(pts, col, outline_w, true)
 	else:
 		var p := PackedVector2Array(pts)
-		if Geometry2D.triangulate_polygon(p).is_empty():
+		var idx := Geometry2D.triangulate_polygon(p)
+		if idx.is_empty():
 			return                             # вырожденный многоугольник — pygame его тоже не закрашивает
-		_op([2, p, col])
+		_op([2, p, col, idx])
 
 
 func _circle(c: Vector2, r: float, col: Color, w: float = 0.0) -> void:
 	if r <= 0:
 		return
 	if w <= 0 or w >= r:
-		if _anim_ci != null:
-			_anim_ci.draw_circle(c, r, col, true, -1.0, true)
-			return
-		_op([3, c, r, col])
+		_mseg_now()
+		_m_circle(c, r, col)
 	else:
 		_op([4, c, r - w / 2.0, maxi(16, int(r * 2)), col, w])
 
@@ -275,6 +342,345 @@ func _aa_rect(x: float, y: float, w: float, h: float, col: Color, width: int = 0
 		_rrect(r, col, Color(0, 0, 0, 0), 0, radius)
 
 
+# ---------------- пачка фигур одним вызовом рисования ----------------
+# Каждый сглаженный draw_circle — 2 многоугольника, draw_polyline/draw_arc — 3, а каждый многоугольник в Compatibility
+# (GLES3/WebGL2) — свой вызов рисования и рвёт пачку соседних линий (те — «примитивы» и склеиваются). На скелет выходило
+# 300–800 вызовов. Здесь та же геометрия, что строит движок (servers/rendering/renderer_canvas_cull.cpp 4.7:
+# canvas_item_add_line / _polyline / _ellipse — сглаживающая кромка FEATHER_SIZE с прозрачным краем, поправка толщины
+# canvas_item_get_compensated_antialiasing_width), собирается в один список треугольников с цветом по вершинам, и весь
+# отрезок слоя между текстами/плашками уходит одним canvas_item_add_triangle_array. Порядок треугольников = порядок
+# рисования, поэтому перекрытия те же. Отличие от движка — только число сегментов круга (у движка всегда 64): малым
+# кругам хватает меньше (прогиб хорды < 0,05 px при растяжении ×2).
+
+const FEATHER := 1.25
+
+
+static func _aa_w(w: float) -> float:
+	if w <= 0.0:
+		return w
+	if w <= FEATHER * 2.0 + 0.00001:
+		return w * 0.5
+	if w <= FEATHER * 4.0 + 0.00001:
+		return remap(w, FEATHER * 2.0, FEATHER * 4.0, w * 0.5, w - FEATHER * 0.5)
+	return w - FEATHER * 0.5
+
+
+func _mesh_flush() -> void:
+	if _mp.is_empty():
+		return
+	_ops[_mseg].append([7, _mp, _mc])
+	_mp = PackedVector2Array()
+	_mc = PackedColorArray()
+
+
+static func _solid(col: Color, n: int) -> PackedColorArray:
+	var a := PackedColorArray()
+	a.resize(n)
+	a.fill(col)
+	return a
+
+
+## Цвета 18 треугольников сглаженной линии (сердцевина, 4 кромки, 4 угла) — как у движка.
+static func _line_cols(c: Color) -> PackedColorArray:
+	var a: PackedColorArray = _patc.get(c, PackedColorArray())
+	if a.is_empty():
+		var t := Color(c, 0.0)
+		a = PackedColorArray([c, c, c, c, c, c])
+		for k in 4:
+			a.append_array(PackedColorArray([c, t, t, c, t, c]))
+		for k in 4:
+			a.append_array(PackedColorArray([c, t, t, c, t, t]))
+		if _patc.size() > 2000:
+			_patc.clear()
+		_patc[c] = a
+	return a
+
+
+## draw_line(a, b, c, w, true): четырёхугольник + 4 кромки + 4 угла (каждый — треугольники 0-1-2 и 0-2-3).
+func _m_line(a: Vector2, b: Vector2, c: Color, w: float) -> void:
+	var key := [a, b, w]                      # пока тянут ползунок, пол и часть коляски не двигаются
+	var hit: PackedVector2Array = _lmemo.get(key, PackedVector2Array())
+	if hit.is_empty():
+		hit = _line_tris(a, b, w)
+		_lmemo_put(key, hit, hit.size())
+	_mp.append_array(hit)
+	_mc.append_array(_line_cols(c))
+
+
+## Память линий и ломаных — по объёму (вершина ломаной с цветом — как три вершины линии): ≈ 3 МБ.
+static func _lmemo_put(key: Array, v: Variant, n: int) -> void:
+	if _lmemo_v + n > 400000:
+		_lmemo.clear()
+		_lmemo_v = 0
+	_lmemo[key] = v
+	_lmemo_v += n
+
+
+## То же без памяти (внутри кусков, которые запоминаются целиком — _chunk_*).
+func _m_line_raw(a: Vector2, b: Vector2, c: Color, w: float) -> void:
+	_mp.append_array(_line_tris(a, b, w))
+	_mc.append_array(_line_cols(c))
+
+
+## Кусок рисунка из одних фигур (без текста и плашек — пачка внутри не закрывается), который часто повторяется: тот
+## же контур кости, сетка, ломаная. Есть в памяти — дописать готовое и вернуть -1; иначе — начало куска для _chunk_save.
+func _chunk_hit(key: Array) -> int:
+	var hit: Array = _cmemo.get(key, [])
+	if hit.is_empty():
+		return _mp.size()
+	_mp.append_array(hit[0])
+	_mc.append_array(hit[1])
+	return -1
+
+
+func _chunk_save(key: Array, p0: int) -> void:
+	var n := _mp.size() - p0
+	if _cmemo_v + n > 300000:                 # ≈ 7 МБ (вершина 8 байт + цвет 16): кость с суставами — ~2500 вершин
+		_cmemo.clear()
+		_cmemo_v = 0
+	_cmemo[key] = [_mp.slice(p0), _mc.slice(p0)]
+	_cmemo_v += n
+
+
+static func _line_tris(a: Vector2, b: Vector2, w: float) -> PackedVector2Array:
+	var diff := a - b
+	var dir := diff.orthogonal().normalized()
+	w = _aa_w(w)
+	var t := dir * (w * 0.5)
+	var bl := a + t
+	var br := a - t
+	var el := b + t
+	var er := b - t
+	var bs := FEATHER * (w if w < 1.0 else 1.0)
+	var bo := dir * bs
+	var b2 := diff.normalized() * bs
+	var lo := bl + bo
+	var lo2 := el + bo
+	var ro := br - bo
+	var ro2 := er - bo
+	var tl := bl + b2
+	var tr := br + b2
+	var dl := el - b2
+	var dr := er - b2
+	return PackedVector2Array([bl, br, er, bl, er, el,
+		bl, lo, lo2, bl, lo2, el,
+		br, ro, ro2, br, ro2, er,
+		bl, tl, tr, bl, tr, br,
+		el, dl, dr, el, dr, er,
+		bl, tl, lo + b2, bl, lo + b2, lo,
+		br, tr, ro + b2, br, ro + b2, ro,
+		el, dl, lo2 - b2, el, lo2 - b2, lo2,
+		er, dr, ro2 - b2, er, ro2 - b2, ro2])
+
+
+## Полоса (TRIANGLE_STRIP) → отдельные треугольники.
+static func _strip(s: PackedVector2Array, sc: PackedColorArray, out: PackedVector2Array, outc: PackedColorArray) -> void:
+	for k in s.size() - 2:
+		out.append(s[k])
+		out.append(s[k + 1])
+		out.append(s[k + 2])
+		outc.append(sc[k])
+		outc.append(sc[k + 1])
+		outc.append(sc[k + 2])
+
+
+static func _edge_off(seg: Vector2, prev: Vector2) -> Vector2:
+	var bis := (prev * seg.length() - seg * prev.length()).normalized()
+	var ln := 1.0
+	var s := sin(atan2(bis.cross(prev), bis.dot(prev)))
+	if not is_zero_approx(s) and not seg.is_equal_approx(prev):
+		ln = clampf(1.0 / s, -3.0, 3.0)
+	else:
+		bis = seg.orthogonal()
+	if bis.is_zero_approx():
+		bis = seg.orthogonal()
+	return bis * ln
+
+
+## draw_polyline(p, c, width, true): средняя полоса и две кромки (в этом порядке), как у движка → [вершины, цвета].
+static func _polyline_tris(p: PackedVector2Array, col: Color, width: float) -> Array:
+	var out := PackedVector2Array()
+	var outc := PackedColorArray()
+	var n := p.size()
+	if n < 2:
+		return [out, outc]
+	var w := _aa_w(width)
+	var loop := p[0].is_equal_approx(p[n - 1])
+	var first := Vector2()
+	var last := Vector2()
+	for i in range(1, n):
+		first = (p[i] - p[i - 1]).normalized()
+		if not first.is_zero_approx():
+			break
+	for i in range(n - 1, 0, -1):
+		last = (p[i] - p[i - 1]).normalized()
+		if not last.is_zero_approx():
+			break
+	var bs := FEATHER * (w if w < 1.0 else 1.0)
+	var t := Color(col, 0.0)
+	var m := PackedVector2Array()
+	var mc := PackedColorArray()
+	var l := PackedVector2Array()
+	var lc := PackedColorArray()
+	var r := PackedVector2Array()
+	var rc := PackedColorArray()
+	m.resize(n * 2 + (0 if loop else 4))
+	mc.resize(m.size())
+	l.resize(n * 2 + (0 if loop else 5))
+	lc.resize(l.size())
+	r.resize(l.size())
+	rc.resize(l.size())
+	var prev := Vector2()
+	for i in n:
+		var is_first := i == 0
+		var is_last := i == n - 1
+		var sd: Vector2
+		if is_last:
+			sd = prev
+		else:
+			sd = (p[i + 1] - p[i]).normalized()
+			if sd.is_zero_approx():
+				sd = prev
+		if is_first and loop:
+			prev = last
+		elif is_last and loop:
+			prev = first
+		var beo: Vector2
+		if is_first and not loop:
+			beo = first.orthogonal()
+		elif is_last and not loop:
+			beo = last.orthogonal()
+		else:
+			beo = _edge_off(sd, prev)
+		var eo := beo * (w * 0.5)
+		var bd := beo * bs
+		var pos := p[i]
+		var j := i * 2 + (0 if loop else 2)
+		m[j] = pos + eo
+		m[j + 1] = pos - eo
+		l[j] = pos + eo
+		l[j + 1] = pos + eo + bd
+		r[j] = pos - eo
+		r[j + 1] = pos - eo - bd
+		mc[j] = col
+		mc[j + 1] = col
+		lc[j] = col
+		lc[j + 1] = t
+		rc[j] = col
+		rc[j + 1] = t
+		if is_first and not loop:
+			var bb := -sd * bs
+			m[0] = pos + eo + bb
+			m[1] = pos - eo + bb
+			l[0] = pos + eo + bb
+			l[1] = pos + eo + bb + bd
+			r[0] = pos - eo + bb
+			r[1] = pos - eo + bb - bd
+			for k in 2:
+				mc[k] = t
+				lc[k] = t
+				rc[k] = t
+		if is_last and not loop:
+			var eb := prev * bs
+			var ei := n * 2 + 2
+			m[ei] = pos + eo + eb
+			m[ei + 1] = pos - eo + eb
+			mc[ei] = t
+			mc[ei + 1] = t
+			l[ei] = pos + eo
+			l[ei + 1] = pos + eo + eb + bd
+			l[ei + 2] = pos + eo + eb
+			r[ei] = pos - eo
+			r[ei + 1] = pos - eo + eb - bd
+			r[ei + 2] = pos - eo + eb
+			lc[ei] = col
+			lc[ei + 1] = t
+			lc[ei + 2] = t
+			rc[ei] = col
+			rc[ei + 1] = t
+			rc[ei + 2] = t
+		prev = sd
+	_strip(m, mc, out, outc)
+	_strip(l, lc, out, outc)
+	_strip(r, rc, out, outc)
+	return [out, outc]
+
+
+func _m_polyline(p: PackedVector2Array, col: Color, width: float) -> void:
+	var key := [p, col, width]
+	var tr: Array = _lmemo.get(key, [])
+	if tr.is_empty():
+		tr = _polyline_tris(p, col, width)
+		_lmemo_put(key, tr, (tr[0] as PackedVector2Array).size() * 3)
+	_mp.append_array(tr[0])
+	_mc.append_array(tr[1])
+
+
+## draw_arc(c, r, 0, TAU, n, col, w, true) — кольцо; готовая форма вокруг (0, 0) по [r, n, w, цвет], сдвиг — одним
+## умножением на Transform2D.
+func _m_arc(c: Vector2, r: float, n: int, col: Color, w: float) -> void:
+	var key := ["A", r, n, w, col]
+	var pat: Array = _pat.get(key, [])
+	if pat.is_empty():
+		var pts := PackedVector2Array()
+		pts.resize(n)
+		for i in n:
+			var th := (i / (n - 1.0)) * TAU
+			pts[i] = Vector2(r * cos(th), r * sin(th))
+		pat = _polyline_tris(pts, col, w)
+		if _pat.size() > 500:
+			_pat.clear()
+		_pat[key] = pat
+	_mp.append_array(Transform2D(0.0, c) * (pat[0] as PackedVector2Array))
+	_mc.append_array(pat[1])
+
+
+## Сегментов у сглаженного круга: у движка всегда 64; малому кругу хватает меньше (прогиб хорды r·(1−cos(π/n))
+## при растяжении ×2 — меньше 0,05 px).
+static func _circle_segs(r: float) -> int:
+	return clampi(int(ceil(PI * sqrt(maxf(r, 0.0) * 20.0) / 4.0)) * 4, 16, 64)
+
+
+## draw_circle(c, r, col, true, -1, true): веер (радиус r − FEATHER/4) и кромка до прозрачного.
+func _m_circle(c: Vector2, r: float, col: Color) -> void:
+	var n := _circle_segs(r)
+	var pts: PackedVector2Array = _cpat.get(r, PackedVector2Array())
+	if pts.is_empty():
+		var major := maxf(0.0, r - FEATHER * 0.25)
+		var bs := FEATHER
+		if major * 2.0 < 1.0:
+			bs *= major
+		var u: Array[Vector2] = []
+		for i in n + 1:
+			var a := i * TAU / n
+			u.append(Vector2(cos(a), sin(a)))
+		for i in n:
+			pts.append_array(PackedVector2Array([Vector2(), u[i] * major, u[i + 1] * major]))
+		var s := PackedVector2Array()
+		for i in n + 1:
+			s.append(u[i] * major)
+			s.append(u[i] * (major + bs))
+		for k in s.size() - 2:
+			pts.append_array(PackedVector2Array([s[k], s[k + 1], s[k + 2]]))
+		if _cpat.size() > 2000:
+			_cpat.clear()
+		_cpat[r] = pts
+	var by_n: Dictionary = _ccol.get(n, {})
+	if by_n.is_empty():
+		_ccol[n] = by_n
+	var cols: PackedColorArray = by_n.get(col, PackedColorArray())
+	if cols.is_empty():
+		var t := Color(col, 0.0)
+		cols = _solid(col, n * 3)
+		for k in n * 2:
+			cols.append_array(PackedColorArray([col, t, col] if k % 2 == 0 else [t, col, t]))
+		if by_n.size() > 500:
+			by_n.clear()
+		by_n[col] = cols
+	_mp.append_array(Transform2D(0.0, c) * pts)
+	_mc.append_array(cols)
+
+
 static func _layer_col(c: Color, a8: int) -> Color:
 	var a := a8 / 255.0
 	return Color(c.r * a, c.g * a, c.b * a, a)
@@ -293,6 +699,18 @@ func bone_seg(p0: Vector2, p1: Vector2, r0: float, r1: float = -1.0, col: Color 
 	var L := d.length()
 	if L < 1.0:
 		return
+	_mseg_now()
+	var key := ["bone", p0, p1, r0, r1, col, outline, joint]
+	var c0 := _chunk_hit(key)
+	if c0 < 0:
+		return
+	_bone_seg(p0, p1, r0, r1, col, outline, joint)
+	_chunk_save(key, c0)
+
+
+func _bone_seg(p0: Vector2, p1: Vector2, r0: float, r1: float, col: Color, outline: Color, joint: bool) -> void:
+	var d := p1 - p0
+	var L := d.length()
 	var u := d / L
 	var n := Vector2(-u.y, u.x)
 	var steps := [[0.0, 1.15], [0.14, 1.25], [0.30, 0.78], [0.50, 0.70], [0.70, 0.78], [0.86, 1.22], [1.0, 1.12]]
@@ -325,14 +743,15 @@ func bone_seg(p0: Vector2, p1: Vector2, r0: float, r1: float = -1.0, col: Color 
 
 ## Нить от посоха Мортимера к кости (_draw_necro_thread).
 func necro_thread(p_staff: Vector2, p_target: Vector2, col: Color, active: bool, phase: float) -> void:
-	var m := Vector2((p_staff.x + p_target.x) * 0.5, minf(p_staff.y, p_target.y) - 26.0 - 9.0 * UI.wsin(t * 2.4 + phase))
+	var wk := 0.0 if Settings.calm() else 1.0     # = UI.wsin, но без вызова на каждую точку (каждый кадр, 5 нитей)
+	var m := Vector2((p_staff.x + p_target.x) * 0.5, minf(p_staff.y, p_target.y) - 26.0 - 9.0 * (wk * sin(t * 2.4 + phase)))
 	var pts: Array = []
 	var n := 16
 	for i in n + 1:
 		var tt := float(i) / n
 		var u := 1.0 - tt
 		pts.append(Vector2(u * u * p_staff.x + 2 * u * tt * m.x + tt * tt * p_target.x,
-			u * u * p_staff.y + 2 * u * tt * m.y + tt * tt * p_target.y + 3.2 * UI.wsin(tt * PI * 2 + t * 4.0 + phase)))
+			u * u * p_staff.y + 2 * u * tt * m.y + tt * tt * p_target.y + 3.2 * (wk * sin(tt * PI * 2 + t * 4.0 + phase))))
 	var glow_c := col if active else Color8(152, 114, 218)
 	_lines(pts, _shade(glow_c, 0.62), 3 if active else 2)
 	_lines(pts, Color8(232, 210, 255) if active else glow_c, 1)
@@ -382,12 +801,18 @@ func _necro_live(ci: CanvasItem, late: bool) -> void:
 		breathe(ci, tex, Rect2(g[2], g[3], g[1], g[0]), t, 0.0)
 	if not late:
 		return
-	_anim_ci = ci
+	var keep := [_mp, _mc]                   # круги нитей копятся в _mp/_mc (_live_flush), пачка рисунка — в стороне
+	_mp = PackedVector2Array()
+	_mc = PackedColorArray()
+	_live = ci
 	var tg_all: Array = _anim[1]
 	for i in tg_all.size():
 		var tg: Array = tg_all[i]
 		necro_thread(g[4], Vector2(tg[0], tg[1]), tg[2], tg[3], i * 1.3)
-	_anim_ci = null
+	_live_flush()
+	_live = null
+	_mp = keep[0]
+	_mc = keep[1]
 
 
 ## Картинка, вписанная в бокс, «дышит» верхом (blit_idle breathe).
@@ -422,14 +847,7 @@ func draw_scene(rect_: Rect2, case_: Dictionary, cfg_: Dictionary, pose_: Dictio
 	var ry := rect_.position.y
 	var rr := rect_.end.x
 	var rb := rect_.end.y
-	var gx := rx + 20
-	while gx < rr - 10:
-		_line(Vector2(gx, ry + 8), Vector2(gx, rb - 26), Color8(26, 29, 40), 1)
-		gx += 36
-	var gy := ry + 16
-	while gy < rb - 26:
-		_line(Vector2(rx + 10, gy), Vector2(rr - 10, gy), Color8(26, 29, 40), 1)
-		gy += 36
+	_grid(rect_)
 	var body: Dictionary = case_.get("body", {})
 	var need_h := float(case_["seat_h"]) + float(body.get("shoulder", 60)) + 52
 	var k := minf(rect_.size.x / 155.0, rect_.size.y / maxf(132.0, need_h))
@@ -796,14 +1214,20 @@ func draw_myth(r: Rect2) -> void:
 # ---------------- виды спереди и сверху ----------------
 
 func _grid(r: Rect2) -> void:
+	_mseg_now()
+	var key := ["grid", r]
+	var c0 := _chunk_hit(key)
+	if c0 < 0:
+		return
 	var gx := r.position.x + 20
 	while gx < r.end.x - 10:
-		_line(Vector2(gx, r.position.y + 8), Vector2(gx, r.end.y - 26), Color8(26, 29, 40), 1)
+		_m_line_raw(Vector2(gx, r.position.y + 8), Vector2(gx, r.end.y - 26), Color8(26, 29, 40), 1)
 		gx += 36
 	var gy := r.position.y + 16
 	while gy < r.end.y - 26:
-		_line(Vector2(r.position.x + 10, gy), Vector2(r.end.x - 10, gy), Color8(26, 29, 40), 1)
+		_m_line_raw(Vector2(r.position.x + 10, gy), Vector2(r.end.x - 10, gy), Color8(26, 29, 40), 1)
 		gy += 36
+	_chunk_save(key, c0)
 
 
 ## Вид спереди для примерки (_seat_front_fit): основа (гамак/жёсткая), ширина, две подножки, подкладка под седалищную

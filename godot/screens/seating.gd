@@ -38,6 +38,10 @@ var _back: Control                        # подложка рамки и ре�
 var _head: Control                        # голова Мортимера у реплики — «дышит» (каждый кадр)
 var _face: Control                        # портрет клиента примерки — «дышит» (каждый кадр)
 var _fg: Control                          # тексты поверх рисунка
+var _fg0: Control                         # …из них неподвижные при перетаскивании ползунка (примерка)
+var _fg0_sig: Array = []
+var _lay: Array = []                      # _fit_layout() по подписи _lay_sig (перенос строк — не каждый кадр)
+var _lay_sig: Array = []
 var _back_sig: Array = []                 # перерисовка неподвижного — только при изменении (скорость, 19.11)
 var _fg_sig: Array = []
 var _dyn: Control                         # кнопки, которые меняются вместе с вкладкой/клиентом/вопросом
@@ -138,6 +142,12 @@ func build() -> void:
 	_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_face.draw.connect(_draw_face)
 	add_child(_face)
+	_fg0 = Control.new()                   # тексты примерки, не зависящие от ползунков (история, карта, мерки)
+	_fg0.name = "Fg0"
+	_fg0.size = size
+	_fg0.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fg0.draw.connect(_draw_fg0)
+	add_child(_fg0)
 	_fg = Control.new()
 	_fg.name = "Fg"
 	_fg.size = size
@@ -513,6 +523,10 @@ func tick(_dt: float) -> void:
 		_fg_sig = fs
 		_fg.queue_redraw()
 		_face.queue_redraw()
+	var f0 := [tab, case_i, view, look]
+	if f0 != _fg0_sig:
+		_fg0_sig = f0
+		_fg0.queue_redraw()
 	if not Settings.calm():                    # «дышат» голова Мортимера и портрет клиента
 		_head.queue_redraw()
 		if tab == "fit":
@@ -615,6 +629,14 @@ func _place_figure() -> void:
 
 ## Шапка примерки: [строки истории, карта, строки карты, y карты, рамка сцены, рамка обрезки].
 func _fit_layout() -> Array:
+	var sig := [case_i, Loc.code, Settings.a11y.get("text", 0), Settings.easy_font()]
+	if sig != _lay_sig:
+		_lay_sig = sig
+		_lay = _fit_layout_calc()
+	return _lay
+
+
+func _fit_layout_calc() -> Array:
 	var c: Dictionary = cases()[case_i]
 	var st_lines := UI.wrap_lines(Loc.t(c["story"]), CV.size.x - 362, 14)
 	var chart := "%s: %s" % [Loc.t("Карта терапевта"), Loc.t(c["therapist"])]
@@ -729,10 +751,12 @@ func _draw_fg() -> void:
 		_draw_quiz(ci)
 
 
-func _draw_fit(ci: CanvasItem) -> void:
+## Неподвижное при ползунках (слой _fg0, под остальными текстами — как раньше, они рисовались первыми).
+func _draw_fg0() -> void:
+	if tab != "fit":
+		return
+	var ci := _fg0
 	var c: Dictionary = cases()[case_i]
-	var res: Array = SeatLogic.seat_eval(c, cfg)
-	var checks: Array = res[0]
 	var lay := _fit_layout()
 	if view == "side" and c.get("view"):
 		var note := Loc.t("Сбоку посадка ровная — перекос виден только спереди" if c["view"] == "front"
@@ -743,6 +767,12 @@ func _draw_fit(ci: CanvasItem) -> void:
 	UI.draw_wrapped(ci, Loc.t(c["story"]), CV.position + Vector2(112, 10), CV.size.x - 362, 14, UI.WHITE)
 	UI.draw_wrapped(ci, lay[1], Vector2(CV.position.x + 112, lay[3]), CV.size.x - 126, 13, UI.CYAN)
 	UI.draw_text(ci, SeatLogic.measure_text(c), Vector2(CV.position.x + 14, CV.end.y - 18), 11, UI.AMBER)
+
+
+func _draw_fit(ci: CanvasItem) -> void:
+	var c: Dictionary = cases()[case_i]
+	var res: Array = SeatLogic.seat_eval(c, cfg)
+	var checks: Array = res[0]
 	var keys := slider_keys()
 	for i in keys.size():
 		var key: String = keys[i]

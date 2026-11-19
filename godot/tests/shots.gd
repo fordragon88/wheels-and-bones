@@ -1,7 +1,8 @@
 extends Node
 ## Снимки экранов 1280×720 для сверки с pygame-версией (эталоны — tests/ref/, их делает tools/ref_shots.py):
 ##   D:\Godot\Godot_v4.7.2-stable_win64.exe --path godot --audio-driver Dummy -- --test --shots [имя …]
-## Без имён — все; с «--calm» перед «--shots» — «Без анимации», файлы calm_<имя>.png; с «--big» — текст 150 %, big_<имя>.png. Снимки: tests/shots/<имя>.png (в git не хранятся). После снимков игра закрывается сама.
+## Без имён — все; с «--calm» перед «--shots» — «Без анимации», файлы calm_<имя>.png; с «--big» — текст 150 %, big_<имя>.png;
+## с «--native» — в размере окна (`--resolution 2220x1080` до `--`), без ужатия до 1280×720. Снимки: tests/shots/<имя>.png (в git не хранятся). После снимков игра закрывается сама.
 ## Ввод мыши в окне на время снимков выключен (курсор над окном не даёт подсветку наведения).
 
 const IDLE_T := 1.6                         # кадр петли «живых» персонажей на снимках = IDLE_T в tools/ref_shots.py
@@ -41,7 +42,7 @@ func _wait(secs: float) -> void:
 func _shot(name: String) -> void:
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
-	if img.get_size() != Vector2i(1280, 720):
+	if img.get_size() != Vector2i(1280, 720) and not "--native" in OS.get_cmdline_user_args():
 		img.resize(1280, 720, Image.INTERPOLATE_LANCZOS)
 	var pre := ("calm_" if Settings.calm() else "") + ("big_" if int(Settings.a11y.get("text", 0)) == 3 else "")
 	img.save_png(out_dir.path_join(pre + name + ".png"))
