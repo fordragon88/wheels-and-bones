@@ -6323,6 +6323,7 @@ class Game:
         self.ride_t0 = None               # тест-драйв: клиент проезжает через экран
         self._ride_name = None            # петля проезда, выбранная в start_ride (None — скользящий портрет)
         self._ride_drawn = 0              # сколько кадров петли нарисовано в этом проезде (web_smoke)
+        self._ride_last = None            # (кадр, место) — где петля остановилась (Гильдия)
         self.magic_t0 = None              # «волшебство» на портрете: когда началось (None — не играет)
         self._magic_name = None
         self._magic_auto = False          # первый показ после открытия задания ещё впереди
@@ -7974,7 +7975,20 @@ class Game:
                  "ride_saira": (12, 0.30, 4.0),
                  # сопровождающий идёт пешком: путь за 1 с петли = темп × длина шага (замер по ступням в кадрах:
                  # Агата 1,39 шага/с × 153 px, Искра 1,5 × 140 px при высоте кадра 440) — ноги не «скользят» по полу
-                 "ride_agatha": (12, 0.48, 1.3), "ride_iskra": (12, 0.48, 1.3)}
+                 "ride_agatha": (12, 0.48, 1.3), "ride_iskra": (12, 0.48, 1.3),
+                 # Гильдия: Бренна в четырёх электроколясках (Q6 Edge — 9,5 к/с: в клипе повторы кадров выброшены);
+                 # Тавр: 2 шага за петлю 1,42 с, шаг 113 px при высоте кадра 440 → 0,36 высоты за 1 с петли
+                 "ride_brenna_edge4b": (12, 0.30, 4.0), "ride_brenna_q6edge2": (12, 0.30, 4.0),
+                 "ride_brenna_pulse6": (12, 0.30, 4.0), "ride_brenna_q6edge": (9.5, 0.30, 4.0),
+                 "ride_tavr": (12, 0.36, 1.7)}
+    # Гильдия (19.11, владелец: «анимировать Бренну и Тавра»): раньше в про-заданиях скользила картинка коляски, рядом парил
+    # портрет. Теперь — петля по id задания: Бренна едет в той коляске, которую чинили (у неё один портрет на четыре коляски,
+    # поэтому ключ — задание, а не портрет), Тавр идёт сам с тележкой, Аэлин — своей петлёй из обычного задания.
+    RIDE_ANIM_TECH = {"t_battery": "ride_brenna_edge4b", "t_battery_q6": "ride_brenna_q6edge2",
+                      "t_pulse6": "ride_brenna_pulse6", "t_q6brake": "ride_brenna_q6edge", "toe": "ride_tavr",
+                      "truing": "ride_aelin"}
+    RIDE_TECH_STOP = (1040, 560)          # Гильдия: остановка правее кнопки «ГОТОВО» (центр кадра по x, линия пола)
+    RIDE_ANIM_T = {"ride_tavr": 7.0}      # свой срок проезда: Тавр идёт пешком — за 4,6 с пришлось бы бежать
     RIDE_ANIM_SECS = 4.6                  # проезд с петлёй: въезд слева, торможение и остановка в центре
     RIDE_ANIM_H = 330                     # высота кадра петли (портрет — 250): колёса на той же линии пола
     RIDE_FLOOR = 534                      # низ кадра петли (в кадре поле ~4 px под колёсами — пол на y≈530, как у портрета)
@@ -8162,8 +8176,10 @@ class Game:
 
     def _ride_hero(self):
         """Имя петли проезда героя текущего задания (по портрету) или None — без проверки кадров."""
-        if not self.cur or self.cur.get("track") == "tech":
+        if not self.cur:
             return None
+        if self.cur.get("track") == "tech":
+            return self.RIDE_ANIM_TECH.get(self.cur.get("id"))
         return self.RIDE_ANIM.get(self.cur.get("client_art"))
 
     def ride_anim(self):
@@ -8178,12 +8194,14 @@ class Game:
         return name if anim_web_ready(name) and anim_count(name) else None
 
     def ride_secs(self):
-        return self.RIDE_ANIM_SECS if self.ride_anim() else self.RIDE_SECS
+        name = self.ride_anim()
+        return self.RIDE_ANIM_T.get(name, self.RIDE_ANIM_SECS) if name else self.RIDE_SECS
 
     def start_ride(self):
         self.ride_t0 = None
         self._ride_name = self.ride_anim()                   # петля или портрет — до конца этого проезда
         self._ride_drawn = 0
+        self._ride_last = None                               # последний кадр петли и его место (Гильдия: стоит после проезда)
         self.ride_t0 = self.t - (self.ride_secs() if calm() else 0)   # без анимации — проверка сразу, без проезда
         snd("whoosh")
 
@@ -8203,7 +8221,9 @@ class Game:
     def _draw_ride_anim(self, surf, name):
         """Проезд петлёй: въезд из-за левого края, полный ход, плавная остановка в центре мастерской (там после
         проезда стоит портрет). Кадр петли — по пройденному пути: колесо радиуса r за оборот проходит 2πr."""
-        T, p = self.RIDE_ANIM_SECS, self.RIDE_CRUISE
+        T, p = self.RIDE_ANIM_T.get(name, self.RIDE_ANIM_SECS), self.RIDE_CRUISE
+        tech = self.cur.get("track") == "tech"
+        floor = self.RIDE_TECH_STOP[1] if tech else self.RIDE_FLOOR
         k = min(1.0, max(0.0, (self.t - self.ride_t0) / T))
         dist = p + (1 - p) * 2 / math.pi                     # путь при скорости 1 (доля T): ход + торможение по косинусу
         if k < p:
@@ -8212,14 +8232,14 @@ class Game:
             u = (k - p) / (1 - p)
             e, v = (p + (1 - p) * 2 / math.pi * math.sin(math.pi / 2 * u)) / dist, math.cos(math.pi / 2 * u)
         size = self._ride_anim_size(name)
-        x0, x1 = -size[0] / 2, self._chair_rect().centerx
+        x0, x1 = -size[0] / 2, (self.RIDE_TECH_STOP[0] if tech else self._chair_rect().centerx)
         P = x1 - x0
         fps, roll, rate = self.RIDE_LOOP.get(name, (ANIM_FPS, 0.25, 2.4))
         roll *= size[1]                                       # px пути за 1 с петли
         peak = P / (dist * T)                                 # px/с на полном ходу
         tau = e * P / max(roll, peak / rate)                  # время петли = путь / (путь за 1 с петли)
         img = anim_frame(name, size, tau, fps)
-        x, y = x0 + P * e - size[0] / 2, self.RIDE_FLOOR - size[1]
+        x, y = x0 + P * e - size[0] / 2, floor - size[1]
         if v > 0.35:                                          # линии скорости — пока едет быстро
             for i in range(6):
                 ly = y + size[1] * 0.3 + i * 26
@@ -8227,9 +8247,10 @@ class Game:
                 xe = x + size[0] * 0.08 - 20 * i % 50
                 DR.line(surf, (200, 200, 210), (xe - ln, ly), (xe, ly), 2)
         for i in range(4):                                    # пыль из-под заднего колеса
-            add_glow(surf, (x + size[0] * 0.3 - i * 30, self.RIDE_FLOOR - 6), 18, (80, 70, 55), (0.7 - 0.15 * i) * v)
+            add_glow(surf, (x + size[0] * 0.3 - i * 30, floor - 6), 18, (80, 70, 55), (0.7 - 0.15 * i) * v)
         if img is not None:
             surf.blit(img, (round(x), y))
+            self._ride_last = (img, (round(x), y))
             self._ride_drawn += 1                             # проверка браузера: кадры петли рисуются (web_smoke)
 
     def _draw_ride(self, surf):
@@ -14078,7 +14099,12 @@ class Game:
             draw_text(surf, "ПРОВЕРКА ПОД НАГРУЗКОЙ", (360, 70), 20, GOOD, bold=True)
             draw_wrapped(surf, job["test"], (360, 100), 560, 19, WHITE)
             if self.ride_t0 is None:                     # реплика — над кнопкой, кнопку не закрывает
-                self._draw_tt_show(surf, self._tech_chair_rect(), mouse)   # коляска крупно по центру (24.10)
+                if not self.ride_done and self.ride_anim():   # пока читают — подгрузить кадры петли проезда
+                    anim_prefetch(self.ride_anim(), self._ride_anim_size(self.ride_anim()))
+                if self.ride_done and self._ride_last and not calm():
+                    surf.blit(*self._ride_last)              # проехал(а) и стоит справа — коляска с героем, а не пустая
+                else:
+                    self._draw_tt_show(surf, self._tech_chair_rect(), mouse)   # коляска крупно по центру (24.10)
                 self._draw_ghost_bubble(surf, 440)
                 self._draw_ride_done(surf)
                 Button(self._test_btn_rect(), "ГОТОВО ▸" if self.ride_done else "ПРОВЕРИТЬ РАБОТУ",
@@ -15900,6 +15926,35 @@ def run_selftest():
             failures.append(f"Проезд {jid} ({name}): {ex!r}")
         if not gr.ride_done:
             failures.append(f"Проезд {jid}: не завершился")
+    for jid, name in Game.RIDE_ANIM_TECH.items():               # Гильдия: проезд петлёй по заданию
+        if anim_count(name) < 2:
+            failures.append(f"Проезд Гильдии: нет кадров assets/anim/{name}")
+            continue
+        gr = Game(headless=True)
+        jt = gr.job_by_id(jid)
+        if not jt or jt.get("track") != "tech":
+            failures.append(f"Проезд Гильдии: нет про-задания {jid}")
+            continue
+        gr.start_job(jid)
+        gr.phase = "test"
+        sc = pygame.display.get_surface()
+        gr.draw(sc)
+        gr.start_ride()
+        if gr.ride_anim() != name:
+            failures.append(f"Проезд Гильдии {jid}: петля {name} не выбрана")
+        try:
+            for _ in range(int(gr.ride_secs() * 20) + 10):
+                if gr.ride_t0 is None:
+                    break
+                gr.update(1 / 20)
+                gr.draw(sc)
+            gr.draw(sc)
+        except Exception as ex:
+            failures.append(f"Проезд Гильдии {jid} ({name}): {ex!r}")
+        if not gr.ride_done or not gr._ride_last:
+            failures.append(f"Проезд Гильдии {jid}: не завершился или герой не остался стоять")
+        elif gr._ride_last[1][0] + gr._ride_last[0].get_width() / 2 < WIDTH / 2:
+            failures.append(f"Проезд Гильдии {jid}: остановка не справа ({gr._ride_last[1]})")
     calm0 = A11Y["calm"]                                       # «волшебство» героев на портрете (magic_index.json)
     A11Y["calm"] = False
     try:
