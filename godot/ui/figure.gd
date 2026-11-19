@@ -14,6 +14,34 @@ var phase: float = 0.0
 var appear_k: float = 1.0                  # масштаб появления (ease_back), 0 — не видно
 var t: float = 0.0
 var flip: bool = false
+var loop_still: bool = false               # петля «живого» персонажа (Бренна): клип сам парит — без своего покачивания
+
+## Снимки (tests/shots.gd): ≥ 0 — петли «живых» персонажей берут кадр на это время (как ref_shots.py), иначе свой t.
+static var idle_t: float = -1.0
+
+
+## Петля «живого» персонажа для картинки (IDLE_LOOPS в game.py: master.png → brenna_wave) или "".
+static func idle_loop(img: String) -> String:
+	return str(Content.consts.get("idle", {}).get("loops", {}).get(img, ""))
+
+
+## Бокс кадра петли для картинки в боксе bx (idle_loop_box в game.py): шире и выше на поле IDLE_PAD с каждой стороны,
+## поле округлено до целых логических px, центр тот же.
+static func idle_box(bx: Rect2) -> Rect2:
+	var pad := float(Content.consts.get("idle", {}).get("pad", 0.0))
+	var p := Vector2(roundf(bx.size.x * pad), roundf(bx.size.y * pad))
+	return Rect2(bx.position - p, bx.size + 2 * p)
+
+
+## Персонаж img для бокса bx на время t (idle_img в game.py): {tex, box, live} — кадр петли в боксе с полем или
+## статичная картинка в самом bx («Без анимации», петли нет или ещё не загружена).
+static func idle_pick(img: String, bx: Rect2, t: float) -> Dictionary:
+	var n := idle_loop(img)
+	if n != "":
+		var tex := Frames.loop_frame(n, idle_t if idle_t >= 0.0 else t)
+		if tex != null:
+			return {"tex": tex, "box": idle_box(bx), "live": true}
+	return {"tex": Content.texture(img), "box": bx, "live": false}
 
 
 static func make(img: String, pos: Vector2, bx: Vector2, md: String = "breathe", loop_name: String = "") -> Figure:
@@ -24,6 +52,10 @@ static func make(img: String, pos: Vector2, bx: Vector2, md: String = "breathe",
 	f.size = bx
 	f.mode = md
 	f.loop = loop_name
+	if loop_name == "" and idle_loop(img) != "":     # Бренна — своей петлёй, в боксе с полем, без покачивания
+		f.loop = idle_loop(img)
+		f.loop_box = idle_box(Rect2(Vector2.ZERO, bx))
+		f.loop_still = true
 	return f
 
 
@@ -42,15 +74,25 @@ func _draw() -> void:
 	var tex: Texture2D = null
 	var bx := Rect2(Vector2.ZERO, box)
 	if loop != "":
-		tex = Frames.loop_frame(loop, t)
+		tex = Frames.loop_frame(loop, idle_t if loop_still and idle_t >= 0.0 else t)
 		if tex != null and loop_box.size != Vector2.ZERO:
 			bx = loop_box
+	var live := tex != null
 	if tex == null:
 		tex = Content.texture(image)
 		bx = Rect2(Vector2.ZERO, box)
 	if tex == null:
 		return
 	var r := UI.fit_rect(tex.get_size(), bx)
+	if live and loop_still:                              # blit_hero: только появление k (призрак — из центра)
+		if appear_k == 1.0:
+			draw_texture_rect(tex, r, false)
+			return
+		var o := bx.get_center() if mode == "float" else Vector2(bx.get_center().x, bx.end.y)
+		draw_set_transform(o, 0.0, Vector2(appear_k, appear_k))
+		draw_texture_rect(tex, Rect2(r.position - o, r.size), false)
+		draw_set_transform(Vector2.ZERO)
+		return
 	if mode == "float":
 		var dy := 7.0 * UI.wsin(t * 1.6 + phase)
 		var ang := 2.5 * UI.wsin(t * 1.1 + phase)

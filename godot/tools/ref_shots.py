@@ -17,6 +17,10 @@ random.seed(1)
 pygame.init()
 S = pygame.display.set_mode((1280, 720))
 import game
+IDLE_T = 1.6     # петли «живых» персонажей (Бренна) — кадр на это время, как Figure.idle_t в tests/shots.gd:
+_anim_frame = game.anim_frame   # иначе кадр зависит от того, сколько игра уже идёт, и разница снимков ложная
+game.anim_frame = lambda name, size, t, fps=game.ANIM_FPS: _anim_frame(
+    name, size, IDLE_T if name in game.IDLE_LOOPS.values() else t, fps)
 
 
 def run(g, secs, name=None):

@@ -694,6 +694,18 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-19 — Claude (Fable 5.2), ветка `godot-port` — **Godot: Бренна «живая» и проезд Гильдии переживает
+  пересборку**. Слита `test-build` (f7eaa96, петля `brenna_wave`), `sync_content.py` выгружает в `game_consts.json`
+  `idle: {pad, loops}` (IDLE_PAD и IDLE_LOOPS из game.py). `ui/figure.gd`: `Figure.idle_loop/idle_box/idle_pick`,
+  `loop_still` — `Figure.make` сам берёт петлю для `master.png` (Гильдия, портрет про-задания, итог через
+  MagicPortrait), бокс с полем, без своего парения/дыхания, только появление; `ui/speech_bubble.gd` `_draw_speaker` —
+  то же в пузыре (90×110 и 46×56). `screens/tech.gd` `rebuild()`: смена языка/размера текста после проезда больше не
+  возвращает пустую коляску — состояние RideView (active/stay/loop/t/t0) переносится. Снимки: `Figure.idle_t` /
+  `IDLE_T` 1,6 с в `tests/shots.gd` и `tools/ref_shots.py` — один кадр петли; guild_* — средняя разница 3,3–3,5,
+  область Бренны 2,8/255; tech_ride_t_q6brake_* — портрет 3,8. Самопроверка: `_flow_brenna` (петля, calm — картинка,
+  рисунок совпадает с картинкой, худший сдвиг 0,52 px) и пересборка после проезда у 6/6 про-заданий.
+  (godot/ui/figure.gd, godot/ui/speech_bubble.gd, godot/screens/tech.gd, godot/tests/*, godot/tools/*, PORT_PLAN.md)
+
 - 2026-11-19 — Claude (Fable 5.2), ветка `test-build` (в релиз — по команде владельца) — **Мастерица Бренна «живая»**
   (владелец: «Сама Бренна в гильдии же не анимирована, она просто картинка»). Петля `assets/anim/brenna_wave` (39 кадров,
   12 к/с, 3,25 с: парит, колышет подолом, моргает, кивает; нарезка — `art_tests/idle_loop.py`) рисуется вместо

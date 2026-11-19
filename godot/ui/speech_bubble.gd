@@ -127,18 +127,7 @@ func _draw_mentor() -> void:
 	if col.size != Vector2.ZERO:
 		_draw_mentor_col()
 		return
-	var img := speaker_img(line)
-	var tex: Texture2D = Frames.loop_frame("barty_wave", t) if img == "ghost.png" else null
-	if tex == null:
-		tex = Content.texture(img)
-	if tex:
-		var bx := Rect2(24, top_y, 90, 110)
-		var r := UI.fit_rect(tex.get_size(), bx)
-		var dy := 7.0 * UI.wsin(t * 1.6 + 1.3)
-		var ang := 2.5 * UI.wsin(t * 1.1 + 1.3)
-		draw_set_transform(bx.get_center() + Vector2(0, dy), deg_to_rad(-ang))
-		draw_texture_rect(tex, Rect2(r.position - bx.get_center(), r.size), false)
-		draw_set_transform(Vector2.ZERO)
+	_draw_speaker(speaker_img(line), Rect2(24, top_y, 90, 110))
 	var bubble := Rect2(120, top_y, 740, 86)
 	draw_rect(bubble, Color8(24, 30, 36, 220))
 	UI.draw_round_rect(self, bubble, Color(0, 0, 0, 0), UI.CYAN, 2, 8)
@@ -154,22 +143,32 @@ func _draw_mentor() -> void:
 		typed(text, 90), maxi(1, int((bubble.size.y - 20) / lh)))
 
 
+## Портрет говорящего в боксе bx: Барти — машущей петлёй, Бренна — своей петлёй в боксе с полем и без покачивания
+## (клип сам парит; blit_hero в game.py), остальные — картинкой. «Без анимации» — картинки, парят как раньше.
+func _draw_speaker(img: String, bx: Rect2) -> void:
+	var tex: Texture2D = Frames.loop_frame("barty_wave", t) if img == "ghost.png" else null
+	if tex == null:
+		var p := Figure.idle_pick(img, bx, t)
+		tex = p["tex"]
+		if tex != null and p["live"]:
+			draw_texture_rect(tex, UI.fit_rect(tex.get_size(), p["box"]), false)
+			return
+	if tex == null:
+		return
+	var r := UI.fit_rect(tex.get_size(), bx)
+	var dy := 7.0 * UI.wsin(t * 1.6 + 1.3)
+	var ang := 2.5 * UI.wsin(t * 1.1 + 1.3)
+	draw_set_transform(bx.get_center() + Vector2(0, dy), deg_to_rad(-ang))
+	draw_texture_rect(tex, Rect2(r.position - bx.get_center(), r.size), false)
+	draw_set_transform(Vector2.ZERO)
+
+
 ## Узкий пузырь наставника в правой колонке (ремонт): портрет 46×56 и текст рядом.
 func _draw_mentor_col() -> void:
 	var img := speaker_img(line)
 	draw_rect(col, Color8(24, 30, 36, 220))
 	UI.draw_round_rect(self, col, Color(0, 0, 0, 0), UI.CYAN, 2, 8)
-	var tex: Texture2D = Frames.loop_frame("barty_wave", t) if img == "ghost.png" else null
-	if tex == null:
-		tex = Content.texture(img)
-	if tex:
-		var bx := Rect2(col.position + Vector2(6, 6), Vector2(46, 56))
-		var r := UI.fit_rect(tex.get_size(), bx)
-		var dy := 7.0 * UI.wsin(t * 1.6 + 1.3)
-		var ang := 2.5 * UI.wsin(t * 1.1 + 1.3)
-		draw_set_transform(bx.get_center() + Vector2(0, dy), deg_to_rad(-ang))
-		draw_texture_rect(tex, Rect2(r.position - bx.get_center(), r.size), false)
-		draw_set_transform(Vector2.ZERO)
+	_draw_speaker(img, Rect2(col.position + Vector2(6, 6), Vector2(46, 56)))
 	var text := Loc.t(line)
 	var tw := col.size.x - 70
 	var sz := 12

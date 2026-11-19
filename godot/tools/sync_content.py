@@ -189,6 +189,7 @@ def game_tables():
                   "guild_req": game.GUILD_REQ, "inspect_req": game.INSPECT_REQ,
                   "exam_max_mistakes": game.EXAM_MAX_MISTAKES, "text_k": list(game.TEXT_K),
                   "anim_fps": game.ANIM_FPS, "anim_keep_ms": game.ANIM_KEEP_MS,
+                  "idle": {"pad": game.IDLE_PAD, "loops": dict(game.IDLE_LOOPS)},   # Бренна петлёй (blit_hero)
                   "vol": dict(game.VOL),
                   "music": {"full": game.MUSIC_FULL, "fade": game.MUSIC_FADE, "bed": game.MUSIC_BED,
                             "loud_scenes": list(game.MUSIC_LOUD_SCENES)},

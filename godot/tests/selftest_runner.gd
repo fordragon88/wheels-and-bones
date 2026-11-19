@@ -184,6 +184,7 @@ func _run() -> void:
 	var sw_line: String = await _flow_switch(["flat:0", "brake:0", "spokes:0"], ["truing"])
 	var pad_line: String = await _flow_pad(["flat:0", "brake:0", "lift:0"], ["truing"])
 	var ride_line: String = await _flow_tech_rides()
+	ride_line += "; " + await _flow_brenna()
 	Loc.audit = false
 	var n_audit: int = Loc.audited.size()
 	var dump := OS.get_cmdline_user_args().find("--dump-tr")
@@ -2443,6 +2444,8 @@ func _only(what: String) -> void:
 			line = await _flow_switch(all, Content.tech_jobs.map(func(j: Dictionary) -> String: return j["id"]))
 		"rides":
 			line = await _flow_tech_rides()
+		"brenna":
+			line = await _flow_brenna()
 		"pad":
 			line = await _flow_pad(["flat:0", "brake:0", "lift:0"], ["truing"])
 	Nav.shutdown()
@@ -2739,6 +2742,12 @@ func _flow_tech_rides() -> String:
 		if absf(r.get_center().x - float(ts[0])) > 2 or absf(r.end.y - float(ts[1])) > 1:
 			err("проезд Гильдии %s: остановка %s, нужно центр x=%d, пол %d" % [jid, r, ts[0], ts[1]])
 			continue
+		scr.rebuild()                          # смена языка / размера текста: герой так и стоит справа
+		await _frames(2)
+		if not scr.ride.stay or scr.ride.stay_rect() != r or scr.chair.visible:
+			err("проезд Гильдии %s: после пересборки экрана герой не стоит (%s, коляска видна: %s)" % [
+				jid, scr.ride.stay_rect(), scr.chair.visible])
+			continue
 		ok += 1
 	# «Без анимации» — прежнее: без петли, коляска по центру после проверки
 	var calm0: bool = Settings.a11y.get("calm", false)
@@ -2752,4 +2761,67 @@ func _flow_tech_rides() -> String:
 	if sc2.ride.loop_name != "" or not sc2.ride_done or sc2.ride.stay or not sc2.chair.visible:
 		err("проезд Гильдии «Без анимации»: не прежнее поведение")
 	Settings.a11y["calm"] = calm0
-	return "проезд Гильдии петлёй: %d/%d про-заданий (петля, срок, остановка справа, стоит после), «Без анимации» — прежнее" % [ok, at.size()]
+	return "проезд Гильдии петлёй: %d/%d про-заданий (петля, срок, остановка справа, стоит после и после пересборки), «Без анимации» — прежнее" % [ok, at.size()]
+
+
+## Бренна «живая» (IDLE_LOOPS/IDLE_PAD из game_consts.json): петля выбрана, «Без анимации» — картинка, рисунок в кадре
+## петли стоит там же, где картинка (±2 px), во всех боксах, где её рисуют; Гильдия, про-задание, итог — Figure с петлёй.
+func _flow_brenna() -> String:
+	var idle: Dictionary = Content.consts.get("idle", {})
+	var pad := float(idle.get("pad", 0.0))
+	var loops: Dictionary = idle.get("loops", {})
+	if pad <= 0.0 or loops.get("master.png", "") == "":
+		err("Бренна: нет idle.pad / idle.loops в game_consts.json")
+		return "Бренна: нет данных"
+	var name: String = loops["master.png"]
+	if Frames.loop_count(name) < 2:
+		err("Бренна: нет кадров петли " + name)
+		return "Бренна: нет кадров"
+	Frames.want_loop(name)
+	Frames.flush()
+	await _frames(2)
+	var calm0: bool = Settings.a11y.get("calm", false)
+	Settings.a11y["calm"] = false
+	var st := Content.texture("master.png").get_size()
+	var boxes := [Rect2(UI.W - 300, 130, 200, 280), Rect2(986, 158, 46, 56), Rect2(24, 300, 90, 110),
+		Rect2(24, 70, 150, 190), Rect2(24, 300, 210, 250)]
+	var worst := 0.0
+	for bx: Rect2 in boxes:
+		var p := Figure.idle_pick("master.png", bx, 1.6)
+		if not p["live"]:
+			err("Бренна: в боксе %s не петля" % bx.size)
+			continue
+		var fr: Vector2 = (p["tex"] as Texture2D).get_size()
+		var f := UI.fit_rect(fr, p["box"])
+		var iw := roundf(fr.x / (1 + 2 * pad))
+		var ih := roundf(fr.y / (1 + 2 * pad))
+		var k := f.size / fr
+		var inner := Rect2(f.position + Vector2(floorf((fr.x - iw) / 2), floorf((fr.y - ih) / 2)) * k, Vector2(iw, ih) * k)
+		var s := UI.fit_rect(st, bx)
+		var d := maxf(maxf(absf(inner.position.x - s.position.x), absf(inner.position.y - s.position.y)),
+			maxf(absf(inner.end.x - s.end.x), absf(inner.end.y - s.end.y)))
+		worst = maxf(worst, d)
+		if d > 2.0:
+			err("Бренна: бокс %s — рисунок в петле %s, картинка %s (сдвиг %.1f px)" % [bx.size, inner, s, d])
+	Settings.a11y["calm"] = true
+	if Figure.idle_pick("master.png", boxes[0], 1.6)["live"]:
+		err("Бренна: «Без анимации» — всё равно петля")
+	Settings.a11y["calm"] = false
+	# экраны: Гильдия, про-задание с Бренной, — Figure с петлёй, без покачивания
+	Nav.go("guild")
+	await _frames(3)
+	var g := Nav.current.get_node_or_null("Brenna") as Figure
+	if g == null or g.loop != name or not g.loop_still or g.loop_box != Figure.idle_box(Rect2(Vector2.ZERO, g.box)):
+		err("Бренна: в Гильдии не петлёй (%s)" % (g.loop if g else "нет"))
+	var tj := ""
+	for j: Dictionary in Content.tech_jobs:
+		if j.get("client_art", "") == "master.png":
+			tj = j["id"]
+			break
+	if tj != "":
+		var scr: Node = await _open_tech(tj)
+		var c := scr.get_node_or_null("Client") as Figure
+		if c == null or c.loop != name or not c.loop_still:
+			err("Бренна: портрет про-задания %s не петлёй" % tj)
+	Settings.a11y["calm"] = calm0
+	return "Бренна петлёй %s: Гильдия, пузырь, портрет и итог про-задания; рисунок совпадает с картинкой (худший сдвиг %.2f px), «Без анимации» — картинка" % [name, worst]

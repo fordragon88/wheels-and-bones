@@ -4,6 +4,7 @@ extends Node
 ## Без имён — все; с «--calm» перед «--shots» — «Без анимации», файлы calm_<имя>.png; с «--big» — текст 150 %, big_<имя>.png. Снимки: tests/shots/<имя>.png (в git не хранятся). После снимков игра закрывается сама.
 ## Ввод мыши в окне на время снимков выключен (курсор над окном не даёт подсветку наведения).
 
+const IDLE_T := 1.6                         # кадр петли «живых» персонажей на снимках = IDLE_T в tools/ref_shots.py
 const ALL := ["title", "title_en", "hub", "job_flat_diagnose", "job_flat_inspected",
 	"job_joystick_diagnose", "job_joystick_inspected", "job_flat_repair", "mini_pump", "mini_gap", "mini_ping",
 	"mini_meter", "ride_martin", "ride_zix", "result_lift", "hub_done", "intro_1", "intro_2", "intro_3", "intro_4",
@@ -450,6 +451,8 @@ func _run() -> void:
 	if want.is_empty():
 		want = ALL
 	seed(1)
+	Figure.idle_t = IDLE_T                    # Бренна (brenna_wave) — тот же кадр петли, что в ref_shots.py
+	Frames.want_loop(str(Content.consts.get("idle", {}).get("loops", {}).get("master.png", "")))
 	if "--big" in args:
 		Settings.a11y["text"] = 3
 	Settings.lang = "ru"

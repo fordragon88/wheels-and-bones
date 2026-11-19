@@ -258,7 +258,23 @@ func rebuild() -> void:
 		if w and w.get_parent() == self:
 			remove_child(w)
 			keep.append(w)
+	# смена языка/размера текста пересобирает экран: проезд (идёт или герой уже стоит справа) — переживает пересборку,
+	# иначе новый RideView пуст и на месте героя снова пустая коляска
+	var rs := {}
+	if ride:
+		rs = {"active": ride.active, "stay": ride.stay, "loop": ride.loop_name, "t": ride.t, "t0": ride.t0,
+			"drawn": ride.drawn}
 	super.rebuild()
+	if rs.get("active", false) or rs.get("stay", false):
+		ride.loop_name = rs["loop"]
+		ride.t = rs["t"]
+		ride.t0 = rs["t0"]
+		ride.drawn = rs["drawn"]
+		ride.active = rs["active"]
+		ride.stay = rs["stay"]
+		chair.visible = not (ride.active or ride.stay)
+		if _test_btn:
+			_test_btn.visible = not ride.riding()
 	for w in keep:
 		add_child(w)
 	if not keep.is_empty():
