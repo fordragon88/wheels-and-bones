@@ -37,6 +37,8 @@ var _worst_win: float = 0.0
 var _touch: bool = false
 var _cover_cb: JavaScriptObject           # обратный вызов для страницы (держим ссылку, иначе его соберут)
 var _lang_sent: String = ""
+var _stage_cb: JavaScriptObject           # ?test=1: window.wnbStage(имя) — состояние снимка tests/shots.gd (замер)
+var _stager: Node
 
 
 func _ready() -> void:
@@ -58,6 +60,9 @@ func _ready() -> void:
 			JavaScriptBridge.get_interface("window").wnbOnCover(_cover_cb)
 		Loc.changed.connect(_send_lang)
 		_send_lang()
+	if test:                                 # web_smoke screens: любое состояние экрана без прохождения
+		_stage_cb = JavaScriptBridge.create_callback(_on_stage)
+		JavaScriptBridge.get_interface("window").wnbStage = _stage_cb
 	if fps_on:
 		var layer := CanvasLayer.new()
 		layer.name = "FpsHud"
@@ -88,6 +93,21 @@ func _on_cover(args: Array) -> void:
 	covered = c
 	get_tree().paused = c
 	RenderingServer.render_loop_enabled = not c
+
+
+## window.wnbStage("seat_fit_troll") — поставить экран в состояние снимка (tests/shots.gd stage, только ?test=1).
+func _on_stage(args: Array) -> void:
+	if args.is_empty():
+		return
+	if _stager == null:
+		var gd := load("res://tests/shots.gd") as GDScript
+		if gd == null or not gd.can_instantiate():
+			push_error("tests/shots.gd не загрузился")
+			return
+		_stager = gd.new()
+		_stager.set("stage_only", true)
+		add_child(_stager)
+	_stager.call("web_stage", str(args[0]))
 
 
 ## Язык игры — странице (тексты заслонки и кнопок полного экрана; запоминает до следующей загрузки).
@@ -295,7 +315,8 @@ func _buttons() -> Array:
 func _collect(n: Node, out: Array) -> void:
 	if n is CanvasItem and not (n as CanvasItem).visible:
 		return
-	if n is BaseButton and not (n as BaseButton).disabled and (n as Control).mouse_filter != Control.MOUSE_FILTER_IGNORE:
+	if (n is BaseButton and not (n as BaseButton).disabled or n is Control and str(n.name).begins_with("Slider_")) \
+			and (n as Control).mouse_filter != Control.MOUSE_FILTER_IGNORE:
 		var c := n as Control
 		var r := c.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, c.size)
 		out.append([str(c.name), roundf(r.position.x), roundf(r.position.y), roundf(r.size.x), roundf(r.size.y)])

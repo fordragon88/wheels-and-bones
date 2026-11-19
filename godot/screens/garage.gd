@@ -57,6 +57,7 @@ func build() -> void:
 		b.set_meta("i", i)
 		b.set_meta("k", k)
 		b.on_draw = _draw_card
+		b.redraw_sig = func() -> int: return 0         # содержимое карточки не меняется (въезд и наведение видит кнопка)
 		b.accessibility_name = "%s. %s. %s" % [Loc.t(job.get("client", "")), Loc.t(job.get("title", "")),
 			"★".repeat(int(g[1])) + "☆".repeat(3 - int(g[1]))]
 		b.pressed.connect(open_card.bind(i))
@@ -133,8 +134,8 @@ func go_back() -> void:
 func tick(_dt: float) -> void:
 	for b in _cards:
 		b.slide = Vector2(0, int(40 * (1 - UI.appear(st, 0.06 * int(b.get_meta("k")), 0.4))))
-	_deco.queue_redraw()
-	_popup.queue_redraw()
+	redraw_on(_deco, [page, SaveGame.garage.size()])
+	redraw_on(_popup, [open_idx, page])
 
 
 ## Урок задания: fact (у заданий с вариантами — первого варианта, как в данных).

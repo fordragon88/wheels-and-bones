@@ -83,8 +83,8 @@ func go_back() -> void:
 
 
 func tick(_dt: float) -> void:
-	_deco.queue_redraw()
-	_add.queue_redraw()
+	redraw_on(_deco, [minf(st, 1.0)])          # молнии, дрожь и въезд карточки — до 0,9 с, потом рисунок стоит
+	redraw_on(_add, [minf(st, 1.0)])
 
 
 func _draw_deco() -> void:

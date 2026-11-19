@@ -35,7 +35,11 @@ var quiz: Array = []                      # вопросы зачёта с пе�
 
 var fig: SeatFigure
 var _back: Control                        # подложка рамки и реплика Мортимера
+var _head: Control                        # голова Мортимера у реплики — «дышит» (каждый кадр)
+var _face: Control                        # портрет клиента примерки — «дышит» (каждый кадр)
 var _fg: Control                          # тексты поверх рисунка
+var _back_sig: Array = []                 # перерисовка неподвижного — только при изменении (скорость, 19.11)
+var _fg_sig: Array = []
 var _dyn: Control                         # кнопки, которые меняются вместе с вкладкой/клиентом/вопросом
 var _typing: Array = ["", 0.0]
 var _said: String = ""
@@ -120,8 +124,20 @@ func build() -> void:
 	_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_back.draw.connect(_draw_back)
 	add_child(_back)
+	_head = Control.new()                  # сразу над подложкой (с ней не пересекается)
+	_head.name = "Head"
+	_head.size = size
+	_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_head.draw.connect(_draw_head)
+	add_child(_head)
 	fig = SeatFigure.new()
 	add_child(fig)
+	_face = Control.new()                  # под текстами (с ними не пересекается)
+	_face.name = "Face"
+	_face.size = size
+	_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_face.draw.connect(_draw_face)
+	add_child(_face)
 	_fg = Control.new()
 	_fg.name = "Fg"
 	_fg.size = size
@@ -179,6 +195,7 @@ func _build_dyn() -> void:
 			b.active = i == lesson
 			b.set_meta("i", i)
 			b.on_draw = _draw_lesson_btn
+			b.redraw_sig = _btn_sig
 			b.accessibility_name = "%d. %s" % [i + 1, Loc.t(lessons()[i]["title"])]
 			b.pressed.connect(pick_lesson.bind(i))
 			_dyn.add_child(b)
@@ -202,6 +219,7 @@ func _build_dyn() -> void:
 			b.active = i == case_i
 			b.set_meta("i", i)
 			b.on_draw = _draw_case_btn
+			b.redraw_sig = _btn_sig
 			b.accessibility_name = ("✔ " if done else "") + Loc.t(cases()[i]["client"])
 			b.pressed.connect(pick_case.bind(i))
 			_dyn.add_child(b)
@@ -249,6 +267,7 @@ func _build_dyn() -> void:
 			b.enabled = picked < 0 or i == picked or ok
 			b.set_meta("i", i)
 			b.on_draw = _draw_option
+			b.redraw_sig = _btn_sig
 			b.accessibility_name = Loc.t(q["options"][i][0])
 			b.pressed.connect(quiz_pick.bind(i))
 			_dyn.add_child(b)
@@ -479,8 +498,37 @@ func tick(_dt: float) -> void:
 		_said = say
 		pass                                   # реплику Мортимера говорит A11y (a11y_lines)
 	_place_figure()
-	_back.queue_redraw()
-	_fg.queue_redraw()
+	var look := [Loc.code, Settings.a11y.get("text", 0), Settings.easy_font(), Settings.calm()]
+	var line := _say_line()
+	var bs := [line, mini(typed(line, 95), line.length()), look]
+	if bs != _back_sig:                        # реплика печатается — каждый кадр, потом стоит
+		_back_sig = bs
+		_back.queue_redraw()
+	var fs := [tab, lesson, case_i, cfg.duplicate(), view, drag, solved, demo_good, quiz_i, picked, quiz_done, score,
+		fix_t(), UI.kb_active, look]
+	for k: String in sliders:
+		var sl: SeatSlider = sliders[k]
+		fs.append([sl.hover, sl.has_focus()])
+	if fs != _fg_sig:
+		_fg_sig = fs
+		_fg.queue_redraw()
+		_face.queue_redraw()
+	if not Settings.calm():                    # «дышат» голова Мортимера и портрет клиента
+		_head.queue_redraw()
+		if tab == "fit":
+			_face.queue_redraw()
+	elif _head.get_meta("look", []) != look:
+		_head.set_meta("look", look)
+		_head.queue_redraw()
+
+
+## Подпись кнопок списка и вариантов (GameButton.redraw_sig): от чего зависит их содержимое.
+func _btn_sig() -> Array:
+	return [lesson, quiz_i, picked, Loc.code]
+
+
+func _say_line() -> String:
+	return Loc.t(say if say != "" else mentor("intro"))
 
 
 func _place_figure() -> void:
@@ -589,13 +637,24 @@ func typed(text: String, cps: float) -> int:
 	return int((t - float(_typing[1])) * cps)
 
 
+func _draw_head() -> void:
+	var head := Content.texture("mentor_necro_head.png")
+	if head:
+		SeatFigure.breathe(_head, head, Rect2(24, 104, 68, 68), t, 0.0)
+
+
+func _draw_face() -> void:
+	if tab != "fit":
+		return
+	var face := Content.texture(cases()[case_i]["client_art"])
+	if face:
+		SeatFigure.breathe(_face, face, Rect2(CV.position.x + 12, CV.position.y + 6, 92, 108), t, 0.0)
+
+
 func _draw_back() -> void:
 	var ci := _back
 	UI.draw_round_rect(ci, BUBBLE, Color8(30, 22, 40, 232), UI.PURPLE, 2, 8)
-	var head := Content.texture("mentor_necro_head.png")
-	if head:
-		SeatFigure.breathe(ci, head, Rect2(24, 104, 68, 68), t, 0.0)
-	var line := Loc.t(say if say != "" else mentor("intro"))
+	var line := _say_line()
 	var sz := 14
 	while sz > 10 and UI.wrap_lines(line, BUBBLE.size.x - 24, sz).size() * (UI.line_height(sz) + 2) > BUBBLE.size.y - 10:
 		sz -= 1
@@ -681,9 +740,6 @@ func _draw_fit(ci: CanvasItem) -> void:
 		var nw := UI.text_width(note, 13, true) + 16
 		UI.draw_round_rect(ci, Rect2(CV.end.x - 14 - nw, CV.end.y - 56, nw, 24), Color8(16, 12, 24, 225), Color(), 0, 5)
 		UI.draw_text(ci, note, Vector2(CV.end.x - 22, CV.end.y - 53), 13, UI.AMBER, true, 2)
-	var face := Content.texture(c["client_art"])
-	if face:
-		SeatFigure.breathe(ci, face, Rect2(CV.position.x + 12, CV.position.y + 6, 92, 108), t, 0.0)
 	UI.draw_wrapped(ci, Loc.t(c["story"]), CV.position + Vector2(112, 10), CV.size.x - 362, 14, UI.WHITE)
 	UI.draw_wrapped(ci, lay[1], Vector2(CV.position.x + 112, lay[3]), CV.size.x - 126, 13, UI.CYAN)
 	UI.draw_text(ci, SeatLogic.measure_text(c), Vector2(CV.position.x + 14, CV.end.y - 18), 11, UI.AMBER)

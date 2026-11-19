@@ -65,8 +65,8 @@ func go_back() -> void:
 
 
 func tick(_dt: float) -> void:
-	_deco.queue_redraw()
-	_top.queue_redraw()
+	redraw_on(_deco, [minf(st, 0.4 + 0.35 * items().size() + 0.35)])   # пункты чек-листа въезжают, потом стоят
+	_top.queue_redraw()                         # конфетти — каждый кадр
 
 
 func _plate(r: Rect2) -> void:

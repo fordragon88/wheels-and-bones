@@ -931,6 +931,163 @@ async def sc_prof(b):
     metrics["prof"] = prof
 
 
+# Экраны и состояния для замера по всем экранам (sc_screens): [ключ, состояние tests/shots.gd (window.wnbStage),
+# что делать во время замера, секунд замера]. Состояния — те же, что у снимков --shots (сверка картинки).
+SCREENS = [
+    ("title", "title", None, 4), ("intro", "intro_2", None, 4), ("hub", "hub", None, 4),
+    ("job_loading", "job_joystick_diagnose", "loading", 4),   # кадры коляски качаются и распаковываются (просадки)
+    ("job_diag", "job_flat_inspected", None, 4), ("job_repair", "job_flat_repair", None, 4),
+    ("mini_pump", "mini_pump", None, 4), ("mini_gap", "mini_gap", None, 4), ("mini_ping", "mini_ping", None, 4),
+    ("mini_meter", "mini_meter", None, 4), ("result", "result_lift", None, 4),
+    ("seat_lesson1", "seat_lessons", None, 4), ("seat_slump", "seat_lesson_slump", None, 4),
+    ("seat_measure", "seat_lesson_measure", None, 4), ("seat_front", "seat_lesson_front", None, 4),
+    ("seat_front_norm", "seat_lesson_front_norm", None, 4),
+    ("seat_fit", "seat_fit_troll", None, 4), ("seat_fit_drag", "seat_fit_troll", "slider", 4),
+    ("seat_fit_front", "seat_fit_dryad", None, 4), ("seat_fit_front_drag", "seat_fit_dryad", "slider", 4),
+    ("seat_fit_top", "seat_fit_owl", None, 4),
+    ("seat_quiz", "seat_quiz_q1", None, 4), ("seat_quiz_answer", "seat_quiz_wrong", None, 4),
+    ("seat_quiz_myth", "seat_quiz_myth", None, 4), ("seat_quiz_wedge", "seat_quiz_wedge", None, 4),
+    ("seat_quiz_pass", "seat_quiz_pass", None, 4),
+    ("guild", "guild_open", None, 4), ("tech_ops", "tech_ops", None, 4), ("tech_manual", "tech_manual", None, 4),
+    ("tech_spec", "tech_spec", None, 4), ("tech_mini", "tech_mini", None, 4), ("tech_test", "tech_test", None, 4),
+    ("tech_ride", "tech_ride", None, 3), ("tech_result", "tech_result", None, 4),
+    ("exam", "exam_ticket", None, 4), ("exam_failed", "exam_failed", None, 4), ("exam_passed", "exam_passed", None, 4),
+    ("garage", "garage", None, 4), ("garage_open", "garage_open", None, 4),
+    ("ending", "ending", None, 4), ("credits", "credits", None, 4),
+    ("settings_sound", "settings_sound", None, 4), ("settings_graphics", "settings_graphics", None, 4),
+    ("settings_access", "settings_access", None, 4), ("settings_game", "settings_game", None, 4),
+    ("help", "help", None, 4), ("feedback", "feedback_general", None, 4),
+    ("share_paste", "share_paste", None, 4), ("share_builder", "share_builder", None, 4),
+    ("share_summary", "share_summary", None, 4),
+]
+
+
+async def drag_slider(p, secs, name="Slider_leg"):
+    """Двигать ползунок примерки мышью туда-сюда secs секунд (рисунок едет за ползунком)."""
+    st = await p.state()
+    sl = [x for x in st.get("buttons", []) if x[0] == name] or \
+         [x for x in st.get("buttons", []) if x[0].startswith("Slider_")]
+    if not sl:
+        await p.pg.wait_for_timeout(int(secs * 1000))
+        return
+    b = sl[0]
+    y = b[2] + b[4] / 2
+    x0, py = await p.at(b[1] + 25, y)
+    x1, _ = await p.at(b[1] + b[3] - 25, y)
+    await p.pg.mouse.move(x0, py)
+    await p.pg.mouse.down()
+    t0 = time.time()
+    k = 0
+    while time.time() - t0 < secs:
+        k += 1
+        u = (k % 24) / 24
+        await p.pg.mouse.move(x0 + (x1 - x0) * (u if (k // 24) % 2 == 0 else 1 - u), py)
+        await p.pg.wait_for_timeout(50)
+    await p.pg.mouse.up()
+
+
+async def measure_win(p, secs, during=None, profs=None):
+    """Кадры/с (среднее окон по 1 с без первого) и худший кадр за всё время замера (мс); profs — сюда сводки профиля
+    по окнам (с ?prof=1)."""
+    fps, worst = [], []
+
+    async def sample():
+        t0 = time.time()
+        while time.time() - t0 < secs:
+            st = await p.state()
+            if st.get("fps"):
+                fps.append(st["fps"])
+                worst.append(st.get("worst_ms", 0))
+                if profs is not None and st.get("prof"):
+                    profs.append(dict(st["prof"], frames_stats=st.get("frames")))
+            await p.pg.wait_for_timeout(1000)
+    if during:
+        await asyncio.gather(sample(), during(p, secs))
+    else:
+        await sample()
+    f = (sum(fps[1:]) / max(1, len(fps) - 1)) if len(fps) > 1 else (fps[0] if fps else 0)
+    return f, max(worst[1:] or worst or [0])
+
+
+async def screens_run(b, label, rate, mobile, query="", only=None):
+    """Один проход по всем экранам: состояние (wnbStage) → дождаться кадров → замер. Возврат: ключ → [к/с, худший мс,
+    профиль]."""
+    p = await new_page(b, "screens", touch=mobile, mobile=mobile, w=740 if mobile else 1280, h=360 if mobile else 720,
+                       dpr=3 if mobile else 1, legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+    p.allow.append("ERR_NO_BUFFER_SPACE")   # Windows: сокетам локального сервера не хватило буфера на поток кадров —
+    cdp = await p.ctx.new_cdp_session(p.pg)  # игра повторяет загрузку сама (Frames: retry)
+    await cdp.send("Emulation.setCPUThrottlingRate", {"rate": rate})
+    await p.boot(query)
+    await p.wait(lambda s: s["frames"]["sets"].get("loop:barty_wave", [0, 1])[0] == 36, "петли титула", 120, quiet=True)
+    out = {}
+    for key, stage, act, secs in SCREENS:
+        if only and key not in only:
+            continue
+        await p.pg.evaluate("(n) => window.wnbStage(n)", stage)
+        if act == "loading":                              # замер сразу: кадры задания ещё качаются
+            await p.pg.wait_for_timeout(300)
+            f0 = (await p.state()).get("frames", {}).get("decoded", 0)
+            profs = []
+            f, w = await measure_win(p, secs + 1, profs=profs)
+            st = await p.state()
+            pr = max(profs, key=lambda x: x.get("worst_ms", 0)) if profs else {}   # окно с худшим кадром
+            pr = dict(pr, decoded=st.get("frames", {}).get("decoded", 0) - f0, windows=[
+                [x.get("fps"), x.get("worst_ms"), x.get("frame_ms"), x.get("process_ms"), x.get("draw_ms"),
+                 x.get("render_cpu_ms"), (x.get("text") or {}).get("frames")] for x in profs])
+            out[key] = [round(f, 1), round(w, 1), pr]
+            await p.wait(lambda s: s.get("frames", {}).get("queue", 1) == 0, "кадры", 60, quiet=True)
+            continue
+        ok = False
+        t0 = time.time()
+        while time.time() - t0 < 40:
+            if await p.pg.evaluate("window.wnbStaged || ''") == stage:
+                ok = True
+                break
+            await p.pg.wait_for_timeout(200)
+        if not ok:
+            check(False, f"{label}: состояние {stage} не встало")
+            continue
+        await p.wait(lambda s: s["frames"]["queue"] == 0 and s["frames"]["inflight"] == 0 and s["frames"]["wait"] == 0,
+                     "кадры докачались", 30, quiet=True)
+        await p.pg.wait_for_timeout(600)
+        during = drag_slider if act == "slider" else None
+        f, w = await measure_win(p, secs + 1, during)
+        pr = (await p.state()).get("prof") or {}
+        out[key] = [round(f, 1), round(w, 1), pr]
+        if mobile and rate >= 6 and not query:
+            await p.shot(f"{label.replace(' ', '_')}_{key}")
+    p.check_console()
+    await p.ctx.close()
+    slow = [f"{k} {v[0]:.0f}" for k, v in out.items() if v[0] < 50]
+    info(f"{label}: экранов {len(out)}; ниже 50 к/с: {', '.join(slow) or 'нет'}")
+    return out
+
+
+async def sc_screens(b):
+    """Замер кадров/с по ВСЕМ экранам и состояниям (SCREENS; состояния ставит игра — window.wnbStage, ?test=1):
+    без замедления, ×6 и «телефон ×6» (740×360, dpr 3); плюс проход телефона ×6 с ?prof=1 — что дороже всего в кадре.
+    WNB_SCREENS=ключ,ключ — только эти; WNB_SCREENS_MODES=x1,x6,phone,prof — только эти проходы.
+    Итог — godot/tests/web_shots/screens_perf.json и таблица в конце вывода."""
+    only = [x for x in os.environ.get("WNB_SCREENS", "").split(",") if x]
+    modes = [x for x in os.environ.get("WNB_SCREENS_MODES", "x1,x6,phone,prof").split(",") if x]
+    runs = {"x1": ("desktop x1", 1, False, ""), "x6": ("desktop x6", 6, False, ""), "phone": ("phone x6", 6, True, ""),
+            "prof": ("prof phone x6", 6, True, "&prof=1")}
+    res = {}
+    for m in modes:
+        label, rate, mobile, q = runs[m]
+        res[m] = await screens_run(b, label, rate, mobile, q, only)
+    with open(os.path.join(SHOTS, "screens_perf.json"), "w", encoding="utf-8") as f:
+        json.dump(res, f, ensure_ascii=False, indent=1)
+    metrics["screens"] = res
+    check(all(len(v) > 0 for v in res.values()), f"screens: замер по экранам снят ({', '.join(f'{k}: {len(v)}' for k, v in res.items())})")
+    for k, (fv, wv, pr) in res.get("prof", {}).items():
+        if not pr:
+            continue
+        top = ", ".join(f"{x[0]} {x[1]:.2f}" for x in pr.get("draw_top", [])[:5])
+        info(f"prof {k}: кадр {pr.get('frame_ms')} мс — process {pr.get('process_ms')}, draw {pr.get('draw_ms')}, "
+             f"render {pr.get('render_cpu_ms')}, вызовов {pr.get('draw_calls')}, перерисовок {pr.get('redraws')}; {top}")
+
+
 async def sc_fpshud(b):
     """?fps=1 — плашка и строка «[wnb] fps …» в консоли; в ссылки-задания fps не попадает."""
     p = await new_page(b, "fps")
@@ -955,7 +1112,8 @@ async def sc_fpshud(b):
 
 SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
              "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "perf": sc_perf,
-             "prof": sc_prof}
+             "prof": sc_prof, "screens": sc_screens}
+TIMEOUT = {"screens": 5400}                               # все экраны × 4 прохода — долго
 
 
 async def main(only):
@@ -974,7 +1132,7 @@ async def main(only):
                     continue
                 print(f"— {name}", flush=True)
                 try:
-                    await asyncio.wait_for(fn(b), 600)
+                    await asyncio.wait_for(fn(b), TIMEOUT.get(name, 600))
                 except Exception as e:
                     check(False, f"{name}: {e!r}"[:400])
         finally:
@@ -1004,6 +1162,14 @@ if __name__ == "__main__":
             print(f"  {r['label']:<20} {r['t_title']:>7.1f}  {r['title']:>5.0f}  {r['hub']:>10.0f}  {r['job']:>7.0f}  "
                   f"{r['drag']:>4.0f} ({r['w_drag']:>3.0f})  {r['repair']:>4.0f} ({r['w_repair']:>3.0f})  "
                   f"{r['ride']:>4.0f} ({r['w_ride']:>3.0f})  {r['t_tt']:>9.1f}  {r['dec']}")
+    if metrics.get("screens"):
+        sc = metrics["screens"]
+        cols = [m for m in ("x1", "x6", "phone") if m in sc]
+        print("\nЭкраны (Chromium, видеокарта, CDP-замедление), кадры/с (худший кадр, мс):")
+        print("  экран                " + "".join(f"{c:>14}" for c in cols))
+        for k in [k for k, *_ in SCREENS if any(k in sc[c] for c in cols)]:
+            print(f"  {k:<21}" + "".join(f"{sc[c][k][0]:>8.0f} ({sc[c][k][1]:>3.0f})" if k in sc[c] else f"{'—':>14}"
+                                         for c in cols))
     print(f"\nWEB SMOKE: {len(notes)} ok, {len(fails)} FAIL. Скриншоты: godot/tests/web_shots/ — открой и посмотри.")
     for f in fails:
         print("  ", f)

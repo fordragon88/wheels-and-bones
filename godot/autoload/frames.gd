@@ -356,6 +356,7 @@ func _pump(budget_ms: int) -> void:
 
 ## Браузер: забрать скачанное, декодировать в пределах NET_BUDGET_MS (хотя бы один кадр), поставить новые загрузки.
 func _pump_net() -> void:
+	var p0 := Prof.t0() if Prof.on else 0
 	if not _net_inflight.is_empty():
 		for u: String in Web.net_ready():
 			var q: Variant = _net_inflight.get(u)
@@ -366,8 +367,11 @@ func _pump_net() -> void:
 			_net_done.append([q[0], q[1], u])
 	var t0 := Time.get_ticks_usec()
 	var n := 0
+	# Кадр игры уже долгий (слабый процессор) — один кадр коляски/петли за кадр игры, иначе до NET_BUDGET_MS:
+	# на телефоне кадр (забрать байты, mipmaps, текстура) стоит 4–5 мс, два-три подряд давали просадки при загрузке.
+	var budget_us := NET_BUDGET_MS * 1000 if get_process_delta_time() < 0.018 else 0
 	while not _net_done.is_empty():
-		if n > 0 and Time.get_ticks_usec() - t0 >= NET_BUDGET_MS * 1000:
+		if n > 0 and Time.get_ticks_usec() - t0 >= budget_us:
 			break
 		var r: Array = _net_done.pop_front()
 		var dims := Web.net_dims(r[2])          # (0, 0) — сырые байты WebP; иначе RGBA, распакованные страницей
@@ -401,3 +405,5 @@ func _pump_net() -> void:
 		_net_inflight[u] = q
 		if fresh:
 			Web.net_get(u)
+	if Prof.on and n > 0:
+		Prof.add("frames", p0)                 # кадры поворота/петель в этом игровом кадре (забрать, mipmaps, текстура)

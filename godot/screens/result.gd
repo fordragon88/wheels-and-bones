@@ -111,8 +111,11 @@ func tick(_dt: float) -> void:
 			Audio.sfx("star%d" % i)
 	if _leg:
 		_leg.t = st - 1.4
-	_deco.queue_redraw()
-	_add.queue_redraw()
+	# «ГОТОВО», звёзды и карточка въезжают до 1,7 с, потом печатается «спасибо» — дальше рисунок стоит
+	var thanks := Loc.t(job.get("thanks", ""))
+	var n := mini(_typed(thanks), thanks.length()) if st > 1.2 else 0
+	redraw_on(_deco, [minf(st, 1.8), n])
+	redraw_on(_add, [minf(st, 1.8)])             # вспышки звёзд — до 1,71 с
 
 
 func _typed(text: String) -> int:

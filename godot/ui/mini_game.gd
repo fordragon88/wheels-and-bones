@@ -79,6 +79,7 @@ func _ready() -> void:
 				b.set_meta("i", i)
 				b.accessibility_name = Loc.tf("Спица {0}", [i + 1])
 				b.on_draw = _draw_spoke
+				b.redraw_sig = func() -> Array: return [tested.duplicate(), dull.duplicate()]   # проверенная спица — цвет
 				b.pressed.connect(ping.bind(i))
 				add_child(b)
 				_spokes.append(b)
@@ -92,6 +93,7 @@ func _ready() -> void:
 				b.set_meta("i", i)
 				b.accessibility_name = Loc.t(opts[i][0])
 				b.on_draw = _draw_option
+				b.redraw_sig = func() -> int: return 0              # наведение видит сама кнопка
 				b.pressed.connect(meter.bind(i))
 				add_child(b)
 				if i == 0:
@@ -121,7 +123,8 @@ func close() -> void:
 func _process(_dt: float) -> void:
 	if _release:
 		_release.enabled = value > 0
-	queue_redraw()
+	# окно стоит — перерисовка, когда сменилось значение, проверенные спицы или фокус шкалы
+	Screen.redraw_on(self, [value, tested.duplicate(), dull.duplicate(), _track != null and _track.has_focus() and UI.kb_active])
 
 
 func _gui_input(_e: InputEvent) -> void:

@@ -11,7 +11,12 @@ extends Control
 ## Сглаживание: кружки — draw_circle/draw_arc с antialiased, линии и контуры полигонов — draw_line с antialiased;
 ## заливки полигонов без сглаживания, но их край закрыт сглаженным контуром (как aa_* + DR.polygon в pygame).
 ## Свечение (add_glow) — аддитивным слоем; чтобы оно ложилось как в pygame (поверх того, что нарисовано раньше, и ПОД
-## тем, что позже), рисунок проходит дважды: до первого свечения — в самом узле, после — в верхнем слое _late.
+## тем, что позже), рисунок делится на части: до первого свечения — в самом узле, после — в верхних слоях.
+## Скорость (19.11): поза меняется редко (смена урока, ползунок, переход в зачёте), а «живой» только Мортимер (дыхание,
+## посох, нити с искрой). Поэтому рисунок считается один раз при смене позы (_build) в списки команд по слоям, и слои
+## перерисовываются только тогда; каждый кадр — лишь Мортимер (_n0/_n1) и свечение. Порядок слоёв = порядок рисования:
+##   узел (до первого свечения) → _n0 (дыхание Мортимера, если свечений до него не было) → _add (свечение) →
+##   _s1a (после свечения, до Мортимера) → _n1 (дыхание, если свечение было раньше, и нити) → _s1b (после Мортимера).
 
 const BONE := Color8(234, 226, 206)
 const BONE_D := Color8(186, 176, 154)
@@ -36,12 +41,18 @@ var pose: Dictionary = {}
 var highlight: bool = true
 var show_necro: bool = true
 var t: float = 0.0
-var _glows: Array = []                    # [центр, радиус, цвет, уровень] — аддитивным слоем
+var _glows: Array = []                    # [центр, радиус, цвет, уровень] — неподвижные свечения (аддитивный слой)
 var _add: Control
-var _late: Control
-var _ci: CanvasItem
-var _phase: int = 0                       # 0 — рисуем до первого свечения, 1 — после (слой _late)
+var _n0: Control
+var _s1a: Control
+var _n1: Control
+var _s1b: Control
+var _ops: Array = [[], [], []]            # команды рисования неподвижной части: узел, _s1a, _s1b
+var _anim: Array = []                     # Мортимер: [рамка, цели нитей, «плохо», было ли свечение до него]
+var _anim_ci: CanvasItem                  # рисуем «живое» прямо в этот слой (а не в список команд)
+var _sig: Array = []
 var _glowed: bool = false
+var _necro_done: bool = false
 
 
 func _init() -> void:
@@ -51,19 +62,24 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	_add = Control.new()
-	_add.size = size
-	_add.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_n0 = _layer("Necro0", _draw_n0)
+	_add = _layer("Glow", _draw_glows)
 	var mat := CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_add.material = mat
-	_add.draw.connect(_draw_glows)
-	add_child(_add)
-	_late = Control.new()
-	_late.size = size
-	_late.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_late.draw.connect(_draw_late)
-	add_child(_late)
+	_s1a = _layer("Late0", _draw_s1a)
+	_n1 = _layer("Necro1", _draw_n1)
+	_s1b = _layer("Late1", _draw_s1b)
+
+
+func _layer(nm: String, fn: Callable) -> Control:
+	var c := Control.new()
+	c.name = nm
+	c.size = size
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.draw.connect(fn)
+	add_child(c)
+	return c
 
 
 ## Рамка обрезки и сцены: clip — что видно, scene — где рисовать.
@@ -71,32 +87,40 @@ func place(clip: Rect2, scene: Rect2) -> void:
 	position = clip.position
 	size = clip.size
 	if _add:
-		_add.size = size
-		_late.size = size
+		for c: Control in [_n0, _add, _s1a, _n1, _s1b]:
+			c.size = size
 	rect = scene
 
 
 func _process(dt: float) -> void:
 	t += dt
-	queue_redraw()
-	_add.queue_redraw()
-	_late.queue_redraw()
+	var sig := [mode, rect, position, size, case, cfg, pose, highlight, show_necro, front_corrected, front_pads, front_obl,
+		front_wedge, targets, puppet_bad, Loc.code, Settings.glow, Settings.calm(), Settings.a11y.get("text", 0),
+		Settings.easy_font()]
+	var changed := sig != _sig
+	if changed:
+		var had := [not _ops[1].is_empty(), not _ops[2].is_empty()]
+		_sig = sig.duplicate(true)
+		_build()
+		queue_redraw()
+		if had[0] or not _ops[1].is_empty():
+			_s1a.queue_redraw()
+		if had[1] or not _ops[2].is_empty():
+			_s1b.queue_redraw()
+	if changed or (not _anim.is_empty() and not Settings.calm()):   # «Без анимации» — Мортимер тоже неподвижен
+		_n0.queue_redraw()
+		_add.queue_redraw()
+		_n1.queue_redraw()
 
 
-func _draw() -> void:
+## Посчитать рисунок: команды неподвижной части по слоям, свечения, параметры Мортимера.
+func _build() -> void:
+	_ops = [[], [], []]
 	_glows.clear()
-	_render(self, 0)
-
-
-func _draw_late() -> void:
-	_render(_late, 1)
-
-
-func _render(ci: CanvasItem, phase: int) -> void:
-	_ci = ci
-	_phase = phase
+	_anim = []
+	_anim_ci = null
 	_glowed = false
-	ci.draw_set_transform(-position)
+	_necro_done = false
 	match mode:
 		"scene":
 			draw_scene(rect, case, cfg, pose, highlight, show_necro)
@@ -112,12 +136,63 @@ func _render(ci: CanvasItem, phase: int) -> void:
 			draw_front(rect, front_corrected, front_pads, front_obl, front_wedge)
 
 
+func _draw() -> void:
+	_replay(self, 0)
+
+
+func _draw_s1a() -> void:
+	_replay(_s1a, 1)
+
+
+func _draw_s1b() -> void:
+	_replay(_s1b, 2)
+
+
+func _replay(ci: CanvasItem, seg: int) -> void:
+	ci.draw_set_transform(-position)
+	for o: Array in _ops[seg]:
+		_emit(ci, o)
+
+
+static func _emit(ci: CanvasItem, o: Array) -> void:
+	match int(o[0]):
+		0:
+			ci.draw_line(o[1], o[2], o[3], o[4], true)
+		1:
+			ci.draw_polyline(o[1], o[2], 1.0, true)
+		2:
+			ci.draw_colored_polygon(o[1], o[2])
+		3:
+			ci.draw_circle(o[1], o[2], o[3], true, -1.0, true)
+		4:
+			ci.draw_arc(o[1], o[2], 0, TAU, o[3], o[4], o[5], true)
+		5:
+			UI.draw_round_rect(ci, o[1], o[2], o[3], o[4], o[5])
+		6:
+			UI.draw_text(ci, o[1], o[2], o[3], o[4], o[5], o[6])
+
+
+func _draw_n0() -> void:
+	if not _anim.is_empty() and not _anim[3]:
+		_necro_live(_n0, false)
+
+
+func _draw_n1() -> void:
+	if not _anim.is_empty():
+		_necro_live(_n1, true)
+
+
 func _draw_glows() -> void:
 	if not Settings.glow:
 		return
 	_add.draw_set_transform(-position)
 	for g: Array in _glows:
 		UI.draw_glow(_add, g[0], g[1], g[2], g[3])
+	if not _anim.is_empty():                 # посох Мортимера пульсирует
+		var g := _necro_geom(_anim[0])
+		var pulse := 0.65 + 0.35 * UI.wsin(t * 4.5)
+		UI.draw_glow(_add, g[4], int(20 * pulse), UI.PURPLE, 0.85)
+		UI.draw_glow(_add, g[4], int(10 * pulse), UI.BAD if _anim[2] else UI.GHOST, 0.9)
 
 
 # ---------------- примитивы как в pygame ----------------
@@ -130,58 +205,63 @@ static func _pg_width(d: Vector2, w: float) -> float:
 	return maxf(1.0, w * maxf(absf(d.x), absf(d.y)) / ln)
 
 
-## Рисовать ли сейчас: в узле — то, что до первого свечения, в _late — то, что после.
-func _on() -> bool:
-	return _glowed == (_phase == 1)
+## Команда рисования: «живое» (Мортимер) — сразу в слой, неподвижное — в список своего слоя (до первого свечения —
+## узел, после — _s1a до Мортимера и _s1b после).
+func _op(o: Array) -> void:
+	if _anim_ci != null:
+		_emit(_anim_ci, o)
+		return
+	_ops[0 if not _glowed else (2 if _necro_done else 1)].append(o)
 
 
 func _line(a: Vector2, b: Vector2, col: Color, w: float) -> void:
-	if not _on():
-		return
-	_ci.draw_line(a, b, col, _pg_width(b - a, w), true)
+	_op([0, a, b, col, _pg_width(b - a, w)])
 
 
 func _lines(pts: Array, col: Color, w: float, closed: bool = false) -> void:
-	if not _on():
-		return
 	var p := PackedVector2Array(pts)
 	if closed:
 		p.append(p[0])
 	if w <= 1.0 or p.size() < 2:
-		_ci.draw_polyline(p, col, 1.0, true)
+		_op([1, p, col])
+		return
+	if _anim_ci != null:                      # нити Мортимера — каждый кадр, без списка команд
+		for i in p.size() - 1:
+			_anim_ci.draw_line(p[i], p[i + 1], col, _pg_width(p[i + 1] - p[i], w), true)
 		return
 	for i in p.size() - 1:                    # как DR.lines: каждый отрезок своей толщины
-		_ci.draw_line(p[i], p[i + 1], col, _pg_width(p[i + 1] - p[i], w), true)
+		_op([0, p[i], p[i + 1], col, _pg_width(p[i + 1] - p[i], w)])
 
 
 func _poly(pts: Array, col: Color, outline_w: float = 0.0) -> void:
 	if outline_w > 0:
 		_lines(pts, col, outline_w, true)
-	elif _on():
+	else:
 		var p := PackedVector2Array(pts)
 		if Geometry2D.triangulate_polygon(p).is_empty():
 			return                             # вырожденный многоугольник — pygame его тоже не закрашивает
-		_ci.draw_colored_polygon(p, col)
+		_op([2, p, col])
 
 
 func _circle(c: Vector2, r: float, col: Color, w: float = 0.0) -> void:
-	if r <= 0 or not _on():
+	if r <= 0:
 		return
 	if w <= 0 or w >= r:
-		_ci.draw_circle(c, r, col, true, -1.0, true)
+		if _anim_ci != null:
+			_anim_ci.draw_circle(c, r, col, true, -1.0, true)
+			return
+		_op([3, c, r, col])
 	else:
-		_ci.draw_arc(c, r - w / 2.0, 0, TAU, maxi(16, int(r * 2)), col, w, true)
+		_op([4, c, r - w / 2.0, maxi(16, int(r * 2)), col, w])
 
 
 func _glow(c: Vector2, r: float, col: Color, level: float) -> void:
-	if _phase == 0:
-		_glows.append([c, r, col, level])
+	_glows.append([c, r, col, level])
 	_glowed = true
 
 
 func _rrect(r: Rect2, fill: Color, border: Color = Color(0, 0, 0, 0), width: int = 0, radius: int = 7) -> void:
-	if _on():
-		UI.draw_round_rect(_ci, r, fill, border, width, radius)
+	_op([5, r, fill, border, width, radius])
 
 
 ## aa_rect с дробными координатами: pygame.Rect отбрасывает дробную часть, радиус — не больше половины стороны.
@@ -271,26 +351,43 @@ func _ellipse(r: Rect2, col: Color, w: float) -> void:
 	_lines(pts, col, w)
 
 
-## Мортимер слева с посохом-черепом и нитями к скелету (_draw_necro_puppeteer).
-func necro_puppeteer(r: Rect2, targets: Array, bad_flag: bool) -> void:
+## Мортимер слева с посохом-черепом и нитями к скелету (_draw_necro_puppeteer). Здесь — неподвижное (тень-круги)
+## и запись для «живой» части (_necro_live): дыхание, посох со свечением, нити.
+func necro_puppeteer(r: Rect2, targets_: Array, bad_flag: bool) -> void:
+	var g := _necro_geom(r)
+	var rc := Vector2(g[2] + int(g[1] / 2.0), r.end.y - 20)
+	_ellipse(Rect2(rc.x - 54, rc.y - 9, 108, 18), Color8(68, 46, 98), 2)
+	_ellipse(Rect2(rc.x - 38, rc.y - 5, 76, 10), Color8(118, 80, 166), 1)
+	_anim = [r, targets_.duplicate(true), bad_flag, _glowed]
+	_necro_done = true
+	_glowed = true                            # свечение посоха — дальше всё поверх него
+
+
+## [высота, ширина, x, y, посох] картинки Мортимера в рамке r (посох качается со временем).
+func _necro_geom(r: Rect2) -> Array:
 	var nh := mini(232, maxi(164, int(r.size.y * 0.65)))
 	var nw := int(nh * 288 / 540.0)
 	var nx := r.position.x + 8
 	var ny := r.end.y - nh - 22
-	var rc := Vector2(nx + int(nw / 2.0), r.end.y - 20)
-	_ellipse(Rect2(rc.x - 54, rc.y - 9, 108, 18), Color8(68, 46, 98), 2)
-	_ellipse(Rect2(rc.x - 38, rc.y - 5, 76, 10), Color8(118, 80, 166), 1)
-	var tex := Content.texture("mentor_necro.png")
-	if tex:
-		if _on():
-			breathe(_ci, tex, Rect2(nx, ny, nw, nh), t, 0.0)
 	var staff := Vector2(nx + int(nw * 0.14), ny + int(nh * 0.08) + int(3.0 * UI.wsin(t * 2.5)))
-	var pulse := 0.65 + 0.35 * UI.wsin(t * 4.5)
-	_glow(staff, int(20 * pulse), UI.PURPLE, 0.85)
-	_glow(staff, int(10 * pulse), UI.BAD if bad_flag else UI.GHOST, 0.9)
-	for i in targets.size():
-		var tg: Array = targets[i]
-		necro_thread(staff, Vector2(tg[0], tg[1]), tg[2], tg[3], i * 1.3)
+	return [nh, nw, nx, ny, staff]
+
+
+## «Живой» Мортимер в слой ci: дыхание (в _n0 — если до него свечений не было, иначе в _n1) и нити (_n1).
+func _necro_live(ci: CanvasItem, late: bool) -> void:
+	ci.draw_set_transform(-position)
+	var g := _necro_geom(_anim[0])
+	var tex := Content.texture("mentor_necro.png")
+	if tex and late == bool(_anim[3]):
+		breathe(ci, tex, Rect2(g[2], g[3], g[1], g[0]), t, 0.0)
+	if not late:
+		return
+	_anim_ci = ci
+	var tg_all: Array = _anim[1]
+	for i in tg_all.size():
+		var tg: Array = tg_all[i]
+		necro_thread(g[4], Vector2(tg[0], tg[1]), tg[2], tg[3], i * 1.3)
+	_anim_ci = null
 
 
 ## Картинка, вписанная в бокс, «дышит» верхом (blit_idle breathe).
@@ -309,8 +406,7 @@ static func breathe(ci: CanvasItem, tex: Texture2D, box: Rect2, tt: float, phase
 
 
 func _text(s: String, pos: Vector2, size_: float, col: Color, bold: bool = false, align: int = 0) -> void:
-	if _on():
-		UI.draw_text(_ci, s, pos, size_, col, bold, align)
+	_op([6, s, pos, size_, col, bold, align])
 
 
 func _plate(r: Rect2) -> void:

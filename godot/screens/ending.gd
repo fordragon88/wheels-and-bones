@@ -3,7 +3,9 @@ extends Screen
 ## потом — кнопкой «НА ВЕЧЕРИНКУ!» в мастерской). Мартин танцует в коляске, Барти кружит, конфетти, «ВЕЧЕРИНКА!»,
 ## история, слова Барти, «Коллекция: N колясок…», «[ клик — посмотреть гараж ]», «ТИТРЫ», «ПОДДЕРЖАТЬ GOAT ♥».
 
-var _deco: Control
+var _deco: Control                       # подложка истории
+var _wave: Control                       # «ВЕЧЕРИНКА!» (каждый кадр)
+var _text: Control                       # история, реплика Барти, коллекция
 var _top: Control
 var _martin: Figure
 var _barty: Figure
@@ -44,6 +46,8 @@ func build() -> void:
 	_deco.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_deco.draw.connect(_draw_deco)
 	add_child(_deco)
+	_wave = _layer("Title", _draw_wave)        # слои подряд — порядок рисования тот же, что был в одном _deco
+	_text = _layer("Story", _draw_story)
 	_garage = GameButton.make(Rect2(UI.W / 2.0 - 260, 490, 520, 40), "", UI.AMBER)
 	_garage.name = "ToGarage"
 	_garage.plain = true
@@ -101,8 +105,19 @@ func tick(_dt: float) -> void:
 		_barty.appear_k = UI.ease_back((st - 0.6) / 0.6)
 		_barty.rotation_degrees = -8 * UI.wsin(t * 2.1)
 		_barty.pivot_offset = Vector2(85, 110)
-	_deco.queue_redraw()
-	_top.queue_redraw()
+	redraw_on(_deco, [minf(st, 1.1)])          # подложка проявляется до 1 с, потом стоит
+	_wave.queue_redraw()                       # «ВЕЧЕРИНКА!» — буквы качаются волной
+	_top.queue_redraw()                        # конфетти
+
+
+func _layer(nm: String, fn: Callable) -> Control:
+	var c := Control.new()
+	c.name = nm
+	c.size = size
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.draw.connect(fn)
+	add_child(c)
+	return c
 
 
 ## Сколько колясок в гараже (билеты Гильдии — не коляски).
@@ -130,11 +145,19 @@ func _draw_deco() -> void:
 	var panel: Rect2 = L[5]
 	var pk := UI.appear(st, 0.5, 0.5)
 	UI.draw_round_rect(_deco, panel, Color8(18, 16, 30, int(200 * pk)), Color(), 0, 14)
-	UI.wave_title(_deco, "ВЕЧЕРИНКА!", Vector2(UI.W / 2.0, 140), 60, UI.AMBER, st, t)
-	UI.draw_wrapped(_deco, L[0], Vector2(UI.W / 2.0, L[2]), 800, 20, UI.WHITE, true)
+
+
+func _draw_wave() -> void:
+	UI.wave_title(_wave, "ВЕЧЕРИНКА!", Vector2(UI.W / 2.0, 140), 60, UI.AMBER, st, t)
+
+
+func _draw_story() -> void:
+	var L := _layout()
+	var panel: Rect2 = L[5]
+	UI.draw_wrapped(_text, L[0], Vector2(UI.W / 2.0, L[2]), 800, 20, UI.WHITE, true)
 	if L[1] != "":
-		UI.draw_wrapped(_deco, L[1], Vector2(UI.W / 2.0, L[3]), 800, 19, UI.GHOST, true)
-	UI.draw_text(_deco, Loc.tf("Коллекция: {0} колясок починено и спасено.", [chairs()]), Vector2(UI.W / 2.0, L[4]), 18,
+		UI.draw_wrapped(_text, L[1], Vector2(UI.W / 2.0, L[3]), 800, 19, UI.GHOST, true)
+	UI.draw_text(_text, Loc.tf("Коллекция: {0} колясок починено и спасено.", [chairs()]), Vector2(UI.W / 2.0, L[4]), 18,
 		UI.PURPLE, false, 1)
 	_garage.position.y = maxf(510, panel.end.y + 20) - 20
 

@@ -151,6 +151,7 @@ func build() -> void:
 		b.name = "Pick_" + k
 		b.set_meta("k", k)
 		b.on_draw = _draw_pick
+		b.redraw_sig = func() -> Array: return (ui.get("sel", []) as Array).duplicate()   # номер в порядке выбора
 		b.pressed.connect(action.bind("pick:" + k))
 		add_child(b)
 		_picks.append(b)
@@ -213,7 +214,7 @@ func _gui_input(_e: InputEvent) -> void:
 
 
 func _process(_dt: float) -> void:
-	queue_redraw()
+	Screen.redraw_on(self, [mode(), ui.duplicate(true)])     # окно стоит — перерисовка только при изменении
 
 
 # ---------------- рисование (_draw_share) ----------------
@@ -397,7 +398,7 @@ class ShareField extends Control:
 
 	func _process(dt: float) -> void:
 		_t += dt
-		queue_redraw()
+		Screen.redraw_on(self, [value(), has_focus() and UI.kb_active, -1 if _web() else int(_t * 2) % 2])   # мигает курсор
 		if _web():
 			_web_sync()
 

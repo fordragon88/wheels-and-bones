@@ -111,9 +111,9 @@ func scroll(d: float) -> void:
 func tick(dt: float) -> void:
 	if not Settings.calm() and st > 1.2:
 		scroll_y = minf(scroll_y + 26 * dt, max_scroll())       # медленно вверх
-	_text.queue_redraw()
-	_deco.queue_redraw()
-	_shade.queue_redraw()
+	redraw_on(_text, [scroll_y])                # строки — когда сдвинулись
+	redraw_on(_deco, [])                        # затемнение не меняется
+	_shade.queue_redraw()                       # заголовок «ТИТРЫ» качается волной
 
 
 func handle_key(e: InputEventKey) -> bool:

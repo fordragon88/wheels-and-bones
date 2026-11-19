@@ -49,7 +49,8 @@ func _process(dt: float) -> void:
 	t += dt
 	if timer > 0.0 and not sticky:
 		timer -= dt
-	queue_redraw()
+	# въезжает 0,3 с, потом стоит до конца — перерисовка только при изменении
+	Screen.redraw_on(self, [active(), text, color, bounds, minf(t - t0, 0.35) if active() else 0.0])
 
 
 func _draw() -> void:

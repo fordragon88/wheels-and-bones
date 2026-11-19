@@ -54,6 +54,7 @@ func _ready() -> void:
 		b.plain = true
 		b.set_meta("i", i)
 		b.on_draw = _draw_opt
+		b.redraw_sig = func() -> bool: return is_viewed()     # варианты открываются после мануала
 		b.pressed.connect(func() -> void: chosen.emit(i))
 		add_child(b)
 		_opts.append(b)

@@ -70,6 +70,7 @@ func _ready() -> void:
 		b.name = "Reason_%d" % i
 		b.plain = false
 		b.on_draw = _draw_reason
+		b.redraw_sig = func() -> int: return reason            # ◉ у выбранной причины
 		b.set_meta("i", i)
 		b.pressed.connect(func() -> void:
 			reason = i

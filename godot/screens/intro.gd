@@ -134,7 +134,11 @@ func tick(_dt: float) -> void:
 	m.position.x = 120 - int(300 * (1 - UI.ease_out(st / 0.9)))
 	(get_node("Barty") as Figure).appear_k = UI.ease_back((st - 0.3) / 0.6)
 	_leg.t = (t - float(_typing[1])) if idx == 1 else -1.0
-	_deco.queue_redraw()
+	# панель слайда въезжает 0,35 с, текст печатается по буквам — потом стоит
+	var s: Array = slides()[mini(idx, slides().size() - 1)]
+	var text := Loc.t(s[1])
+	var n := mini(typed(text), text.length())
+	redraw_on(_deco, [idx, n, minf(t - float(_typing[1]), 0.4)])
 
 
 func _draw_deco() -> void:

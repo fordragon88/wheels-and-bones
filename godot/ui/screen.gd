@@ -139,6 +139,14 @@ func _on_settings(key: String) -> void:
 		rebuild()
 
 
+## Перерисовать ci, только если подпись sig (всё, от чего зависит его рисунок) изменилась с прошлого раза.
+## Неподвижное каждый кадр не перерисовываем: на слабом процессоре это и есть кадр (скорость, 19.11).
+static func redraw_on(ci: CanvasItem, sig: Array) -> void:
+	if not ci.has_meta("redraw_sig") or ci.get_meta("redraw_sig") != sig:
+		ci.set_meta("redraw_sig", sig)
+		ci.queue_redraw()
+
+
 ## Подпись для чтеца экрана (accessibility_name), переведённая.
 static func a11y(ctl: Control, ru: String, desc: String = "") -> void:
 	ctl.accessibility_name = Loc.t(ru)

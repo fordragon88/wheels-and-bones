@@ -305,7 +305,18 @@ func _gui_input(_e: InputEvent) -> void:
 
 
 func _process(_dt: float) -> void:
-	_help.queue_redraw()
+	Screen.redraw_on(_help, [_help_zone(), UI.kb_active, tab, _zones.size()])   # карточка — только когда сменился пункт
+
+
+## Пункт под мышью (или в фокусе клавиатуры), о котором карточка справа; -1 — нет.
+func _help_zone() -> int:
+	var fo := get_viewport().gui_get_focus_owner()
+	for i in _zones.size():
+		var z: Array = _zones[i]
+		var ctl: Control = z[2]
+		if (UI.kb_active and fo == ctl) or (not UI.kb_active and (z[1] as Rect2).has_point(get_local_mouse_position())):
+			return i
+	return -1
 
 
 func progress_summary() -> PackedStringArray:
@@ -374,15 +385,10 @@ func _draw() -> void:
 
 ## Карточка «что делает настройка» справа от окна (_draw_setting_help): пункт в фокусе клавиатуры или под мышью.
 func _draw_help() -> void:
-	var hit: Array = []
-	var fo := get_viewport().gui_get_focus_owner()
-	for z: Array in _zones:
-		var ctl: Control = z[2]
-		if (UI.kb_active and fo == ctl) or (not UI.kb_active and (z[1] as Rect2).has_point(get_local_mouse_position())):
-			hit = z
-			break
-	if hit.is_empty():
+	var hi := _help_zone()
+	if hi < 0:
 		return
+	var hit: Array = _zones[hi]
 	var text := Loc.t(Content.consts.get("setting_help", {}).get(hit[0], ""))
 	if text == "":
 		return

@@ -39,6 +39,7 @@ func _ready() -> void:
 		b.plain = true
 		b.set_meta("key", key)
 		b.on_draw = _draw_page_btn
+		b.redraw_sig = func() -> String: return page          # подсветка открытой страницы
 		b.accessibility_name = Loc.t(title_of(key))
 		b.pressed.connect(func() -> void:
 			page = key

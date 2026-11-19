@@ -5,7 +5,9 @@ extends Screen
 ## зачётов, «НАЗАД» — в мастерскую. Вход — из мастерской после 5 ремонтов.
 
 var _cards: Array[GameButton] = []
-var _deco: Control
+var _deco: Control                       # звание, пояснение, подпись Бренны (неподвижное)
+var _barty: Control                      # машущий Барти у реплики (каждый кадр)
+var _bubble: Control                     # реплика (неподвижная)
 var _exam: GameButton
 
 
@@ -51,6 +53,8 @@ func build() -> void:
 	_deco.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_deco.draw.connect(_draw_deco)
 	add_child(_deco)
+	_barty = _layer("BartyWave", _draw_barty)       # слои подряд — тот же порядок рисования, что был в одном _deco
+	_bubble = _layer("Bubble", _draw_bubble)
 	for i in Content.tech_jobs.size():
 		var job: Dictionary = Content.tech_jobs[i]
 		var done := SaveGame.is_done(job["id"])
@@ -59,6 +63,7 @@ func build() -> void:
 		b.active = done
 		b.set_meta("i", i)
 		b.on_draw = _draw_card
+		b.redraw_sig = func() -> int: return 0         # содержимое карточки не меняется (сдвиг и наведение видит кнопка)
 		b.accessibility_name = "%s. %s. %s%s" % [Loc.t(job["title"]), Loc.t(job["client"]), Loc.t("УРОВЕНЬ: ТЕХНИК"),
 			(". " + Loc.t("✔ сдано")) if done else ""]
 		b.pressed.connect(func() -> void:
@@ -98,7 +103,23 @@ func tick(_dt: float) -> void:
 	for b in _cards:
 		b.slide = Vector2(-int(140 * (1 - UI.appear(st, 0.1 * int(b.get_meta("i")), 0.45))), 0)
 	(get_node("Brenna") as Figure).appear_k = UI.ease_back((st - 0.3) / 0.6)
-	_deco.queue_redraw()
+	if _barty_on():
+		_barty.queue_redraw()
+
+
+func _layer(nm: String, fn: Callable) -> Control:
+	var c := Control.new()
+	c.name = nm
+	c.size = size
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.draw.connect(fn)
+	add_child(c)
+	return c
+
+
+## Реплику говорит Барти (машет у пузыря).
+func _barty_on() -> bool:
+	return _line().begins_with("Барти") and Settings.barty_on()
 
 
 func _line() -> String:
@@ -126,18 +147,25 @@ func _draw_deco() -> void:
 			Color8(14, 12, 20, 175), Color(), 0, 8)
 		UI.draw_wrapped(_deco, note, Vector2(60, dy), 680, nsz, UI.GREY)
 	UI.draw_text(_deco, Loc.t("Мастерица Бренна"), Vector2(UI.W - 200, 420), 16, UI.WHITE, true, 1)
+
+
+func _draw_barty() -> void:
+	if not _barty_on():
+		return
+	var tex := Frames.loop_frame("barty_wave", t)
+	if tex == null:
+		tex = Content.texture("ghost.png")
+	if tex:
+		var bx := Rect2(UI.W - 540, 446, 64, 78)
+		var r := UI.fit_rect(tex.get_size(), bx)
+		_barty.draw_set_transform(bx.get_center() + Vector2(0, 7 * UI.wsin(t * 1.6 + 1.3)), deg_to_rad(-2.5 * UI.wsin(t * 1.1 + 1.3)))
+		_barty.draw_texture_rect(tex, Rect2(r.position - bx.get_center(), r.size), false)
+		_barty.draw_set_transform(Vector2.ZERO)
+
+
+func _draw_bubble() -> void:
 	var line := _line()
 	if Settings.barty_on() or not line.begins_with("Барти"):
-		if line.begins_with("Барти"):
-			var tex := Frames.loop_frame("barty_wave", t)
-			if tex == null:
-				tex = Content.texture("ghost.png")
-			if tex:
-				var bx := Rect2(UI.W - 540, 446, 64, 78)
-				var r := UI.fit_rect(tex.get_size(), bx)
-				_deco.draw_set_transform(bx.get_center() + Vector2(0, 7 * UI.wsin(t * 1.6 + 1.3)), deg_to_rad(-2.5 * UI.wsin(t * 1.1 + 1.3)))
-				_deco.draw_texture_rect(tex, Rect2(r.position - bx.get_center(), r.size), false)
-				_deco.draw_set_transform(Vector2.ZERO)
 		var tl := Loc.t(line)
 		var ls := UI.wrap_lines(tl, 420, 15)
 		if ls.size() > 5:
@@ -145,9 +173,9 @@ func _draw_deco() -> void:
 		var bw2 := 0.0
 		for ln in ls:
 			bw2 = maxf(bw2, UI.text_width(ln, 15))
-		UI.draw_round_rect(_deco, Rect2(UI.W - 470 - 8, 452 - 4, bw2 + 16, ls.size() * (UI.line_height(15) + 2) - 2 + 8),
+		UI.draw_round_rect(_bubble, Rect2(UI.W - 470 - 8, 452 - 4, bw2 + 16, ls.size() * (UI.line_height(15) + 2) - 2 + 8),
 			Color8(14, 12, 20, 175), Color(), 0, 8)
-		UI.draw_wrapped(_deco, tl, Vector2(UI.W - 470, 452), 420, 15, UI.GHOST, false, 2, -1, 5)
+		UI.draw_wrapped(_bubble, tl, Vector2(UI.W - 470, 452), 420, 15, UI.GHOST, false, 2, -1, 5)
 
 
 func _draw_card(b: GameButton, r: Rect2) -> void:

@@ -36,7 +36,8 @@ OUT = os.path.join(GODOT, "build", "web")
 GODOT_EXE = os.environ.get("GODOT", r"D:\Godot\Godot_v4.7.2-stable_win64_console.exe")
 DEFAULT_BASE = "https://fordragon88.github.io/wheels-and-bones-test/godot/"
 CODE_DIRS = ["autoload", "ui", "screens", "i18n", "web"]
-CODE_FILES = ["project.godot", "export_presets.cfg", "main.gd", "main.gd.uid", "main.tscn"]
+CODE_FILES = ["project.godot", "export_presets.cfg", "main.gd", "main.gd.uid", "main.tscn",
+              "tests/shots.gd", "tests/shots.gd.uid"]   # shots.gd — состояния экранов для замера (?test=1, wnbStage)
 LOSSY_MIN = 150_000            # картинки крупнее — с потерями (как build_web.py pygame: JPEG для файлов > 150 КБ)
 LOSSY_Q = 0.8
 MUSIC_ARGS = ["-ac", "1", "-c:a", "libmp3lame", "-q:a", "5"]   # моно VBR ~70–90 кбит/с: фоновая музыка
@@ -167,6 +168,7 @@ def stage(base_url, frames_v, music_v):
         open(gi, "w").close()
     for fn in CODE_FILES:
         s, d = os.path.join(GODOT, fn), os.path.join(STAGE, fn)
+        os.makedirs(os.path.dirname(d), exist_ok=True)
         if not same(s, d):
             shutil.copy2(s, d)
     for d in CODE_DIRS:

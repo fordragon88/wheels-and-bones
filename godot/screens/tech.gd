@@ -205,6 +205,7 @@ func build() -> void:
 			b.plain = true
 			b.set_meta("sid", sid)
 			b.on_draw = _draw_op
+			b.redraw_sig = func() -> int: return done_steps.size()   # «✔» у сделанного; наведение видит кнопка
 			b.pressed.connect(op_clicked.bind(sid))
 			add_child(b)
 			_ops.append(b)
@@ -727,7 +728,7 @@ func tick(dt: float) -> void:
 	if _bar_sig != [_bar.brand, _bar.right_edge]:   # шапка — только когда сменилась
 		_bar_sig = [_bar.brand, _bar.right_edge]
 		_bar.queue_redraw()
-	_deco.queue_redraw()
+	redraw_on(_deco, [phase, step_order.size(), done_steps.size(), mistakes, ride_done, ride.riding()])
 
 
 func _draw_deco() -> void:
