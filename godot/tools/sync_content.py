@@ -513,6 +513,7 @@ def share_ref(game):
         {"jobs": "nope"},
         {"jobs": ",".join(jobs), "seat": ",".join(seats), "from": "Очень длинное имя учителя, которое явно длиннее сорока знаков",
          "title": "Т" * 100},
+        {"jobs": "flat", "from": "И" * 39 + " Петров", "title": "т" * 79 + " хвост"},   # 40-й/80-й знак — пробел
     ]
     for p in params:
         a = game.assign_parse(p)

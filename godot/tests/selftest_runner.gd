@@ -1743,6 +1743,9 @@ func _share_codes() -> Array:
 			n_links += 1
 		if not _same(Share.parse_link(link), row["link_back"]):
 			err("разбор ссылки %s: %s, в game.py %s" % [link, Share.parse_link(link), row["link_back"]])
+		var again := Share.assign_parse(Share.parse_link(link))      # та же ссылка заново — тот же номер задания
+		if not _same(again, a):
+			err("ссылка-задание: повторный разбор дал %s, было %s" % [again, a])
 		if Share.assign_head(a["from"], a["title"]) != row["head"]:
 			err("заголовок задания «%s», в game.py «%s»" % [Share.assign_head(a["from"], a["title"]), row["head"]])
 		share_out.append({"what": "code", "kind": "J", "code": Share.assign_code(a), "data": row["data"]})

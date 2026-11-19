@@ -162,7 +162,7 @@ static func clean_line(v: Variant, n: int) -> String:
 		if _printable(ch) and not ch in ZW:
 			o += ch
 	var re := RegEx.create_from_string("\\s+")
-	return re.sub(o, " ", true).strip_edges().substr(0, n)
+	return re.sub(o, " ", true).strip_edges().substr(0, n).strip_edges(false, true)   # обрезка на пробеле — без хвоста
 
 
 ## str() как в Python для чисел (5.0 → «5»), bool → True/False.
