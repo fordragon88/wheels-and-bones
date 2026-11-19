@@ -1215,6 +1215,54 @@ def ghost_img(size, t):
     return anim_frame("barty_wave", size, t) or load_image("ghost.png", size, CYAN)
 
 
+# «Живые» персонажи вместо статичной картинки (19.11: Мастерица Бренна парит, колышет подолом, моргает, кивает).
+# Кадр петли — холст картинки, раздвинутый на IDLE_PAD с каждой стороны (доля ширины и высоты;
+# art_tests/idle_loop.py --pad): рисунок картинки — в центре кадра, первый кадр совпадает с картинкой. Поэтому
+# петлю рисуем в боксе картинки, раздвинутом на то же поле, — Бренна стоит там же и того же размера, что и
+# при «Без анимации». Godot берёт IDLE_PAD из эталона game_consts.json.
+IDLE_LOOPS = {"master.png": "brenna_wave"}
+IDLE_PAD = 0.08
+
+
+def idle_loop_box(box):
+    """Бокс кадра петли для картинки в боксе box (x, y, w, h — как у load_image): шире и выше на поле IDLE_PAD с
+    каждой стороны, симметрично (центр тот же), размер — целые логические px."""
+    x, y, w, h = box
+    pw, ph = round(w * IDLE_PAD), round(h * IDLE_PAD)
+    return (x - pw, y - ph, w + 2 * pw, h + 2 * ph)
+
+
+def idle_img(art, box, t, color=GHOST):
+    """Персонаж art для бокса box -> (картинка, её бокс, петля ли): кадр петли IDLE_LOOPS в боксе с полем или
+    статичная картинка в самом box («Без анимации», петли или кадров нет)."""
+    name = IDLE_LOOPS.get(art)
+    if name:
+        lb = idle_loop_box(box)
+        img = anim_frame(name, tuple(lb[2:]), t)
+        if img is not None:
+            return img, lb, True
+    return load_image(art, tuple(box[2:]), color), tuple(box), False
+
+
+def blit_hero(surf, art, box, t, mode="breathe", phase=0.0, k=1.0, color=GHOST):
+    """Персонаж art в боксе box. Есть петля (IDLE_LOOPS) — кадр петли без покачивания blit_idle (клип сам парит
+    и дышит; второе покачивание поверх — «морская болезнь»), остаётся только появление k. Нет — blit_idle как
+    раньше (mode, phase, k). True — нарисована петля."""
+    img, b, live = idle_img(art, box, t, color)
+    if not live:
+        blit_idle(surf, img, b[:2], t, mode, phase, k)
+        return False
+    if k == 1:
+        surf.blit(img, b[:2])
+        return True
+    out = TF.rotozoom(img, 0, k)
+    if mode == "float":                                # как blit_idle: призрак растёт из центра, стоящий — от низа
+        surf.blit(out, out.get_rect(center=(b[0] + b[2] // 2, b[1] + b[3] // 2)))
+    else:
+        surf.blit(out, out.get_rect(midbottom=(b[0] + b[2] // 2, b[1] + b[3])))
+    return True
+
+
 def blit_idle(surf, img, pos, t, mode="breathe", phase=0.0, k=1.0, rock=0.0):
     """«Живой» спрайт вместо статичного blit (pos — левый верхний угол, как у blit).
     breathe — дышит верх (торс), низ с коляской стоит на месте; float — парит
@@ -14017,7 +14065,10 @@ class Game:
             s.fill((24, 30, 36, 220))
             surf.blit(s, bubble)
             aa_rect(surf, CYAN, bubble, 2, border_radius=8)
-            blit_idle(surf, (ghost_img((46, 56), self.t) if img == "ghost.png" else load_image(img, (46, 56), CYAN)), (bubble.x + 6, bubble.y + 6), self.t, "float", phase=1.3)
+            if img == "ghost.png":
+                blit_idle(surf, ghost_img((46, 56), self.t), (bubble.x + 6, bubble.y + 6), self.t, "float", phase=1.3)
+            else:                                 # Бренна — петлёй (blit_hero), остальные — картинкой
+                blit_hero(surf, img, (bubble.x + 6, bubble.y + 6, 46, 56), self.t, "float", phase=1.3, color=CYAN)
             tw = bubble.w - 70
             for size in (15, 14, 13, 12):
                 if len(wrap_lines(tr(line), tw, size)) * (font(size).get_height() + 2) <= bubble.h - 16:
@@ -14025,7 +14076,10 @@ class Game:
             draw_wrapped(surf, line, (bubble.x + 60, bubble.y + 8), tw, size, GHOST,
                          limit=self.typed("ghost", line, cps=90))
             return
-        blit_idle(surf, (ghost_img((90, 110), self.t) if img == "ghost.png" else load_image(img, (90, 110), CYAN)), (24, y), self.t, "float", phase=1.3)
+        if img == "ghost.png":
+            blit_idle(surf, ghost_img((90, 110), self.t), (24, y), self.t, "float", phase=1.3)
+        else:
+            blit_hero(surf, img, (24, y, 90, 110), self.t, "float", phase=1.3, color=CYAN)
         bubble = pygame.Rect(120, y, 740, 86)
         s = Surf(bubble.size, pygame.SRCALPHA)
         s.fill((24, 30, 36, 220))
@@ -14062,7 +14116,7 @@ class Game:
         job = self.cur
         self._topbar(surf, ("ЭКЗАМЕН: " if self.exam_mode else "Гильдия: ") + job["title"], job.get("chair_name"))
         mouse = mouse_pos()
-        blit_idle(surf, load_image(job["client_art"], (150, 190), GHOST), (24, 70), self.t)
+        blit_hero(surf, job["client_art"], (24, 70, 150, 190), self.t)   # Бренна (master.png) — петлёй
         draw_wrapped(surf, job["client"], (24, 266), 168, 15, WHITE, max_lines=2)   # не заходит под карточки шагов
         if self.phase == "repair":                     # какую коляску чиним — под портретом (замечание коллеги 24.10):
             self._draw_tt_show(surf, self._tech_chair_rect(), mouse)   # кадрами поворота, крутится (24.10, владелец);
@@ -14618,8 +14672,8 @@ class Game:
             draw_text(surf, "УРОВЕНЬ: ТЕХНИК", (r.x + 96, ty + 47), 12, PURPLE, bold=True)
             if done:
                 draw_text(surf, "✔ сдано", (r.right - 14, r.y + 12), 15, GOOD, right=True)
-        blit_idle(surf, load_image("master.png", (200, 280), PURPLE), (WIDTH - 300, 130), self.t,
-                  "float", phase=0.7, k=ease_back((self.st - 0.3) / 0.6))
+        blit_hero(surf, "master.png", (WIDTH - 300, 130, 200, 280), self.t,      # Бренна — петлёй (19.11)
+                  "float", phase=0.7, k=ease_back((self.st - 0.3) / 0.6), color=PURPLE)
         draw_text(surf, "Мастерица Бренна", (WIDTH - 200, 420), 16, WHITE, bold=True, center=True)
         if n >= len(TECH_JOBS):
             Button(self._guild_exam_rect(), "ЭКЗАМЕН ГИЛЬДИИ", GOOD,
@@ -14646,10 +14700,9 @@ class Game:
         job = self.cur
         st = self.st
         # довольный клиент слева, Барти справа
-        cimg = load_image(job["client_art"], (210, 250), GHOST)
         hop = int(18 * abs(wsin(st * 6)) * max(0.0, 1 - st / 1.6))
         if hop or not self._draw_magic(surf):        # волшебство — после подпрыга, на месте героя (интерфейс сверху)
-            blit_idle(surf, cimg, (24, 300 - hop), self.t)
+            blit_hero(surf, job["client_art"], (24, 300 - hop, 210, 250), self.t)   # Бренна (Гильдия) — петлёй
         if barty_on():
             blit_idle(surf, ghost_img((150, 200), self.t), (WIDTH - 200, 290), self.t, "float",
                       k=ease_back((st - 0.5) / 0.5))
@@ -14852,6 +14905,104 @@ class Game:
 # ----------------------------------------------------------------------------- #
 #  Self-test (headless): полная проверка логики без окна
 # ----------------------------------------------------------------------------- #
+IDLE_TEST_BOXES = ((WIDTH - 300, 130, 200, 280), (986, 158, 46, 56), (24, 300, 90, 110), (24, 70, 150, 190),
+                   (24, 300, 210, 250), (24, 282, 210, 250))   # Гильдия, пузыри (узкий/широкий), портрет, итог (+подпрыг)
+
+
+def _fit_px(src, box, rs):
+    """Где load_image/anim_frame ставит картинку размера src (px файла), вписанную в логический бокс box, —
+    прямоугольник в пикселях экрана (x, y, w, h) при рендере ×rs (тот же расчёт, что в load_image)."""
+    x, y, w, h = box
+    k = min(w * rs / src[0], h * rs / src[1])
+    iw, ih = max(1, round(src[0] * k)), max(1, round(src[1] * k))
+    return round(x * rs) + round((w * rs - iw) / 2), round(y * rs) + round((h * rs - ih) / 2), iw, ih
+
+
+def idle_inner_px(frame, box, rs):
+    """Где в кадре петли (размер файла frame), нарисованном в боксе idle_loop_box(box), стоит рисунок картинки:
+    центральная часть кадра 1/(1+2·IDLE_PAD), как её кладёт art_tests/idle_loop.py, — в пикселях экрана."""
+    fx, fy, fw, fh = _fit_px(frame, idle_loop_box(box), rs)
+    ow, oh = frame
+    iw, ih = round(ow / (1 + 2 * IDLE_PAD)), round(oh / (1 + 2 * IDLE_PAD))
+    kx, ky = fw / ow, fh / oh
+    return fx + (ow - iw) // 2 * kx, fy + (oh - ih) // 2 * ky, iw * kx, ih * ky
+
+
+def _idle_selftest(failures):
+    """Петли «живых» персонажей (IDLE_LOOPS): кадры есть и одного размера; при анимации — кадр петли в боксе с
+    полем, «Без анимации» — статичная картинка; рисунок в кадре петли стоит там же, где картинка (±2 px экрана),
+    во всех боксах, где Бренну рисуют, — при рендере ×1, ×1,5, ×2 и с кадрами, ужатыми для браузера (400 px)."""
+    calm0 = A11Y["calm"]
+    try:
+        for art, name in IDLE_LOOPS.items():
+            n = anim_count(name)
+            if n < 2:
+                failures.append(f"Петля {name}: нет кадров assets/anim/{name}")
+                continue
+            try:
+                fr = pygame.image.load(os.path.join(ASSETS_DIR, "anim", name, "00.jpg")).get_size()
+                st = pygame.image.load(asset_path(art)).get_size()
+            except Exception as ex:
+                failures.append(f"Петля {name}: кадр или {art} не читается: {ex!r}")
+                continue
+            if abs(fr[0] / fr[1] - st[0] / st[1]) > 0.01:
+                failures.append(f"Петля {name}: пропорции кадра {fr} не как у {art} {st}")
+            web = (round(fr[0] * 400 / fr[1]), 400) if fr[1] > 400 else fr       # build_web.shrink_anim
+            for box in IDLE_TEST_BOXES:
+                for rs in (1.0, 1.5, 2.0):
+                    for f in (fr, web):
+                        a, b = _fit_px(st, box, rs), idle_inner_px(f, box, rs)
+                        d = max(abs(a[0] - b[0]), abs(a[1] - b[1]), abs(a[0] + a[2] - b[0] - b[2]),
+                                abs(a[1] + a[3] - b[1] - b[3]))
+                        if d > 2:
+                            failures.append(f"Петля {name}: бокс {box[2:]} ×{rs} кадр {f}: рисунок сдвинут на "
+                                            f"{d:.1f} px (картинка {a}, в петле {tuple(round(v, 1) for v in b)})")
+            A11Y["calm"] = False                               # поле IDLE_PAD — то же, с каким резали петлю: площадь
+            box = IDLE_TEST_BOXES[0]                           # Бренны в кадре 0 — как у картинки (поле 0,06 или 0,10
+            a_st = pygame.mask.from_surface(load_image(art, tuple(box[2:])), 128).count()    # дало бы −8 % / +6 %)
+            f0 = idle_img(art, box, 0.0)[0]
+            a_lp = pygame.mask.from_surface(f0, 128).count()
+            if not a_st or abs(a_lp / a_st - 1) > 0.03:
+                failures.append(f"Петля {name}: в боксе {box[2:]} Бренна петлёй {a_lp} px, картинкой {a_st} px — "
+                                f"поле IDLE_PAD={IDLE_PAD} не то, с каким резали петлю?")
+            sc = pygame.display.get_surface()
+            for calm_on in (False, True):
+                A11Y["calm"] = calm_on
+                for box in IDLE_TEST_BOXES:
+                    img, b, live = idle_img(art, box, 1.6)
+                    want = tuple(idle_loop_box(box)) if not calm_on else tuple(box)
+                    if live == calm_on or tuple(b) != want or img.get_size() != tuple(want[2:]):
+                        failures.append(f"Петля {name}: calm={calm_on} бокс {box[2:]} — "
+                                        f"{'петля' if live else 'картинка'} {img.get_size()} в {b}")
+                    if blit_hero(sc, art, box, 1.6, "float", k=0.7) == calm_on:
+                        failures.append(f"Петля {name}: blit_hero при calm={calm_on} рисует не то")
+                if not calm_on and anim_frame(name, tuple(idle_loop_box(IDLE_TEST_BOXES[0])[2:]), 1.6) is \
+                        anim_frame(name, tuple(idle_loop_box(IDLE_TEST_BOXES[0])[2:]), 0.0):
+                    failures.append(f"Петля {name}: кадр не меняется со временем")
+        g = Game(headless=True)                                # сцены с Бренной рисуются и с петлёй, и без
+        sc = pygame.display.get_surface()
+        tj = next((j for j in TECH_JOBS if j.get("client_art") == "master.png"), None)
+        for calm_on in (False, True):
+            A11Y["calm"] = calm_on
+            try:
+                g.scene = "guild"
+                g.draw(sc)                                     # смена сцены: draw сам ставит scene_t0
+                g.scene_t0, g._fade_from = g.t - 3.0, None     # появление Бренны (k) закончилось
+                g.draw(sc)
+                if tj:
+                    g.start_job(tj["id"])
+                    g.ghost_line = "Бренна: «Проверка.»"
+                    g.draw(sc)
+                    g.scene = "result"
+                    g.draw(sc)
+                    g.scene_t0, g._fade_from = g.t - 2.0, None
+                    g.draw(sc)
+            except Exception as ex:
+                failures.append(f"Сцены с Бренной (calm={calm_on}): {ex!r}")
+    finally:
+        A11Y["calm"] = calm0
+
+
 def run_selftest():
     global FEEDBACK_URL
     FEEDBACK_URL = ""                     # тесты никогда не шлют замечания в настоящую таблицу
@@ -15955,6 +16106,7 @@ def run_selftest():
             failures.append(f"Проезд Гильдии {jid}: не завершился или герой не остался стоять")
         elif gr._ride_last[1][0] + gr._ride_last[0].get_width() / 2 < WIDTH / 2:
             failures.append(f"Проезд Гильдии {jid}: остановка не справа ({gr._ride_last[1]})")
+    _idle_selftest(failures)                                   # Бренна петлёй (brenna_wave): кадры, calm, геометрия
     calm0 = A11Y["calm"]                                       # «волшебство» героев на портрете (magic_index.json)
     A11Y["calm"] = False
     try:
