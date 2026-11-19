@@ -180,6 +180,7 @@ def game_tables():
         guild_ref(game)
         seat_ref(game)
         share_ref(game)
+        speech_ref(game)
         consts = {"version": game.GAME_VERSION, "width": game.WIDTH, "height": game.HEIGHT,
                   "colors": {k: list(getattr(game, k)) for k in ("BG", "PANEL", "PANEL2", "WOOD", "GHOST", "AMBER", "RUST",
                                                                  "GOOD", "BAD", "CYAN", "PURPLE", "WHITE", "GREY", "DIM")
@@ -599,6 +600,135 @@ def share_ref(game):
     out["base_url"] = game.SHARE_BASE_URL
     out["fmt_secs"] = {str(s): game.fmt_secs(s) for s in (0, 5, 61, 600, 3601)}
     json.dump(out, open(os.path.join(DST, "share_ref.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
+
+def speech_ref(game):
+    """Эталон озвучки: что game.py говорит о каждом экране и окне (a11y_summary: где ты и что делать — полная и
+    короткая), подписи пунктов для озвучки фокуса (a11y_items: группа и подпись) и фразы клавиш F1/F2/H/C, на RU и EN.
+    Пишет content/speech_ref.json — selftest Godot ставит те же состояния и сравнивает. Голос не звучит: только текст."""
+    G = game.Game
+    out = {}
+    game.A11Y["voices"] = False                           # реплики героев (случайные) — отдельно, без них
+    for lang in ("ru", "en"):
+        game.set_lang(lang)
+        random_state = game.random.getstate()
+        game.random.seed(5)
+        rows = []
+
+        def snap(name, g, items=False):
+            g.kb["help"] = g.kb.get("help", False)
+            g.draw(game.pygame.display.get_surface())
+            row = {"name": name, "full": game.speech_clean(g.a11y_summary(full=True)),
+                   "short": game.speech_clean(g.a11y_summary(full=False))}
+            if items:
+                row["items"] = [[it["group"], it["label"]] for it in g.a11y_items()]
+            rows.append(row)
+
+        g = G(headless=True)
+        snap("title", g)
+        g.scene = "intro"
+        for i in range(len(g.intro_slides)):
+            g.intro_idx = i
+            snap(f"intro_{i}", g)
+        g.open_credits()
+        snap("credits", g)
+        g.done = {"flat", "brake"}
+        g.tutorial_skipped = True
+        g.scene = "hub"
+        snap("hub", g)
+        g.start_job("flat", 0)
+        snap("job_flat_diagnose", g, items=True)
+        for pid in g.cur["parts"][:2]:
+            g.inspect_part(pid)
+        g.choose_diagnosis(next(i for i, o in enumerate(g.cur["diagnosis"]) if o["correct"]))
+        g.toast_timer = 0
+        snap("job_flat_repair", g, items=True)
+        st = g.cur["steps"][0]
+        g.do_action(st["tool"], st["part"])
+        snap("job_flat_repair_2", g)
+        for jid, kind in (("flat", "pump"), ("brake", "gap"), ("spokes", "ping"), ("lift", "meter")):
+            g.start_job(jid, 0)
+            for pid in g.cur["parts"][:2]:
+                g.inspect_part(pid)
+            g.choose_diagnosis(next(i for i, o in enumerate(g.cur["diagnosis"]) if o["correct"]))
+            while g.phase == "repair" and not (g.cur["steps"][g.step_idx].get("mini") or {}).get("kind") == kind:
+                g.step_skip()
+            s = g.cur["steps"][g.step_idx]
+            g.select_tool(s["tool"])
+            g.do_action(s["tool"], s["part"])
+            snap("mini_" + kind, g)
+            g.mini_pending = None
+        g.start_job("flat", 0)
+        for pid in g.cur["parts"][:2]:
+            g.inspect_part(pid)
+        g.choose_diagnosis(next(i for i, o in enumerate(g.cur["diagnosis"]) if o["correct"]))
+        while g.phase == "repair":
+            g.step_skip()
+        snap("job_flat_test", g)
+        g.mistakes = 0
+        g.finish_test()
+        g.result_gag = game.MARTIN_TALK["good"][0]
+        g.cur_stars = 3
+        snap("result_flat", g)
+        g.start_job("truing")
+        snap("tech_truing", g, items=True)
+        for key in g._manual_pages():
+            g.manual_viewed.add(key)
+        spec_i = next(i for i, s in enumerate(g.cur["steps"]) if s.get("spec"))
+        for s in g.cur["steps"][:spec_i]:
+            g.do_tech_action(s["tool"], s["id"])
+            if g.mini_pending:
+                g.mini_pending = None
+        s = g.cur["steps"][spec_i]
+        g.do_tech_action(s["tool"], s["id"])
+        snap("tech_spec", g)
+        g.spec_pending = None
+        g.scene = "hub"
+        g.cur = None
+        g.open_seating()
+        snap("seat_lessons", g)
+        g.seatc["tab"] = "fit"
+        g._seat_load_case(0)
+        snap("seat_fit", g, items=True)
+        g.seatc["tab"] = "quiz"
+        snap("seat_quiz", g)
+        g.seatc["quiz_done"] = True
+        g.seatc["score"] = 6
+        snap("seat_quiz_done", g)
+        g.seatc = None
+        g.scene = "hub"
+        for tab in ("sound", "graphics", "access", "game"):
+            g.show_sound = True
+            g.settings_tab = tab
+            snap("settings_" + tab, g, items=tab == "access")
+        g.show_sound = False
+        g.open_share("paste")
+        snap("share_paste", g)
+        g.share_ui = None
+        g.open_share("builder")
+        snap("share_builder", g)
+        g.share_ui = None
+        g.kb["help"] = True
+        snap("help", g)
+        g.kb["help"] = False
+        g.open_feedback()
+        snap("feedback_general", g)
+        g.close_dispute()
+        out[lang] = {"rows": rows}
+        # фразы клавиш (game.py: toggle_speech, toggle_help, H, C)
+        out[lang]["phrases"] = {
+            "f2_off": game.speech_clean(game.tr("Озвучка выключена. F2 — включить.")),
+            "f2_on": game.speech_clean(game.tr("Озвучка включена.") + " " + game.tr("F1 — справка по клавишам.")),
+            "help": game.speech_clean(game.tr("Клавиши.") + " " + " ".join(f"{game.tr(k)}: {game.tr(v)}." for k, v in G.A11Y_KEYS)
+                                      + " " + game.tr("Esc — закрыть справку.")),
+            "help_closed": game.speech_clean(game.tr("Справка закрыта.")),
+            "no_hint": game.speech_clean(game.tr("Подсказки сейчас нет.")),
+            "no_client": game.speech_clean(game.tr("Клиент пока молчит.")),
+        }
+        game.random.setstate(random_state)
+    game.set_lang("ru")
+    game.A11Y["voices"] = True
+    json.dump(out, open(os.path.join(DST, "speech_ref.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
 def main():

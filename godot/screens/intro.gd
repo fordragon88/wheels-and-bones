@@ -21,8 +21,12 @@ func music_theme() -> String:
 
 
 func summary() -> String:
-	var s: Array = slides()[idx]
-	return Loc.t(s[0]) + ". " + Loc.t(s[1])
+	var s: Array = slides()[mini(idx, slides().size() - 1)]
+	return "%s. %s " % [Loc.t(s[0]), Loc.t(s[1])] + Loc.t("Enter — далее.")
+
+
+func a11y_sig() -> Array:
+	return [[], [idx]]
 
 
 func toast_bounds() -> Vector2:

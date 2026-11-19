@@ -33,7 +33,7 @@ func _init() -> void:
 	_live = Label.new()
 	_live.modulate = Color(1, 1, 1, 0)
 	_live.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_live.accessibility_live = AccessibilityServer.AccessibilityLiveMode.LIVE_POLITE
+	_live.accessibility_live = AccessibilityServer.AccessibilityLiveMode.LIVE_OFF   # реплики говорит A11y/Speech
 	add_child(_live)
 
 

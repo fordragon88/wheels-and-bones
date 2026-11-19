@@ -166,7 +166,8 @@ func toast_bounds() -> Vector2:
 func summary() -> String:
 	if SaveGame.assign_on():
 		return Loc.t("Мастерская.") + " " + Loc.t(assign_label()) + ". " + 			Loc.t("Стрелки — выбрать клиента, Enter — взять заказ, Tab — другие разделы.")
-	return Loc.t("Мастерская") + ". " + Loc.t("Кто сегодня в очереди на ремонт:")
+	return "%s %s: %s. " % [Loc.t("Мастерская."), Loc.t("Починено"), A11y._of(SaveGame.user_done_count(), Content.jobs.size())] + \
+		Loc.t("Стрелки — выбрать клиента, Enter — взять заказ, Tab — другие разделы.")
 
 
 func go_back() -> void:

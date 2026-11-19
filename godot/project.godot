@@ -15,6 +15,10 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 boot_splash/bg_color=Color(0.0941176, 0.0862745, 0.117647, 1)
 config/icon="res://content/img/ghost.png"
 
+[audio]
+
+general/text_to_speech=true
+
 [autoload]
 
 Settings="*res://autoload/settings.gd"
@@ -27,6 +31,7 @@ Speech="*res://autoload/speech.gd"
 Nav="*res://autoload/nav.gd"
 Feedback="*res://autoload/feedback.gd"
 Share="*res://autoload/share.gd"
+A11y="*res://autoload/a11y.gd"
 
 [display]
 

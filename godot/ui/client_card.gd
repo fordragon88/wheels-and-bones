@@ -22,9 +22,12 @@ func refresh() -> void:
 	var done := SaveGame.is_done(jid)
 	color = UI.GOOD if done else UI.AMBER
 	active = done
-	var kind := "ЭЛЕКТРО" if job.get("kind") == "power" else "РУЧНАЯ"
-	accessibility_name = "%s. %s. %s%s" % [Loc.t(job["client"]), Loc.t(job["title"]), Loc.t(kind),
-		(". " + Loc.t("✔ готово")) if done else ""]
+	var intro: Array = Content.client_talk(jid).get("intro", [""])
+	var note: String = intro[0] if not intro.is_empty() else ""
+	accessibility_name = "%s. %s. %s" % [Loc.t(job["client"]), Loc.t(job["title"]),
+		Loc.t("Электроколяска" if job.get("kind") == "power" else "Ручная коляска")] + \
+		((". " + Loc.t("Уже починено")) if done else "") + ((". " + Loc.t(note)) if note != "" and not done else "")
+	set_meta("a11y_group", "Клиенты")
 	queue_redraw()
 
 

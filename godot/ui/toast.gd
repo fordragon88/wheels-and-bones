@@ -19,7 +19,7 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label = Label.new()
 	label.modulate = Color(1, 1, 1, 0)
-	label.accessibility_live = AccessibilityServer.AccessibilityLiveMode.LIVE_ASSERTIVE
+	label.accessibility_live = AccessibilityServer.AccessibilityLiveMode.LIVE_OFF   # говорит Speech (один голос)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(label)
 

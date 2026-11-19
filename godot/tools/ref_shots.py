@@ -379,3 +379,47 @@ g.toast_timer = 0
 g.open_share("result", res=rres)
 run(g, 0.5, "share_result")
 g.share_ui = None
+
+
+# ---- срез 7: рамка «одной кнопки» (A11Y["scan"]; выделение не двигается само — _scan_next далеко) ----
+game.A11Y["scan"] = 1
+g.share_ui = None
+g.assign = None
+g.done = {"flat", "brake"}
+g.tutorial_skipped = True
+
+
+def scan_shot(name, key, secs=0.4, sub=None):
+    g.kb["active"] = True
+    g.kb["key"] = key
+    g.kb["scan_sub"] = sub
+    g._scan_next = g.t + 1000
+    g.toast_timer = 0
+    run(g, secs, name)
+
+
+g.scene = "hub"
+g.scene_t0 = g.t
+run(g, 1.5)
+scan_shot("scan_hub", ("job", "brake"))
+g.start_job("flat", 0)
+run(g, 1.0)
+g.toast_timer = 0
+scan_shot("scan_job", ("part", g.cur["parts"][1]))
+g.cur = None
+g.scene = "hub"
+g.show_sound = True
+g.settings_tab = "access"
+scan_shot("scan_settings", ("acc", "calm"))
+g.show_sound = False
+g.open_seating()
+g.seatc["tab"] = "fit"
+g._seat_load_case(0)
+run(g, 1.0)
+scan_shot("scan_seat", ("seat", "leg"), sub={"key": ("seat", "leg"), "i": 1})
+g.seatc = None
+g.scene = "hub"
+g.open_share("paste")
+scan_shot("scan_share", "sfield")
+g.share_ui = None
+game.A11Y["scan"] = 0

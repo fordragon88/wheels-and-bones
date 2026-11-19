@@ -86,7 +86,42 @@ func text_cap() -> float:
 
 
 func summary() -> String:
-	return Loc.t(("ЭКЗАМЕН: " if exam else "Гильдия: ") + job["title"]) + ". " + Loc.t(job.get("symptom", ""))
+	return summary_full(true)
+
+
+## Сводка про-задания (_a11y_job_summary, ветка tech): мини-игра, мануал, спека, операции, проверка под нагрузкой.
+func summary_full(full: bool) -> String:
+	if mini != null:
+		return load("res://screens/job.gd").mini_summary(mini)
+	if manual_dlg != null and manual_dlg.page != "":
+		var e: Dictionary = Content.manual.get(manual_dlg.page, {})
+		return "%s. %s. " % [Loc.t("Мануал"), Loc.t(e.get("title", ""))] + " ".join((e.get("lines", []) as Array).map(
+			func(x: String) -> String: return Loc.t(x)))
+	if spec_dlg != null:
+		var sp: Dictionary = spec_dlg.spec()
+		return Loc.t(sp["prompt"]) + ("" if manual_viewed.has(sp["manual"]) else " " + Loc.t("Сначала открой мануал — варианты откроются."))
+	if phase == "repair":
+		var out := "%s: %s." % [Loc.t("Выполнено"), A11y._of(done_steps.size(), job["steps"].size())]
+		if full:
+			out = "%s. %s " % [Loc.t(job["title"]), Loc.t(job["symptom"])] + out + " " + \
+				Loc.t("Порядок шагов выбираешь сам: выбери инструмент, потом операцию. Значения — из мануала.")
+		var voices: bool = Settings.a11y.get("voices", true)
+		return out + (" " + Loc.t(ghost_line) if voices and ghost_line != "" and (Settings.barty_on() or
+			not ghost_line.begins_with("Бартоломью")) else "")
+	return Loc.t("Проверка под нагрузкой.") + " " + Loc.t(job.get("test", "")) + " " + Loc.t(
+		"Проверка пройдена. Enter на кнопке ГОТОВО — к итогу." if ride_done else "Enter на кнопке — прокатить и проверить.")
+
+
+func a11y_sig() -> Array:
+	return [[phase, mini != null, manual_dlg != null, spec_dlg != null], [done_steps.size(), manual_dlg.page if manual_dlg != null else ""]]
+
+
+func a11y_lines() -> Array:
+	return [ghost_quip if t < ghost_quip_until else ""]
+
+
+func hint_line() -> String:
+	return ghost_line
 
 
 func toast_bounds() -> Vector2:
@@ -206,7 +241,14 @@ func first_focus() -> Control:
 func _update_a11y() -> void:
 	for b in _ops:
 		var sid: String = b.get_meta("sid")
-		b.accessibility_name = ("✔ " if done_steps.has(sid) else "") + Loc.t(step_by_id(sid)["instr"])
+		b.accessibility_name = Loc.t(step_by_id(sid)["instr"]) + (", " + Loc.t("выполнено") if done_steps.has(sid) else "")
+		b.set_meta("a11y_group", "Операции")
+	var sk := get_node_or_null("StepSkip") as Control
+	if sk:
+		sk.accessibility_name = Loc.t("Пропустить шаг (минус звезда)")
+		sk.set_meta("a11y_group", "Шаги")
+	if tools:
+		tools.update_a11y(sel_tool)
 
 
 func rebuild() -> void:
@@ -244,6 +286,8 @@ func select_tool(tid: String) -> void:
 	sel_tool = tid
 	Audio.sfx(Content.consts.get("tool_sound", {}).get(tid, "tool_metal"))
 	Speech.say(Loc.tf("В руке: {0}", [Loc.t(Content.tools[tid]["name"])]), true)
+	if tools:
+		tools.update_a11y(sel_tool)
 
 
 func op_clicked(sid: String) -> void:

@@ -86,6 +86,11 @@ func _run() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	probe.queue_free()
+	# --- быстрый прогон одной части: -- --test --only speech|switch|pad (отладка; полная самопроверка — без него)
+	var only_i := OS.get_cmdline_user_args().find("--only")
+	if only_i >= 0:
+		await _only(OS.get_cmdline_user_args()[only_i + 1])
+		return
 	# --- перевод: всё, что показывают экраны ---
 	Loc.audit = true
 	Loc.misses.clear()
@@ -175,6 +180,9 @@ func _run() -> void:
 	var sh_line: String = await _flow_share_assign()
 	_share_write_out()
 	Loc.code = lang_sh
+	var sp_res: Array = await _speech_ref()
+	var sw_line: String = await _flow_switch(["flat:0", "brake:0", "spokes:0"], ["truing"])
+	var pad_line: String = await _flow_pad(["flat:0", "brake:0", "lift:0"], ["truing"])
 	Loc.audit = false
 	var n_audit: int = Loc.audited.size()
 	var dump := OS.get_cmdline_user_args().find("--dump-tr")
@@ -207,7 +215,7 @@ func _run() -> void:
 	SaveGame.reset()
 	await _flow_mouse()
 	await _flow_keyboard()
-	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; Коды и ссылки: кодов game.py прочитано %d (P/J/R, те же данные), битых отвергнуто %d, ссылок и разборов = game.py %d, своих кодов и ссылок для check_share.py %d; прогресс: копировать → сбросить → вставить → тот же, «вернуть прежний»; %s; «продолжить / обычная игра»; итог в таблицу = game.py (в сеть — ничего); %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, sh[0], sh[1], sh[2], share_out.size(), sh_line, n_gd, n_audit,
+	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; Коды и ссылки: кодов game.py прочитано %d (P/J/R, те же данные), битых отвергнуто %d, ссылок и разборов = game.py %d, своих кодов и ссылок для check_share.py %d; прогресс: копировать → сбросить → вставить → тот же, «вернуть прежний»; %s; «продолжить / обычная игра»; итог в таблицу = game.py (в сеть — ничего); Озвучка: %d/%d сводок, подписей фокуса и фраз клавиш = game.py (RU/EN), в тестах голос не звучит; %s; %s; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, sh[0], sh[1], sh[2], share_out.size(), sh_line, sp_res[0], sp_res[1], sw_line, pad_line, n_gd, n_audit,
 		"" if _drawn > 0 else " (без окна _draw не вызывается — проверены строки данных и обработчиков)"],
 		n_jobs, n_var, n_tech)
 
@@ -233,6 +241,11 @@ func _click(pos: Vector2) -> void:
 
 
 func _key(code: Key, shift: bool = false) -> void:
+	var pad := {KEY_ENTER: JOY_BUTTON_A, KEY_ESCAPE: JOY_BUTTON_B, KEY_UP: JOY_BUTTON_DPAD_UP, KEY_DOWN: JOY_BUTTON_DPAD_DOWN,
+		KEY_LEFT: JOY_BUTTON_DPAD_LEFT, KEY_RIGHT: JOY_BUTTON_DPAD_RIGHT}
+	if ctl_mode == "pad" and pad.has(code) and not shift:      # геймпад: те же действия кнопками
+		await _pad_btn(pad[code])
+		return
 	for pressed: bool in [true, false]:
 		var e := InputEventKey.new()
 		e.keycode = code
@@ -504,7 +517,7 @@ func _bot_all() -> Array:
 		err("бот: в прогрессе %d заданий из %d" % [SaveGame.user_done_count(), Content.jobs.size()])
 	Nav.go("hub")
 	await _frames(2)
-	if not str(Nav.current.get_node("Card_flat").accessibility_name).contains("✔"):
+	if not str(Nav.current.get_node("Card_flat").accessibility_name).contains(Loc.t("Уже починено")):
 		err("мастерская: у пройденного задания нет отметки")
 	return [ok, total]
 
@@ -633,7 +646,9 @@ func _negatives() -> void:
 
 
 func _press(c: Control, keyboard: bool) -> void:
-	if keyboard:
+	if keyboard and ctl_mode == "switch":
+		await _sw_press_on(c)
+	elif keyboard:
 		c.grab_focus()
 		await _frames(1)
 		await _key(KEY_ENTER)
@@ -713,7 +728,9 @@ func _mini_events(m: MiniGame, keyboard: bool, how: String, key: String) -> void
 		"gap":
 			var tr: GapTrack = m.get_node("Track")
 			var lo := int(m.cfg["lo"])
-			if keyboard:
+			if keyboard and ctl_mode == "switch":
+				await _sw_slider(tr, func() -> int: return m.value, lo)
+			elif keyboard:
 				tr.grab_focus()
 				await _frames(1)
 				for _i in 400:
@@ -2197,3 +2214,487 @@ func _flow_share_assign() -> String:
 	Share.exit_assignment()
 	await _frames(1)
 	return "задание из конструктора (4 пункта) пройдено по ссылке --link, итог и код результата = пройденному"
+
+
+# ======================= Озвучка =======================
+
+## Сводки «где я и что делать» и фразы клавиш против game.py (content/speech_ref.json) на RU и EN.
+## Голос в тестах не звучит (Speech.kind = "test"): сравниваем текст. Возврат: [совпало, всего].
+func _speech_ref() -> Array:
+	var path := "res://content/speech_ref.json"
+	if not FileAccess.file_exists(path):
+		err("нет content/speech_ref.json — запусти tools/sync_content.py")
+		return [0, 0]
+	var ref: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var lang0 := Loc.code
+	var voices0: bool = Settings.a11y.get("voices", true)
+	Settings.a11y["voices"] = false
+	var ok := 0
+	var total := 0
+	for lang: String in ["ru", "en"]:
+		Loc.code = lang
+		var want := {}
+		for r: Dictionary in ref[lang]["rows"]:
+			want[r["name"]] = r
+		var got := await _speech_states()
+		for name: String in want:
+			total += 1
+			if not got.has(name):
+				err("озвучка (%s): нет состояния %s" % [lang, name])
+				continue
+			var g: Array = got[name]
+			var w: Dictionary = want[name]
+			if g.size() > 2 and w.has("items"):                # подписи пунктов для озвучки фокуса — по группам
+				total += 1
+				var gi: Dictionary = _by_group(g[2])
+				var wi: Dictionary = _by_group(w["items"])
+				var bad_g: Array = []
+				for grp: String in gi:
+					if not wi.has(grp) or gi[grp] != wi[grp]:
+						bad_g.append([grp, gi[grp], wi.get(grp)])
+				for grp: String in wi:
+					if grp in A11Y_GROUPS and not gi.has(grp):
+						bad_g.append([grp, null, wi[grp]])
+				if bad_g.is_empty():
+					ok += 1
+				else:
+					err("озвучка фокуса (%s) «%s»: %s" % [lang, name, bad_g])
+			if Speech.clean(g[0]) != w["full"] or (g.size() > 1 and Speech.clean(g[1]) != w["short"]):
+				err("озвучка (%s) «%s»:\n    godot  %s\n    pygame %s" % [lang, name, Speech.clean(g[0]) if Speech.clean(g[0]) != w["full"]
+					else Speech.clean(g[1]), w["full"] if Speech.clean(g[0]) != w["full"] else w["short"]])
+				continue
+			ok += 1
+		# фразы клавиш: F2 (выкл/вкл), F1 (справка, закрыта), H, C
+		var ph: Dictionary = ref[lang]["phrases"]
+		Nav.go("hub")
+		await _frames(3)
+		var got_ph := {}
+		Settings.a11y["on"] = true
+		await _key(KEY_F2)
+		await _frames(1)
+		got_ph["f2_off"] = Speech.last()
+		await _key(KEY_F2)
+		await _frames(1)
+		got_ph["f2_on"] = Speech.last()
+		Settings.a11y["on"] = false
+		await _key(KEY_F1)
+		await _frames(1)
+		got_ph["help"] = _last_with(Speech.clean(Loc.t("Клавиши.")))
+		await _key(KEY_F1)
+		await _frames(1)
+		got_ph["help_closed"] = Speech.last()
+		await _key(KEY_H)
+		await _frames(1)
+		got_ph["no_hint"] = Speech.last()
+		await _key(KEY_C)
+		await _frames(1)
+		got_ph["no_client"] = Speech.last()
+		for k: String in ph:
+			total += 1
+			if not str(got_ph.get(k, "")).contains(ph[k]):
+				err("озвучка (%s), клавиша %s:\n    godot  %s\n    pygame %s" % [lang, k, got_ph.get(k, ""), ph[k]])
+			else:
+				ok += 1
+	Loc.code = lang0
+	Settings.a11y["voices"] = voices0
+	Settings.a11y["on"] = false
+	return [ok, total]
+
+
+func _last_with(prefix: String) -> String:
+	for i in range(Speech.history.size() - 1, -1, -1):
+		if Speech.history[i].contains(prefix):
+			return Speech.history[i]
+	return ""
+
+
+## Те же состояния, что speech_ref в sync_content.py: имя → [полная сводка, короткая].
+func _speech_states() -> Dictionary:
+	var out := {}
+	SaveGame.reset()
+	Nav.go("title")
+	await _frames(1)
+	out["title"] = [A11y.summary(true), A11y.summary(false)]
+	Nav.go("intro")
+	await _frames(1)
+	for i in Nav.current.slides().size():
+		Nav.current.idx = i
+		out["intro_%d" % i] = [A11y.summary(true), A11y.summary(false)]
+	Nav.go("credits", {"from": "title"})
+	await _frames(1)
+	out["credits"] = [A11y.summary(true), A11y.summary(false)]
+	SaveGame.done["flat"] = true
+	SaveGame.done["brake"] = true
+	SaveGame.tutorial_skipped = true
+	Nav.go("hub")
+	await _frames(1)
+	out["hub"] = [A11y.summary(true), A11y.summary(false)]
+	Nav.go("job", {"job": "flat", "variant": 0})
+	await _frames(1)
+	var scr: Node = Nav.current
+	out["job_flat_diagnose"] = [A11y.summary(true), A11y.summary(false), _items(scr)]
+	for pid: String in scr.job["parts"].slice(0, 2):
+		scr.inspect_part(pid)
+	scr.choose_diagnosis(_correct_diag(scr))
+	await _frames(1)
+	scr = Nav.current
+	out["job_flat_repair"] = [A11y.summary(true), A11y.summary(false), _items(scr)]
+	var st: Dictionary = scr.job["steps"][0]
+	scr.select_tool(st["tool"])
+	scr.part_clicked(st["part"])
+	await _frames(1)
+	out["job_flat_repair_2"] = [A11y.summary(true), A11y.summary(false)]
+	for pair: Array in [["flat", "pump"], ["brake", "gap"], ["spokes", "ping"], ["lift", "meter"]]:
+		Nav.go("job", {"job": pair[0], "variant": 0})
+		await _frames(1)
+		scr = Nav.current
+		for pid: String in scr.job["parts"].slice(0, 2):
+			scr.inspect_part(pid)
+		scr.choose_diagnosis(_correct_diag(scr))
+		await _frames(1)
+		scr = Nav.current
+		while scr.phase == "repair" and not (scr.cur_step().get("mini") is Dictionary and scr.cur_step()["mini"]["kind"] == pair[1]):
+			scr.step_skip()
+		var s2: Dictionary = scr.cur_step()
+		scr.select_tool(s2["tool"])
+		scr.part_clicked(s2["part"])
+		await _frames(1)
+		out["mini_" + pair[1]] = [A11y.summary(true), A11y.summary(false)]
+	Nav.go("job", {"job": "flat", "variant": 0})
+	await _frames(1)
+	scr = Nav.current
+	for pid: String in scr.job["parts"].slice(0, 2):
+		scr.inspect_part(pid)
+	scr.choose_diagnosis(_correct_diag(scr))
+	await _frames(1)
+	scr = Nav.current
+	while scr.phase == "repair":
+		scr.step_skip()
+	await _frames(1)
+	out["job_flat_test"] = [A11y.summary(true), A11y.summary(false)]
+	Nav.go("result", {"job": scr.job, "stars": 3, "gag": Content.talk["martin"]["good"][0], "mistakes": 0})
+	await _frames(1)
+	out["result_flat"] = [A11y.summary(true), A11y.summary(false)]
+	var ts: Node = await _open_tech("truing")
+	out["tech_truing"] = [A11y.summary(true), A11y.summary(false), _items(ts)]
+	_view_all_manual(ts)
+	for s3: Dictionary in ts.job["steps"]:
+		if s3.get("spec") is Dictionary:
+			ts.select_tool(s3["tool"])
+			ts.op_clicked(s3["id"])
+			break
+		await _tech_do(ts, s3["id"])
+	await _frames(1)
+	out["tech_spec"] = [A11y.summary(true), A11y.summary(false)]
+	Nav.go("seating")
+	await _frames(1)
+	var se: Node = Nav.current
+	se.quiz = Content.seating["quiz"].duplicate(true)
+	out["seat_lessons"] = [A11y.summary(true), A11y.summary(false)]
+	se.tab = "fit"
+	se.load_case(0)
+	se.refresh()
+	await _frames(1)
+	out["seat_fit"] = [A11y.summary(true), A11y.summary(false), _items(se)]
+	se.tab = "quiz"
+	out["seat_quiz"] = [A11y.summary(true), A11y.summary(false)]
+	se.quiz_done = true
+	se.score = 6
+	out["seat_quiz_done"] = [A11y.summary(true), A11y.summary(false)]
+	Nav.go("hub")
+	await _frames(1)
+	for tb: String in ["sound", "graphics", "access", "game"]:
+		SettingsDialog.tab = tb
+		Nav.open_settings()
+		await _frames(1)
+		out["settings_" + tb] = [A11y.summary(true), A11y.summary(false), _items(Nav.settings)]
+		Nav.close_settings()
+		await _frames(1)
+	Share.open({"mode": "paste"})
+	out["share_paste"] = [A11y.summary(true), A11y.summary(false)]
+	Share.open({"mode": "builder"})
+	out["share_builder"] = [A11y.summary(true), A11y.summary(false)]
+	Share._close_dlg()
+	Nav.toggle_help()
+	out["help"] = [A11y.summary(true), A11y.summary(false)]
+	Nav.toggle_help()
+	Nav.open_flag()
+	out["feedback_general"] = [A11y.summary(true), A11y.summary(false)]
+	Nav.feedback.close()
+	await _frames(1)
+	return out
+
+
+
+func _only(what: String) -> void:
+	var line := ""
+	match what:
+		"speech":
+			var sp: Array = await _speech_ref()
+			line = "озвучка: %d/%d" % sp
+		"switch":
+			line = await _flow_switch(["flat:0", "brake:0", "spokes:0"], ["truing"])
+		"switch-full":
+			var all: Array = []
+			for job: Dictionary in Content.jobs:
+				for v in maxi(1, job.get("variants", []).size()):
+					all.append("%s:%d" % [job["id"], v])
+			line = await _flow_switch(all, Content.tech_jobs.map(func(j: Dictionary) -> String: return j["id"]))
+		"pad":
+			line = await _flow_pad(["flat:0", "brake:0", "lift:0"], ["truing"])
+	Nav.shutdown()
+	await _frames(10)
+	for e in errors:
+		pass
+	if errors.is_empty():
+		print("GODOT SELFTEST OK (только %s) — %s" % [what, line])
+		get_tree().quit(0)
+	else:
+		printerr("GODOT SELFTEST FAILED: %d ошибок" % errors.size())
+		get_tree().quit(1)
+
+
+
+const A11Y_GROUPS := ["Детали", "Диагноз", "Инструменты", "Операции", "Шаги", "Ползунки", "Вкладки", "Доступность", "Меню",
+	"Клиенты"]
+
+
+## Пункты для озвучки фокуса: [группа, подпись] (детали — строки списка, не кружки на коляске).
+func _items(root: Node) -> Array:
+	var out: Array = []
+	for c: Control in A11y.focusables(root):
+		var g := A11y.group_of(c)
+		if not g in A11Y_GROUPS or (g == "Детали" and not str(c.name).begins_with("Part_")):
+			continue
+		out.append([g, Speech.clean(A11y.label_of(c))])
+	return out
+
+
+func _by_group(items: Array) -> Dictionary:
+	var d := {}
+	for it: Array in items:
+		if not it[0] in A11Y_GROUPS:
+			continue
+		if not d.has(it[0]):
+			d[it[0]] = []
+		d[it[0]].append(Speech.clean(it[1]))
+	for g: String in ["Меню", "Операции"]:            # порядок операций перемешан (как в game.py) — сравниваем набор
+		if d.has(g):
+			d[g].sort()
+	if d.has("Диагноз"):                               # варианты диагноза перемешаны: без номера, набором
+		var rx := RegEx.create_from_string("^[^:]+ [0-9]+: ")
+		d["Диагноз"] = d["Диагноз"].map(func(x: String) -> String: return rx.sub(x, ""))
+		d["Диагноз"].sort()
+	return d
+
+
+# ======================= одна кнопка и геймпад =======================
+
+var ctl_mode: String = ""                   # "" — клавиатура; "pad" — геймпад; "switch" — одна кнопка
+
+
+func _pad_btn(b: JoyButton) -> void:
+	for pressed: bool in [true, false]:
+		var e := InputEventJoypadButton.new()
+		e.button_index = b
+		e.pressed = pressed
+		get_viewport().push_input(e)
+	await get_tree().process_frame
+
+
+## Одна кнопка: ждём, пока выделится нужный пункт (бот сам двигает выделение — шаг сканирования), и коротко жмём.
+func _sw_press_on(c: Control) -> void:
+	A11y._scan_next = A11y.scan_t + 1e6         # выделение двигает бот: время не ждём
+	for _i in 400:
+		if c.has_focus():
+			break
+		A11y.scan_step()
+	if not c.has_focus():
+		err("одна кнопка: не дошли до «%s» (%s)" % [c.name, A11y.label_of(c)])
+		return
+	await _sw_press(false)
+
+
+func _sw_press(hold: bool) -> void:
+	for pressed: bool in [true, false]:
+		if not pressed:
+			A11y.scan_t += (A11y.SCAN_HOLD + 0.1) if hold else 0.05
+		var e := InputEventKey.new()
+		e.keycode = KEY_SPACE
+		e.physical_keycode = KEY_SPACE
+		e.pressed = pressed
+		get_viewport().push_input(e)
+	await _frames(1)
+
+
+## Ползунок одной кнопкой: нажать — «больше»; «меньше / больше / готово» по очереди, нажатие — сделать.
+func _sw_slider(c: Control, value: Callable, target: int) -> void:
+	await _sw_press_on(c)
+	for _i in 400:
+		var v: int = value.call()
+		if v == target:
+			break
+		var want := 1 if v < target else 0
+		for _j in 3:
+			if int(A11y.scan_sub.get("i", -1)) == want:
+				break
+			A11y.scan_step()
+		await _sw_press(false)
+	for _j in 3:
+		if int(A11y.scan_sub.get("i", -1)) == 2:
+			break
+		A11y.scan_step()
+	await _sw_press(false)
+	if int(value.call()) != target:
+		err("одна кнопка: ползунок «%s» — %d, нужно %d" % [c.name, value.call(), target])
+
+
+## Одна кнопка и геймпад: задания мастерской, про-задание, примерка, настройки. Возврат: строка для итога.
+func _flow_switch(jobs: Array, techs: Array) -> String:
+	var lang0 := Loc.code
+	Settings.a11y["scan"] = 1
+	A11y.scan_stat = {"press": 0, "hold": 0, "steps": 0}
+	ctl_mode = "switch"
+	SaveGame.reset()
+	SaveGame.tutorial_skipped = true
+	SaveGame.ending_seen = true                  # вечеринка после 21-го ремонта — не в этой проверке
+	for key: String in jobs:
+		await _flow_repair(key, true)
+	for jid: String in techs:
+		SaveGame.done.merge({"flat": true, "brake": true, "spokes": true, "lift": true, "caster": true}, true)
+		await _flow_tech_events(jid, false, true)
+	await _sw_seat_settings()
+	# долгое нажатие — назад (Esc): из мастерской на титул
+	Nav.go("hub")
+	await _frames(2)
+	await _sw_press(true)
+	await _frames(2)
+	if Nav.current_name != "title":
+		err("одна кнопка: долгое нажатие не вернуло на титул (%s)" % Nav.current_name)
+	var st: Dictionary = A11y.scan_stat.duplicate()
+	ctl_mode = ""
+	Settings.a11y["scan"] = 0
+	A11y.scan_sub = {}
+	Loc.code = lang0
+	return "Одна кнопка: %d заданий + %d про-заданий, примерка, настройки — нажатий %d, долгих %d, шагов выделения %d" % [
+		jobs.size(), techs.size(), st["press"], st["hold"], st["steps"]]
+
+
+## Одна кнопка: верная посадка у первого клиента (ползунки — «меньше / больше / готово»), настройки.
+func _sw_seat_settings() -> void:
+	Nav.go("seating")
+	await _frames(2)
+	var scr: Node = Nav.current
+	await _press(scr.get_node("Tab_fit"), true)
+	await _frames(1)
+	var c: Dictionary = SeatLogic.cases()[scr.case_i]
+	var sol := _seat_solution(c, scr.slider_keys(), scr.cfg)
+	for k: String in scr.slider_keys():
+		if int(scr.cfg[k]) == int(sol[k]):
+			continue
+		var sl: Control = scr.sliders[k]
+		if ctl_mode == "switch":
+			await _sw_slider(sl, func() -> int: return int(scr.cfg[k]), int(sol[k]))
+		else:
+			sl.grab_focus()
+			await _frames(1)
+			for _i in 200:
+				if int(scr.cfg[k]) == int(sol[k]):
+					break
+				await _key(KEY_RIGHT if int(scr.cfg[k]) < int(sol[k]) else KEY_LEFT)
+	await _press(scr.get_node("Dyn/Check"), true)
+	await _frames(1)
+	if not scr.solved:
+		err("%s: посадка не засчитана" % ctl_mode)
+	Nav.go("hub")
+	await _frames(2)
+	await _press(Nav.current.get_node("Gear"), true)
+	await _frames(1)
+	if Nav.settings == null:
+		err("%s: настройки не открылись" % ctl_mode)
+		return
+	await _press(Nav.settings.get_node("Tab_access"), true)
+	await _frames(1)
+	var calm0 := Settings.calm()
+	await _press(Nav.settings.get_node("Acc_calm"), true)
+	await _frames(1)
+	if Settings.calm() == calm0:
+		err("%s: «Без анимации» не переключилось" % ctl_mode)
+	await _press(Nav.settings.get_node("Acc_calm"), true)
+	await _frames(1)
+	await _press(Nav.settings.get_node("Tab_sound"), true)
+	await _frames(1)
+	var vs: VolSlider = Nav.settings.get_node("Vol_music")
+	var v0: float = Settings.vol["music"]
+	if ctl_mode == "switch":
+		await _sw_slider(vs, func() -> int: return roundi(float(Settings.vol["music"]) * 20), roundi(v0 * 20) - 1)
+	else:
+		vs.grab_focus()
+		await _frames(1)
+		await _key(KEY_LEFT)
+	if is_equal_approx(float(Settings.vol["music"]), v0):
+		err("%s: громкость музыки не изменилась" % ctl_mode)
+	Settings.vol["music"] = v0
+	await _press(Nav.settings.get_node("Done"), true)
+	await _frames(1)
+	if Nav.settings != null:
+		err("%s: «Готово» не закрыло настройки" % ctl_mode)
+
+
+## Геймпад: те же задания, про-задание, примерка и настройки кнопками A/B, крестовиной, LB/RB, Start, Back, Y.
+func _flow_pad(jobs: Array, techs: Array) -> String:
+	ctl_mode = "pad"
+	Nav.pad_presses = 0
+	SaveGame.reset()
+	SaveGame.tutorial_skipped = true
+	for key: String in jobs:
+		await _flow_repair(key, true)
+	for jid: String in techs:
+		SaveGame.done.merge({"flat": true, "brake": true, "spokes": true, "lift": true, "caster": true}, true)
+		await _flow_tech_events(jid, false, true)
+	await _sw_seat_settings()
+	# крестовина двигает фокус, LB/RB — группы, Start — настройки, Back — справка, Y — «где я», B — назад
+	Nav.go("hub")
+	await _frames(2)
+	var f0 := get_viewport().gui_get_focus_owner()
+	await _pad_btn(JOY_BUTTON_DPAD_RIGHT)
+	await _frames(1)
+	if get_viewport().gui_get_focus_owner() == f0:
+		err("геймпад: крестовина не двигает фокус")
+	var f1 := get_viewport().gui_get_focus_owner()
+	await _pad_btn(JOY_BUTTON_RIGHT_SHOULDER)
+	await _frames(1)
+	if get_viewport().gui_get_focus_owner() == f1:
+		err("геймпад: RB не переводит фокус")
+	var heard: Array = []
+	var hear := func(x: String) -> void: heard.append(x)
+	Speech.spoke.connect(hear)
+	await _pad_btn(JOY_BUTTON_Y)
+	await _frames(2)
+	Speech.spoke.disconnect(hear)
+	var want_y := Speech.clean(A11y.summary(true))
+	if not heard.any(func(x: String) -> bool: return x.contains(want_y)):
+		err("геймпад: Y не повторил «где я»:
+    %s
+    ждали %s" % [heard, want_y])
+	await _pad_btn(JOY_BUTTON_START)
+	await _frames(1)
+	if Nav.settings == null:
+		err("геймпад: Start не открыл настройки")
+	await _pad_btn(JOY_BUTTON_START)
+	await _frames(1)
+	if Nav.settings != null:
+		err("геймпад: Start не закрыл настройки")
+	await _pad_btn(JOY_BUTTON_BACK)
+	await _frames(1)
+	if Nav.help == null:
+		err("геймпад: Back не открыл справку")
+	await _pad_btn(JOY_BUTTON_B)
+	await _frames(1)
+	await _pad_btn(JOY_BUTTON_B)
+	await _frames(2)
+	if Nav.help != null or Nav.current_name != "title":
+		err("геймпад: B не закрыл справку и не вернул на титул (%s)" % Nav.current_name)
+	ctl_mode = ""
+	return "Геймпад: %d заданий + %d про-заданий, примерка, настройки, крестовина/LB/RB/Start/Back/Y/B — нажатий %d" % [
+		jobs.size(), techs.size(), Nav.pad_presses]

@@ -92,7 +92,70 @@ func music_theme() -> String:
 
 
 func summary() -> String:
-	return Loc.t(job.get("title", "")) + ". " + Loc.t(job.get("symptom", ""))
+	return summary_full(true)
+
+
+## Сводка задания (_a11y_job_summary): мини-игра, сноски, диагноз, шаг ремонта, тест-драйв.
+func summary_full(full: bool) -> String:
+	if mini != null:
+		return mini_summary(mini)
+	if phase == "diagnose":
+		return "%s. %s: %s. %s: %s. %s " % [Loc.t(job["title"]), Loc.t("Клиент"), Loc.t(job["client"]), Loc.t("Коляска"),
+			Loc.t(job.get("chair_name", "")), Loc.t(job["symptom"])] + \
+			Loc.t("Осмотри детали, минимум две, потом выбери диагноз. Tab — переход между группами.")
+	if phase == "repair":
+		var n: int = job["steps"].size()
+		var st: Dictionary = job["steps"][mini(step_idx, n - 1)]
+		var out := "%s %s: %s" % [Loc.t("Шаг"), A11y._of(step_idx + 1, n), Loc.t(st["instr"])]
+		if full:
+			out += " " + Loc.t("Выбери инструмент, потом деталь.")
+		if Settings.a11y.get("voices", true) and ghost_audible():
+			out += " " + Loc.t(ghost_line)
+		return out
+	return Loc.t("Тест-драйв.") + " " + Loc.t(job.get("test", "")) + " " + Loc.t(
+		"Проверка пройдена. Enter на кнопке ГОТОВО — к итогу." if ride_done else "Enter на кнопке — прокатить и проверить.")
+
+
+## Мини-игра (_a11y_job_summary, ветка mini_pending): инструкция шага, подсказка, что делать.
+static func mini_summary(m: MiniGame) -> String:
+	var cfg: Dictionary = m.cfg
+	var hint: String = cfg.get("hint", "") if str(cfg.get("hint", "")) != "" else str(cfg.get("prompt", ""))
+	var out := Loc.t(m.step["instr"]) + ". " + Loc.t(hint)
+	match m.kind:
+		"pump":
+			out += " %s: %d %s. " % [Loc.t("Сейчас"), m.value, Loc.t(cfg["unit"])] + Loc.t("Нужно попасть в зелёную зону") + \
+				": %s–%s %s. " % [Share.pystr(cfg["lo"]), Share.pystr(cfg["hi"]), Loc.t(cfg["unit"])] + \
+				Loc.t("Enter на «Качать» — подкачать, «Стравить» — выпустить лишнее, потом «Готово».")
+		"gap":
+			out += " %s: %s–%s %s. " % [Loc.t("Допуск"), Share.pystr(cfg["lo"]), Share.pystr(cfg["hi"]), Loc.t(cfg["unit"])] + \
+				Loc.t("Стрелки влево-вправо — значение, потом «Проверить».")
+		"ping":
+			out += " " + Loc.t("Простукивай спицы по очереди и слушай: звонкая — в норме, глухая — ослабла.")
+		"meter":
+			out += " %s: %s. %s" % [Loc.t("Прибор показывает"), Loc.t(cfg["reading"]), Loc.t(cfg.get("sub", ""))]
+	return out
+
+
+## Подсказку призрака озвучиваем по тому же правилу, что рисуем пузырь (_ghost_audible): Барти — если он включён.
+func ghost_audible() -> bool:
+	return ghost_line != "" and (Settings.barty_on() or not ghost_line.begins_with("Бартоломью") and not ghost_line.begins_with("Барти"))
+
+
+func a11y_sig() -> Array:
+	return [[phase, mini != null, notes != null and notes.visible], [step_idx]]
+
+
+func a11y_lines() -> Array:
+	var q := ghost_quip if t < ghost_quip_until else ""
+	return [client_line, q]
+
+
+func hint_line() -> String:
+	return ghost_line if ghost_audible() else ""
+
+
+func client_now() -> String:
+	return client_line
 
 
 func toast_bounds() -> Vector2:
@@ -330,24 +393,33 @@ func _build_test() -> void:
 	add_child(_test_btn)
 
 
+## Подписи пунктов для озвучки фокуса — как a11y_items в game.py: группа (Детали, Диагноз, Инструменты, Шаги) и текст.
 func _update_a11y() -> void:
 	var unlocked := inspected.size() >= inspect_req
 	for b in _part_btns:
 		var pid: String = b.get_meta("pid")
-		var nm := "%d. %s" % [int(b.get_meta("i")) + 1, Loc.t(Content.part_name(pid))]
+		var nm := Loc.t(Content.part_name(pid))
 		if phase == "diagnose" and inspected.has(pid):
-			nm += " ✔"
-		if phase == "repair" and _part_note(pid).size() > 0:
-			nm += ". " + ToolPanel.note_head(_part_note(pid)) + ": " + Loc.t(_part_note(pid)["text"])
+			nm += ", " + Loc.t("осмотрено")
 		b.accessibility_name = nm
+		b.set_meta("a11y_group", "Детали")
 	for b in _diag_btns:
+		var i := int(b.get_meta("i"))
 		b.enabled = unlocked
 		b.color = UI.CYAN if unlocked else UI.DIM
-		b.accessibility_name = Loc.t(job["diagnosis"][int(b.get_meta("i"))]["text"]) + \
-			("" if unlocked else " (" + Loc.t("недоступно") + ")")
+		b.accessibility_name = "%s %d: %s" % [Loc.t("Диагноз"), i + 1, Loc.t(job["diagnosis"][i]["text"])] + \
+			("" if unlocked else ", " + Loc.t("сначала осмотри детали"))
+		b.set_meta("a11y_group", "Диагноз")
 	if _prev_btn:
 		_prev_btn.enabled = step_idx > 0
-		_prev_btn.accessibility_name = Loc.t("Шаг назад")
+		_prev_btn.accessibility_name = Loc.t("Вернуться на шаг назад")
+		_prev_btn.set_meta("a11y_group", "Шаги")
+	var sk := get_node_or_null("StepSkip") as Control
+	if sk:
+		sk.accessibility_name = Loc.t("Пропустить шаг (минус звезда)")
+		sk.set_meta("a11y_group", "Шаги")
+	if tools:
+		tools.update_a11y(sel_tool)
 	if chair:
 		for pid: String in job["parts"]:
 			var hb := chair.spot_button(pid)
@@ -450,6 +522,8 @@ func select_tool(tid: String) -> void:
 	sel_tool = tid
 	Audio.sfx(Content.consts.get("tool_sound", {}).get(tid, "tool_metal"))
 	Speech.say(Loc.tf("В руке: {0}", [Loc.t(Content.tools[tid]["name"])]), true)
+	if tools:
+		tools.update_a11y(sel_tool)
 
 
 ## Применить (инструмент, деталь) к текущему шагу: "ok" | "mini" | "wrong".

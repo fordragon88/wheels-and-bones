@@ -74,8 +74,32 @@ func feedback_context() -> Dictionary:
 		"msg": "", "scene": screen_name}
 
 
-## Что сказать чтецу при входе на экран (a11y_summary) — пока коротко.
+## Что сказать при входе на экран (a11y_summary): где ты и что делать.
 func summary() -> String:
+	return ""
+
+
+## Сводка экрана: full — полная (новый экран, R), иначе — короткая (сменилось состояние экрана).
+func summary_full(_full: bool) -> String:
+	return summary()
+
+
+## Состояние экрана для озвучки: изменилось — сказать сводку снова (_a11y_sig в game.py).
+func a11y_sig() -> Array:
+	return []
+
+
+## Реплики героев на экране сейчас (вслух при «Реплики героев вслух»): клиент, Барти, Мортимер.
+func a11y_lines() -> Array:
+	return []
+
+
+## H — подсказка призрака; C — что сказал клиент.
+func hint_line() -> String:
+	return ""
+
+
+func client_now() -> String:
 	return ""
 
 

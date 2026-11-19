@@ -96,8 +96,7 @@ func go(name: String, p: Dictionary = {}, remember: bool = true) -> void:
 		UI.focus_later(Share.dlg.first_focus())
 	Audio.scene(name, current.music_theme())
 	_esc_t = 0.0
-	Speech.say(current.summary(), true)
-	screen_changed.emit(name)
+	screen_changed.emit(name)                 # сводку экрана говорит A11y (как a11y_frame: «новый экран»)
 
 
 func back() -> void:
@@ -198,7 +197,12 @@ func toggle_help() -> void:
 		UI.set_focus_enabled(host, true)
 		if current != null:
 			current._focus_default()
+		Speech.say(Loc.t("Справка закрыта."), true)
 		return
+	var keys: Array = []                       # справка вслух — все клавиши (toggle_help в game.py)
+	for kv: Array in Content.consts.get("help_keys", []):
+		keys.append("%s: %s." % [Loc.t(kv[0]), Loc.t(kv[1])])
+	Speech.say(Loc.t("Клавиши.") + " " + " ".join(keys) + " " + Loc.t("Esc — закрыть справку."), true)
 	help = HelpOverlay.new()
 	UI.set_focus_enabled(host, false)
 	overlay.get_node("Top").add_child(help)
@@ -241,6 +245,10 @@ func _on_settings_closed() -> void:
 
 
 func _process(dt: float) -> void:
+	_pad_t += dt
+	if _pad_dir != 0 and _pad_t >= _pad_next:      # держат крестовину/стик — повтор стрелки
+		_pad_next = _pad_t + PAD_REPEAT[1]
+		_pad_key(_pad_dir)
 	if _fade_t >= 0.0:
 		_fade_t += dt
 		var k := _fade_t / 0.35
@@ -263,7 +271,92 @@ func _process(dt: float) -> void:
 		get_tree().root.propagate_call("queue_redraw")
 
 
+## Геймпад (pad_action в game.py): кнопки → клавиши управления с клавиатуры. Крестовина и левый стик — стрелки
+## (держишь — повтор через 0,42 с, потом каждые 0,13 с), A — Enter, B — Esc, X — H (подсказка), Y — R (где я),
+## LB/RB — Shift+Tab/Tab (группы), Back — F1 (справка), Start — настройки (открыты — закрыть).
+const PAD_KEYS := {JOY_BUTTON_A: KEY_ENTER, JOY_BUTTON_B: KEY_ESCAPE, JOY_BUTTON_X: KEY_H, JOY_BUTTON_Y: KEY_R,
+	JOY_BUTTON_BACK: KEY_F1, JOY_BUTTON_DPAD_UP: KEY_UP, JOY_BUTTON_DPAD_DOWN: KEY_DOWN,
+	JOY_BUTTON_DPAD_LEFT: KEY_LEFT, JOY_BUTTON_DPAD_RIGHT: KEY_RIGHT}
+const PAD_REPEAT := [0.42, 0.13]
+var pad_presses: int = 0                     # нажатий кнопок геймпада (тесты)
+var _pad_dir: int = 0                        # клавиша-стрелка, которую держат, или 0
+var _pad_next: float = 0.0
+var _pad_t: float = 0.0
+var _stick: Vector2 = Vector2.ZERO
+
+
+func _pad_key(code: Key, down: bool = true, shift: bool = false) -> void:
+	var k := InputEventKey.new()
+	k.keycode = code
+	k.physical_keycode = code
+	k.shift_pressed = shift
+	k.pressed = down
+	get_viewport().push_input.call_deferred(k)   # не изнутри разбора события геймпада (иначе клавиша «поглощается»)
+
+
+func _pad(e: InputEvent) -> bool:
+	if e is InputEventJoypadButton:
+		var b := e as InputEventJoypadButton
+		if b.pressed:
+			pad_presses += 1
+		match b.button_index:
+			JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER:
+				if b.pressed:
+					_pad_key(KEY_TAB, true, b.button_index == JOY_BUTTON_LEFT_SHOULDER)
+					_pad_key(KEY_TAB, false, b.button_index == JOY_BUTTON_LEFT_SHOULDER)
+			JOY_BUTTON_START:
+				if b.pressed:
+					if settings != null:
+						close_settings()
+					elif feedback == null and Share.dlg == null and help == null:
+						open_settings()
+			_:
+				if not PAD_KEYS.has(b.button_index):
+					return true
+				var code: Key = PAD_KEYS[b.button_index]
+				if code in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT]:
+					if b.pressed:
+						_pad_dir = code
+						_pad_next = _pad_t + PAD_REPEAT[0]
+					elif _pad_dir == code:
+						_pad_dir = 0
+				_pad_key(code, b.pressed)
+		return true
+	if e is InputEventJoypadMotion:
+		var m := e as InputEventJoypadMotion
+		if m.axis == JOY_AXIS_LEFT_X:
+			_stick.x = m.axis_value
+		elif m.axis == JOY_AXIS_LEFT_Y:
+			_stick.y = m.axis_value
+		else:
+			return true
+		var code: Key = 0 as Key
+		if absf(_stick.x) > 0.5 and absf(_stick.x) >= absf(_stick.y):
+			code = KEY_RIGHT if _stick.x > 0 else KEY_LEFT
+		elif absf(_stick.y) > 0.5:
+			code = KEY_DOWN if _stick.y > 0 else KEY_UP
+		if code != _pad_dir:
+			_pad_dir = code
+			if code != 0:
+				pad_presses += 1
+				_pad_next = _pad_t + PAD_REPEAT[0]
+				_pad_key(code)
+		return true
+	return false
+
+
 func _input(e: InputEvent) -> void:
+	if A11y.scan_input(e):                     # одна кнопка: нажатие — выбрать, держать — назад
+		if not UI.kb_active:
+			UI.kb_active = true
+		get_viewport().set_input_as_handled()
+		return
+	if (e is InputEventJoypadButton or e is InputEventJoypadMotion) and _pad(e):
+		if not UI.kb_active:
+			UI.kb_active = true
+			_redraw_focus()
+		get_viewport().set_input_as_handled()
+		return
 	if e is InputEventMouseMotion:
 		if UI.kb_active:
 			UI.kb_active = false
@@ -310,6 +403,9 @@ func _unhandled_input(e: InputEvent) -> void:
 				close_settings()
 				get_viewport().set_input_as_handled()
 			return
+		if A11y.key(k):
+			get_viewport().set_input_as_handled()
+			return
 		if current != null and current.handle_key(k):
 			get_viewport().set_input_as_handled()
 			return
@@ -331,7 +427,7 @@ func _unhandled_input(e: InputEvent) -> void:
 					_toggle_fullscreen()
 					get_viewport().set_input_as_handled()
 	elif e is InputEventJoypadButton and e.pressed and (e as InputEventJoypadButton).button_index == JOY_BUTTON_B:
-		back()
+		back()                                     # (геймпад переводится в клавиши в _input — сюда не доходит)
 		get_viewport().set_input_as_handled()
 
 

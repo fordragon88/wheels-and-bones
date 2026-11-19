@@ -82,6 +82,9 @@ func _build() -> void:
 				tab = tb
 				reset_ask = false
 				_rebuild(), tb == tab)
+		b.accessibility_name = Loc.t({"sound": "Вкладка: звук", "graphics": "Вкладка: графика", "access": "Вкладка: доступность",
+			"game": "Вкладка: игра и прогресс"}[tb]) + (", " + Loc.t("открыта") if tb == tab else "")
+		b.set_meta("a11y_group", "Вкладки")
 		if tb == tab:
 			_first = b
 	match tab:
@@ -138,6 +141,7 @@ func _build() -> void:
 					on and not k in ["rate", "text"])
 				b.label_size = 14
 				b.accessibility_name = _access_label(k)
+				b.set_meta("a11y_group", "Доступность")
 				_zones.append(["acc_" + k, Rect2(P.position.x + 24, r.position.y - 1, r.end.x - P.position.x - 24, r.size.y + 2), b])
 		"game":
 			@warning_ignore("integer_division")
@@ -251,9 +255,19 @@ func _access_label(k: String) -> String:
 ## Переключить пункт доступности (_access_toggle).
 func _access_toggle(k: String) -> void:
 	match k:
+		"on":
+			A11y.toggle_speech()
+			Audio.sfx("tick")
+			_rebuild()
+			return
 		"rate":
 			var r := int(Settings.a11y.get("rate", 0))
 			Settings.set_a11y("rate", mini(10, r + 2) if r < 10 else -4)
+			Speech.set_voice()
+			Speech.say("%s: %d" % [Loc.t("Скорость"), int(Settings.a11y["rate"])], true)
+			Audio.sfx("tick")
+			_rebuild()
+			return
 		"text":
 			Settings.set_a11y("text", (int(Settings.a11y.get("text", 0)) + 1) % Settings.TEXT_K.size())
 		"quiet":

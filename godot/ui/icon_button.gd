@@ -40,11 +40,20 @@ static func make_icon(k: Kind) -> IconButton:
 
 
 func update_a11y() -> void:
-	if kind == Kind.LANG:
-		accessibility_name = Loc.t("Язык: русский. Переключить на английский") if Loc.code == "ru" \
-			else "Language: English. Switch to Russian"
-	else:
-		super.update_a11y()
+	match kind:
+		Kind.LANG:
+			accessibility_name = Loc.t("Язык: русский. Переключить на английский") if Loc.code == "ru" \
+				else "Language: English. Switch to Russian"
+			set_meta("a11y_group", "Меню")
+		Kind.GEAR:
+			var on: bool = Settings.vol.get("on", true) and float(Settings.vol.get("master", 1)) > 0.001
+			accessibility_name = Loc.t("Настройки: звук, графика, доступность") + ("" if on else ". " + Loc.t("Звук выключен"))
+			set_meta("a11y_group", "Меню")
+		Kind.FLAG:
+			accessibility_name = Loc.t("Сообщить о неточности")
+			set_meta("a11y_group", "Меню")
+		_:
+			accessibility_name = Loc.t("Назад")
 
 
 func _draw() -> void:

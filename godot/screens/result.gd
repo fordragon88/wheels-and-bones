@@ -70,8 +70,8 @@ func first_focus() -> Control:
 
 
 func summary() -> String:
-	return Loc.t("ГОТОВО!") + " " + "★".repeat(stars) + ". " + Loc.t(job.get("thanks", "")) + " " + \
-		Loc.t("ЧТО ТЫ УЗНАЛ (по-настоящему):") + " " + Loc.t(job.get("fact", ""))
+	return "%s %s: %s. %s %s: %s %s " % [Loc.t("Готово!"), Loc.t("Звёзд"), A11y._of(stars, 3), Loc.t(job.get("thanks", "")),
+		Loc.t("Что ты узнал"), Loc.t(job.get("fact", "")), Loc.t(gag)] + Loc.t("Enter на кнопке — дальше.")
 
 
 func _next_label() -> String:

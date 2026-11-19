@@ -15,7 +15,8 @@ const ALL := ["title", "title_en", "hub", "job_flat_diagnose", "job_flat_inspect
 	"seat_quiz_mid", "seat_quiz_wrong", "seat_quiz_right", "seat_quiz_myth", "seat_quiz_pass", "seat_fit_dryad",
 	"seat_fit_dryad_good", "seat_fit_owl", "seat_fit_owl_good", "seat_fit_orc", "seat_fit_orc_good", "seat_lesson_front",
 	"seat_lesson_front_norm", "seat_quiz_wedge", "seat_quiz_wedge_after", "seat_quiz_pads", "seat_quiz_pads_after",
-	"share_paste", "share_confirm", "share_builder", "hub_assign", "share_summary", "share_result", "share_resume"]
+	"share_paste", "share_confirm", "share_builder", "hub_assign", "share_summary", "share_result", "share_resume",
+	"scan_hub", "scan_job", "scan_settings", "scan_seat", "scan_share"]
 
 var out_dir := ""
 
@@ -261,6 +262,54 @@ func _seat_shot(name: String) -> void:
 	Nav.toast.timer = 0.0
 
 
+## Рамка «одной кнопки» на выделенном пункте — те же состояния, что в ref_shots.py.
+func _scan_shot(name: String) -> void:
+	Settings.a11y["scan"] = 1
+	A11y.scan_sub = {}
+	Share._close_dlg()
+	Nav.close_settings()
+	SaveGame.reset()
+	SaveGame.done["flat"] = true
+	SaveGame.done["brake"] = true
+	SaveGame.tutorial_skipped = true
+	var target: Control
+	match name:
+		"scan_hub":
+			Nav.go("hub")
+			await _wait(1.5)
+			target = Nav.current.get_node("Card_brake")
+		"scan_job":
+			Nav.go("job", {"job": "flat", "variant": 0})
+			await _wait(1.0)
+			target = Nav.current.get_node("Part_" + str(Nav.current.job["parts"][1]))
+		"scan_settings":
+			Nav.go("hub")
+			await _wait(0.3)
+			SettingsDialog.tab = "access"
+			Nav.open_settings()
+			await _wait(0.2)
+			target = Nav.settings.get_node("Acc_calm")
+		"scan_seat":
+			Nav.go("seating")
+			await _wait(0.2)
+			Nav.current.set_tab("fit")
+			await _wait(1.0)
+			target = Nav.current.sliders["leg"]
+		"scan_share":
+			Nav.go("hub")
+			await _wait(0.3)
+			Share.open({"mode": "paste"})
+			await _wait(0.1)
+			target = Share.dlg.get_node("Field")
+	UI.kb_active = true
+	target.grab_focus()
+	if name == "scan_seat":
+		A11y.scan_sub = {"ctl": target, "i": 1}
+	A11y._scan_next = A11y.scan_t + 1e6
+	Nav.toast.timer = 0.0
+	await _wait(0.4)
+
+
 ## Коды и ссылки — те же состояния, что в ref_shots.py (share_resume — новое окно, эталона нет).
 func _share_shot(name: String) -> void:
 	if name == "share_paste" or Nav.current_name != "hub":
@@ -400,6 +449,9 @@ func _run() -> void:
 			Frames.want_loop("barty_wave")
 			Frames.flush()
 			await _wait(2.0)
+			await _shot(name)
+		elif name.begins_with("scan_"):
+			await _scan_shot(name)
 			await _shot(name)
 		elif name.begins_with("share_") or name == "hub_assign":
 			await _share_shot(name)

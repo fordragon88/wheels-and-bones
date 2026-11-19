@@ -222,6 +222,7 @@ func _build_dyn() -> void:
 			var tr := slider_rect(i)
 			s.position = tr.position - Vector2(15, 15)
 			s.size = tr.size + Vector2(30, 30)
+			s.set_meta("a11y_group", "Ползунки")
 			_dyn.add_child(s)
 			sliders[keys[i]] = s
 		var go := GameButton.make(BTN, "СЛЕДУЮЩИЙ КЛИЕНТ ▶" if solved else "ГОТОВО — ПРОВЕРИТЬ ПОСАДКУ",
@@ -268,6 +269,14 @@ func go_back() -> void:
 
 func text_cap() -> float:
 	return 1.25 if tab == "fit" else 0.0
+
+
+func a11y_sig() -> Array:
+	return [[tab], [case_i, lesson, quiz_i, quiz_done]]
+
+
+func a11y_lines() -> Array:
+	return [say]
 
 
 func summary() -> String:
@@ -468,8 +477,7 @@ func _lpose() -> Dictionary:
 func tick(_dt: float) -> void:
 	if say != _said:
 		_said = say
-		if Settings.a11y.get("voices", true):
-			Speech.say(Loc.t(say))
+		pass                                   # реплику Мортимера говорит A11y (a11y_lines)
 	_place_figure()
 	_back.queue_redraw()
 	_fg.queue_redraw()

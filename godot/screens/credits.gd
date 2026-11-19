@@ -27,12 +27,11 @@ func text_cap() -> float:
 
 
 func summary() -> String:
-	var out: PackedStringArray = [Loc.t("ТИТРЫ")]
+	var secs: Array = []
 	for sec: Dictionary in Content.credits:
-		out.append(Loc.t(sec.get("title", "")))
-		for ln: String in sec.get("lines", []):
-			out.append(Loc.t(ln))
-	return ". ".join(out)
+		secs.append(Loc.t(sec.get("title", "")) + ". " + " ".join((sec.get("lines", []) as Array).map(
+			func(x: String) -> String: return Loc.t(x))))
+	return Loc.t("Титры.") + " " + " ".join(secs) + " " + Loc.t("Esc — назад.")
 
 
 func toast_bounds() -> Vector2:

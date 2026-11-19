@@ -103,6 +103,15 @@ func _process(_dt: float) -> void:
 	_card.queue_redraw()
 
 
+## Подписи плиток для озвучки фокуса (a11y_items): «Насос, в руке. Накачать камеру…», группа «Инструменты».
+func update_a11y(sel: String) -> void:
+	for tid: String in tiles:
+		var b: GameButton = tiles[tid]
+		b.accessibility_name = Loc.t(Content.tools[tid]["name"]) + (", " + Loc.t("в руке") if tid == sel else "") + \
+			". " + Loc.t(Content.tools[tid]["hint"])
+		b.set_meta("a11y_group", "Инструменты")
+
+
 func _draw_tile(b: GameButton, _r: Rect2) -> void:
 	var tid: String = b.get_meta("tid")
 	var i: int = b.get_meta("i")
