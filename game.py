@@ -2246,9 +2246,11 @@ def share_decode(code):
 
 
 def _clean_line(s, n):
-    """Имя/заголовок из ссылки: одна строка печатных символов, не длиннее n."""
+    """Имя/заголовок из ссылки: одна строка печатных символов, не длиннее n.
+    После обрезки пробел на конце убираем ещё раз: иначе имя, обрезанное ровно на пробеле, при повторном разборе той же
+    ссылки давало другую строку — а значит другой номер задания, и прогресс задания «терялся»."""
     s = "".join(ch for ch in str(s or "") if ch.isprintable() and ch not in "​‌‍⁠﻿")
-    return re.sub(r"\s+", " ", s).strip()[:n]
+    return re.sub(r"\s+", " ", s).strip()[:n].rstrip()
 
 
 def progress_pack(g):
@@ -16142,6 +16144,11 @@ def run_selftest():
     if a and (assign_parse(parse_link(share_link(assign_params(a)))) != a
               or assign_parse(dict(assign_params(a), title="другое"))["id"] == a["id"]):
         failures.append("ссылка-задание: id не сохраняется по ссылке или не меняется от параметров")
+    edge = "И" * 39 + " Петров"                                 # 40-й знак — пробел: обрезка не должна оставлять его
+    a1 = assign_parse({"jobs": "flat", "from": edge, "title": "т" * 79 + " хвост"})
+    a2 = assign_parse(parse_link(share_link(assign_params(a1)))) if a1 else None
+    if not a1 or a1 != a2 or a1["from"] != "И" * 39 or a1["title"] != "т" * 79:
+        failures.append(f"ссылка-задание: имя/заголовок, обрезанные на пробеле, меняют номер задания ({a1} / {a2})")
     ga = Game(headless=True)
     ga.done = {"brake"}
     ga.apply_link("?jobs=flat,caster&seat=seat_elf&from=T")
