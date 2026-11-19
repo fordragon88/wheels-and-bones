@@ -13,6 +13,7 @@ var code: String = "ru"
 var audit: bool = false                # самопроверка: запоминать строки, у которых нет английского
 var misses: Dictionary = {}            # русская строка → что вышло по-английски (с кириллицей)
 var audited: Dictionary = {}           # все проверенные строки
+var user_text: Dictionary = {}         # текст игрока (имя и заголовок задания): кириллица в нём — не пропуск перевода
 
 var _tr: Dictionary = {}
 var _fmt: Array = []                   # [RegEx целиком, порядок {n}, en, RegEx внутри склейки | null]
@@ -107,7 +108,12 @@ func t(s: String) -> String:
 	if audit and s != "" and has_cyrillic(s):
 		audited[s] = true
 		var en := _translate(s)
-		if has_cyrillic(en):
+		var rest := en
+		var us: Array = user_text.keys()
+		us.sort_custom(func(x: String, y: String) -> bool: return x.length() > y.length())   # длинные — первыми
+		for u: String in us:
+			rest = rest.replace(u, "")
+		if has_cyrillic(rest):
 			misses[s] = en
 	if code == "ru" or s == "" or not has_cyrillic(s):
 		return s

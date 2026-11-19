@@ -3,6 +3,9 @@ extends Screen
 ## портрет в кружке, имя, поломка, РУЧНАЯ/ЭЛЕКТРО, отметка «✔ готово»), листание ◀ ▶ с точками страниц, Барти,
 ## кнопки «Кабинет посадки», «Гильдия колёсников», «Гараж-коллекция» (пока — заглушки с тем же видом),
 ## счётчик «Починено: N/21». При наведении/фокусе на карточке — записка клиента (с чем пришёл / спасибо).
+## Задание по ссылке (_draw_hub_assign): плашка «Задание от X: k/N», только назначенные поломки, справа — «Кабинет
+## посадки» (если в задании есть примерки), «Итог задания», «Выйти из задания». Запуск без ссылки при незаконченном
+## задании — вопрос «продолжить задание / обычная игра» (Share.maybe_ask_resume, просьба владельца).
 
 const COLS := 4
 const ROWS := 2
@@ -53,6 +56,57 @@ func build() -> void:
 		var g := Figure.make("ghost.png", Vector2(UI.W - 220, 120), Vector2(150, 200), "float", "barty_wave")
 		g.name = "Barty"
 		add_child(g)
+	if SaveGame.assign_on():
+		_build_assign()
+	else:
+		_build_normal()
+	_note = Control.new()
+	_note.name = "Note"
+	_note.size = size
+	_note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_note.draw.connect(_draw_note)
+	add_child(_note)
+	Chrome.add(self, true, true, true)
+	if params.get("summary", false):
+		params.erase("summary")
+		Share.maybe_summary.call_deferred(true)
+	else:
+		Share.maybe_ask_resume.call_deferred()
+
+
+## Задание по ссылке: «Кабинет посадки» (если есть примерки), «Итог задания», «Выйти из задания».
+func _build_assign() -> void:
+	var a := SaveGame.assign
+	if not (a["seat"] as Array).is_empty():
+		var k := 0
+		for c: String in a["seat"]:
+			if (a["done"] as Dictionary).has(c):
+				k += 1
+		var seat := GameButton.make(Rect2(UI.W - 360, UI.H - 290, 300, 54), "КАБИНЕТ ПОСАДКИ", UI.GOOD,
+			Loc.fmt("примерки {0}/{1}", [k, (a["seat"] as Array).size()]))
+		seat.name = "Seating"
+		seat.pressed.connect(func() -> void: Nav.go("seating"))
+		add_child(seat)
+	var res := GameButton.make(Rect2(UI.W - 360, UI.H - 220, 300, 54), "ИТОГ ЗАДАНИЯ", UI.CYAN,
+		"всё выполнено ✔" if SaveGame.assign_complete() else "что уже сделано")
+	res.name = "Summary"
+	res.pressed.connect(func() -> void: Share.open({"mode": "summary"}))
+	add_child(res)
+	var ex := GameButton.make(Rect2(UI.W - 360, UI.H - 150, 300, 54), "ВЫЙТИ ИЗ ЗАДАНИЯ", UI.PURPLE, "в обычную игру")
+	ex.name = "ExitAssign"
+	ex.pressed.connect(Share.exit_assignment)
+	add_child(ex)
+
+
+## Плашка задания: «Задание от Имя: 1/3» (_hub_assign_label).
+static func assign_label() -> String:
+	var a := SaveGame.assign
+	var n := Share.assign_items(a).size()
+	var k := (a["done"] as Dictionary).size()
+	return Loc.fmt("Задание от {0}: {1}/{2}", [a["from"], k, n]) if a.get("from", "") != "" else Loc.fmt("Задание: {0}/{1}", [k, n])
+
+
+func _build_normal() -> void:
 	var seat_ok := SaveGame.tutorial_ok()
 	var seat := GameButton.make(Rect2(UI.W - 360, UI.H - 290, 300, 54), "КАБИНЕТ ПОСАДКИ", UI.GOOD,
 		Loc.fmt("примерки {0}/{1}", [SaveGame.seat_done.size(), 9]) + (" · зачёт ✔" if SaveGame.seat_quiz_ok else "")
@@ -93,13 +147,6 @@ func build() -> void:
 			Audio.sfx("tick")
 			Nav.go("ending"))
 		add_child(party)
-	_note = Control.new()
-	_note.name = "Note"
-	_note.size = size
-	_note.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_note.draw.connect(_draw_note)
-	add_child(_note)
-	Chrome.add(self, true, true, true)
 
 
 @warning_ignore("integer_division")
@@ -117,6 +164,8 @@ func toast_bounds() -> Vector2:
 
 
 func summary() -> String:
+	if SaveGame.assign_on():
+		return Loc.t("Мастерская.") + " " + Loc.t(assign_label()) + ". " + 			Loc.t("Стрелки — выбрать клиента, Enter — взять заказ, Tab — другие разделы.")
 	return Loc.t("Мастерская") + ". " + Loc.t("Кто сегодня в очереди на ремонт:")
 
 
@@ -157,18 +206,45 @@ func _set_note(jid: String) -> void:
 
 
 func _draw_deco() -> void:
-	UI.draw_text(_deco, Loc.t("Кто сегодня в очереди на ремонт:"), Vector2(60, 86), 20, UI.WHITE, true)
+	var asg := SaveGame.assign_on()
+	if not asg:
+		UI.draw_text(_deco, Loc.t("Кто сегодня в очереди на ремонт:"), Vector2(60, 86), 20, UI.WHITE, true)
 	var pages := _pages()
 	if pages > 1:
 		var cx := (60 + 54 + 60 + 4 * 214 - 14 - 54) / 2.0
 		for k in pages:
 			_deco.draw_circle(Vector2(cx + (k - (pages - 1) / 2.0) * 22, 657), 6, UI.AMBER if k == page else UI.DIM,
 				true, -1, true)
+	if asg:
+		_draw_assign_plate()
+		UI.draw_text(_deco, Loc.t(assign_label() + "   ·   Esc — на титул/выход"), Vector2(60, UI.H - 40), 16, UI.GHOST)
+		return
 	var counter := Loc.fmt("Починено: {0}/{1}", [SaveGame.user_done_count(), Content.jobs.size()])
 	if SaveGame.guild_unlocked():
 		counter += Loc.fmt("   ·   Гильдия: {0}/{1}", [SaveGame.tech_done_count(), Content.tech_jobs.size()])
 	counter += "   ·   Esc — на титул/выход"
 	UI.draw_text(_deco, Loc.t(counter), Vector2(60, UI.H - 40), 16, UI.GHOST)
+
+
+func _fit(s: String, pos: Vector2, width: float, size_: int, col: Color, bold: bool = false) -> void:
+	var f: Array = UI.fit_text(s, width, size_, bold)
+	@warning_ignore("integer_division")
+	UI.draw_text(_deco, f[0], Vector2(pos.x, pos.y + (size_ - int(f[1])) / 2), f[1], col, bold)
+
+
+## Плашка задания по ссылке сверху (_draw_hub_assign).
+func _draw_assign_plate() -> void:
+	var a := SaveGame.assign
+	var plate := Rect2(56, 62, 4 * 214 - 10, 54)
+	UI.draw_round_rect(_deco, plate, Color8(24, 20, 30, 235), UI.GOOD, 2, 10)
+	_fit(Loc.t(assign_label()), plate.position + Vector2(16, 6), plate.size.x - 32, 20, UI.GOOD, true)
+	var sub := "Только эти задания, по порядку. Обычный прогресс не меняется."
+	if a.get("title", "") != "":
+		sub = "«%s» · Только эти задания, по порядку. Обычный прогресс не меняется." % a["title"]
+	_fit(Loc.t(sub), plate.position + Vector2(16, 32), plate.size.x - 32, 13, UI.GREY)
+	if (a["jobs"] as Array).is_empty():
+		UI.draw_wrapped(_deco, Loc.t("Поломок в задании нет — задание в Кабинете посадки (кнопка справа)."), Vector2(60, 160),
+			4 * 214 - 40, 18, UI.WHITE)
 
 
 ## Записка клиента у карточки (_draw_hub_note): с чем пришёл, после ремонта — спасибо.

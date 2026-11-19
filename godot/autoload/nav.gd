@@ -91,6 +91,9 @@ func go(name: String, p: Dictionary = {}, remember: bool = true) -> void:
 	current.params = p
 	current.screen_name = name
 	host.add_child(current)
+	if Share.dlg != null:                      # окно кодов поверх нового экрана (итог задания) — фокус у окна
+		UI.set_focus_enabled(host, false)
+		UI.focus_later(Share.dlg.first_focus())
 	Audio.scene(name, current.music_theme())
 	_esc_t = 0.0
 	Speech.say(current.summary(), true)
@@ -103,6 +106,9 @@ func back() -> void:
 		return
 	if feedback != null:
 		feedback.close()
+		return
+	if Share.dlg != null:
+		Share.dlg.escape()
 		return
 	if settings != null:
 		close_settings()
@@ -198,6 +204,30 @@ func toggle_help() -> void:
 	overlay.get_node("Top").add_child(help)
 
 
+## Модальное окно поверх экрана (и поверх настроек): окно кодов и ссылок.
+func show_modal(c: Control) -> void:
+	UI.set_focus_enabled(host, false)
+	if settings != null:
+		UI.set_focus_enabled(settings, false)
+	overlay.get_node("Top").add_child(c)
+	overlay.get_node("Top").move_child(toast, -1)
+	if c.has_method("first_focus"):
+		UI.focus_later(c.call("first_focus"))
+
+
+func hide_modal(c: Control) -> void:
+	if c.get_parent():
+		c.get_parent().remove_child(c)
+	c.queue_free()
+	if settings != null:
+		UI.set_focus_enabled(settings, true)
+		UI.focus_later(settings.first_focus())
+	else:
+		UI.set_focus_enabled(host, true)
+		if current != null:
+			current._focus_default()
+
+
 func close_settings() -> void:
 	if settings != null:
 		settings.close()
@@ -226,7 +256,7 @@ func _process(dt: float) -> void:
 		toast.bounds = current.toast_bounds()
 	# потолок крупного текста 125 % (text_cap в game.py): плотные экраны, окно настроек, окно мини-игры
 	var cap: float = current.text_cap() if current != null else 0.0
-	if settings != null or (current != null and current.get("mini") != null):
+	if settings != null or Share.dlg != null or (current != null and current.get("mini") != null):
 		cap = 1.25
 	if cap != Settings.text_cap:              # подписи кнопок рисуются один раз — перерисовать всё новым размером
 		Settings.text_cap = cap
@@ -268,6 +298,11 @@ func _unhandled_input(e: InputEvent) -> void:
 		if feedback != null:
 			if k.keycode == KEY_ESCAPE:
 				feedback.close()
+				get_viewport().set_input_as_handled()
+			return
+		if Share.dlg != null:
+			if k.keycode == KEY_ESCAPE and not k.echo:
+				Share.dlg.escape()
 				get_viewport().set_input_as_handled()
 			return
 		if settings != null:

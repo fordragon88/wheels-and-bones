@@ -28,6 +28,7 @@ var solved: bool = false
 var demo_good: bool = false
 var view: String = "side"
 var fails: int = 0
+var case_t0: float = 0.0                  # начало примерки (время пункта задания по ссылке)
 var say: String = ""
 var fix_t0: float = -99.0
 var quiz: Array = []                      # вопросы зачёта с перемешанными вариантами (верный — не всегда первым)
@@ -49,7 +50,7 @@ func _init() -> void:
 	super._init()
 	quiz = Content.seating.get("quiz", []).duplicate(true)
 	_shuffle_quiz()
-	load_case(0)
+	load_case(SaveGame.seat_idx()[0])
 	say = mentor("intro")
 
 
@@ -80,6 +81,7 @@ func load_case(i: int) -> void:
 	view = str(c.get("view", "side"))
 	focus_key = ""
 	fails = 0
+	case_t0 = t
 	say = mentor("view_" + str(c["view"])) if c.get("view") else mentor("fit")
 
 
@@ -191,9 +193,11 @@ func _build_dyn() -> void:
 				_dyn.add_child(tg)
 				break
 	elif tab == "fit":
-		for i in cases().size():
-			var done := SaveGame.seat_done.has(cases()[i]["id"])
-			var b := GameButton.make(list_rect(i), "", UI.GOOD if done else UI.CYAN)
+		var idx := SaveGame.seat_idx()               # в задании по ссылке — только назначенные примерки
+		for n in idx.size():
+			var i: int = idx[n]
+			var done := SaveGame.is_done(cases()[i]["id"])
+			var b := GameButton.make(list_rect(n), "", UI.GOOD if done else UI.CYAN)
 			b.name = "Case_%d" % i
 			b.active = i == case_i
 			b.set_meta("i", i)
@@ -366,7 +370,8 @@ func _update_slider_a11y() -> void:
 func check_fit() -> void:
 	var c: Dictionary = cases()[case_i]
 	if solved:
-		load_case((case_i + 1) % cases().size())
+		var idx := SaveGame.seat_idx()
+		load_case(idx[(idx.find(case_i) + 1) % idx.size()] if case_i in idx else idx[0])
 		refresh()
 		return
 	var checks: Array = SeatLogic.seat_eval(c, cfg)[0]
@@ -382,12 +387,16 @@ func check_fit() -> void:
 	else:
 		solved = true
 		say = mentor("solved")
-		SaveGame.seat_done[c["id"]] = true
-		SaveGame.save()
+		if SaveGame.assign_on():               # задание по ссылке: обычный прогресс не трогаем
+			SaveGame.assign_record(c["id"], fails, int(t - case_t0))
+		else:
+			SaveGame.seat_done[c["id"]] = true
+			SaveGame.save()
 		Audio.sfx("fanfare")
 		Nav.flash(c["fact"], UI.GOOD, 6)
 		drag = ""
 		refresh()
+		Share.maybe_summary()
 
 
 func quiz_pick(i: int) -> void:
@@ -418,8 +427,9 @@ func quiz_next() -> void:
 		var ok := score >= SeatLogic.QUIZ_PASS
 		say = mentor("pass" if ok else "nopass")
 		if ok:
-			SaveGame.seat_quiz_ok = true
-			SaveGame.save()
+			if not SaveGame.assign_on():
+				SaveGame.seat_quiz_ok = true
+				SaveGame.save()
 			Audio.sfx("fanfare")
 	refresh()
 	UI.focus_later((_dyn.get_node_or_null("Again") if quiz_done else _dyn.get_node_or_null("Opt_0")) as Control)
@@ -777,7 +787,7 @@ func _draw_lesson_btn(b: GameButton, r: Rect2) -> void:
 
 func _draw_case_btn(b: GameButton, r: Rect2) -> void:
 	var i := int(b.get_meta("i"))
-	var done := SaveGame.seat_done.has(cases()[i]["id"])
+	var done := SaveGame.is_done(cases()[i]["id"])
 	_fit(b, ("✔ " if done else "") + Loc.t(cases()[i]["client"]), r.position + Vector2(10, 8), r.size.x - 20, 14, UI.WHITE)
 
 

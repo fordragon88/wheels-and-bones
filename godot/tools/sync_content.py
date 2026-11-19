@@ -179,6 +179,7 @@ def game_tables():
         feedback_ref(game)
         guild_ref(game)
         seat_ref(game)
+        share_ref(game)
         consts = {"version": game.GAME_VERSION, "width": game.WIDTH, "height": game.HEIGHT,
                   "colors": {k: list(getattr(game, k)) for k in ("BG", "PANEL", "PANEL2", "WOOD", "GHOST", "AMBER", "RUST",
                                                                  "GOOD", "BAD", "CYAN", "PURPLE", "WHITE", "GREY", "DIM")
@@ -195,6 +196,8 @@ def game_tables():
                           "zoom": list(G.M3D_ZOOM)},
                   "support_url": game.SUPPORT_URL,
                   "feedback_url": feedback_url(), "feedback_key": game.FEEDBACK_KEY,
+                  "share": {"base_url": game.SHARE_BASE_URL, "direct_url": game.SHARE_DIRECT_URL,
+                            "result_salt": game.RESULT_SALT, "max": game.SHARE_MAX, "params": list(game.SHARE_PARAMS)},
                   "feedback_reasons": list(G.FEEDBACK_REASONS), "dispute_reasons": list(G.DISPUTE_REASONS),
                   "rank_names": ["Ученик Гильдии", "Младший подмастерье", "Подмастерье", "Старший подмастерье"],
                   "tt_spin": G.TT_SPIN,
@@ -460,6 +463,141 @@ def seat_ref(game):
         p.pop(k, None)
     out["feedback"] = p
     json.dump(out, open(os.path.join(DST, "seat_ref.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
+
+def share_ref(game):
+    """Эталон кодов и ссылок (docs/SHARE_LINKS.md): game.py сама выдаёт коды прогресса (P), задания (J), результата (R)
+    и разбирает их; ссылки и их разбор; битые коды; итог задания (текст, строка, запрос «Отправить в таблицу»).
+    Пишет content/share_ref.json — selftest Godot читает эти коды; обратное направление — tools/check_share.py."""
+    G = game.Game
+    out = {"progress": [], "assign": [], "result": [], "links": [], "bad": [], "head": [], "texts": {}}
+
+    def norm_p(p):
+        return None if p is None else {"done": sorted(p["done"]), "garage": [list(x) for x in p["garage"]],
+                                       "exam_passed": p["exam_passed"], "seat_done": sorted(p["seat_done"]),
+                                       "seat_quiz_ok": p["seat_quiz_ok"], "tutorial_skipped": p["tutorial_skipped"]}
+
+    jobs = [j["id"] for j in game.JOBS]
+    tech = [j["id"] for j in game.TECH_JOBS]
+    seats = [c["id"] for c in game.SEAT_CASES]
+    states = [
+        ("пустой", dict(done=set(), garage=[], exam_passed=False, seat_done=set(), seat_quiz_ok=False, tutorial_skipped=False)),
+        ("обучение пропущено", dict(done=set(), garage=[], exam_passed=False, seat_done=set(), seat_quiz_ok=False,
+                                    tutorial_skipped=True)),
+        ("несколько ремонтов", dict(done={"flat", "brake", "spokes"}, garage=[("flat", 3), ("brake", 1), ("spokes", 2)],
+                                    exam_passed=False, seat_done={"seat_elf"}, seat_quiz_ok=False, tutorial_skipped=False)),
+        ("полный", dict(done=set(jobs) | set(tech), garage=[(j, 1 + i % 3) for i, j in enumerate(jobs)], exam_passed=True,
+                        seat_done=set(seats), seat_quiz_ok=True, tutorial_skipped=True)),
+        ("Гильдия и посадка", dict(done=set(jobs[:6]) | set(tech[:3]), garage=[(j, 3) for j in jobs[:6]], exam_passed=False,
+                                   seat_done=set(seats[:4]), seat_quiz_ok=True, tutorial_skipped=False)),
+    ]
+    for name, st in states:
+        g = G(headless=True)
+        for k, v in st.items():
+            setattr(g, k, v)
+        data = game.progress_pack(g)
+        code = game.share_encode("P", data)
+        kind, back = game.share_decode(code)
+        out["progress"].append({"name": name, "code": code, "data": back, "unpack": norm_p(game.progress_unpack(back))})
+    # распаковка с мусором: неизвестные id, повторы, звёзды вне 1..3, не-bool флаги
+    junk = {"v": 1, "d": ["flat", "nope", 5, "brake"], "g": [["flat", 7], ["flat", 1], ["x", 2], ["brake", 0], "bad"],
+            "e": 1, "s": ["seat_elf", "seat_x"], "q": True, "t": "yes"}
+    out["progress"].append({"name": "мусор", "code": game.share_encode("P", junk), "data": junk,
+                            "unpack": norm_p(game.progress_unpack(junk))})
+    params = [
+        {"jobs": "flat,caster,brake"},
+        {"seat": "seat_troll,seat_elf"},
+        {"jobs": "spokes,flat", "seat": "seat_owl", "from": "Анна Петровна", "title": "Неделя 1: колёса и посадка"},
+        {"jobs": "flat, flat;caster nope", "seat": "seat_x,seat_elf", "from": "  Учитель\tМария  ", "title": "  "},
+        {"jobs": "lift,joystick", "from": "Ms. O'Neil & \"Co\" <b>", "title": "Unit 2 — power chairs / тест"},
+        {"jobs": "nope"},
+        {"jobs": ",".join(jobs), "seat": ",".join(seats), "from": "Очень длинное имя учителя, которое явно длиннее сорока знаков",
+         "title": "Т" * 100},
+    ]
+    for p in params:
+        a = game.assign_parse(p)
+        row = {"params": p, "assign": a}
+        if a is not None:
+            row["code"] = game.assign_code(a)
+            row["link_params"] = game.assign_params(a)
+            row["link"] = game.share_link(game.assign_params(a))
+            row["link_back"] = game.parse_link(row["link"])
+            kind, d = game.share_decode(row["code"])
+            row["data"] = d
+            row["from_code"] = game.assign_parse({"jobs": d.get("j"), "seat": d.get("s"), "from": d.get("f"),
+                                                  "title": d.get("ti")})
+            row["head"] = game.assign_head(a["from"], a["title"])
+        out["assign"].append(row)
+    # итоги: без ошибок, с ошибками, частичный
+    for name, a_params, rec in (
+            ("без ошибок", {"jobs": "flat,caster", "from": "T"}, [("flat", 0, 61), ("caster", 0, 125)]),
+            ("с ошибками", {"jobs": "brake", "seat": "seat_elf,seat_orc", "from": "Анна", "title": "Урок 3"},
+             [("brake", 4, 300), ("seat_elf", 2, 61), ("seat_orc", 0, 3601)]),
+            ("частичный", {"jobs": "spokes,lift,joystick", "seat": "seat_troll", "title": "Домашка"},
+             [("lift", 1, 90)]),
+            ("пустой", {"seat": "seat_owl"}, [])):
+        g = G(headless=True)
+        a = game.assign_parse(a_params)
+        g.start_assignment(a)
+        for k, e, s in rec:
+            g.assign_record(k, e, s)
+        code = game.result_code(g.assign)
+        kind, d = game.share_decode(code)
+        res = game.result_unpack(d)
+        texts = {}
+        for lang in ("ru", "en"):
+            game.set_lang(lang)
+            texts[lang] = {"text": game.result_text(res, code), "summary": game.result_summary(res["rows"]),
+                           "head": game.assign_head(res["from"], res["title"]),
+                           "labels": {k: game.share_item_label(k) for k in game.assign_items(a)}}
+        game.set_lang("ru")
+        out["result"].append({"name": name, "assign": {k: g.assign[k] for k in ("id", "jobs", "seat", "from", "title", "done",
+                                                                                  "errors", "secs", "active", "sent")},
+                              "code": code, "data": d, "unpack": {**res, "rows": [list(r) for r in res["rows"]]},
+                              "texts": texts})
+        if name == "с ошибками":                        # «Отправить в таблицу»: поля как у send_result
+            url0 = game.FEEDBACK_URL
+            game.FEEDBACK_URL = "test"
+            try:
+                g.send_result()
+            finally:
+                game.FEEDBACK_URL = url0
+            p = dict(g.feedback_mem[-1])
+            for k in ("time", "platform"):
+                p.pop(k, None)
+            out["payload"] = p
+            out["payload_sent_after"] = g.assign["sent"]
+    links = ["https://www.openassistivetech.org/wheels-and-bones/?jobs=flat,caster&seat=seat_elf&from=Anna&title=Week%201",
+             "?jobs=flat%2Cbrake&from=%D0%90%D0%BD%D0%BD%D0%B0+%D0%9F.&title=a%26b",
+             "jobs=spokes&jobs=lift#frag", "https://example.org/", "?foo=bar&load=", "?load=" + out["progress"][2]["code"],
+             "?from=X&title=Y", "  ?seat=seat_owl ;  "]
+    for s in links:
+        p = game.parse_link(s)
+        out["links"].append({"text": s, "params": p, "assign": game.assign_parse(p) if p else None})
+    good = out["progress"][2]["code"]
+    k_, body, crc = good.split(".")
+    bad = ["", "P", "P..", good[:-1], good[:-1] + ("0" if good[-1] != "0" else "1"), "X." + body + "." + crc,
+           "J." + body + "." + crc, k_ + "." + body[:-4] + "." + crc, k_ + "." + body + "!." + crc,
+           game.share_encode("P", {"v": 2, "d": []}), game.share_encode("R", {"v": 1})[:-3] + "zzz",
+           "R." + game.share_encode("R", {"v": 1, "a": "x"}).split(".")[1] + "." +
+           game._share_crc("P", game.share_encode("R", {"v": 1, "a": "x"}).split(".")[1]),
+           "P." + "A" * 9000 + ".000000", "P.eJw.000000", "J." + game._b64u(b"not zlib") + "." + game._share_crc("J", game._b64u(b"not zlib")),
+           ]
+    for b in bad:
+        out["bad"].append({"code": b, "decoded": game.share_decode(b)})
+    # пробелы, переносы и кавычки вокруг кода — игнорируются
+    spaced = "«" + " ".join(good[i:i + 6] for i in range(0, len(good), 6)) + "»\n"
+    out["spaced"] = {"code": spaced, "decoded": game.share_decode(spaced)}
+    # разбор кода результата с битыми строками
+    out["result_bad"] = [{"data": d, "unpack": game.result_unpack(d)} for d in (
+        {"v": 1, "a": "x", "it": ["flat"], "r": [["flat", "2", 3.9]]}, {"v": 1, "it": ["flat"], "r": [["flat", None, 1]]},
+        {"v": 1, "a": 5, "f": None, "it": ["flat", "seat_elf"], "r": []}, {"v": 1, "it": 3, "r": []})]
+    for r in out["result_bad"]:
+        if r["unpack"]:
+            r["unpack"] = {**r["unpack"], "rows": [list(x) for x in r["unpack"]["rows"]]}
+    out["base_url"] = game.SHARE_BASE_URL
+    out["fmt_secs"] = {str(s): game.fmt_secs(s) for s in (0, 5, 61, 600, 3601)}
+    json.dump(out, open(os.path.join(DST, "share_ref.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
 def main():

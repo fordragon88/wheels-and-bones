@@ -14,7 +14,8 @@ const ALL := ["title", "title_en", "hub", "job_flat_diagnose", "job_flat_inspect
 	"seat_lesson_measure", "seat_fit_troll", "seat_fit_troll_good", "seat_fit_golem", "seat_fit_dryad_side", "seat_quiz_q1",
 	"seat_quiz_mid", "seat_quiz_wrong", "seat_quiz_right", "seat_quiz_myth", "seat_quiz_pass", "seat_fit_dryad",
 	"seat_fit_dryad_good", "seat_fit_owl", "seat_fit_owl_good", "seat_fit_orc", "seat_fit_orc_good", "seat_lesson_front",
-	"seat_lesson_front_norm", "seat_quiz_wedge", "seat_quiz_wedge_after", "seat_quiz_pads", "seat_quiz_pads_after"]
+	"seat_lesson_front_norm", "seat_quiz_wedge", "seat_quiz_wedge_after", "seat_quiz_pads", "seat_quiz_pads_after",
+	"share_paste", "share_confirm", "share_builder", "hub_assign", "share_summary", "share_result", "share_resume"]
 
 var out_dir := ""
 
@@ -260,6 +261,54 @@ func _seat_shot(name: String) -> void:
 	Nav.toast.timer = 0.0
 
 
+## Коды и ссылки — те же состояния, что в ref_shots.py (share_resume — новое окно, эталона нет).
+func _share_shot(name: String) -> void:
+	if name == "share_paste" or Nav.current_name != "hub":
+		SaveGame.reset()
+		for j: String in ["flat", "brake", "spokes"]:
+			SaveGame.done[j] = true
+		SaveGame.garage = [["flat", 3], ["brake", 2], ["spokes", 1]]
+		SaveGame.seat_done["seat_elf"] = true
+		Share.resume_asked = true
+		Nav.go("hub")
+		await _wait(0.5)
+	match name:
+		"share_paste":
+			Share.open({"mode": "paste", "text": Share.encode("P", Share.progress_pack())})
+		"share_confirm":
+			Share.dlg_action(Share.dlg, "apply")
+		"share_builder":
+			Share.open({"mode": "builder", "sel": ["spokes", "caster", "seat_elf"], "name": "Анна"})
+		"hub_assign":
+			Share._close_dlg()
+			Share.start_assignment(Share.assign_parse({"jobs": "spokes,caster,lift", "seat": "seat_elf", "from": "Анна",
+				"title": "Неделя 1"}))
+			SaveGame.assign_record("spokes", 2, 95)
+			Nav.go("hub")
+			await _wait(1.5)
+		"share_summary":
+			for r: Array in [["caster", 0, 61], ["lift", 1, 200], ["seat_elf", 3, 75]]:
+				SaveGame.assign_record(r[0], r[1], r[2])
+			Share.open({"mode": "summary"})
+		"share_result":
+			var res := Share.assign_result()
+			Share._close_dlg()
+			SaveGame.exit_assignment()
+			Nav.go("hub")
+			await _wait(0.4)
+			Share.open({"mode": "result", "res": res})
+		"share_resume":
+			Share._close_dlg()
+			SaveGame.assign["active"] = true
+			SaveGame.assign["done"].erase("seat_elf")
+			Share.resume_asked = false
+			Share.link_launch = false
+			Nav.go("hub")
+			await _wait(0.4)
+	Nav.toast.timer = 0.0
+	await _wait(0.5)
+
+
 ## Верная посадка перебором по одному ползунку (как seat_solve в ref_shots.py).
 func _seat_solve(c: Dictionary, keys: Array, cfg0: Dictionary) -> Dictionary:
 	var cfg := cfg0.duplicate()
@@ -351,6 +400,9 @@ func _run() -> void:
 			Frames.want_loop("barty_wave")
 			Frames.flush()
 			await _wait(2.0)
+			await _shot(name)
+		elif name.begins_with("share_") or name == "hub_assign":
+			await _share_shot(name)
 			await _shot(name)
 		elif name.begins_with("seat_"):
 			await _seat_shot(name)

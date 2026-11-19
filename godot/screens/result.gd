@@ -56,7 +56,7 @@ func build() -> void:
 		_leg = LegGag.make(kinds[gags.find(gag) % kinds.size()], Rect2(260, 500, 760, 100))
 		add_child(_leg)
 	_btn = GameButton.make(Rect2(UI.W / 2.0 - 150, UI.H - 110, 300, 56),
-		"В ГИЛЬДИЮ" if job.get("track") == "tech" else ("НА ВЕЧЕРИНКУ" if party_next() else "В МАСТЕРСКУЮ"), UI.AMBER)
+		_next_label(), UI.AMBER)
 	_btn.name = "ToHub"
 	_btn.pressed.connect(func() -> void:
 		Audio.sfx("tick")
@@ -74,6 +74,14 @@ func summary() -> String:
 		Loc.t("ЧТО ТЫ УЗНАЛ (по-настоящему):") + " " + Loc.t(job.get("fact", ""))
 
 
+func _next_label() -> String:
+	if job.get("track") == "tech":
+		return "В ГИЛЬДИЮ"
+	if SaveGame.assign_on():
+		return "К ИТОГУ ЗАДАНИЯ" if SaveGame.assign_complete() else "В МАСТЕРСКУЮ"
+	return "НА ВЕЧЕРИНКУ" if party_next() else "В МАСТЕРСКУЮ"
+
+
 ## Вечеринка — один раз, после последнего ремонта (_party_next); переигрывание ведёт в мастерскую.
 func party_next() -> bool:
 	return SaveGame.user_done_count() >= Content.jobs.size() and not SaveGame.ending_seen
@@ -82,6 +90,9 @@ func party_next() -> bool:
 func go_back() -> void:
 	if job.get("track") == "tech":
 		Nav.go("guild")
+		return
+	if SaveGame.assign_on():                  # задание по ссылке: вечеринки и Гильдии нет, всё выполнено — итог
+		Nav.go("hub", {"summary": true})
 		return
 	if party_next():
 		SaveGame.ending_seen = true

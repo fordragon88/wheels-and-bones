@@ -6,7 +6,8 @@ extends Control
 ##             в Godot нет: картинка всегда в разрешении экрана — пункты не показываются.)
 ##   ДОСТУПНОСТЬ — озвучка, реплики вслух, скорость голоса (значения хранятся, сама озвучка — позже), контрастный
 ##             фон, текст сразу, без анимации, клиент: одна фраза, призрак Барти, размер текста, лёгкий шрифт.
-##   ИГРА — прогресс и «СБРОСИТЬ ПРОГРЕСС» с подтверждением. (Коды и ссылки-задания — позже.)
+##   ИГРА — прогресс, коды и ссылки (_share_set_rects: «СКОПИРОВАТЬ КОД», «ВСТАВИТЬ КОД», «ССЫЛКА-ЗАДАНИЕ», в браузере —
+##             «ССЫЛКА С ПРОГРЕССОМ», «ВЕРНУТЬ ПРЕЖНИЙ ПРОГРЕСС», пока есть копия) и «СБРОСИТЬ ПРОГРЕСС» с подтверждением.
 ## Справа — карточка «что делает эта настройка» (наведение или фокус). Esc / «ГОТОВО» — закрыть.
 
 signal closed
@@ -18,6 +19,8 @@ const ACCESS_ROWS := ["on", "voices", "rate", "contrast", "instant", "calm", "qu
 const ACCESS_NAMES := {"on": "Озвучка (F2)", "voices": "Реплики героев вслух", "rate": "Скорость голоса",
 	"contrast": "Контрастный фон", "instant": "Текст сразу", "calm": "Без анимации", "quiet": "Клиент: одна фраза",
 	"barty": "Призрак Барти", "text": "Размер текста", "font": "Лёгкий шрифт"}
+const SHARE_LABELS := {"share_code": "СКОПИРОВАТЬ КОД", "share_paste": "ВСТАВИТЬ КОД", "share_build": "ССЫЛКА-ЗАДАНИЕ",
+	"share_link": "ССЫЛКА С ПРОГРЕССОМ", "share_restore": "ВЕРНУТЬ ПРЕЖНИЙ ПРОГРЕСС"}
 const VOL_NAMES := {"master": "Общая громкость", "music": "Музыка", "sfx": "Эффекты", "amb": "Атмосфера сцен"}
 
 static var tab: String = "sound"
@@ -137,6 +140,20 @@ func _build() -> void:
 				b.accessibility_name = _access_label(k)
 				_zones.append(["acc_" + k, Rect2(P.position.x + 24, r.position.y - 1, r.end.x - P.position.x - 24, r.size.y + 2), b])
 		"game":
+			@warning_ignore("integer_division")
+			var sw := int((P.size.x - 64 - 12) / 2)
+			var col := func(i: int) -> float: return P.position.x + 32 + i * (sw + 12)
+			var specs: Array = [["share_code", Rect2(col.call(0), P.position.y + 212, sw, 40)],
+				["share_paste", Rect2(col.call(1), P.position.y + 212, sw, 40)],
+				["share_build", Rect2(col.call(0), P.position.y + 258, sw, 40)]]
+			if OS.has_feature("web"):
+				specs.append(["share_link", Rect2(col.call(1), P.position.y + 258, sw, 40)])
+			if SaveGame.has_backup() and not reset_ask:
+				specs.append(["share_restore", Rect2(col.call(0), P.position.y + 304, P.size.x - 64, 40)])
+			for sp: Array in specs:
+				var k: String = sp[0]
+				_btn("Share_" + k.trim_prefix("share_"), sp[1], SHARE_LABELS[k], UI.PURPLE if k == "share_restore" else UI.CYAN,
+					_share_action.bind(k))
 			if reset_ask:
 				var w := (P.size.x - 80) / 2
 				_btn("ResetYes", Rect2(P.position.x + 32, P.position.y + 352, w, 42), "ДА, СБРОСИТЬ", UI.BAD, reset_progress)
@@ -162,6 +179,26 @@ func _build() -> void:
 	_help.draw.connect(_draw_help)
 	add_child(_help)
 	queue_redraw()
+
+
+## Кнопки кодов и ссылок вкладки «ИГРА» (_share_set_action).
+func _share_action(k: String) -> void:
+	match k:
+		"share_code":
+			Share.copy_progress_code()
+		"share_paste":
+			Share.open({"mode": "paste"})
+		"share_build":
+			Share.open({"mode": "builder"})
+		"share_link":
+			Share.copy_progress_link()
+		"share_restore":
+			SaveGame.restore_backup()
+			Audio.sfx("whoosh")
+			close()
+			if Nav.current_name != "title":
+				Nav.go("hub")
+			Nav.flash("Прежний прогресс возвращён.", UI.GOOD, 4.0)
 
 
 func _access_on(k: String) -> bool:
@@ -231,7 +268,7 @@ func _access_toggle(k: String) -> void:
 
 func reset_progress() -> void:
 	reset_ask = false
-	SaveGame.reset()
+	SaveGame.reset_progress()
 	SaveGame.save()
 	close()
 	Audio.sfx("whoosh")

@@ -169,6 +169,12 @@ func _run() -> void:
 	await _flow_guild_feedback()
 	var seat_n: Array = await _seat_logic()
 	var seat_line: String = await _flow_seating()
+	var lang_sh := Loc.code
+	var sh: Array = await _share_codes()
+	await _flow_share_progress()
+	var sh_line: String = await _flow_share_assign()
+	_share_write_out()
+	Loc.code = lang_sh
 	Loc.audit = false
 	var n_audit: int = Loc.audited.size()
 	var dump := OS.get_cmdline_user_args().find("--dump-tr")
@@ -201,7 +207,7 @@ func _run() -> void:
 	SaveGame.reset()
 	await _flow_mouse()
 	await _flow_keyboard()
-	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, n_gd, n_audit,
+	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; Коды и ссылки: кодов game.py прочитано %d (P/J/R, те же данные), битых отвергнуто %d, ссылок и разборов = game.py %d, своих кодов и ссылок для check_share.py %d; прогресс: копировать → сбросить → вставить → тот же, «вернуть прежний»; %s; «продолжить / обычная игра»; итог в таблицу = game.py (в сеть — ничего); %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, sh[0], sh[1], sh[2], share_out.size(), sh_line, n_gd, n_audit,
 		"" if _drawn > 0 else " (без окна _draw не вызывается — проверены строки данных и обработчиков)"],
 		n_jobs, n_var, n_tech)
 
@@ -1677,3 +1683,514 @@ func _flow_seating() -> String:
 		if not sb.sub.contains("%d/%d" % [n_cases, n_cases]) or not sb.sub.contains("зачёт ✔"):
 			err("посадка: на кнопке мастерской «%s»" % sb.sub)
 	return "уроки %d/%d (норма — у %d), виды спереди: урок и вопросы зачёта — %d, примерки %d/%d (особые клиенты спереди/сверху и сбоку: %d — клавиатурой, щелчками и перетаскиванием, как и обычные), зачёт (провал 0/%d и сдача %d/%d)" % [n_les, n_les, n_toggle, n_front, SaveGame.seat_done.size(), n_cases, n_views, nq, nq, nq]
+
+
+# ======================= Коды и ссылки =======================
+
+const SHARE_OUT := "res://tests/out/share_godot.json"
+var share_out: Array = []                  # коды и ссылки Godot — для tools/check_share.py (обратное направление)
+
+
+func _shref() -> Dictionary:
+	if not FileAccess.file_exists("res://content/share_ref.json"):
+		err("нет content/share_ref.json — запусти tools/sync_content.py")
+		return {}
+	return JSON.parse_string(FileAccess.get_file_as_string("res://content/share_ref.json"))
+
+
+## Коды game.py → Godot: каждый эталонный код читается и даёт те же данные, битые отвергаются; тексты итога, ссылки,
+## разбор ссылок — как у game.py. Godot пишет свои коды и ссылки в tests/out для check_share.py.
+## Возврат: [кодов прочитано, битых отвергнуто, ссылок совпало, своих выдано].
+func _share_codes() -> Array:
+	var ref := _shref()
+	if ref.is_empty():
+		return [0, 0, 0, 0]
+	var lang0 := Loc.code
+	Loc.code = "ru"
+	var n_read := 0
+	var n_links := 0
+	for p: Dictionary in ref["progress"]:
+		var got := Share.decode(p["code"])
+		if got.size() != 2 or got[0] != "P" or not _same(got[1], p["data"]):
+			err("код прогресса «%s» не прочитан как в game.py: %s" % [p["name"], got])
+			continue
+		n_read += 1
+		if not _same(Share.progress_unpack(got[1]), p["unpack"]):
+			err("код прогресса «%s»: распаковка %s, в game.py %s" % [p["name"], Share.progress_unpack(got[1]), p["unpack"]])
+		share_out.append({"what": "code", "kind": "P", "code": Share.encode("P", p["data"]), "data": p["data"]})
+	for row: Dictionary in ref["assign"]:
+		var a := Share.assign_parse(row["params"])
+		if row["assign"] == null:
+			if not a.is_empty():
+				err("задание %s: в game.py не принимается, у нас — %s" % [row["params"], a])
+			continue
+		if not _same(a, row["assign"]):
+			err("задание %s: %s, в game.py %s" % [row["params"], a, row["assign"]])
+			continue
+		var got := Share.decode(row["code"])
+		if got.size() != 2 or got[0] != "J" or not _same(got[1], row["data"]):
+			err("код задания %s не прочитан как в game.py" % row["code"])
+		else:
+			n_read += 1
+			var d: Dictionary = got[1]
+			var fc := Share.assign_parse({"jobs": d.get("j"), "seat": d.get("s"), "from": d.get("f"), "title": d.get("ti")})
+			if not _same(fc, row["from_code"]):
+				err("задание из кода: %s, в game.py %s" % [fc, row["from_code"]])
+		var link := Share.share_link(Share.assign_params(a))
+		if link != row["link"]:
+			err("ссылка-задание:\n    godot  %s\n    pygame %s" % [link, row["link"]])
+		else:
+			n_links += 1
+		if not _same(Share.parse_link(link), row["link_back"]):
+			err("разбор ссылки %s: %s, в game.py %s" % [link, Share.parse_link(link), row["link_back"]])
+		if Share.assign_head(a["from"], a["title"]) != row["head"]:
+			err("заголовок задания «%s», в game.py «%s»" % [Share.assign_head(a["from"], a["title"]), row["head"]])
+		share_out.append({"what": "code", "kind": "J", "code": Share.assign_code(a), "data": row["data"]})
+		share_out.append({"what": "link", "link": link, "params": row["link_back"],
+			"assign": Share.assign_parse(Share.parse_link(link))})
+	for r: Dictionary in ref["result"]:
+		var got := Share.decode(r["code"])
+		if got.size() != 2 or got[0] != "R" or not _same(got[1], r["data"]):
+			err("код результата «%s» не прочитан как в game.py" % r["name"])
+			continue
+		n_read += 1
+		var res := Share.result_unpack(got[1])
+		if not _same(res, r["unpack"]):
+			err("результат «%s»: %s, в game.py %s" % [r["name"], res, r["unpack"]])
+		var st: Dictionary = r["assign"]
+		if not _same(Share.result_pack(st), r["data"]):
+			err("результат «%s»: данные кода %s, в game.py %s" % [r["name"], Share.result_pack(st), r["data"]])
+		for lang: String in ["ru", "en"]:
+			var want: Dictionary = r["texts"][lang]
+			Loc.code = lang
+			if Share.result_text(res, r["code"]) != want["text"]:
+				err("итог текстом (%s, «%s»):\n    godot  %s\n    pygame %s" % [lang, r["name"], Share.result_text(res, r["code"]),
+					want["text"]])
+			if Share.result_summary(res["rows"]) != want["summary"] or Share.assign_head(res["from"], res["title"]) != want["head"]:
+				err("итог (%s, «%s»): строка или заголовок не как в game.py" % [lang, r["name"]])
+			for k: String in want["labels"]:
+				if Share.item_label(k) != want["labels"][k]:
+					err("подпись пункта %s (%s): «%s», в game.py «%s»" % [k, lang, Share.item_label(k), want["labels"][k]])
+			Loc.code = "ru"
+		share_out.append({"what": "code", "kind": "R", "code": Share.result_code(st), "data": r["data"]})
+	for l: Dictionary in ref["links"]:
+		var p := Share.parse_link(l["text"])
+		var a := Share.assign_parse(p) if not p.is_empty() else {}
+		if not _same(p, l["params"]) or (l["assign"] == null) != a.is_empty() or (l["assign"] != null and not _same(a, l["assign"])):
+			err("разбор ссылки «%s»: %s / %s, в game.py %s / %s" % [l["text"], p, a, l["params"], l["assign"]])
+		else:
+			n_links += 1
+	var n_bad := 0
+	for b: Dictionary in ref["bad"]:
+		if not Share.decode(b["code"]).is_empty():
+			err("битый код принят: «%s»" % str(b["code"]).left(60))
+		else:
+			n_bad += 1
+	var sp := Share.decode(ref["spaced"]["code"])
+	if sp.size() != 2 or not _same(sp[1], ref["spaced"]["decoded"][1]):
+		err("код с пробелами и кавычками не прочитан")
+	else:
+		n_read += 1
+	for rb: Dictionary in ref["result_bad"]:
+		var u := Share.result_unpack(rb["data"])
+		if (rb["unpack"] == null) != u.is_empty() or (rb["unpack"] != null and not _same(u, rb["unpack"])):
+			err("разбор результата %s: %s, в game.py %s" % [rb["data"], u, rb["unpack"]])
+	for s: String in ref["fmt_secs"]:
+		if Share.fmt_secs(int(s)) != ref["fmt_secs"][s]:
+			err("время %s: «%s», в game.py «%s»" % [s, Share.fmt_secs(int(s)), ref["fmt_secs"][s]])
+	if Share.base_url() != ref["base_url"]:
+		err("адрес-основа ссылок «%s», в game.py «%s»" % [Share.base_url(), ref["base_url"]])
+	# «Отправить в таблицу»: поля запроса как у send_result (без сети)
+	var sa: Dictionary = {}
+	for r: Dictionary in ref["result"]:
+		if r["name"] == "с ошибками":
+			sa = r["assign"]
+	var a0 := SaveGame.assign
+	SaveGame.assign = Share._ints(sa.duplicate(true))
+	var n0: int = Feedback.captured.size()
+	Share.send_result()
+	if Feedback.captured.size() != n0 + 1:
+		err("итог в таблицу: запрос не собран")
+	else:
+		var got: Dictionary = Feedback.captured[-1]
+		for k: String in ref["payload"]:
+			if k == "comment":                         # в конце — код результата: сжатые байты у Godot другие
+				var gc: String = got.get(k, "")
+				var wc: String = ref["payload"][k]
+				var tail := "Result code: "
+				if gc.split(tail)[0] != wc.split(tail)[0] or not _same(Share.decode(gc.split(tail)[-1]), Share.decode(wc.split(tail)[-1])):
+					err("итог в таблицу: comment не как в game.py:
+    godot  %s
+    pygame %s" % [gc, wc])
+				continue
+			if not _same(got.get(k), ref["payload"][k]):
+				err("итог в таблицу: поле %s = «%s», в game.py «%s»" % [k, got.get(k), ref["payload"][k]])
+		if not str(got.get("platform", "")).begins_with("godot-") or str(got.get("time", "")) == "":
+			err("итог в таблицу: platform/time")
+		if SaveGame.assign.get("sent") != ref["payload_sent_after"]:
+			err("итог в таблицу: «отправлено» не отмечено")
+	Share.send_result()                        # второй раз — не уходит
+	if Feedback.captured.size() != n0 + 1:
+		err("итог в таблицу ушёл дважды")
+	SaveGame.assign = a0
+	Loc.code = lang0
+	return [n_read, n_bad, n_links, share_out.size()]
+
+
+func _share_write_out() -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://tests/out"))
+	FileAccess.open("res://tests/out/.gdignore", FileAccess.WRITE)
+	var f := FileAccess.open(SHARE_OUT, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(share_out, " "))
+
+
+func _type_text(s: String) -> void:
+	for ch in s:
+		for pressed: bool in [true, false]:
+			var e := InputEventKey.new()
+			e.unicode = ch.unicode_at(0)
+			e.pressed = pressed
+			get_viewport().push_input(e)
+		await get_tree().process_frame
+
+
+func _open_game_tab() -> SettingsDialog:
+	await _press(Nav.current.get_node("Gear"), false)
+	await _frames(1)
+	if Nav.settings == null:
+		err("коды: настройки не открылись")
+		return null
+	await _press(Nav.settings.get_node("Tab_game"), false)
+	await _frames(1)
+	return Nav.settings
+
+
+## Прогресс: «СКОПИРОВАТЬ КОД» → сброс → «ВСТАВИТЬ КОД» → «ДА» → тот же прогресс → «ВЕРНУТЬ ПРЕЖНИЙ ПРОГРЕСС».
+func _flow_share_progress() -> void:
+	Loc.code = "ru"
+	SaveGame.reset()
+	for j: String in ["flat", "brake", "spokes"]:
+		SaveGame.done[j] = true
+	SaveGame.garage = [["flat", 3], ["brake", 2], ["spokes", 1]]
+	SaveGame.seat_done["seat_elf"] = true
+	SaveGame.seat_quiz_ok = true
+	var before := Share.progress_pack()
+	Nav.go("hub")
+	await _frames(2)
+	var sd := await _open_game_tab()
+	if sd == null:
+		return
+	await _press(sd.get_node("Share_code"), true)
+	await _frames(1)
+	if Share.dlg == null or Share.dlg.mode() != "show" or Share.dlg.ui.get("ok") != true:
+		err("коды: «Скопировать код» не показал код")
+		return
+	var code := Share.clip_mem
+	var got := Share.decode(code)
+	if got.size() != 2 or got[0] != "P" or not _same(got[1], before):
+		err("коды: скопирован не тот код прогресса")
+	share_out.append({"what": "code", "kind": "P", "code": code, "data": before})
+	await _press(Share.dlg.get_node("Btn_close"), false)
+	await _frames(1)
+	await _press(Nav.settings.get_node("Reset"), false)
+	await _frames(1)
+	await _press(Nav.settings.get_node("ResetYes"), false)
+	await _frames(2)
+	if SaveGame.done.size() != 0:
+		err("коды: сброс прогресса не сработал")
+	sd = await _open_game_tab()
+	if sd == null:
+		return
+	await _press(sd.get_node("Share_paste"), false)
+	await _frames(1)
+	if Share.dlg == null or Share.dlg.mode() != "paste":
+		err("коды: «Вставить код» не открыл окно")
+		return
+	await _press(Share.dlg.get_node("Btn_apply"), false)          # пусто — «не распознан»
+	await _frames(1)
+	if Share.dlg == null or Share.dlg.ui.get("err", "") == "":
+		err("коды: пустой код не дал ошибку")
+	Share.dlg.get_node("Field").grab_focus()
+	await _frames(1)
+	var ev := InputEventKey.new()                                  # Ctrl+V в поле — из «буфера» (в тестах — память)
+	ev.keycode = KEY_V
+	ev.ctrl_pressed = true
+	ev.pressed = true
+	get_viewport().push_input(ev)
+	await _frames(1)
+	if Share.dlg.ui.get("text", "") != code:
+		err("коды: Ctrl+V не вставил код")
+	await _key(KEY_ENTER)                                          # Enter в поле — «Применить»
+	await _frames(1)
+	if Share.dlg == null or Share.dlg.mode() != "confirm":
+		err("коды: код прогресса не спросил подтверждение")
+		return
+	await _press(Share.dlg.get_node("Btn_yes"), true)
+	await _frames(2)
+	if not _same(Share.progress_pack(), before):
+		err("коды: после вставки прогресс %s, был %s" % [Share.progress_pack(), before])
+	if not SaveGame.has_backup():
+		err("коды: нет копии прежнего прогресса")
+	sd = await _open_game_tab()
+	if sd == null:
+		return
+	if sd.get_node_or_null("Share_restore") == null:
+		err("коды: нет «Вернуть прежний прогресс»")
+		return
+	await _press(sd.get_node("Share_restore"), false)
+	await _frames(2)
+	if SaveGame.done.size() != 0 or SaveGame.has_backup():
+		err("коды: «Вернуть прежний прогресс» не вернул (или копия осталась)")
+	# битый код — «не распознан», прогресс не тронут; код результата — окно чужого результата
+	Share.clip_mem = code.left(code.length() - 1) + ("0" if code[-1] != "0" else "1")
+	sd = await _open_game_tab()
+	await _press(sd.get_node("Share_paste"), true)
+	await _frames(1)
+	await _press(Share.dlg.get_node("Btn_clip"), false)
+	await _press(Share.dlg.get_node("Btn_apply"), false)
+	await _frames(1)
+	if Share.dlg == null or Share.dlg.mode() != "paste" or Share.dlg.ui.get("err", "") == "" or SaveGame.done.size() != 0:
+		err("коды: битый код не отвергнут")
+	var ref := _shref()
+	Share.dlg.ui["text"] = ref["result"][1]["code"]
+	await _press(Share.dlg.get_node("Btn_apply"), false)
+	await _frames(1)
+	if Share.dlg == null or Share.dlg.mode() != "result" or not _same(Share.dlg.ui["res"], ref["result"][1]["unpack"]):
+		err("коды: код результата не открыл итог ученика")
+	else:
+		await _press(Share.dlg.get_node("Btn_rtext"), false)
+		await _frames(1)
+		if Share.clip_mem != ref["result"][1]["texts"]["ru"]["text"].split("\n" + Loc.t("Код результата"))[0]:
+			err("коды: итог ученика текстом не как в game.py")
+		await _key(KEY_ESCAPE)
+		await _key(KEY_ESCAPE)
+	await _frames(1)
+	if Share.dlg != null:
+		err("коды: окно не закрылось по Esc")
+	Nav.close_settings()
+
+
+func _play_job(jid: String, mistake: bool) -> void:
+	var card: Node = Nav.current.get_node_or_null("Card_" + jid)
+	if card == null:
+		err("задание по ссылке: в мастерской нет карточки %s" % jid)
+		return
+	await _press(card, mistake)
+	await _frames(2)
+	var scr: Node = Nav.current
+	for pid: String in scr.job["parts"].slice(0, 2):
+		scr.inspect_part(pid)
+	scr.choose_diagnosis(_correct_diag(scr))
+	await _frames(1)
+	scr = Nav.current
+	for i in scr.job["steps"].size():
+		var st: Dictionary = scr.job["steps"][i]
+		if mistake and i == 0:
+			scr.select_tool("lube" if st["tool"] != "lube" else "pump")
+			scr.part_clicked(st["part"])
+			await _frames(1)
+		scr.select_tool(st["tool"])
+		scr.part_clicked(st["part"])
+		if scr.mini != null:
+			await _frames(1)
+			_solve_mini(scr.mini)
+		await _frames(1)
+	scr.start_ride()
+	scr.ride.t0 = scr.ride.t - scr.ride.secs() - 0.01
+	await _frames(2)
+	scr._test_pressed()
+	await _frames(2)
+
+
+## Задание: конструктор → код и ссылка → запуск по ссылке (--link) → в мастерской только назначенное → все пункты →
+## «Итог задания» (код результата = пройденное) → «Выйти из задания» (обычный прогресс не тронут) → та же ссылка
+## возвращает прогресс задания → без ссылки — вопрос «продолжить / обычная игра».
+func _flow_share_assign() -> String:
+	Loc.code = "ru"
+	SaveGame.reset()
+	SaveGame.done["flat"] = true
+	SaveGame.garage = [["flat", 2]]
+	var normal := Share.progress_pack()
+	Nav.go("hub")
+	await _frames(2)
+	var sd := await _open_game_tab()
+	if sd == null:
+		return ""
+	await _press(sd.get_node("Share_build"), true)
+	await _frames(1)
+	if Share.dlg == null or Share.dlg.mode() != "builder":
+		err("конструктор не открылся")
+		return ""
+	await _press(Share.dlg.get_node("Btn_make"), false)          # ничего не выбрано — ошибка
+	if Share.dlg.ui.get("err", "") == "":
+		err("конструктор: пустое задание принято")
+	for k: String in ["spokes", "caster", "seat_elf", "seat_owl"]:
+		await _press(Share.dlg.get_node("Pick_" + k), k.begins_with("seat"))
+	await _press(Share.dlg.get_node("Pick_caster"), false)        # снять и отметить снова — в конец
+	await _press(Share.dlg.get_node("Pick_caster"), false)
+	Share.dlg.get_node("Field").grab_focus()
+	await _frames(1)
+	await _type_text("Анна П.")
+	if Share.dlg.ui["sel"] != ["spokes", "seat_elf", "seat_owl", "caster"] or Share.dlg.ui["name"] != "Анна П.":
+		err("конструктор: выбрано %s, имя «%s»" % [Share.dlg.ui["sel"], Share.dlg.ui["name"]])
+	await _key(KEY_ENTER)                                        # Enter в поле имени — «Показать код задания»
+	await _frames(1)
+	var jcode := Share.clip_mem
+	var got := Share.decode(jcode)
+	var want := {"v": 1, "j": ["spokes", "caster"], "s": ["seat_elf", "seat_owl"], "f": "Анна П.", "ti": ""}
+	if got.size() != 2 or got[0] != "J" or not _same(got[1], want):
+		err("конструктор: код задания %s" % [got])
+		return ""
+	share_out.append({"what": "code", "kind": "J", "code": jcode, "data": want})
+	await _press(Share.dlg.get_node("Btn_close"), false)        # «Готово» — назад в конструктор
+	await _frames(1)
+	if Share.dlg == null or Share.dlg.mode() != "builder":
+		err("конструктор: «Готово» не вернул в конструктор")
+	await _press(Share.dlg.get_node("Btn_cancel"), false)
+	Nav.close_settings()
+	await _frames(1)
+	var a := Share.assign_parse({"jobs": want["j"], "seat": want["s"], "from": want["f"]})
+	var link := Share.share_link(Share.assign_params(a))
+	share_out.append({"what": "link", "link": link, "params": Share.parse_link(link), "assign": a})
+	# запуск по ссылке: аргумент «--link=…» с тем же разбором, что адрес в браузере
+	Share.link_launch = false
+	Share.resume_asked = false
+	Nav.go("title")
+	await _frames(1)
+	Share.apply_link(Share.launch_query(PackedStringArray(["--test", "--link=" + link])))
+	await _frames(1)
+	if not SaveGame.assign_on() or SaveGame.assign["id"] != a["id"]:
+		err("запуск по ссылке: задание не началось")
+		return ""
+	Nav.current.start()                                          # «клик — продолжить» на титуле
+	await _frames(2)
+	if Nav.current_name != "hub":
+		err("задание: с титула не в мастерскую (%s)" % Nav.current_name)
+		Nav.go("hub")
+		await _frames(2)
+	var cards: Array = Nav.current._cards.map(func(c: Node) -> String: return c.get_meta("job"))
+	if cards != ["spokes", "caster"] or Nav.current.get_node_or_null("Guild") != null or Nav.current.get_node_or_null("Garage") != null:
+		err("задание: в мастерской %s (или видны Гильдия/гараж)" % [cards])
+	if Share.dlg != null:
+		err("задание по ссылке: лишний вопрос «продолжить»")
+	await _play_job("spokes", true)
+	var res_scr: Node = Nav.current
+	if Nav.current_name != "result" or res_scr._btn.label != "В МАСТЕРСКУЮ":
+		err("задание: после первого пункта итог не «В МАСТЕРСКУЮ»")
+	await _press(res_scr.get_node("ToHub"), false)
+	await _frames(2)
+	await _play_job("caster", false)
+	await _press(Nav.current.get_node("ToHub"), true)
+	await _frames(2)
+	if Share.dlg != null:
+		err("задание: итог открылся до примерок")
+		Share.close()
+	if SaveGame.done.has("spokes") or SaveGame.done.has("caster") or SaveGame.garage.size() != 1:
+		err("задание: обычный прогресс изменился")
+	# примерки — только назначенные; верная посадка — мышью и клавиатурой
+	await _press(Nav.current.get_node("Seating"), false)
+	await _frames(2)
+	var scr: Node = Nav.current
+	await _press(scr.get_node("Tab_fit"), false)
+	await _frames(1)
+	var listed: Array = []
+	for c in scr.get_node("Dyn").get_children():
+		if c.name.begins_with("Case_"):
+			listed.append(SeatLogic.cases()[int(c.get_meta("i"))]["id"])
+	if listed != ["seat_elf", "seat_owl"]:
+		err("задание: в Кабинете посадки примерки %s" % [listed])
+	for sid: String in ["seat_elf", "seat_owl"]:
+		var ci: int = SeatLogic.cases().map(func(c: Dictionary) -> String: return c["id"]).find(sid)
+		await _press(scr.get_node("Dyn/Case_%d" % ci), sid == "seat_owl")
+		await _frames(1)
+		if sid == "seat_elf":
+			await _press(scr.get_node("Dyn/Check"), false)          # одна ошибка
+			await _frames(1)
+		var sol := _seat_solution(SeatLogic.cases()[ci], scr.slider_keys(), scr.cfg)
+		for k: String in sol:
+			scr.set_value(k, sol[k])
+		await _press(scr.get_node("Dyn/Check"), sid == "seat_owl")
+		await _frames(1)
+	if SaveGame.seat_done.size() != 0:
+		err("задание: примерки попали в обычный прогресс")
+	if Share.dlg == null or Share.dlg.mode() != "summary":
+		err("задание: после последнего пункта нет «Итога задания»")
+		return ""
+	var res := Share.assign_result()
+	var want_rows := [["spokes", true], ["caster", true], ["seat_elf", true], ["seat_owl", true]]
+	var errs := {}
+	for r: Array in res["rows"]:
+		errs[r[0]] = r[2]
+	if res["rows"].map(func(r: Array) -> Array: return [r[0], r[1]]) != want_rows or errs["seat_elf"] != 1 or \
+			errs["seat_owl"] != 0 or errs["caster"] != 0 or errs["spokes"] < 1:
+		err("итог задания: %s" % [res["rows"]])
+	await _press(Share.dlg.get_node("Btn_rcode"), true)
+	await _frames(1)
+	var rcode := Share.clip_mem
+	var rg := Share.decode(rcode)
+	if rg.size() != 2 or rg[0] != "R" or not _same(Share.result_unpack(rg[1]), res):
+		err("код результата не совпадает с пройденным")
+	share_out.append({"what": "code", "kind": "R", "code": rcode, "data": Share.result_pack(SaveGame.assign)})
+	await _press(Share.dlg.get_node("Btn_close"), false)         # назад к итогу
+	await _frames(1)
+	await _press(Share.dlg.get_node("Btn_rtext"), false)
+	await _frames(1)
+	if not Share.clip_mem.contains(rcode) or not Share.clip_mem.begins_with("Колёса и Кости — итог задания"):
+		err("итог текстом: %s" % Share.clip_mem.left(80))
+	await _key(KEY_ESCAPE)
+	await _frames(1)
+	var n0: int = Feedback.captured.size()
+	if Share.can_send():
+		await _press(Share.dlg.get_node("Btn_send"), false)
+		await _frames(1)
+		if Feedback.captured.size() != n0 + 1 or not SaveGame.assign["sent"] or Share.dlg.get_node("Btn_send").enabled:
+			err("итог в таблицу: не отправлен или кнопка осталась")
+	var asg := SaveGame.assign.duplicate(true)
+	await _press(Share.dlg.get_node("Btn_exit"), false)
+	await _frames(2)
+	if SaveGame.assign_on() or not _same(Share.progress_pack(), normal) or Nav.current_name != "hub":
+		err("«Выйти из задания»: обычный прогресс не тот (или задание осталось)")
+	# та же ссылка — прогресс задания с места; без ссылки — вопрос «продолжить / обычная игра»
+	Share.apply_link(link)
+	if not SaveGame.assign_on() or not _same(SaveGame.assign["done"], asg["done"]):
+		err("та же ссылка не вернула прогресс задания")
+	SaveGame.assign["done"].erase("seat_owl")                    # незаконченное задание
+	Share.link_launch = false
+	Share.resume_asked = false
+	Nav.go("hub")
+	await _frames(3)
+	if Share.dlg == null or Share.dlg.mode() != "resume":
+		err("запуск без ссылки: нет вопроса «продолжить задание / обычная игра»")
+		return ""
+	await _press(Share.dlg.get_node("Btn_normal"), true)
+	await _frames(2)
+	if SaveGame.assign_on() or Nav.current_name != "hub" or Nav.current.get_node_or_null("Guild") == null:
+		err("«Обычная игра»: задание не выключилось")
+	Share.resume_asked = false
+	SaveGame.assign["active"] = true
+	Nav.go("hub")
+	await _frames(3)
+	if Share.dlg == null:
+		err("вопрос «продолжить» не появился второй раз")
+		return ""
+	await _press(Share.dlg.get_node("Btn_resume"), false)
+	await _frames(2)
+	if not SaveGame.assign_on() or Nav.current.get_node_or_null("Summary") == null:
+		err("«Продолжить задание»: мастерская не в режиме задания")
+	Nav.go("hub")                                              # вопрос — один раз за запуск
+	await _frames(3)
+	if Share.dlg != null:
+		err("вопрос «продолжить» повторился в том же запуске")
+	# сохранение: ключ assign как в game.py
+	var sv: Dictionary = SaveGame.to_dict().get("assign", {})
+	var keys: Array = sv.keys()
+	keys.sort()
+	if keys != ["active", "done", "errors", "from", "id", "jobs", "seat", "secs", "sent", "title"]:
+		err("save.json: ключи assign %s" % [keys])
+	var back := SaveGame.assign_state(JSON.parse_string(JSON.stringify(sv)))
+	if not _same(back, SaveGame.assign):
+		err("save.json: задание не читается обратно")
+	Share.exit_assignment()
+	await _frames(1)
+	return "задание из конструктора (4 пункта) пройдено по ссылке --link, итог и код результата = пройденному"

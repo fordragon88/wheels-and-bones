@@ -15,10 +15,12 @@ import game
 
 godot = json.load(open(sys.argv[1], encoding="utf-8"))
 port = json.load(open(os.path.join(ROOT, "godot", "i18n", "lang_en_port.json"), encoding="utf-8"))
+import re
+port_rx = [re.compile(".*".join(re.escape(x) for x in re.split(r"\{\d+\}", p))) for p in port if re.search(r"\{\d+\}", p)]
 game.set_lang("en")
 bad = 0
 for ru, en in godot.items():
-    if any(p in ru for p in port):
+    if any(p in ru for p in port) or any(r.search(ru) for r in port_rx):    # шаблоны переноса: «… {0} …»
         continue
     want = game.tr(ru)
     if want != en:

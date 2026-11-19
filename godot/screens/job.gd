@@ -744,15 +744,18 @@ func finish_test() -> void:
 	Audio.sfx("fanfare")
 	var stars := maxi(1, 3 - mistakes / 2)
 	var jid: String = job["id"]
-	SaveGame.done[jid] = true
-	var found := false
-	for g: Array in SaveGame.garage:
-		if g[0] == jid:
-			found = true
-			if stars > int(g[1]):              # переигрывание: в гараже — лучшая оценка
-				g[1] = stars
-	if not found:
-		SaveGame.garage.append([jid, stars])
+	if SaveGame.assign_on():                   # задание по ссылке: свой прогресс, обычный (done, гараж) не трогаем
+		SaveGame.assign_record(jid, mistakes, int(t))
+	else:
+		SaveGame.done[jid] = true
+		var found := false
+		for g: Array in SaveGame.garage:
+			if g[0] == jid:
+				found = true
+				if stars > int(g[1]):          # переигрывание: в гараже — лучшая оценка
+					g[1] = stars
+		if not found:
+			SaveGame.garage.append([jid, stars])
 	var gag := ""
 	if randf() < 0.5:                          # то нога отвалится, то Мартин сам себя похвалит/подколет
 		var legs: Array = Content.talk.get("leg_gags", []).filter(func(g: String) -> bool:

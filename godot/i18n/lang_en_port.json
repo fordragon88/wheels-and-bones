@@ -9,5 +9,13 @@
   "РЕМОНТ": "REPAIR",
   "В МАСТЕРСКУЮ": "TO THE WORKSHOP",
   "Esc — на титул/выход": "Esc — title/exit",
-  "Сноски мануала появятся в следующих шагах переноса.": "Manual notes are coming in the next porting steps."
+  "Сноски мануала появятся в следующих шагах переноса.": "Manual notes are coming in the next porting steps.",
+  "ОБЫЧНАЯ ИГРА": "NORMAL GAME",
+  "ПРОДОЛЖИТЬ ЗАДАНИЕ": "CONTINUE ASSIGNMENT",
+  "ЗАДАНИЕ НЕ ЗАКОНЧЕНО": "ASSIGNMENT NOT FINISHED",
+  "Продолжить задание от {0} ({1}/{2}) или обычная игра?": "Continue the assignment from {0} ({1}/{2}) or play the normal game?",
+  "Продолжить задание ({0}/{1}) или обычная игра?": "Continue the assignment ({0}/{1}) or play the normal game?",
+  "Обычная игра — твой прогресс; задание сохранится, та же ссылка вернёт его с места.": "The normal game uses your own progress; the assignment is kept, and the same link brings it back where you left off.",
+  "Код или ссылка": "Code or link",
+  "Имя": "Name"
 }

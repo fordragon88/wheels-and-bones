@@ -26,6 +26,7 @@ Frames="*res://autoload/frames.gd"
 Speech="*res://autoload/speech.gd"
 Nav="*res://autoload/nav.gd"
 Feedback="*res://autoload/feedback.gd"
+Share="*res://autoload/share.gd"
 
 [display]
 

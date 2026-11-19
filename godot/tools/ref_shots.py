@@ -337,3 +337,45 @@ run(g, 1.0, "seat_quiz_pads")
 g._seat_quiz_pick(next(i for i, o in enumerate(game.SEAT_QUIZ[6]["options"]) if not o[1]))
 sc["fix_t0"] = g.t - 5
 run(g, 2.5, "seat_quiz_pads_after")
+
+
+# ---- срез 6: коды и ссылки (окна share_ui, мастерская в задании, итог) ----
+game.FEEDBACK_URL = "https://example.invalid/"   # кнопка «Отправить в таблицу» видна (снимок; отправки нет)
+sc = None
+g.seatc = None
+g.done = {"flat", "brake", "spokes"}
+g.garage = [("flat", 3), ("brake", 2), ("spokes", 1)]
+g.seat_done = {"seat_elf"}
+g.seat_quiz_ok = False
+g.exam_passed = False
+g.assign = None
+g.scene = "hub"
+g.show_sound = False
+run(g, 0.5)
+pcode = game.share_encode("P", game.progress_pack(g))
+g.open_share("paste", text=pcode)
+run(g, 0.5, "share_paste")
+g._share_action("apply")
+run(g, 0.5, "share_confirm")
+g.share_ui = None
+g.open_share("builder", sel=["spokes", "caster", "seat_elf"], name="Анна")
+run(g, 0.5, "share_builder")
+g.share_ui = None
+sa = game.assign_parse({"jobs": "spokes,caster,lift", "seat": "seat_elf", "from": "Анна", "title": "Неделя 1"})
+g.start_assignment(sa)
+g.assign_record("spokes", 2, 95)
+g.toast_timer = 0
+g.scene = "hub"
+g.scene_t0 = g.t
+run(g, 2.0, "hub_assign")
+for k_, e_, s_ in (("caster", 0, 61), ("lift", 1, 200), ("seat_elf", 3, 75)):
+    g.assign_record(k_, e_, s_)
+g.open_share("summary")
+run(g, 0.5, "share_summary")
+g.share_ui = None
+rres = game.result_unpack(game.result_pack(g.assign))
+g.exit_assignment()
+g.toast_timer = 0
+g.open_share("result", res=rres)
+run(g, 0.5, "share_result")
+g.share_ui = None

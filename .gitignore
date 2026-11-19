@@ -69,6 +69,7 @@ backups/
 art_tests/data_golden_now.json
 # Godot
 godot/.godot/
+godot/tests/out/
 godot/content/
 godot/export/
 godot/tests/shots/

@@ -4,6 +4,7 @@ extends Node
 ##   --test                                    не читать и не писать настройки/сохранение
 ##   --shots [имя …]                           снимки экранов для сверки (tests/shots.gd), потом выход
 ##   --lang ru|en, --calm                      язык, «Без анимации»
+##   --link="?jobs=flat,caster&from=Анна"      запуск со ссылкой-заданием / кодом прогресса (?load=…), как адрес в браузере
 
 
 func _ready() -> void:
@@ -24,3 +25,4 @@ func _ready() -> void:
 		return
 	i = args.find("--screen")
 	Nav.go(args[i + 1] if i >= 0 and i + 1 < args.size() else "title")
+	Share.apply_link(Share.launch_query())     # ?jobs=…/?load=… (браузер) или --link (компьютер); без них — ничего

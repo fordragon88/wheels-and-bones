@@ -143,7 +143,7 @@ func _spin_wheel(c: Vector2, r: float, ang: float, k: float) -> void:
 
 func start() -> void:
 	Audio.sfx("tick")
-	if SaveGame.done.size() > 0 or SaveGame.tutorial_skipped:
+	if SaveGame.done.size() > 0 or SaveGame.tutorial_skipped or SaveGame.assign_on():   # задание — сразу в мастерскую
 		Nav.go("hub")
 	else:
 		Nav.go("intro")                     # вступления ещё нет — Nav ведёт в мастерскую (там пока только Мартин)
