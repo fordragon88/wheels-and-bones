@@ -16,6 +16,7 @@ var _note: Control
 var _deco: Control
 var _note_jid: String = ""
 var _note_t0: float = 0.0
+var _note_sig: Array = []
 
 
 @warning_ignore("integer_division")
@@ -178,7 +179,11 @@ func tick(_dt: float) -> void:
 	for b in _cards:
 		var i: int = b.get_meta("i")
 		b.slide = Vector2(0, int(60 * (1 - UI.appear(st, 0.05 * i, 0.4))))
-	_note.queue_redraw()
+	# записка: перерисовка, пока выпрыгивает, и когда сменилась (иначе картинка та же)
+	var sig := [_note_jid, minf(1.0, (t - _note_t0) / 0.25) if _note_jid != "" else 0.0]
+	if sig != _note_sig:
+		_note_sig = sig
+		_note.queue_redraw()
 
 
 func _flip(d: int) -> void:

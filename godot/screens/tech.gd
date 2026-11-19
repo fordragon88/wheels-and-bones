@@ -45,6 +45,7 @@ var chair: TurntableShow
 var _ops: Array[GameButton] = []
 var _deco: Control
 var _mentor: SpeechBubble
+var _bar_sig: Array = []
 var _bar: TopBar
 var _dispute_btn: GameButton
 var _test_btn: GameButton
@@ -163,6 +164,7 @@ func op_rect(i: int) -> Rect2:
 # ---------------- сборка ----------------
 
 func build() -> void:
+	_bar_sig = []
 	_ops.clear()
 	_test_btn = null
 	tools = null
@@ -722,7 +724,9 @@ func tick(dt: float) -> void:
 	_dispute_btn.visible = dv
 	_bar.brand = not dv
 	_bar.right_edge = (UI.W - 352.0) if dv else UI.W - 170.0
-	_bar.queue_redraw()
+	if _bar_sig != [_bar.brand, _bar.right_edge]:   # шапка — только когда сменилась
+		_bar_sig = [_bar.brand, _bar.right_edge]
+		_bar.queue_redraw()
 	_deco.queue_redraw()
 
 

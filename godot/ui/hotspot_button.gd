@@ -9,6 +9,8 @@ var num: int = 0
 var r: int = 18
 var view: ChairView
 var _was_hover := false
+var _pulse: Control                       # пульс «осмотри меня» — свой слой под кружком, рисуется каждый кадр
+var _sig: Array = []                      # кружок с номером — только при смене (наведение, фокус, осмотрено, размер)
 
 
 func _init() -> void:
@@ -24,6 +26,12 @@ func _init() -> void:
 
 func _ready() -> void:
 	update_a11y()
+	_pulse = Control.new()
+	_pulse.name = "Pulse"
+	_pulse.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pulse.show_behind_parent = true          # под кольцами кружка, как раньше (рисовался первым)
+	_pulse.draw.connect(_draw_pulse)
+	add_child(_pulse)
 
 
 func update_a11y() -> void:
@@ -42,17 +50,36 @@ func _process(_dt: float) -> void:
 	if h and not _was_hover:
 		Audio.sfx("hover")
 	_was_hover = h
-	queue_redraw()
+	var done := view != null and view.inspected.has(pid)
+	var sig := [h, has_focus() and UI.kb_active, done, r, size, global_position.round() if h or has_focus() else Vector2.ZERO]
+	if sig != _sig:
+		_sig = sig
+		queue_redraw()
+	var pulsing := _pulsing()
+	if pulsing or _pulse.visible:
+		_pulse.size = size
+		_pulse.visible = pulsing
+		_pulse.queue_redraw()
+
+
+func _pulsing() -> bool:
+	return view != null and view.pulse and not view.inspected.has(pid) and Settings.glow_on()
+
+
+## Пульс неосмотренной детали (зовёт): кольцо расходится и гаснет.
+func _draw_pulse() -> void:
+	if not _pulsing():
+		return
+	var c := size / 2.0
+	var i := maxi(0, num - 1)
+	var ph := fmod(view.t * 0.8 + i * 0.17, 1.0)
+	var rr := r + 10 * UI.ease_out(ph)
+	UI.draw_ring(_pulse, c, rr, Color(UI.AMBER, 150.0 * (1 - ph) / 255.0), 2)
 
 
 func _draw() -> void:
 	var c := size / 2.0
 	var done := view != null and view.inspected.has(pid)
-	if view and view.pulse and not done and Settings.glow_on():          # зовёт пульсом
-		var i := maxi(0, num - 1)
-		var ph := fmod(view.t * 0.8 + i * 0.17, 1.0)
-		var rr := r + 10 * UI.ease_out(ph)
-		UI.draw_ring(self, c, rr, Color(UI.AMBER, 150.0 * (1 - ph) / 255.0), 2)
 	UI.draw_ring(self, c, r + 2, UI.INK, 5)                              # подложка: кольцо видно и на белом арте
 	UI.draw_ring(self, c, r, UI.GOOD if done else UI.AMBER, 2)
 	draw_circle(c, maxi(6, r - 3), Color8(14, 12, 20, 200), true, -1, true)

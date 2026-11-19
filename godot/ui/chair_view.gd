@@ -32,6 +32,7 @@ var _shadow_key: String = ""
 var _shadow: Texture2D
 var _buttons: Dictionary = {}    # pid → HotspotButton
 var _inside: bool = false
+var _sig: Array = []             # от чего зависит картинка: перерисовка только при смене (поворот, зум, кадр, наведение)
 
 
 func setup(chair_art: String, part_ids: Array, rect: Rect2, inspected_set: Dictionary) -> void:
@@ -239,7 +240,22 @@ func _process(dt: float) -> void:
 				b.r = s[3]
 				b.size = Vector2(s[3] * 2 + 8, s[3] * 2 + 8)
 				b.position = Vector2(s[1], s[2]) - position - b.size / 2.0
-	queue_redraw()
+	var yw := view_yaw()
+	var tex: Texture2D = null
+	var n := int(tt.get("n", 0))
+	if n > 0:
+		var i := Frames.tt_index_for(art, yw)
+		tex = Frames.tt_frame(art, i)
+		if tex == null:
+			tex = Frames.tt_frame(art, Frames.tt_nearest_index(art, i))
+	var hov := false
+	for b: HotspotButton in _buttons.values():
+		if b.is_hovered():
+			hov = true
+	var sig := [yw, zoom_k, tex, position, size, drag, _mouse_inside(), hov, has_focus() and UI.kb_active, show_spots]
+	if sig != _sig:
+		_sig = sig
+		queue_redraw()
 
 
 func _draw() -> void:

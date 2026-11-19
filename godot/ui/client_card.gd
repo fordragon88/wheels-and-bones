@@ -13,6 +13,7 @@ static func make_card(job_id: String, rect: Rect2) -> ClientCard:
 	c.size = rect.size
 	c.name = "Card_" + job_id
 	c.on_draw = c._draw_content
+	c.redraw_sig = c._content_sig                # содержимое меняется только с наведением/сдвигом (их видит кнопка)
 	c.refresh()
 	return c
 
@@ -29,6 +30,10 @@ func refresh() -> void:
 		((". " + Loc.t("Уже починено")) if done else "") + ((". " + Loc.t(note)) if note != "" and not done else "")
 	set_meta("a11y_group", "Клиенты")
 	queue_redraw()
+
+
+func _content_sig() -> int:
+	return 0
 
 
 func _draw_content(b: GameButton, r: Rect2) -> void:

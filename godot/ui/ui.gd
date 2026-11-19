@@ -31,6 +31,17 @@ const FONT_DIR := "res://content/fonts/"
 static var kb_active := false              # последним был ввод с клавиатуры/геймпада — видна рамка фокуса
 static var _fonts: Dictionary = {}
 static var _glow_tex: Texture2D
+# Кэши текста (скорость на слабом процессоре, 19.11): экраны перерисовывают текст каждый кадр, а у Font свой кэш
+# раскладки строк — 64 строки (LRU): мастерская и задание рисуют больше, плюс wrap_lines меряет каждое «слово +
+# строка» — кэш вытеснялся, и каждый кадр строки заново шейпились. Здесь: ширина строки, перенос по словам и
+# готовая раскладка строки (TextLine) — по (шрифт, размер в px, текст); сброс — со сменой шрифтов (clear_font_cache).
+const TEXT_CACHE_MAX := 6000              # строк в каждом кэше; больше — сброс (смена языка/текста, длинная игра)
+static var _tw: Dictionary = {}           # "b|px" → {текст: ширина}
+static var _wraps: Dictionary = {}        # "текст|ширина|размер|b" → PackedStringArray
+static var _tl: Dictionary = {}           # "b|px" → {текст: TextLine}
+static var _tl_n: int = 0
+static var _tw_n: int = 0
+static var _sb: Dictionary = {}           # [заливка, рамка, толщина, радиус] → StyleBoxFlat
 
 
 # ---------------- шрифты и размеры ----------------
@@ -58,6 +69,15 @@ static func font(bold: bool = false) -> Font:
 
 static func clear_font_cache() -> void:
 	_fonts.clear()
+	clear_text_cache()
+
+
+static func clear_text_cache() -> void:
+	_tw.clear()
+	_wraps.clear()
+	_tl.clear()
+	_tl_n = 0
+	_tw_n = 0
 
 
 ## Размер шрифта в пикселях холста: логический размер game.py × TEXT_K (× 1,08 у Atkinson).
@@ -67,7 +87,55 @@ static func fs(size: float) -> int:
 
 
 static func text_width(text: String, size: float, bold: bool = false) -> float:
-	return font(bold).get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs(size)).x
+	return px_width(text, fs(size), bold)
+
+
+## Ширина строки в пикселях шрифта px (кэш: Font.get_string_size шейпит строку, если она выпала из его кэша).
+static func px_width(text: String, px: int, bold: bool) -> float:
+	var p0 := Prof.t0() if Prof.on else 0
+	var k := "%s|%d" % [bold, px]
+	var d: Dictionary = _tw.get(k, {})
+	if d.is_empty():
+		_tw[k] = d
+	var w: Variant = d.get(text)
+	if w == null:
+		if _tw_n >= TEXT_CACHE_MAX:
+			_tw.clear()
+			_tw_n = 0
+			d = {}
+			_tw[k] = d
+		w = font(bold).get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+		d[text] = w
+		_tw_n += 1
+	if Prof.on:
+		Prof.add("text_width", p0)
+	return w
+
+
+## Готовая раскладка строки (TextLine) — как у Font.draw_string, но в своём кэше без вытеснения каждый кадр.
+static func text_line(text: String, px: int, bold: bool) -> TextLine:
+	var k := "%s|%d" % [bold, px]
+	var d: Dictionary = _tl.get(k, {})
+	if d.is_empty():
+		_tl[k] = d
+	var tl: TextLine = d.get(text)
+	if tl == null:
+		if _tl_n >= TEXT_CACHE_MAX:
+			_tl.clear()
+			_tl_n = 0
+			d = {}
+			_tl[k] = d
+		tl = TextLine.new()
+		tl.add_string(text, font(bold), px)
+		d[text] = tl
+		_tl_n += 1
+	return tl
+
+
+## Строка от базовой линии (как CanvasItem.draw_string с выравниванием влево и без ширины).
+static func put_string(ci: CanvasItem, baseline: Vector2, text: String, px: int, color: Color, bold: bool) -> void:
+	var tl := text_line(text, px, bold)
+	tl.draw(ci.get_canvas_item(), Vector2(baseline.x, baseline.y - tl.get_line_ascent()), color)
 
 
 static func line_height(size: float, bold: bool = false) -> float:
@@ -98,6 +166,23 @@ static func fit_size(text: String, width: float, size: int, lo: int, bold: bool 
 
 ## Перенос по словам (wrap_lines game.py; text — уже переведённый): слово шире строки режется по дефису.
 static func wrap_lines(text: String, width: float, size: float, bold: bool = false) -> PackedStringArray:
+	var p0 := Prof.t0() if Prof.on else 0
+	var key := "%s|%s|%d|%s" % [text, width, fs(size), bold]
+	var hit: Variant = _wraps.get(key)
+	if hit != null:
+		if Prof.on:
+			Prof.add("wrap_lines", p0)
+		return (hit as PackedStringArray).duplicate()
+	if _wraps.size() >= TEXT_CACHE_MAX:
+		_wraps.clear()
+	var out := _wrap_lines(text, width, size, bold)
+	_wraps[key] = out.duplicate()
+	if Prof.on:
+		Prof.add("wrap_lines", p0)
+	return out
+
+
+static func _wrap_lines(text: String, width: float, size: float, bold: bool) -> PackedStringArray:
 	var out: PackedStringArray = []
 	var cur := ""
 	for w in text.split(" "):
@@ -141,16 +226,19 @@ static func fit_text(text: String, width: float, size: int, bold: bool = false) 
 ## Возврат: прямоугольник текста.
 static func draw_text(ci: CanvasItem, text: String, pos: Vector2, size: float, color: Color, bold: bool = false,
 		align: int = 0) -> Rect2:
+	var p0 := Prof.t0() if Prof.on else 0
 	var f := font(bold)
 	var px := fs(size)
-	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+	var w := px_width(text, px, bold)
 	var h := px_height(px, bold)
 	var tl := pos
 	if align == 1:
 		tl = pos - Vector2(w, h) / 2.0
 	elif align == 2:
 		tl = pos - Vector2(w, 0)
-	ci.draw_string(f, Vector2(roundf(tl.x), roundf(tl.y) + f.get_ascent(px)), text, HORIZONTAL_ALIGNMENT_LEFT, -1, px, color)
+	put_string(ci, Vector2(roundf(tl.x), roundf(tl.y) + f.get_ascent(px)), text, px, color, bold)
+	if Prof.on:
+		Prof.add("draw_text", p0)
 	return Rect2(tl, Vector2(w, h))
 
 
@@ -158,6 +246,7 @@ static func draw_text(ci: CanvasItem, text: String, pos: Vector2, size: float, c
 ## напечатано («печать по буквам», переносы — по полному тексту). Возврат: y под последней строкой.
 static func draw_wrapped(ci: CanvasItem, text: String, pos: Vector2, width: float, size: float, color: Color,
 		center: bool = false, line_gap: float = 2.0, limit: int = -1, max_lines: int = 0, bold: bool = false) -> float:
+	var p0 := Prof.t0() if Prof.on else 0
 	var f := font(bold)
 	var px := fs(size)
 	var lines := wrap_lines(text, width, size, bold)
@@ -175,8 +264,8 @@ static func draw_wrapped(ci: CanvasItem, text: String, pos: Vector2, width: floa
 		if left < ln.length():
 			shown = ln.substr(0, maxi(0, left))
 		if shown != "":
-			var x := pos.x - (f.get_string_size(ln, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x / 2.0 if center else 0.0)
-			ci.draw_string(f, Vector2(roundf(x), roundf(y) + f.get_ascent(px)), shown, HORIZONTAL_ALIGNMENT_LEFT, -1, px, color)
+			var x := pos.x - (px_width(ln, px, bold) / 2.0 if center else 0.0)
+			put_string(ci, Vector2(roundf(x), roundf(y) + f.get_ascent(px)), shown, px, color, bold)
 		var found := text.find(ln, at)
 		var step := ln.length() + 1
 		if found >= 0:
@@ -184,6 +273,8 @@ static func draw_wrapped(ci: CanvasItem, text: String, pos: Vector2, width: floa
 			step = ln.length() + (1 if text.substr(at, 1) == " " else 0)
 		left -= step
 		y += px_height(px, bold) + line_gap
+	if Prof.on:
+		Prof.add("draw_wrapped", p0)
 	return y
 
 
@@ -197,14 +288,22 @@ static func wrapped_height(text: String, width: float, size: float, line_gap: fl
 
 static func draw_round_rect(ci: CanvasItem, r: Rect2, fill: Color, border: Color = Color(0, 0, 0, 0),
 		width: int = 0, radius: int = 7) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = fill
-	sb.set_corner_radius_all(radius)
-	sb.anti_aliasing = true
-	sb.corner_detail = 8
-	if width > 0:
-		sb.border_color = border
-		sb.set_border_width_all(width)
+	if Prof.on:
+		Prof.count("round_rect")
+	var key := [fill, border if width > 0 else Color(), width, radius]
+	var sb: StyleBoxFlat = _sb.get(key)
+	if sb == null:
+		if _sb.size() >= 400:                 # наведение плавно меняет заливку — без потолка кэш рос бы
+			_sb.clear()
+		sb = StyleBoxFlat.new()
+		sb.bg_color = fill
+		sb.set_corner_radius_all(radius)
+		sb.anti_aliasing = true
+		sb.corner_detail = 8
+		if width > 0:
+			sb.border_color = border
+			sb.set_border_width_all(width)
+		_sb[key] = sb
 	ci.draw_style_box(sb, r)
 
 

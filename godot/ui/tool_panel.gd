@@ -17,6 +17,8 @@ var _hover_tid: String = ""
 var _miss_seen := -1
 var _miss_t := -9.0
 var _card: Control
+var _card_sig: Array = []
+var _ring_tid: String = ""                 # обучение: плитка в зелёной рамке (раз в кадр, для redraw_sig плиток)
 
 
 func _init() -> void:
@@ -73,6 +75,7 @@ func _ready() -> void:
 		b.set_meta("i", i)
 		b.accessibility_name = Loc.t(Content.tools[tid]["name"]) + ". " + Loc.t(Content.tools[tid]["hint"])
 		b.on_draw = _draw_tile
+		b.redraw_sig = _tile_sig.bind(b)
 		b.pressed.connect(func() -> void: tool_pressed.emit(tid))
 		b.hovered_changed.connect(func(on: bool) -> void:
 			if on:
@@ -100,7 +103,23 @@ func _process(_dt: float) -> void:
 		if _miss_seen >= 0:
 			_miss_t = job_screen.t
 		_miss_seen = m
-	_card.queue_redraw()
+	var want: Array = job_screen.tutor_want()
+	_ring_tid = str(job_screen.tutor_step()["tool"]) if not want.is_empty() and want[0] == "tool" else ""
+	var cs := [_hover_tid, job_screen.sel_tool, job_screen.note_part_at(), want, _card.size]
+	if cs != _card_sig:                        # карточка — только когда сменилось, что в ней показать
+		_card_sig = cs
+		_card.queue_redraw()
+
+
+## От чего зависит плитка (GameButton.redraw_sig): в руке ли, обучение; пока въезжает, покачивается в руке,
+## вздрагивает после ошибки или пульсирует рамка обучения — время (перерисовка каждый кадр).
+func _tile_sig(b: GameButton) -> Array:
+	var tid: String = b.get_meta("tid")
+	var active: bool = job_screen.sel_tool == tid
+	var ring := tid == _ring_tid
+	var t: float = job_screen.t
+	var anim: bool = float(job_screen.st) - 0.25 - 0.025 * int(b.get_meta("i")) < 0.35 		or ((active or ring) and not Settings.calm()) or (active and t - _miss_t < 0.45)
+	return [active, ring, t if anim else 0.0]
 
 
 ## Подписи плиток для озвучки фокуса (a11y_items): «Насос, в руке. Накачать камеру…», группа «Инструменты».

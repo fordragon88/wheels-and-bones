@@ -16,6 +16,12 @@ var label_size: int = 17
 var plain: bool = false                   # только текст, без рамки (крупная надпись-кнопка)
 var slide: Vector2 = Vector2.ZERO         # сдвиг картинки (въезд в кадр); нажатие — по месту кнопки
 var on_draw: Callable                     # дорисовать содержимое: func(btn, rect: Rect2)
+## С on_draw кнопка перерисовывается каждый кадр (содержимое может двигаться). Если задан redraw_sig — только когда
+## меняется вид самой кнопки (наведение, сдвиг, фокус, цвет, подпись) или значение redraw_sig() (то, от чего зависит
+## on_draw: фаза, осмотрено, инструмент в руке; анимация — время). Текст и рамки, перерисованные зря, — главное, на
+## что уходил кадр на слабом процессоре (19.11).
+var redraw_sig: Callable
+var _sig: Array = []
 var hover_k: float = 0.0
 var hover_sound: bool = true
 var _was_hover := false
@@ -71,7 +77,16 @@ func _process(dt: float) -> void:
 	if target >= 1.0 and hover_k < 0.04 and hover_sound:
 		Audio.sfx("hover")
 	var nk := target if Settings.calm() else hover_k + (target - hover_k) * minf(1.0, dt * 14.0)
-	if absf(nk - hover_k) > 0.001 or on_draw.is_valid():
+	if redraw_sig.is_valid():
+		if absf(target - nk) < 0.0005:
+			nk = target
+		var sig := [nk, slide, hov, is_hovered(), enabled, active, color, has_focus() and UI.kb_active, label, sub, size,
+			redraw_sig.call()]
+		hover_k = nk
+		if sig != _sig:
+			_sig = sig
+			queue_redraw()
+	elif absf(nk - hover_k) > 0.001 or on_draw.is_valid():
 		hover_k = nk
 		queue_redraw()
 

@@ -26,6 +26,11 @@ func _ready() -> void:
 func _process(dt: float) -> void:
 	st += dt
 	t += dt
+	if Prof.on:
+		var p0 := Prof.t0()
+		tick(dt)
+		Prof.add("tick:" + screen_name, p0)
+		return
 	tick(dt)
 
 

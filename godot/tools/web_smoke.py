@@ -534,7 +534,8 @@ async def sc_guild(b):
 
 
 async def sc_phone(b):
-    """Телефон (альбом 740×360, касания, dpr 3): титул, касание «начать», холст на всё окно, поле кода по касанию."""
+    """Телефон (альбом 740×360, касания, dpr 3): титул, касание «начать», холст на всё окно, поле кода по касанию;
+    потом книжная ориентация и планшет (sc_rotate)."""
     p = await new_page(b, "phone", touch=True, mobile=True, w=740, h=360, dpr=3,
                        legacy={"save.json": {"done": [], "tutorial_skipped": True}})
     st, secs, times = await p.boot()
@@ -573,6 +574,118 @@ async def sc_phone(b):
     await p.shot("4_paste")
     p.check_console()
     await p.ctx.close()
+    await sc_rotate(b)                                    # книжная ориентация: заслонка, планшет, ?res=
+
+
+async def orient(p, w, h, landscape, dpr=3):
+    """Повернуть «телефон»: размер окна и экрана (screen.width/height) и screen.orientation — через CDP."""
+    fs = await p.pg.evaluate("!!document.fullscreenElement && (document.exitFullscreen(), true)")
+    if fs:                                               # первое касание включило полный экран — окно не ресайзится
+        await p.pg.wait_for_timeout(500)
+    await p.pg.set_viewport_size({"width": w, "height": h})   # и Playwright помнит размер (снимок его восстановит)
+    cdp = await p.ctx.new_cdp_session(p.pg)
+    await cdp.send("Emulation.setDeviceMetricsOverride", {
+        "width": w, "height": h, "deviceScaleFactor": dpr, "mobile": True, "screenWidth": w, "screenHeight": h,
+        "screenOrientation": {"type": "landscapePrimary" if landscape else "portraitPrimary",
+                              "angle": 90 if landscape else 0}})
+    await p.pg.wait_for_timeout(900)
+
+
+async def rot_state(p):
+    return await p.pg.evaluate("""(()=>{const o=document.getElementById('wnb-rotate'), pa=document.getElementById('wnb-portrait'),
+        f=document.getElementById('wnb-full');
+        return {shown: !!o && getComputedStyle(o).display !== 'none', text: o ? o.textContent : '',
+                anyway: pa ? pa.textContent : null, full: f ? [getComputedStyle(f).display, f.getAttribute('aria-label')] : null,
+                cover: window.wnbCover ? wnbCover() : null, lang: window.wnbLangNow ? wnbLangNow() : ''}})()""")
+
+
+async def sc_rotate(b):
+    """Сенсорный экран, книжная ориентация: телефон — заслонка «поверни боком» поверх заставки и игры, игра под ней
+    на паузе и касаний не получает; поворот в альбом — заслонки нет, игра идёт; планшет — «играть так» работает;
+    плашка ?fps=1 на телефоне — крупная, с окном в CSS-пикселях и dpr; ?res= — потолок разрешения холста."""
+    # телефон, книжная: заслонка с самого начала (во время загрузки)
+    p = await new_page(b, "rotate", touch=True, mobile=True, w=360, h=740, dpr=3,
+                       legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+    await orient(p, 360, 740, False)
+    await p.pg.goto(URL + "?test=1&fps=1")
+    await p.pg.wait_for_timeout(300)
+    r = await rot_state(p)
+    load_vis = await p.pg.evaluate("!!document.getElementById('wnb-load')")
+    check(r["shown"] and load_vis, f"{p.name}: заслонка видна уже во время загрузки (поверх заставки): «{r['text'][:60]}»")
+    st = await p.wait(lambda s: s.get("screen") == "title", "титул под заслонкой", 90)
+    await p.pg.wait_for_timeout(1200)
+    st = await p.state()
+    check(st.get("covered") is True and st.get("paused") is True,
+          f"{p.name}: под заслонкой игра на паузе и не рисует (covered={st.get('covered')}, paused={st.get('paused')})")
+    await p.shot("1_portrait_cover")
+    # касание по заслонке туда, где «начать», — игре не достаётся
+    await p.pg.evaluate("""window.__canvasHits = 0; ['touchstart','touchend','pointerdown','mousedown'].forEach(n =>
+        document.getElementById('canvas').addEventListener(n, () => window.__canvasHits++, true))""")
+    for xy in ((640, 600), (640, 360), (640, 650)):          # где на титуле «начать» и середина
+        await p.tap_xy(*xy)
+        await p.pg.wait_for_timeout(400)
+    st = await p.state()
+    hits = await p.pg.evaluate("window.__canvasHits")
+    check(st.get("screen") == "title" and hits == 0,
+          f"{p.name}: касания по заслонке холсту не достались (событий на холсте {hits}, экран {st.get('screen')})")
+    # поворот в альбом
+    await orient(p, 740, 360, True)
+    r = await rot_state(p)
+    st = await p.wait(lambda s: s.get("covered") is False and s.get("paused") is False, "игра снова идёт", 10)
+    check(not r["shown"] and bool(st), f"{p.name}: в альбомной ориентации заслонки нет, игра идёт")
+    check(bool(r["full"]) and r["full"][0] != "none", f"{p.name}: кнопка полного экрана у левого края ({r['full']})")
+    await p.pg.wait_for_timeout(2500)
+    await p.press("Start", None, 1200)
+    st = await p.wait(lambda s: s.get("screen") == "hub", "касание «начать» после поворота → мастерская", 10)
+    c = await p.canvas()
+    res = await p.pg.evaluate("wnbRes.line()")
+    check(abs(c[2] - 740) < 2 and abs(c[3] - 360) < 2 and c[4] >= 2000,
+          f"{p.name}: холст {c[2]:.0f}×{c[3]:.0f} CSS = окно, {c[4]}×{c[5]} px; {res}")
+    await p.pg.wait_for_timeout(1500)
+    await p.shot("2_landscape_hub_fps")
+    lang = (await rot_state(p))["lang"]
+    check(lang == st.get("lang"), f"{p.name}: язык страницы = язык игры ({lang})")
+    # обратно в книжную — заслонка снова, игра на паузе
+    await orient(p, 360, 740, False)
+    st = await p.wait(lambda s: s.get("covered") is True, "снова заслонка", 10)
+    check(bool(st) and (await rot_state(p))["shown"], f"{p.name}: снова книжная — снова заслонка")
+    p.check_console()
+    await p.ctx.close()
+    # ?res=720 на телефоне: холст ниже, картинка та же по размеру
+    q = await new_page(b, "res", touch=True, mobile=True, w=740, h=360, dpr=3,
+                       legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+    await orient(q, 740, 360, True)
+    await q.boot("&res=720")
+    c = await q.canvas()
+    check(abs(c[3] - 360) < 2 and abs(c[5] - 720) <= 2, f"{q.name}: ?res=720 — холст {c[4]}×{c[5]} px при окне "
+                                                        f"{c[2]:.0f}×{c[3]:.0f} CSS (dpr {c[6]})")
+    await q.press("Start", None, 1200)
+    st = await q.wait(lambda s: s.get("screen") == "hub", "касание при ?res=720 попадает в кнопку", 10)
+    check(bool(st), f"{q.name}: касание при пониженном разрешении попадает куда надо")
+    q.check_console()
+    await q.ctx.close()
+    # планшет, книжная: заслонка с кнопкой «играть так»
+    t = await new_page(b, "tablet", touch=True, mobile=True, w=768, h=1024, dpr=2,
+                       legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+    await orient(t, 768, 1024, False, 2)
+    st, _, _ = await t.boot()
+    r = await rot_state(t)
+    check(r["shown"] and bool(r["anyway"]), f"{t.name}: заслонка с кнопкой «{r['anyway']}»")
+    await t.shot("1_portrait_cover")
+    box = await t.pg.evaluate("(()=>{const r=document.getElementById('wnb-portrait').getBoundingClientRect();"
+                              "return [r.left+r.width/2, r.top+r.height/2]})()")
+    await t.pg.touchscreen.tap(box[0], box[1])
+    await t.pg.wait_for_timeout(600)
+    r = await rot_state(t)
+    st = await t.wait(lambda s: s.get("covered") is False, "игра идёт после «играть так»", 10)
+    check(not r["shown"] and bool(st), f"{t.name}: «играть так» убрал заслонку, игра идёт")
+    await t.pg.wait_for_timeout(1500)
+    await t.press("Start", None, 1200)
+    st = await t.wait(lambda s: s.get("screen") == "hub", "касание «начать» в книжной на планшете", 10)
+    check(bool(st), f"{t.name}: в книжной ориентации игра принимает касания")
+    await t.shot("2_portrait_hub")
+    t.check_console()
+    await t.ctx.close()
 
 
 async def sc_a11y(b):
@@ -597,47 +710,131 @@ async def sc_a11y(b):
     await p.ctx.close()
 
 
+async def drag_chair(p, secs):
+    """Крутить коляску перетаскиванием (мышью — и в мобильном окне) secs секунд: диагноз «с поворотом»."""
+    st = await p.state()
+    hb = [x for x in st.get("buttons", []) if x[0].startswith("Spot_")]
+    cx, cy = (575, 380)
+    if hb:
+        cx = sum(x[1] + x[3] / 2 for x in hb) / len(hb)
+        cy = sum(x[2] + x[4] / 2 for x in hb) / len(hb)
+    x0, y0 = await p.at(cx - 60, cy + 40)
+    x1, _ = await p.at(cx + 60, cy + 40)
+    await p.pg.mouse.move(x0, y0)
+    await p.pg.mouse.down()
+    t0 = time.time()
+    k = 0
+    while time.time() - t0 < secs:
+        k += 1
+        u = (k % 20) / 20
+        x = x0 + (x1 - x0) * (u if (k // 20) % 2 == 0 else 1 - u)
+        await p.pg.mouse.move(x, y0)
+        await p.pg.wait_for_timeout(60)
+    await p.pg.mouse.up()
+
+
+async def measure_phase(p, secs, prof_out=None, key="", during=None):
+    """Кадры/с за secs секунд (среднее окон по 1 с без первого), худший кадр; с ?prof=1 — последняя сводка профиля."""
+    if during:
+        (f, w), _ = await asyncio.gather(measure_fps(p, secs), during(p, secs))
+    else:
+        f, w = await measure_fps(p, secs)
+    if prof_out is not None:
+        pr = (await p.state()).get("prof") or {}
+        if pr:
+            prof_out[key] = pr
+    return f, w
+
+
+async def perf_run(b, label, rate, mobile, query="", prof_out=None):
+    """Один проход замера: титул → мастерская → задание flat: диагноз (стоя и крутим коляску), ремонт (инструмент
+    в руке у курсора), проезд. Возврат: словарь кадров/с по фазам."""
+    p = await new_page(b, "perf", touch=mobile, mobile=mobile, w=740 if mobile else 1280, h=360 if mobile else 720,
+                       dpr=3 if mobile else 1, legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+    cdp = await p.ctx.new_cdp_session(p.pg)
+    await cdp.send("Network.enable")
+    await cdp.send("Network.setCacheDisabled", {"cacheDisabled": True})
+    await cdp.send("Emulation.setCPUThrottlingRate", {"rate": rate})
+    r = {"label": label}
+    st, secs, times = await p.boot(query)
+    r["t_title"] = (times.get("title", 0) - times.get("start", 0)) / 1000
+    await p.wait(lambda s: s["frames"]["sets"].get("loop:barty_wave", [0, 1])[0] == 36, "петли титула", 120, quiet=True)
+    r["title"], r["w_title"] = await measure_phase(p, 5, prof_out, "title")
+    await p.press("Start", wait=1500)
+    await p.wait(lambda s: s.get("screen") == "hub", "мастерская", 30, quiet=True)
+    await p.pg.wait_for_timeout(1500)                       # карточки въехали
+    r["hub"], r["w_hub"] = await measure_phase(p, 5, prof_out, "hub")
+    await p.press("Card_flat", wait=1500)
+    await p.wait(lambda s: s.get("screen") == "job", "задание", 30, quiet=True)
+    t0 = time.time()
+    await p.wait(lambda s: all(v[0] == v[1] for k, v in s["frames"]["sets"].items() if k.startswith("tt:")),
+                 "кадры поворота", 120, quiet=True)
+    r["t_tt"] = time.time() - t0
+    await p.wait(lambda s: s["frames"]["queue"] == 0 and s["frames"]["inflight"] == 0 and s["frames"]["wait"] == 0,
+                 "все кадры задания (поворот, волшебство, проезд)", 120, quiet=True)
+    r["t_all"] = time.time() - t0
+    r["job"], r["w_job"] = await measure_phase(p, 5, prof_out, "diagnose")
+    r["drag"], r["w_drag"] = await measure_phase(p, 5, prof_out, "diagnose_drag", drag_chair)
+    r["dec"] = (await p.state()).get("frames", {}).get("decode_ms")
+    await p.shot(f"{label.replace(' ', '_')}_1_diagnose")
+    st = await follow_hints(p, lambda s: s.get("phase") == "repair", 60)
+    st = await p.wait(lambda s: s.get("phase") == "repair" and s.get("hint"), "ремонт", 10, quiet=True)
+    hint = (st.get("hint") or [""])[0]
+    if hint.startswith("Tool_"):
+        await p.press(hint, st, 400)                        # инструмент в руке (рисуется у курсора)
+        x, y = await p.at(560, 380)
+        await p.pg.mouse.move(x, y)
+    await p.pg.wait_for_timeout(1200)
+    r["repair"], r["w_repair"] = await measure_phase(p, 5, prof_out, "repair")
+    await p.shot(f"{label.replace(' ', '_')}_2_repair")
+    st = await follow_hints(p, lambda s: s.get("phase") == "test", 120)
+    await p.wait(lambda s: all(v[0] == v[1] for k, v in s["frames"]["sets"].items() if k.startswith("loop:ride_")),
+                 "петля проезда", 60, quiet=True)
+    await p.press("TestDrive", wait=200)
+    await p.wait(lambda s: (s.get("ride") or {}).get("riding"), "проезд", 10, quiet=True)
+    await p.pg.wait_for_timeout(600)
+    r["ride"], r["w_ride"] = await measure_phase(p, 3.2, prof_out, "ride")
+    await p.shot(f"{label.replace(' ', '_')}_3_ride")
+    await p.ctx.close()
+    info(f"{label}: титул {r['t_title']:.1f} с; fps титул {r['title']:.0f}, мастерская {r['hub']:.0f}, диагноз "
+         f"{r['job']:.0f} (крутим {r['drag']:.0f}, худший {r['w_drag']:.0f} мс), ремонт {r['repair']:.0f} "
+         f"(худший {r['w_repair']:.0f} мс), проезд {r['ride']:.0f} (худший {r['w_ride']:.0f} мс); кадры поворота "
+         f"за {r['t_tt']:.1f} с, все кадры задания за {r['t_all']:.1f} с, декодирование {r['dec']} мс/кадр")
+    return r
+
+
 async def sc_perf(b):
-    """Замер: загрузка до титула и кадры/с на титуле и в задании — без замедления, с замедлением процессора ×4 и ×6
-    (CDP Emulation.setCPUThrottlingRate) и в мобильном окне — грубая оценка телефона."""
+    """Замер: загрузка до титула и кадры/с на титуле, в мастерской и в задании (диагноз — стоя и с поворотом коляски,
+    ремонт, проезд) — без замедления, с замедлением процессора ×4 и ×6 (CDP Emulation.setCPUThrottlingRate) и в
+    мобильном окне (740×360, dpr 3, ×6 — по снимку владельца 19.11 это и есть его телефон: 27 к/с в мастерской).
+    WNB_PERF_RES=720,1080 — добавить проходы телефона с ?res=…"""
     rows = []
-    for label, rate, mobile in (("desktop x1", 1, False), ("desktop x4", 4, False), ("desktop x6", 6, False),
-                                ("phone x6", 6, True)):
-        p = await new_page(b, "perf", touch=mobile, mobile=mobile, w=740 if mobile else 1280, h=360 if mobile else 720,
-                           dpr=3 if mobile else 1, legacy={"save.json": {"done": [], "tutorial_skipped": True}})
-        cdp = await p.ctx.new_cdp_session(p.pg)
-        await cdp.send("Network.enable")
-        await cdp.send("Network.setCacheDisabled", {"cacheDisabled": True})
-        await cdp.send("Emulation.setCPUThrottlingRate", {"rate": rate})
-        st, secs, times = await p.boot()
-        t_title = (times.get("title", 0) - times.get("start", 0)) / 1000
-        await p.wait(lambda s: s["frames"]["sets"].get("loop:barty_wave", [0, 1])[0] == 36, "петли титула", 120, quiet=True)
-        f_title, w_title = await measure_fps(p, 5)
-        await p.press("Start", wait=1500)
-        await p.wait(lambda s: s.get("screen") == "hub", "мастерская", 30, quiet=True)
-        f_hub, _ = await measure_fps(p, 4)
-        await p.press("Card_flat", wait=1500)
-        await p.wait(lambda s: s.get("screen") == "job", "задание", 30, quiet=True)
-        t0 = time.time()
-        st = await p.wait(lambda s: s["frames"]["sets"].get("tt:chair_basic.png", [0, 1])[0] ==
-                          s["frames"]["sets"].get("tt:chair_basic.png", [0, 1])[1] or
-                          all(v[0] == v[1] for k, v in s["frames"]["sets"].items() if k.startswith("tt:")),
-                          "кадры поворота", 120, quiet=True)
-        t_tt = time.time() - t0
-        await p.wait(lambda s: s["frames"]["queue"] == 0 and s["frames"]["inflight"] == 0 and s["frames"]["wait"] == 0,
-                     "все кадры задания (поворот, волшебство, проезд)", 120, quiet=True)
-        t_all = time.time() - t0
-        info(f"{label}: все кадры задания (поворот + волшебство + проезд) за {t_all:.1f} с")
-        f_job, w_job = await measure_fps(p, 6)
-        dec = (await p.state()).get("frames", {}).get("decode_ms")
-        rows.append((label, t_title, f_title, w_title, f_hub, f_job, w_job, t_tt, dec))
-        info(f"{label}: титул {t_title:.1f} с, fps титул {f_title:.0f} (худший кадр {w_title:.0f} мс), мастерская "
-             f"{f_hub:.0f}, задание {f_job:.0f} (худший {w_job:.0f} мс); кадры поворота за {t_tt:.1f} с, "
-             f"декодирование {dec} мс/кадр")
-        await p.shot(f"{label.replace(' ', '_')}_job")
-        await p.ctx.close()
+    runs = [("desktop x1", 1, False, ""), ("desktop x4", 4, False, ""), ("desktop x6", 6, False, ""),
+            ("phone x6", 6, True, "")]
+    for v in filter(None, os.environ.get("WNB_PERF_RES", "").split(",")):
+        runs.append((f"phone x6 res{v}", 6, True, f"&res={v}"))
+    for label, rate, mobile, q in runs:
+        rows.append(await perf_run(b, label, rate, mobile, q))
     metrics["perf"] = rows
-    check(all(r[5] > 0 for r in rows), "perf: замер кадров/с снят")
+    check(all(r.get("hub", 0) > 0 and r.get("repair", 0) > 0 for r in rows), "perf: замер кадров/с снят")
+
+
+async def sc_prof(b):
+    """?prof=1 — профилировка (ui/prof.gd): сводки в window.wnbState.prof по фазам на телефоне ×6 (что дороже всего
+    в кадре) → godot/tests/web_shots/prof_phone_x6.json и строки в выводе; «[wnb] prof …» в консоли браузера."""
+    prof = {}
+    r = await perf_run(b, "prof phone x6", 6, True, "&prof=1", prof)
+    check(bool(prof.get("hub")) and bool(prof.get("repair")), f"prof: сводки профиля сняты по фазам ({sorted(prof)})")
+    with open(os.path.join(SHOTS, "prof_phone_x6.json"), "w", encoding="utf-8") as f:
+        json.dump({"fps": r, "prof": prof}, f, ensure_ascii=False, indent=1)
+    for k, pr in prof.items():
+        top = ", ".join(f"{x[0]} {x[1]:.2f}" for x in pr.get("draw_top", [])[:6])
+        tx = ", ".join(f"{n} {v[0]:.2f}/{v[1]:.0f}" for n, v in pr.get("text", {}).items())
+        info(f"prof {k}: кадр {pr.get('frame_ms')} мс — process {pr.get('process_ms')}, draw {pr.get('draw_ms')}, "
+             f"render {pr.get('render_cpu_ms')} (gpu {pr.get('render_gpu_ms')}), вызовов рисования "
+             f"{pr.get('draw_calls')}, перерисовок {pr.get('redraws')}; узлы: {top}; текст мс/вызовов: {tx}; "
+             f"тик {pr.get('tick')}")
+    metrics["prof"] = prof
 
 
 async def sc_fpshud(b):
@@ -663,7 +860,8 @@ async def sc_fpshud(b):
 
 
 SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
-             "guild": sc_guild, "phone": sc_phone, "a11y": sc_a11y, "fps": sc_fpshud, "perf": sc_perf}
+             "guild": sc_guild, "phone": sc_phone, "a11y": sc_a11y, "fps": sc_fpshud, "perf": sc_perf,
+             "prof": sc_prof}
 
 
 async def main(only):
@@ -705,11 +903,13 @@ if __name__ == "__main__":
             srv.shutdown()
             srv.server_close()
     if metrics.get("perf"):
-        print("\nЗамер (Chromium без окна, видеокарта; замедление процессора через CDP):")
-        print("  режим        титул,с  fps титул  худший мс  fps мастерская  fps задание  худший мс  кадры поворота,с  декод мс")
+        print("\nЗамер (Chromium без окна, видеокарта; замедление процессора через CDP), кадры/с (худший кадр, мс):")
+        print("  режим                 титул,с  титул  мастерская  диагноз  крутим      ремонт      проезд"
+              "     поворот,с  декод мс")
         for r in metrics["perf"]:
-            print(f"  {r[0]:<12} {r[1]:>6.1f}  {r[2]:>9.0f}  {r[3]:>9.0f}  {r[4]:>14.0f}  {r[5]:>11.0f}  {r[6]:>9.0f}  "
-                  f"{r[7]:>16.1f}  {r[8]}")
+            print(f"  {r['label']:<20} {r['t_title']:>7.1f}  {r['title']:>5.0f}  {r['hub']:>10.0f}  {r['job']:>7.0f}  "
+                  f"{r['drag']:>4.0f} ({r['w_drag']:>3.0f})  {r['repair']:>4.0f} ({r['w_repair']:>3.0f})  "
+                  f"{r['ride']:>4.0f} ({r['w_ride']:>3.0f})  {r['t_tt']:>9.1f}  {r['dec']}")
     print(f"\nWEB SMOKE: {len(notes)} ok, {len(fails)} FAIL. Скриншоты: godot/tests/web_shots/ — открой и посмотри.")
     for f in fails:
         print("  ", f)

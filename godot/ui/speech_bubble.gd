@@ -18,6 +18,8 @@ var job: Dictionary = {}                  # MENTOR: чей портрет у р�
 var col: Rect2 = Rect2()                  # MENTOR: узкий пузырь в правой колонке (ремонт); пусто — внизу
 var _typing: Array = ["", 0.0]
 var _live: Label
+var _spk: Control                         # MENTOR: портрет говорящего — свой слой, рисуется каждый кадр (машет, парит)
+var _sig: Array = []                      # пузырь с текстом — только пока выпрыгивает/печатается и при смене реплики
 
 
 static func make(k: Kind) -> SpeechBubble:
@@ -35,6 +37,12 @@ func _init() -> void:
 	_live.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_live.accessibility_live = AccessibilityServer.AccessibilityLiveMode.LIVE_OFF   # реплики говорит A11y/Speech
 	add_child(_live)
+	_spk = Control.new()
+	_spk.name = "Speaker"
+	_spk.size = size
+	_spk.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_spk.draw.connect(_draw_spk)
+	add_child(_spk)
 
 
 ## Новая реплика (пусто — пузыря нет). Возврат: true — реплика сменилась.
@@ -49,7 +57,20 @@ func say(s: String) -> bool:
 
 func _process(dt: float) -> void:
 	t += dt
-	queue_redraw()
+	var on := shown()
+	var cps := 80.0 if kind == Kind.CLIENT else 90.0
+	var tl := Loc.t(line)                     # выпрыгивает 0,35 с, печатается по буквам (typed: с первого рисования)
+	var typing := str(_typing[0])
+	var typed_all: bool = Settings.a11y.get("instant", false) or (typing != "" and tl.contains(typing)
+		and (t - float(_typing[1])) * cps >= typing.length() + 1)
+	var anim := on and (t - t0 < 0.4 or not typed_all)
+	var sig := [line, on, bottom, top_y, col, t if anim else 0.0]
+	if sig != _sig:
+		_sig = sig
+		queue_redraw()
+	if kind == Kind.MENTOR and (on or _spk.visible):
+		_spk.visible = on
+		_spk.queue_redraw()
 
 
 func typed(text: String, cps: float) -> int:
@@ -127,7 +148,6 @@ func _draw_mentor() -> void:
 	if col.size != Vector2.ZERO:
 		_draw_mentor_col()
 		return
-	_draw_speaker(speaker_img(line), Rect2(24, top_y, 90, 110))
 	var bubble := Rect2(120, top_y, 740, 86)
 	draw_rect(bubble, Color8(24, 30, 36, 220))
 	UI.draw_round_rect(self, bubble, Color(0, 0, 0, 0), UI.CYAN, 2, 8)
@@ -146,29 +166,38 @@ func _draw_mentor() -> void:
 ## Портрет говорящего в боксе bx: Барти — машущей петлёй, Бренна — своей петлёй в боксе с полем и без покачивания
 ## (клип сам парит; blit_hero в game.py), остальные — картинкой. «Без анимации» — картинки, парят как раньше.
 func _draw_speaker(img: String, bx: Rect2) -> void:
+	var ci := _spk
 	var tex: Texture2D = Frames.loop_frame("barty_wave", t) if img == "ghost.png" else null
 	if tex == null:
 		var p := Figure.idle_pick(img, bx, t)
 		tex = p["tex"]
 		if tex != null and p["live"]:
-			draw_texture_rect(tex, UI.fit_rect(tex.get_size(), p["box"]), false)
+			ci.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), p["box"]), false)
 			return
 	if tex == null:
 		return
 	var r := UI.fit_rect(tex.get_size(), bx)
 	var dy := 7.0 * UI.wsin(t * 1.6 + 1.3)
 	var ang := 2.5 * UI.wsin(t * 1.1 + 1.3)
-	draw_set_transform(bx.get_center() + Vector2(0, dy), deg_to_rad(-ang))
-	draw_texture_rect(tex, Rect2(r.position - bx.get_center(), r.size), false)
-	draw_set_transform(Vector2.ZERO)
+	ci.draw_set_transform(bx.get_center() + Vector2(0, dy), deg_to_rad(-ang))
+	ci.draw_texture_rect(tex, Rect2(r.position - bx.get_center(), r.size), false)
+	ci.draw_set_transform(Vector2.ZERO)
+
+
+## Слой портрета наставника (поверх пузыря: в узком пузыре портрет внутри рамки — как раньше, после фона).
+func _draw_spk() -> void:
+	if kind != Kind.MENTOR or not shown():
+		return
+	if col.size != Vector2.ZERO:
+		_draw_speaker(speaker_img(line), Rect2(col.position + Vector2(6, 6), Vector2(46, 56)))
+	else:
+		_draw_speaker(speaker_img(line), Rect2(24, top_y, 90, 110))
 
 
 ## Узкий пузырь наставника в правой колонке (ремонт): портрет 46×56 и текст рядом.
 func _draw_mentor_col() -> void:
-	var img := speaker_img(line)
 	draw_rect(col, Color8(24, 30, 36, 220))
 	UI.draw_round_rect(self, col, Color(0, 0, 0, 0), UI.CYAN, 2, 8)
-	_draw_speaker(img, Rect2(col.position + Vector2(6, 6), Vector2(46, 56)))
 	var text := Loc.t(line)
 	var tw := col.size.x - 70
 	var sz := 12

@@ -66,6 +66,9 @@ var _ok_pos: Vector2
 var _portrait_state: Array = []
 var _bar: TopBar
 var _dispute_btn: GameButton
+var _rows_sig: Array = []                # от чего зависят строки деталей и диагнозы (перерисовка только при смене)
+var _deco_sig: Array = []
+var _bar_sig: Array = []
 
 
 func _ready() -> void:
@@ -227,6 +230,8 @@ func diag_rects() -> Array[Rect2]:
 # ---------------- сборка ----------------
 
 func build() -> void:
+	_bar_sig = []                            # новые узлы — сравнивать заново
+	_deco_sig = []
 	_part_btns.clear()
 	_diag_btns.clear()
 	_skip = null
@@ -333,6 +338,7 @@ func _part_row(i: int, pid: String) -> GameButton:
 	b.set_meta("pid", pid)
 	b.set_meta("i", i)
 	b.on_draw = _draw_part_row
+	b.redraw_sig = _row_sig
 	b.pressed.connect(_part_row_pressed.bind(b))
 	add_child(b)
 	_part_btns.append(b)
@@ -360,6 +366,7 @@ func _build_diagnose() -> void:
 		b.name = "Diag_%d" % i
 		b.set_meta("i", i)
 		b.on_draw = _draw_diag
+		b.redraw_sig = _row_sig
 		b.pressed.connect(choose_diagnosis.bind(i))
 		add_child(b)
 		_diag_btns.append(b)
@@ -1006,7 +1013,10 @@ func tick(dt: float) -> void:
 		_skip.visible = not dv
 	_bar.brand = not dv and _skip == null
 	_bar.right_edge = (UI.W - 340 - 12.0) if dv else (_skip.position.x - 12 if _skip else UI.W - 170.0)
-	_bar.queue_redraw()
+	var bs := [_bar.brand, _bar.right_edge]
+	if bs != _bar_sig:
+		_bar_sig = bs
+		_bar.queue_redraw()
 	_client_bubble.visible = not riding
 	_mentor.visible = not riding
 	action.visible = not riding
@@ -1018,7 +1028,12 @@ func tick(dt: float) -> void:
 	for b in _part_btns:
 		b.slide = Vector2(int(160 * (1 - UI.appear(st, 0.05 * i, 0.35))), 0)
 		i += 1
-	_deco.queue_redraw()
+	var want := tutor_want()
+	_rows_sig = [phase, inspected.size(), note_pin, _dsize, want, tutor_step().get("part", "")]
+	var ds := [phase, inspected.size(), step_idx, ride_done, chair_rect()]
+	if ds != _deco_sig:                       # надписи экрана — только когда что-то сменилось
+		_deco_sig = ds
+		_deco.queue_redraw()
 	_fx.queue_redraw()
 
 
@@ -1108,6 +1123,11 @@ func _draw_fx() -> void:
 		_fx.draw_set_transform(m + Vector2(22, 20), deg_to_rad(12 - 4 * UI.wsin(t * 4)))
 		_fx.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(-17, -17, 34, 34)), false)
 		_fx.draw_set_transform(Vector2.ZERO)
+
+
+## Значение, от которого зависят строки деталей и кнопки диагноза (GameButton.redraw_sig): считается раз в кадр в tick.
+func _row_sig() -> Array:
+	return _rows_sig
 
 
 func _draw_part_row(b: GameButton, _r: Rect2) -> void:

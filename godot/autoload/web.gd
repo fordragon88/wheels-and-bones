@@ -5,6 +5,10 @@ extends Node
 ##     параллельно и мимо игрового кадра; игра раз в кадр забирает готовое (Frames);
 ##   • музыка — элемент <audio> страницы (wnbMusic): Audio зовёт music_*;
 ##   • плашка кадров/с по ?fps=1 (на компьютере — «-- --fps»), как FPS_HUD в game.py, и строка в консоль браузера;
+##     на сенсорном экране — крупнее, в две строки, с размером окна в CSS-пикселях и devicePixelRatio (и потолком ?res);
+##   • ?prof=1 (только вместе с ?test=1 или ?fps=1; на компьютере «-- --prof») — профилировка кадра (ui/prof.gd);
+##   • заслонка «поверни телефон» (страница, shell.html): пока она закрывает игру — дерево на паузе и кадры не
+##     рисуются (RenderingServer.render_loop_enabled); язык игры уходит странице (wnbLang) — тексты заслонки и кнопок;
 ##   • ?test=1 — раз в 0,25 с window.wnbState (JSON) для проверки godot/tools/web_smoke.py: экран, фаза, кадры/с,
 ##     кадры (скачано/в очереди/ошибки), видимые кнопки с прямоугольниками и подсказка «что нажать дальше».
 ## На компьютере (не браузер) работает только плашка кадров/с.
@@ -13,6 +17,8 @@ var on: bool = false
 var params: Dictionary = {}              # параметры адреса страницы: имя → значение (последнее)
 var test: bool = false                   # ?test=1 — состояние для автопроверки
 var fps_on: bool = false                 # ?fps=1 / --fps — плашка кадров/с
+var prof_on: bool = false                # ?prof=1 (+ ?test=1/?fps=1) / --prof — профилировка кадра
+var covered: bool = false                # заслонка страницы закрывает игру (книжная ориентация телефона)
 var cfg: Dictionary = {}                 # game_consts.json → web: {frames_v, music_v, music_ext} (пишет build_web.py)
 var fps: float = 0.0
 var fps_min10: float = 0.0
@@ -28,6 +34,9 @@ var _music_url: String = ""
 var _music_vol: float = -1.0
 var _worst_ms: float = 0.0               # самый долгий кадр за окно замера
 var _worst_win: float = 0.0
+var _touch: bool = false
+var _cover_cb: JavaScriptObject           # обратный вызов для страницы (держим ссылку, иначе его соберут)
+var _lang_sent: String = ""
 
 
 func _ready() -> void:
@@ -39,13 +48,23 @@ func _ready() -> void:
 		params = parse_query(str(JavaScriptBridge.eval("window.location.search || ''", true)))
 	test = on and flag("test")
 	fps_on = flag("fps") or OS.get_cmdline_user_args().has("--fps")
+	prof_on = (flag("prof") and (test or fps_on)) or OS.get_cmdline_user_args().has("--prof")
+	if prof_on:
+		add_child(Prof.new())
+	_touch = DisplayServer.is_touchscreen_available()
+	if on:
+		_cover_cb = JavaScriptBridge.create_callback(_on_cover)
+		if str(JavaScriptBridge.eval("typeof window.wnbOnCover", true)) == "function":
+			JavaScriptBridge.get_interface("window").wnbOnCover(_cover_cb)
+		Loc.changed.connect(_send_lang)
+		_send_lang()
 	if fps_on:
 		var layer := CanvasLayer.new()
 		layer.name = "FpsHud"
 		layer.layer = 128
 		_hud = Label.new()
 		_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_hud.add_theme_font_size_override("font_size", 13)
+		_hud.add_theme_font_size_override("font_size", 24 if _touch else 13)   # телефон: 1280×720 → ~360 px CSS
 		_hud.add_theme_color_override("font_color", Color.WHITE)
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0, 0, 0, 0.66)
@@ -59,6 +78,24 @@ func _ready() -> void:
 		_hud.accessibility_name = ""
 		layer.add_child(_hud)
 		get_tree().root.add_child.call_deferred(layer)
+
+
+## Страница: заслонка закрыла/открыла игру. Закрыла — пауза дерева и без отрисовки кадров (не греть телефон зря).
+func _on_cover(args: Array) -> void:
+	var c := bool(args[0]) if not args.is_empty() else false
+	if c == covered:
+		return
+	covered = c
+	get_tree().paused = c
+	RenderingServer.render_loop_enabled = not c
+
+
+## Язык игры — странице (тексты заслонки и кнопок полного экрана; запоминает до следующей загрузки).
+func _send_lang() -> void:
+	if Loc.code == _lang_sent:
+		return
+	_lang_sent = Loc.code
+	JavaScriptBridge.eval("window.wnbLang && wnbLang(%s)" % JSON.stringify(Loc.code), true)
 
 
 ## «a=1&b=x+y» → {a: "1", b: "x y"} (как parse_qs: последнее значение).
@@ -177,8 +214,13 @@ func _process(dt: float) -> void:
 		fps_min10 = _hist.min()
 		if _hud != null:
 			var ws := DisplayServer.window_get_size()
-			_hud.text = "fps %.0f · min10s %.0f · %s %d×%d · max %.0f ms%s · %s" % [fps, fps_min10, Loc.t("холст"), ws.x, ws.y,
-				_worst_ms, " · touch" if DisplayServer.is_touchscreen_available() else "", Frames.status_line()]
+			var page := ""
+			if on:                               # окно в CSS-пикселях, devicePixelRatio (→ с потолком ?res)
+				page = str(JavaScriptBridge.eval("window.wnbRes ? wnbRes.line() : ''", true))
+			var a := "fps %.0f · min10s %.0f · max %.0f ms%s" % [fps, fps_min10, _worst_ms, " · touch" if _touch else ""]
+			var b := "%s %d×%d%s · %s" % [Loc.t("холст"), ws.x, ws.y, (" · " + page) if page != "" else "", Frames.status_line()]
+			_hud.text = (a + "
+" + b) if _touch else (a + " · " + b)
 			_hud.reset_size()
 			_hud.position = Vector2(4, 720 - _hud.size.y - 4)
 	if on and fps_on:
@@ -209,7 +251,9 @@ func state() -> Dictionary:
 		"settings": Nav.settings != null, "errors": Content.errors.size(), "migrated": SaveGame.migrated,
 		"fullscreen": DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN,
 		"text_k": Settings.a11y.get("text", 0), "speech_on": Settings.a11y.get("on", false),
-		"music": Audio._cur_theme, "buttons": _buttons(), "hint": []}
+		"music": Audio._cur_theme, "buttons": _buttons(), "hint": [], "covered": covered, "paused": get_tree().paused}
+	if prof_on:
+		d["prof"] = Prof.summary
 	if scr != null:
 		for k: String in ["phase", "step_idx", "sel_tool", "mistakes", "ride_done"]:
 			if k in scr:

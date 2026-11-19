@@ -29,6 +29,23 @@ html, body { width: 100%; height: 100%; background: #18161e; overflow: hidden; t
   padding: 0 10px; -webkit-user-select: text; user-select: text; touch-action: auto; }
 #wnb-field::placeholder { color: #6a6a78; }
 #wnb-live { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; overflow: hidden; }
+html, body, #canvas { overscroll-behavior: none; }
+#canvas { touch-action: none; }
+/* заслонка «поверни телефон боком» (как game.py web_setup_touch): поверх заставки загрузки и игры */
+#wnb-rotate { position: fixed; inset: 0; z-index: 9999; display: none; flex-direction: column; align-items: center;
+  justify-content: center; background: #1d1b24; color: #f0b85a; font: bold 22px sans-serif; text-align: center;
+  padding: 24px; box-sizing: border-box; touch-action: none; }
+#wnb-rotate .i { font-size: 72px; line-height: 1; }
+#wnb-rotate .m { margin-top: 12px; }
+#wnb-portrait { margin-top: 28px; min-height: 48px; padding: 10px 22px; border: 2px solid #f0b85a; border-radius: 10px;
+  background: transparent; color: #f0b85a; font: bold 18px sans-serif; cursor: pointer; }
+#wnb-full, #wnb-exitfs { position: fixed; z-index: 9998; border: 0; padding: 0; border-radius: 10px; color: #fff;
+  background: rgba(0,0,0,.45); opacity: .6; cursor: pointer; }
+#wnb-full, #wnb-exitfs.touch { left: 6px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px;
+  font: bold 20px sans-serif; }
+#wnb-exitfs { display: none; }
+#wnb-exitfs:not(.touch) { left: 50%; bottom: 4px; transform: translateX(-50%); padding: 5px 12px; border-radius: 8px;
+  background: rgba(0,0,0,.55); font: bold 13px sans-serif; opacity: .85; }
 @media (max-height: 480px) { #wnb-load { padding-bottom: 3vh; } #wnb-load .t { margin-bottom: 4px; } }
 </style>
 <script>
@@ -210,6 +227,63 @@ html, body { width: 100%; height: 100%; background: #18161e; overflow: hidden; t
     set: function (v) { if (fld.el) fld.el.value = v; }
   };
 
+  // --- язык страницы (заслонка, кнопки, заставка): до загрузки игры — последний язык игры (localStorage) или язык
+  // браузера (ru → русский, иначе английский); игра сообщает свой через wnbLang(code) (autoload/web.gd).
+  var TXT = {
+    ru: { phone: 'Поверни телефон боком, чтобы играть', dev: 'Поверни планшет боком, чтобы играть',
+          anyway: 'Играть так (книжная ориентация)', full: 'Полный экран', exit: 'Выйти из полного экрана',
+          exitEsc: '\u2716 Выйти из полного экрана (Esc)', f11: 'Нажми F11 (или Esc), чтобы выйти из полного экрана',
+          load: 'Загружаю мастерскую…', start: 'Запуск…', fail: 'Игра не запустилась.' },
+    en: { phone: 'Turn your phone sideways to play', dev: 'Turn your device sideways to play',
+          anyway: 'Play in portrait anyway', full: 'Fullscreen', exit: 'Exit fullscreen',
+          exitEsc: '\u2716 Exit fullscreen (Esc)', f11: 'Press F11 (or Esc) to leave full screen',
+          load: 'Loading the workshop…', start: 'Starting…', fail: 'The game could not start.' }
+  };
+  var lang = '';
+  try { lang = localStorage.getItem('wnb-godot:lang') || ''; } catch (e) { lang = ''; }
+  if (!TXT[lang]) lang = /^ru\b/i.test(navigator.language || '') ? 'ru' : 'en';
+  var langCbs = [];
+  window.wnbT = function (k) { return TXT[lang][k] || TXT.en[k] || k; };
+  window.wnbOnLang = function (f) { langCbs.push(f); f(); };
+  window.wnbLang = function (code) {
+    if (!TXT[code]) return;
+    try { localStorage.setItem('wnb-godot:lang', code); } catch (e) {}
+    if (code === lang) return;
+    lang = code;
+    document.documentElement.lang = code;
+    langCbs.forEach(function (f) { try { f(); } catch (e) {} });
+  };
+  window.wnbLangNow = function () { return lang; };
+  document.documentElement.lang = lang;
+
+  // --- потолок разрешения холста: ?res=N — высота игровой картинки 16:9 в пикселях холста (0 — без потолка).
+  // Godot берёт масштаб холста из window.devicePixelRatio (GodotDisplayScreen.getPixelRatio) — подменяем его на
+  // меньший, если картинка выходит выше потолка; CSS-размер холста тот же, браузер растягивает. По умолчанию —
+  // RES_DEFAULT и не ниже 1 (только убирает лишнее на экранах с большой плотностью); с ?res= — как задано.
+  var RES_DEFAULT = 1080;
+  var qr = /[?&]res=(\d+)/.exec(location.search);
+  var res = qr ? +qr[1] : RES_DEFAULT;
+  var dprDesc = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio') ||
+                Object.getOwnPropertyDescriptor(Window.prototype, 'devicePixelRatio');
+  function realDpr() { try { return (dprDesc && dprDesc.get ? dprDesc.get.call(window) : 1) || 1; } catch (e) { return 1; } }
+  function gameCssH() { return Math.max(1, Math.min(window.innerHeight, window.innerWidth * 9 / 16)); }
+  function effDpr() {
+    var d = realDpr();
+    if (res > 0 && gameCssH() * d > res) d = Math.max(qr ? 0.25 : 1, Math.min(d, res / gameCssH()));
+    return d;
+  }
+  try {
+    if (dprDesc && dprDesc.get && res > 0) Object.defineProperty(window, 'devicePixelRatio', { configurable: true, get: effDpr });
+  } catch (e) {}
+  window.wnbRes = {
+    cap: res, real: realDpr, eff: effDpr,
+    line: function () {
+      var r = realDpr(), e = effDpr();
+      return 'css ' + window.innerWidth + '\u00d7' + window.innerHeight + ' dpr ' + (+r.toFixed(2)) +
+        (Math.abs(e - r) > 0.001 ? '\u2192' + (+e.toFixed(2)) + ' (res ' + res + ')' : '');
+    }
+  };
+
   // --- время загрузки: игра отмечает первый кадр титула (wnbMark('title')), страница — начало загрузки.
   window.wnbTimes = { start: performance.now() };
   window.wnbMark = function (k) { if (!(k in window.wnbTimes)) window.wnbTimes[k] = performance.now(); };
@@ -224,9 +298,117 @@ $GODOT_HEAD_INCLUDE
 <div id="wnb-load">
   <div class="t">Wheels &amp; Bones</div>
   <progress id="wnb-bar"></progress>
-  <div class="m" id="wnb-msg">Loading the workshop…</div>
+  <div class="m" id="wnb-msg"></div>
   <div class="e" id="wnb-err"></div>
 </div>
+<script>
+// Сенсорный экран (как web_setup_touch в game.py): на телефоне в книжной ориентации — заслонка «поверни боком»
+// (планшет — с кнопкой «играть так»), по первому касанию на телефоне — полный экран и альбомная ориентация; кнопка
+// полного экрана ⛶/✖ у левого края; на компьютере — «✖ Выйти из полного экрана (Esc)» внизу при полном экране.
+// Пока заслонка видна, игра на паузе и не рисует кадры (wnbOnCover → autoload/web.gd). Работает и во время загрузки.
+(function () {
+  'use strict';
+  var T = window.wnbT;
+  var de = document.documentElement;
+  var touch = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  var isFs = function () { return !!(document.fullscreenElement || document.webkitFullscreenElement); };
+  var canFs = !!(de.requestFullscreen || de.webkitRequestFullscreen);
+  var inFrame = false; try { inFrame = window.parent !== window; } catch (e) { inFrame = true; }
+  var cover = { on: false, cbs: [] };
+  window.wnbCover = function () { return cover.on; };
+  window.wnbOnCover = function (cb) { cover.cbs.push(cb); try { cb(cover.on); } catch (e) {} };
+  function setCover(v) {
+    if (v === cover.on) return;
+    cover.on = v;
+    cover.cbs.forEach(function (cb) { try { cb(v); } catch (e) {} });
+  }
+  function full() {
+    var f = de.requestFullscreen || de.webkitRequestFullscreen;
+    if (isFs() || !f) return;
+    try {
+      var p = f.call(de);
+      if (p && p.then) p.then(function () {
+        try { screen.orientation.lock('landscape').catch(function () {}); } catch (e) {}
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  function exitFs() { var ex = document.exitFullscreen || document.webkitExitFullscreen; if (ex) ex.call(document); }
+
+  // выход из полного экрана: компьютер — надпись внизу (и при F11); сенсорный — ✖ слева, если нет кнопки ⛶
+  if (document.exitFullscreen || document.webkitExitFullscreen) {
+    var x = document.createElement('button'); x.id = 'wnb-exitfs'; x.type = 'button';
+    if (touch) x.className = 'touch';
+    var big = function () { return !touch && innerWidth >= screen.width - 2 && innerHeight >= screen.height - 2; };
+    x.onclick = function () {
+      if (isFs()) { exitFs(); return; }
+      if (inFrame) { try { window.parent.postMessage({ wnb: 'exitfs' }, '*'); } catch (e) {} }   // сайт развернул iframe
+      if (touch) return;
+      x.textContent = T('f11');                                   // F11 браузера скриптом не снять
+      setTimeout(function () { x.textContent = T('exitEsc'); }, 4000);
+    };
+    document.body.appendChild(x);
+    // во фрейме сайта своя кнопка у обёртки — наша только при полном экране самого документа
+    var fsShow = function () {
+      x.style.display = (touch ? (isFs() && !document.getElementById('wnb-full'))
+                               : (isFs() || (!inFrame && big()))) ? 'block' : 'none';
+    };
+    document.addEventListener('fullscreenchange', fsShow); document.addEventListener('webkitfullscreenchange', fsShow);
+    window.addEventListener('resize', fsShow); setInterval(fsShow, 1000); fsShow();
+    window.wnbOnLang(function () {
+      x.textContent = touch ? '\u2716' : T('exitEsc');
+      x.setAttribute('aria-label', T('exit'));
+    });
+  }
+  if (!touch) return;
+
+  var phone = Math.min(screen.width, screen.height) < 700;
+  var ov = document.createElement('div'); ov.id = 'wnb-rotate';
+  ov.innerHTML = '<div class="i" aria-hidden="true">&#x21BB;</div><div class="m" role="alert"></div>';
+  var pa = null, anyway = false;                 // планшет: «играть так» — до перезагрузки страницы
+  if (!phone) {
+    pa = document.createElement('button'); pa.id = 'wnb-portrait'; pa.type = 'button';
+    pa.onclick = function (e) { anyway = true; chk(); if (e) e.stopPropagation(); };
+    ov.appendChild(pa);
+  }
+  // касания по заслонке игре не достаются (кроме кнопки «играть так»)
+  ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'mousedown', 'mouseup'].forEach(function (n) {
+    ov.addEventListener(n, function (e) {
+      if (pa && (e.target === pa)) return;
+      e.stopPropagation();
+      if (e.cancelable) e.preventDefault();
+    });
+  });
+  document.body.appendChild(ov);
+  // телефон — пока экран в книжной ориентации; планшет (любое сенсорное не-«телефон») — пока окно выше, чем шире
+  function chk() {
+    var show = phone ? (screen.height > screen.width && innerHeight > innerWidth * 0.9) : (!anyway && innerHeight > innerWidth);
+    ov.style.display = show ? 'flex' : 'none';
+    setCover(show);
+  }
+  window.addEventListener('resize', chk); window.addEventListener('orientationchange', chk);
+  if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', chk);
+  chk();
+  if (phone) window.addEventListener('touchend', full, { once: true, capture: true });
+
+  var b = null;
+  if (canFs) {
+    b = document.createElement('button'); b.id = 'wnb-full'; b.type = 'button';   // у левого края по центру
+    b.onclick = function () { if (isFs()) exitFs(); else full(); };
+    document.body.appendChild(b);
+  }
+  function texts() {
+    ov.querySelector('.m').textContent = T(phone ? 'phone' : 'dev');
+    if (pa) pa.textContent = T('anyway');
+    if (b) {
+      var on = isFs();                            // одна кнопка: вход ⛶ / выход ✖
+      b.textContent = on ? '\u2716' : '\u26F6';
+      b.setAttribute('aria-label', T(on ? 'exit' : 'full'));
+    }
+  }
+  document.addEventListener('fullscreenchange', texts); document.addEventListener('webkitfullscreenchange', texts);
+  window.wnbOnLang(texts);
+})();
+</script>
 <script src="$GODOT_URL"></script>
 <script>
 const GODOT_CONFIG = $GODOT_CONFIG;
@@ -237,11 +419,12 @@ const engine = new Engine(GODOT_CONFIG);
   const bar = document.getElementById('wnb-bar');
   const msg = document.getElementById('wnb-msg');
   const errBox = document.getElementById('wnb-err');
+  msg.textContent = wnbT('load');
   function fail(err) {
     console.error(err);
     errBox.textContent = (err && err.message) ? err.message : String(err || 'An unknown error occurred.');
     errBox.style.display = 'block';
-    msg.textContent = 'The game could not start.';
+    msg.textContent = wnbT('fail');
   }
   const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
   if (missing.length !== 0) {
@@ -252,7 +435,7 @@ const engine = new Engine(GODOT_CONFIG);
     onProgress: function (cur, total) {
       if (cur > 0 && total > 0) {
         bar.max = total; bar.value = cur;
-        msg.textContent = 'Loading the workshop… ' + (cur / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1) + ' MB';
+        msg.textContent = wnbT('load') + ' ' + (cur / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1) + ' MB';
       } else {
         bar.removeAttribute('value');
       }
@@ -260,7 +443,7 @@ const engine = new Engine(GODOT_CONFIG);
   }).then(function () {
     window.wnbTimes.started = performance.now();
     bar.max = 1; bar.value = 1;
-    msg.textContent = 'Starting…';
+    msg.textContent = wnbT('start');
     // заставка гаснет, когда игра нарисовала титул (или через 4 с — что раньше)
     const t0 = performance.now();
     (function wait() {
