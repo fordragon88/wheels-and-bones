@@ -82,6 +82,7 @@ func build() -> void:
 	back.pressed.connect(go_back)
 	add_child(back)
 	Chrome.add(self, true, true, true)
+	get_node("Back").set_meta("kb_skip", true)   # в a11y_items game.py Гильдии — только большая «НАЗАД»
 
 
 ## Экзамен: случайный билет из заданий Гильдии.

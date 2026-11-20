@@ -220,6 +220,14 @@ func _build_dyn() -> void:
 				_dyn.add_child(tg)
 				break
 	elif tab == "fit":
+		var c: Dictionary = cases()[case_i]
+		if c.get("view"):                            # «вид ⇄» — до списка клиентов: так его рисует и обходит game.py
+			var vname: String = {"front": "ВИД: СПЕРЕДИ  ⇄", "top": "ВИД: СВЕРХУ  ⇄", "side": "ВИД: СБОКУ  ⇄"}[view]
+			var tg := GameButton.make(TOGGLE, vname, UI.CYAN)
+			tg.name = "Toggle"
+			tg.active = view != "side"
+			tg.pressed.connect(toggle_view)
+			_dyn.add_child(tg)
 		var idx := SaveGame.seat_idx()               # в задании по ссылке — только назначенные примерки
 		for n in idx.size():
 			var i: int = idx[n]
@@ -233,14 +241,6 @@ func _build_dyn() -> void:
 			b.accessibility_name = ("✔ " if done else "") + Loc.t(cases()[i]["client"])
 			b.pressed.connect(pick_case.bind(i))
 			_dyn.add_child(b)
-		var c: Dictionary = cases()[case_i]
-		if c.get("view"):
-			var vname: String = {"front": "ВИД: СПЕРЕДИ  ⇄", "top": "ВИД: СВЕРХУ  ⇄", "side": "ВИД: СБОКУ  ⇄"}[view]
-			var tg := GameButton.make(TOGGLE, vname, UI.CYAN)
-			tg.name = "Toggle"
-			tg.active = view != "side"
-			tg.pressed.connect(toggle_view)
-			_dyn.add_child(tg)
 		var keys := slider_keys()
 		for i in keys.size():
 			var s := SeatSlider.new()

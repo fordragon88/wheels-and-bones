@@ -79,6 +79,7 @@ func build() -> void:
 	back.pressed.connect(go_back)
 	add_child(back)
 	Chrome.add(self, true, true, true)
+	get_node("Back").set_meta("kb_skip", true)   # в a11y_items game.py гаража — только большая «НАЗАД»
 	_popup = Control.new()
 	_popup.name = "Popup"
 	_popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -108,6 +109,11 @@ func open_card(i: int) -> void:
 	_popup.visible = true
 	UI.set_focus_enabled(self, false)
 	UI.set_focus_enabled(_popup, true)
+	for n: String in ["Gear", "Flag", "Lang"]:   # как в game.py: при окне урока настройки, флажок и язык — в списке
+		var ic := get_node_or_null(n) as Control
+		if ic != null and ic.has_meta("_focus_mode"):
+			ic.focus_mode = ic.get_meta("_focus_mode")
+			ic.remove_meta("_focus_mode")
 	var job := Content.job_by_id(SaveGame.garage[i][0])
 	_popup.accessibility_name = Loc.t(job.get("client", ""))
 	_popup.accessibility_description = Loc.t("ЧЕМУ НАУЧИЛСЯ") + ": " + Loc.t(job.get("fact", _fact(job)))
