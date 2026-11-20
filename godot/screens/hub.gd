@@ -50,7 +50,8 @@ func build() -> void:
 			var ar := Rect2(60, 642, 54, 30) if d < 0 else Rect2(60 + 4 * 214 - 14 - 54, 642, 54, 30)
 			var a := GameButton.make(ar, "◀" if d < 0 else "▶", UI.AMBER)
 			a.name = "Prev" if d < 0 else "Next"
-			a.accessibility_name = Loc.t("Назад") if d < 0 else Loc.t("Дальше")
+			a.accessibility_name = Loc.t("Предыдущая страница очереди" if d < 0 else "Следующая страница очереди")
+			a.set_meta("a11y_group", "Клиенты")       # как в game.py: стрелки очереди — после карточек, в «Клиентах»
 			a.pressed.connect(_flip.bind(d))
 			add_child(a)
 	if Settings.barty_on():

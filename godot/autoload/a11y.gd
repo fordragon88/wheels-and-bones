@@ -47,6 +47,8 @@ func _process(dt: float) -> void:
 		_sig = s
 		if big:
 			_group = ""
+			if is_instance_valid(kb_cur) and not kb_cur in kb_items():
+				kb_cur = null                   # новый экран/окно: пункта нет — «фокуса ещё не ставили» (kb.key = None)
 		Speech.say(summary(big))
 	if Settings.a11y.get("voices", true):           # реплики героев — вслух, в очередь
 		for ln: String in Nav.current.a11y_lines():
@@ -113,7 +115,10 @@ func announce(c: Control) -> void:
 	if g != _group:
 		head = Loc.t(g) + ". "
 		_group = g
-	var same: Array = focusables(root_of(c)).filter(func(x: Control) -> bool: return group_of(x) == g)
+	var lst: Array = kb_items()                # «k из n» — по списку клавиатуры (как в game.py)
+	if not c in lst:
+		lst = focusables(root_of(c))
+	var same: Array = lst.filter(func(x: Control) -> bool: return group_of(x) == g)
 	var pos := (" (%s)" % _of(same.find(c) + 1, same.size())) if same.size() > 1 else ""
 	Audio.sfx("tick")
 	Speech.say(head + label_of(c) + pos, true)
@@ -162,6 +167,131 @@ static func _collect(n: Node, out: Array) -> void:
 			if ctl.focus_mode == Control.FOCUS_ALL:
 				out.append(ctl)
 		_collect(c, out)
+
+
+# ================= порядок обхода с клавиатуры (a11y_items + a11y_key в game.py) =================
+## Пункты окна — ОДИН список в порядке game.py (группы по очереди: особые пункты экрана, потом «Кнопки», потом
+## «Меню»; внутри группы — порядок экрана). Стрелки ↑ ← / ↓ → — предыдущий/следующий пункт с заворотом; Tab /
+## Shift+Tab — первый пункт следующей/предыдущей группы (заворот); у ползунка ← → меняют значение (их ловит сам
+## ползунок). kb_cur — пункт, на который клавиатура ставила фокус (kb["key"]): мышь и фокус экрана при входе его не
+## трогают, как в game.py; null — «ещё не ставили»: ↓ → — первый пункт, ↑ ← — последний, Tab — первая группа.
+## Порядок задаёт экран/окно: kb_order(items) (свой список) или kb_groups() (порядок особых групп); пункт с метой
+## kb_skip в список не идёт (кружки деталей на коляске — в game.py их нет в a11y_items).
+
+var kb_cur: Control
+
+
+func kb_root() -> Node:
+	return active_root()
+
+
+func kb_items() -> Array:
+	if Nav.help != null:
+		return []
+	var r := active_root()
+	if r == null:
+		return []
+	var items: Array = focusables(r).filter(func(c: Control) -> bool: return not c.has_meta("kb_skip"))
+	if r.has_method("kb_order"):
+		return r.call("kb_order", items)
+	return order_groups(items, r.call("kb_groups") if r.has_method("kb_groups") else [])
+
+
+## Пункты по группам: сначала first (в этом порядке), потом прочие особые группы — в порядке первого появления,
+## потом «Кнопки» (кнопки, нарисованные в кадре — _a11y_generic), потом «Меню» (настройки, флажок, язык).
+static func order_groups(items: Array, first: Array = []) -> Array:
+	var groups: Array = first.duplicate()
+	for c: Control in items:
+		var g := group_of(c)
+		if not g in groups and g != "Кнопки" and g != "Меню":
+			groups.append(g)
+	for g: String in ["Кнопки", "Меню"]:
+		if not g in groups:
+			groups.append(g)
+	var out: Array = []
+	for g: String in groups:
+		var part: Array = items.filter(func(c: Control) -> bool: return group_of(c) == g)
+		if g == "Меню":                        # значки в углу — как в a11y_items: настройки, флажок, язык
+			var rest := part.filter(func(c: Control) -> bool: return _menu_rank(c) < 0)
+			var icons := part.filter(func(c: Control) -> bool: return _menu_rank(c) >= 0)
+			icons.sort_custom(func(a: Control, b: Control) -> bool: return _menu_rank(a) < _menu_rank(b))
+			part = rest + icons
+		out.append_array(part)
+	return out
+
+
+static func _menu_rank(c: Control) -> int:
+	if c is IconButton:
+		return {IconButton.Kind.GEAR: 0, IconButton.Kind.FLAG: 1, IconButton.Kind.LANG: 2}.get((c as IconButton).kind, -1)
+	return -1
+
+
+## Окно поверх экрана (мини-игра, мануал, спека): его пункты и «◂ назад» экрана — в game.py значок рисуется после
+## окна и тоже в списке, последним.
+static func with_screen_back(items: Array) -> Array:
+	var out := order_groups(items)
+	var back: Node = Nav.current.get_node_or_null("Back") if Nav.current != null else null
+	if back is Control and (back as Control).is_visible_in_tree() and (back as Control).focus_mode != Control.FOCUS_NONE:
+		out.append(back)
+	return out
+
+
+func kb_index(items: Array) -> int:
+	return items.find(kb_cur) if is_instance_valid(kb_cur) else -1
+
+
+## Стрелки и Tab (a11y_key в game.py). true — обработано (дальше событие не идёт: свой обход Godot не нужен).
+func nav_key(k: InputEventKey) -> bool:
+	if not k.pressed or k.ctrl_pressed or k.alt_pressed or k.meta_pressed or Nav.help != null:
+		return false
+	var code := k.keycode
+	if not code in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_TAB]:
+		return false
+	if code in [KEY_UP, KEY_DOWN] and Nav.current_name == "credits" and overlay().is_empty():
+		return false                           # титры листаются ↑ ↓ (handle_credits_event)
+	var fo := get_viewport().gui_get_focus_owner()
+	if code in [KEY_LEFT, KEY_RIGHT] and fo != null and is_slider(fo):
+		return false                           # ползунок: ← → — значение (cur["adj"])
+	var items := kb_items()
+	if items.is_empty():
+		return false
+	UI.kb_active = true
+	var idx := kb_index(items)
+	var n := items.size()
+	if code == KEY_TAB:
+		var groups: Array = []
+		for c: Control in items:
+			if not group_of(c) in groups:
+				groups.append(group_of(c))
+		var g: int = groups.find(group_of(items[idx])) if idx >= 0 else -1
+		g = posmod(g + (-1 if k.shift_pressed else 1), groups.size())
+		for c: Control in items:
+			if group_of(c) == groups[g]:
+				kb_focus(c)
+				break
+		return true
+	var d := -1 if code in [KEY_UP, KEY_LEFT] else 1
+	var i := posmod((idx if idx >= 0 else (-1 if d > 0 else 0)) + d, n)
+	kb_focus(items[i])
+	return true
+
+
+## Поставить фокус клавиатуры на пункт (_a11y_focus): фокус Godot настоящий (чтец экрана читает его сам), фраза
+## «Группа. Подпись (k из n)» — из _on_focus; если фокус уже там (экран поставил его при входе) — сказать сразу.
+func kb_focus(c: Control) -> void:
+	kb_cur = c
+	if c.has_focus():
+		if Speech.kind != "reader":
+			announce(c)
+		c.queue_redraw()
+	else:
+		c.grab_focus()
+
+
+## Enter/Пробел нажали на пункте с фокусом — он и есть пункт клавиатуры (в game.py Enter жмёт kb["key"]).
+func kb_pressed(c: Control) -> void:
+	if c != null and c in kb_items():
+		kb_cur = c
 
 
 ## Клавиши озвучки (a11y_key): F2, R, T, H, C. true — обработано.
@@ -271,8 +401,7 @@ func active_root() -> Node:
 
 
 func scan_items() -> Array:
-	var r := active_root()
-	return focusables(r) if r != null else []
+	return kb_items()                       # тот же список, что у стрелок (kb["items"] в game.py)
 
 
 static func is_slider(c: Control) -> bool:
@@ -293,9 +422,8 @@ func scan_step() -> void:
 	var items := scan_items()
 	if items.is_empty():
 		return
-	var fo := get_viewport().gui_get_focus_owner()
-	var i := items.find(fo)
-	(items[0 if i < 0 else (i + 1) % items.size()] as Control).grab_focus()
+	var i := kb_index(items)
+	kb_focus(items[0 if i < 0 else (i + 1) % items.size()])
 
 
 ## Нажатие одной кнопки: выбрать выделенный пункт (scan_select).
@@ -304,7 +432,7 @@ func scan_select() -> void:
 	if items.is_empty():
 		return
 	UI.kb_active = true
-	var cur := get_viewport().gui_get_focus_owner()
+	var cur: Control = kb_cur if is_instance_valid(kb_cur) else null
 	if not scan_sub.is_empty() and cur == scan_sub["ctl"]:
 		if int(scan_sub["i"]) == 2:
 			scan_sub = {}
@@ -315,7 +443,7 @@ func scan_select() -> void:
 		return
 	scan_sub = {}
 	if cur == null or not cur in items:
-		(items[0] as Control).grab_focus()
+		kb_focus(items[0])
 		return
 	if is_slider(cur):
 		scan_sub = {"ctl": cur, "i": 1}

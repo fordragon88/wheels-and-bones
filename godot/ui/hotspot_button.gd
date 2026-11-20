@@ -17,6 +17,7 @@ func _init() -> void:
 	flat = true
 	text = ""
 	focus_mode = Control.FOCUS_ALL
+	set_meta("kb_skip", true)                 # кружки на коляске: в game.py с клавиатуры — строки списка деталей
 	action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	var empty := StyleBoxEmpty.new()

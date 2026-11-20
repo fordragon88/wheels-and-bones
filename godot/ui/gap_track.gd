@@ -11,6 +11,7 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	name = "Track"
+	set_meta("a11y_group", "Шкала")
 
 
 func _process(_dt: float) -> void:

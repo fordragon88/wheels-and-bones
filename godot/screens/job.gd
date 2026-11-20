@@ -169,6 +169,11 @@ func toast_bounds() -> Vector2:
 	return Vector2(54, 164)
 
 
+## Порядок групп клавиатуры (_a11y_job_items): диагноз — детали, диагнозы; ремонт — инструменты, детали, шаги.
+func kb_groups() -> Array:
+	return ["Инструменты", "Детали", "Диагноз", "Шаги"]
+
+
 func first_focus() -> Control:
 	if mini:
 		return mini.first_focus()

@@ -48,6 +48,7 @@ func setup(chair_art: String, part_ids: Array, rect: Rect2, inspected_set: Dicti
 	t0 = 0.0
 	name = "Chair"
 	focus_mode = Control.FOCUS_ALL
+	set_meta("kb_skip", true)                 # в списке клавиатуры game.py коляски нет (стрелки — по пунктам)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_DRAG
 	accessibility_name = Loc.t("Коляска") + ". " + Loc.t("← → — повернуть, + − — масштаб")

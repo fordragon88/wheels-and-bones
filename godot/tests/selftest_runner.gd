@@ -679,7 +679,8 @@ func _flow_repair(key: String, keyboard: bool) -> void:
 			err("%s %s шаг %d: инструмент не взят" % [how, key, i + 1])
 			return
 		var spot: HotspotButton = scr.chair.spot_button(st["part"])
-		if i == 0 and spot != null:                  # первый шаг — кружком на коляске, дальше — списком
+		if i == 0 and spot != null and ctl_mode != "switch":   # первый шаг — кружком на коляске, дальше — списком
+			# (одна кнопка идёт по списку game.py — кружков на коляске в нём нет)
 			await _frames(3)
 			await _press(spot, keyboard)
 		else:
@@ -2451,6 +2452,10 @@ func _only(what: String) -> void:
 			line = await _flow_martin()
 		"pad":
 			line = await _flow_pad(["flat:0", "brake:0", "lift:0"], ["truing"])
+		"kborder":
+			line = await _kb_order_ref(["ru", "en"])
+		"kborder-ru":
+			line = await _kb_order_ref(["ru"])
 	Nav.shutdown()
 	await _frames(10)
 	for e in errors:
@@ -2515,10 +2520,10 @@ func _pad_btn(b: JoyButton) -> void:
 func _sw_press_on(c: Control) -> void:
 	A11y._scan_next = A11y.scan_t + 1e6         # выделение двигает бот: время не ждём
 	for _i in 400:
-		if c.has_focus():
+		if c.has_focus() and A11y.kb_cur == c:  # выделен пункт одной кнопки (kb["key"]), а не фокус экрана при входе
 			break
 		A11y.scan_step()
-	if not c.has_focus():
+	if not c.has_focus() or A11y.kb_cur != c:
 		err("одна кнопка: не дошли до «%s» (%s)" % [c.name, A11y.label_of(c)])
 		return
 	await _sw_press(false)
@@ -2666,6 +2671,10 @@ func _flow_pad(jobs: Array, techs: Array) -> String:
 	Nav.go("hub")
 	await _frames(2)
 	var f0 := get_viewport().gui_get_focus_owner()
+	await _pad_btn(JOY_BUTTON_DPAD_RIGHT)          # фокуса клавиатуры ещё нет — первый пункт (как в game.py)
+	await _frames(1)
+	if A11y.kb_cur == null or A11y.kb_cur != A11y.kb_items()[0]:
+		err("геймпад: первая крестовина не встала на первый пункт")
 	await _pad_btn(JOY_BUTTON_DPAD_RIGHT)
 	await _frames(1)
 	if get_viewport().gui_get_focus_owner() == f0:
@@ -2890,3 +2899,125 @@ func _flow_brenna() -> String:
 			err("Бренна: портрет про-задания %s не петлёй" % tj)
 	Settings.a11y["calm"] = calm0
 	return "Бренна петлёй %s: Гильдия, пузырь, портрет и итог про-задания; рисунок совпадает с картинкой (худший сдвиг %.2f px), «Без анимации» — картинка" % [name, worst]
+
+
+# ======================= порядок обхода с клавиатуры =======================
+
+## Список клавиатуры против game.py (content/kb_order_ref.json — tools/kb_order_ref.py): каждое состояние ставит
+## tests/shots.gd stage() (те же имена и шаги, что tools/ref_shots.py), список Godot — A11y.kb_items(). Пункт в
+## пункт: группа и подпись; «Кнопки» (подписи game.py собирает из нарисованного текста) — группа и место, подпись
+## сверяется отдельно (kb_order_diff.txt). Перемешанные варианты диагноза — без номера, набором.
+## Итог: «KB ORDER: N состояний, M пунктов, расхождений K».
+func _kb_order_ref(langs: Array) -> String:
+	var path := "res://content/kb_order_ref.json"
+	if not FileAccess.file_exists(path):
+		err("нет content/kb_order_ref.json — запусти tools/kb_order_ref.py")
+		return ""
+	var ref: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var stager: Node = (load("res://tests/shots.gd") as GDScript).new()
+	stager.set("stage_only", true)
+	add_child(stager)
+	var lang0 := Loc.code
+	var voices0: bool = Settings.a11y.get("voices", true)
+	Settings.a11y["voices"] = false
+	seed(1)
+	Figure.idle_t = 1.6
+	Engine.time_scale = 8.0
+	var n_states := 0
+	var n_items := 0
+	var n_bad := 0
+	var n_lab := 0
+	var report: PackedStringArray = []
+	for lang: String in langs:
+		for name: String in ref[lang]:
+			SaveGame.tutorial_skipped = true
+			Settings.lang = lang
+			Loc.code = lang
+			var sname := "title_en" if lang == "en" and name == "title" else name
+			if lang == "ru" and name == "title_en":
+				continue
+			await stager.stage(sname)
+			Settings.lang = lang
+			Loc.code = lang
+			await _frames(2)
+			var want: Array = ref[lang][name]
+			var got: Array = kb_rows()
+			var cmp: Array = _kb_cmp(want, got)
+			n_states += 1
+			n_items += want.size()
+			n_bad += cmp[0]
+			n_lab += cmp[1]
+			if cmp[0] > 0 or cmp[1] > 0:
+				report.append("== %s %s: расхождений %d, подписей «Кнопки» %d" % [lang, name, cmp[0], cmp[1]])
+				for i in maxi(want.size(), got.size()):
+					var w: Array = want[i] if i < want.size() else ["—", "", ""]
+					var g: Array = got[i] if i < got.size() else ["—", ""]
+					var mark := "  " if _kb_same(w, g) else ("~ " if w[0] == g[0] else "X ")
+					report.append("%s%-12s %-60s | %-12s %s" % [mark, w[0], str(w[1]).left(60), g[0], str(g[1]).left(60)])
+			stager.unstage(sname)
+	Engine.time_scale = 1.0
+	stager.queue_free()
+	Loc.code = lang0
+	Settings.lang = lang0
+	Settings.a11y["voices"] = voices0
+	var out := ProjectSettings.globalize_path("res://tests/out")
+	DirAccess.make_dir_recursive_absolute(out)
+	var f := FileAccess.open(out.path_join("kb_order_diff.txt"), FileAccess.WRITE)
+	f.store_string("
+".join(report) + "
+")
+	f.close()
+	var line := "KB ORDER: %d состояний, %d пунктов, расхождений %d (подписей «Кнопки» не как в game.py: %d)" % [
+		n_states, n_items, n_bad, n_lab]
+	print(line)
+	if n_bad > 0:
+		err(line + " — tests/out/kb_order_diff.txt")
+	return line
+
+
+## Список клавиатуры сейчас: [группа, подпись].
+func kb_rows() -> Array:
+	var out: Array = []
+	for c: Control in A11y.kb_items():
+		out.append([A11y.group_of(c), Speech.clean(A11y.label_of(c))])
+	return out
+
+
+const KB_SHUFFLED := ["Диагноз", "Выводы", "Варианты"]
+
+
+static func _kb_norm(g: String, l: String) -> String:
+	if g == "Диагноз":
+		return RegEx.create_from_string("^[^:]+ [0-9]+: ").sub(l, "")
+	return l
+
+
+func _kb_same(w: Array, g: Array) -> bool:
+	return w[0] == g[0] and (w[0] == "Кнопки" or w[0] in KB_SHUFFLED or _kb_norm(w[0], w[1]) == _kb_norm(g[0], g[1]))
+
+
+## [расхождений (группа не та / подпись особого пункта не та / лишний или недостающий пункт), подписей «Кнопки»].
+func _kb_cmp(want: Array, got: Array) -> Array:
+	var bad := absi(want.size() - got.size())
+	var lab := 0
+	var diag_w: Array = []
+	var diag_g: Array = []
+	for i in mini(want.size(), got.size()):
+		var w: Array = want[i]
+		var g: Array = got[i]
+		if w[0] != g[0]:
+			bad += 1
+		elif w[0] in KB_SHUFFLED:               # варианты перемешаны (shuffle_answers) — сверяем набором
+			diag_w.append(_kb_norm(w[0], w[1]))
+			diag_g.append(_kb_norm(g[0], g[1]))
+		elif w[0] == "Кнопки":
+			if w[1] != g[1]:
+				lab += 1
+		elif w[1] != g[1]:
+			bad += 1
+	diag_w.sort()
+	diag_g.sort()
+	for i in diag_w.size():
+		if diag_w[i] != diag_g[i]:
+			bad += 1
+	return [bad, lab]

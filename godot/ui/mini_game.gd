@@ -24,6 +24,7 @@ var _first: Control
 var _release: GameButton
 var _track: GapTrack
 var _spokes: Array[GameButton] = []
+var _sp_sig: Array = []
 
 
 static func make(st: Dictionary) -> MiniGame:
@@ -77,7 +78,7 @@ func _ready() -> void:
 				b.name = "Spoke_%d" % i
 				b.plain = true
 				b.set_meta("i", i)
-				b.accessibility_name = Loc.tf("Спица {0}", [i + 1])
+				b.set_meta("a11y_group", "Спицы")
 				b.on_draw = _draw_spoke
 				b.redraw_sig = func() -> Array: return [tested.duplicate(), dull.duplicate()]   # проверенная спица — цвет
 				b.pressed.connect(ping.bind(i))
@@ -92,6 +93,7 @@ func _ready() -> void:
 				b.plain = true
 				b.set_meta("i", i)
 				b.accessibility_name = Loc.t(opts[i][0])
+				b.set_meta("a11y_group", "Выводы")
 				b.on_draw = _draw_option
 				b.redraw_sig = func() -> int: return 0              # наведение видит сама кнопка
 				b.pressed.connect(meter.bind(i))
@@ -99,6 +101,7 @@ func _ready() -> void:
 				if i == 0:
 					_first = b
 	add_child(cancel)
+	_spoke_names()
 	accessibility_name = Loc.t(step["instr"])
 	UI.focus_later(_first)
 
@@ -115,12 +118,33 @@ func first_focus() -> Control:
 	return _first
 
 
+## Подписи спиц как в a11y_items game.py: «Спица 3 из 12», проверенная — «, звонкая» / «, глухая».
+func _spoke_names() -> void:
+	var sig := [tested.keys(), dull.keys(), Loc.code]
+	if sig == _sp_sig:
+		return
+	_sp_sig = sig
+	for i in _spokes.size():
+		var st := ""
+		if tested.has(i):
+			st = ", " + Loc.t("глухая" if dull.has(i) else "звонкая")
+		_spokes[i].accessibility_name = Loc.t("Спица") + " " + A11y._of(i + 1, _spokes.size()) + st
+
+
+## Список клавиатуры окна мини-игры: его пункты и «назад» экрана (в game.py значок рисуется поверх окна и тоже в
+## списке — последним).
+func kb_order(items: Array) -> Array:
+	return A11y.with_screen_back(items)
+
+
 func close() -> void:
 	Audio.sfx("tick")
 	closed.emit()
 
 
 func _process(_dt: float) -> void:
+	if not _spokes.is_empty():
+		_spoke_names()
 	if _release:
 		_release.enabled = value > 0
 	# окно стоит — перерисовка, когда сменилось значение, проверенные спицы или фокус шкалы

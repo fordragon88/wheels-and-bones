@@ -236,6 +236,11 @@ func build() -> void:
 	_update_a11y()
 
 
+## Порядок групп клавиатуры (_a11y_job_items, про-задание): операции, инструменты, шаги.
+func kb_groups() -> Array:
+	return ["Операции", "Инструменты", "Шаги"]
+
+
 func first_focus() -> Control:
 	if phase == "repair" and tools:
 		return tools.tiles.get(sel_tool if sel_tool != "" else tools.ids[0]) if not tools.ids.is_empty() else null

@@ -377,6 +377,12 @@ func _input(e: InputEvent) -> void:
 	if (e is InputEventKey or e is InputEventMouseButton or e is InputEventScreenTouch or e is InputEventJoypadButton) \
 			and e.is_pressed() and not e.is_echo():
 		toast.on_input()
+	if e is InputEventKey and e.is_pressed():   # стрелки и Tab — по списку пунктов game.py (A11y.kb_items)
+		var k := e as InputEventKey
+		if A11y.nav_key(k):
+			get_viewport().set_input_as_handled()
+		elif k.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] and not k.echo:
+			A11y.kb_pressed(get_viewport().gui_get_focus_owner())
 
 
 func _redraw_focus() -> void:

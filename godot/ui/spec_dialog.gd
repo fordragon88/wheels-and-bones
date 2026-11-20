@@ -73,6 +73,11 @@ func _ready() -> void:
 	UI.focus_later(first_focus())
 
 
+## Список клавиатуры: варианты, «открыть мануал», «позже», «◂ назад» экрана (a11y_items game.py при спеке).
+func kb_order(items: Array) -> Array:
+	return A11y.with_screen_back(items)
+
+
 func first_focus() -> Control:
 	return _opts[0] if is_viewed() and not _opts.is_empty() else _manual
 
@@ -82,7 +87,8 @@ func refresh() -> void:
 	for b in _opts:
 		var i: int = b.get_meta("i")
 		b.enabled = is_viewed()
-		b.accessibility_name = Loc.t(opts[i][0]) + ("" if is_viewed() else " (" + Loc.t("недоступно") + ")")
+		b.accessibility_name = Loc.t(opts[i][0]) + ("" if is_viewed() else ", " + Loc.t("закрыто: сначала мануал"))
+		b.set_meta("a11y_group", "Варианты")
 		b.queue_redraw()
 	queue_redraw()
 

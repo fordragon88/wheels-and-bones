@@ -40,7 +40,7 @@ func _ready() -> void:
 		b.set_meta("key", key)
 		b.on_draw = _draw_page_btn
 		b.redraw_sig = func() -> String: return page          # подсветка открытой страницы
-		b.accessibility_name = Loc.t(title_of(key))
+		b.set_meta("a11y_group", "Страницы")
 		b.pressed.connect(func() -> void:
 			page = key
 			viewed[key] = true
@@ -55,6 +55,11 @@ func _ready() -> void:
 	accessibility_name = Loc.t("МАНУАЛ ГИЛЬДИИ КОЛЁСНИКОВ")
 	_update()
 	UI.focus_later(get_node_or_null("Page_" + page) if page != "" else _close)
+
+
+## Список клавиатуры: страницы, «закрыть», «◂ назад» экрана (как a11y_items game.py при открытом мануале).
+func kb_order(items: Array) -> Array:
+	return A11y.with_screen_back(items)
 
 
 func first_focus() -> Control:
@@ -72,6 +77,8 @@ static func lines_of(key: String) -> Array:
 func _update() -> void:
 	accessibility_description = Loc.t(title_of(page)) + ". " + ". ".join(lines_of(page).map(func(l: String) -> String: return Loc.t(l)))
 	for b in _btns:
+		var k: String = b.get_meta("key")
+		b.accessibility_name = Loc.t(title_of(k)) + (", " + Loc.t("открыта") if k == page else "")
 		b.queue_redraw()
 	queue_redraw()
 

@@ -57,7 +57,12 @@ func _update_start_label() -> void:
 		_start.label = "[ тап — продолжить ]" if cont else "[ тап — начать ]"
 	else:
 		_start.label = "[ клик — продолжить ]" if cont else "[ клик — начать ]"
-	_start.accessibility_name = Loc.t(_start.label).trim_prefix("[ ").trim_suffix(" ]")
+	# пункты клавиатуры — как a11y_items game.py на титуле: «Меню»: начать/продолжить, титры, поддержать
+	_start.accessibility_name = Loc.t("Продолжить игру" if cont else "Начать игру")
+	for b: Control in [_start, _credits, _support]:
+		b.set_meta("a11y_group", "Меню")
+	_credits.accessibility_name = Loc.t("Титры")
+	_support.accessibility_name = Loc.t("Поддержать GOAT (откроется Zeffy)")
 
 
 func first_focus() -> Control:
