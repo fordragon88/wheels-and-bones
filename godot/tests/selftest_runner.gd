@@ -181,9 +181,11 @@ func _run() -> void:
 	_share_write_out()
 	Loc.code = lang_sh
 	var sp_res: Array = await _speech_ref()
+	var kbo_line: String = await _kb_order_ref(["ru", "en"])
+	var arrows_line: String = await _flow_arrows()
 	var sw_line: String = await _flow_switch(["flat:0", "brake:0", "spokes:0"], ["truing"])
 	var pad_line: String = await _flow_pad(["flat:0", "brake:0", "lift:0"], ["truing"])
-	var ride_line: String = await _flow_tech_rides()
+	var ride_line: String = kbo_line + "; " + arrows_line + "; " + await _flow_tech_rides()
 	ride_line += "; " + await _flow_brenna()
 	ride_line += "; " + await _flow_martin()
 	Loc.audit = false
@@ -249,6 +251,7 @@ func _key(code: Key, shift: bool = false) -> void:
 	if ctl_mode == "pad" and pad.has(code) and not shift:      # геймпад: те же действия кнопками
 		await _pad_btn(pad[code])
 		return
+	kb_presses += 1
 	for pressed: bool in [true, false]:
 		var e := InputEventKey.new()
 		e.keycode = code
@@ -651,6 +654,8 @@ func _negatives() -> void:
 func _press(c: Control, keyboard: bool) -> void:
 	if keyboard and ctl_mode == "switch":
 		await _sw_press_on(c)
+	elif keyboard and ctl_mode == "arrows":
+		await _kb_press_on(c)
 	elif keyboard:
 		c.grab_focus()
 		await _frames(1)
@@ -679,7 +684,7 @@ func _flow_repair(key: String, keyboard: bool) -> void:
 			err("%s %s шаг %d: инструмент не взят" % [how, key, i + 1])
 			return
 		var spot: HotspotButton = scr.chair.spot_button(st["part"])
-		if i == 0 and spot != null and ctl_mode != "switch":   # первый шаг — кружком на коляске, дальше — списком
+		if i == 0 and spot != null and not ctl_mode in ["switch", "arrows"]:   # первый шаг — кружком на коляске, дальше — списком
 			# (одна кнопка идёт по списку game.py — кружков на коляске в нём нет)
 			await _frames(3)
 			await _press(spot, keyboard)
@@ -735,8 +740,7 @@ func _mini_events(m: MiniGame, keyboard: bool, how: String, key: String) -> void
 			if keyboard and ctl_mode == "switch":
 				await _sw_slider(tr, func() -> int: return m.value, lo)
 			elif keyboard:
-				tr.grab_focus()
-				await _frames(1)
+				await _kb_focus_on(tr)
 				for _i in 400:
 					if m.value == lo:
 						break
@@ -2456,6 +2460,8 @@ func _only(what: String) -> void:
 			line = await _kb_order_ref(["ru", "en"])
 		"kborder-ru":
 			line = await _kb_order_ref(["ru"])
+		"arrows":
+			line = await _flow_arrows()
 	Nav.shutdown()
 	await _frames(10)
 	for e in errors:
@@ -2610,8 +2616,7 @@ func _sw_seat_settings() -> void:
 		if ctl_mode == "switch":
 			await _sw_slider(sl, func() -> int: return int(scr.cfg[k]), int(sol[k]))
 		else:
-			sl.grab_focus()
-			await _frames(1)
+			await _kb_focus_on(sl)
 			for _i in 200:
 				if int(scr.cfg[k]) == int(sol[k]):
 					break
@@ -2643,8 +2648,7 @@ func _sw_seat_settings() -> void:
 	if ctl_mode == "switch":
 		await _sw_slider(vs, func() -> int: return roundi(float(Settings.vol["music"]) * 20), roundi(v0 * 20) - 1)
 	else:
-		vs.grab_focus()
-		await _frames(1)
+		await _kb_focus_on(vs)
 		await _key(KEY_LEFT)
 	if is_equal_approx(float(Settings.vol["music"]), v0):
 		err("%s: громкость музыки не изменилась" % ctl_mode)
@@ -2922,13 +2926,15 @@ func _kb_order_ref(langs: Array) -> String:
 	Settings.a11y["voices"] = false
 	seed(1)
 	Figure.idle_t = 1.6
-	Engine.time_scale = 8.0
+	Engine.time_scale = 25.0
 	var n_states := 0
 	var n_items := 0
 	var n_bad := 0
 	var n_lab := 0
+	var n_known := 0
 	var report: PackedStringArray = []
 	for lang: String in langs:
+		SaveGame.reset()                         # каждый язык эталона — свой процесс game.py с нуля
 		for name: String in ref[lang]:
 			SaveGame.tutorial_skipped = true
 			Settings.lang = lang
@@ -2939,6 +2945,8 @@ func _kb_order_ref(langs: Array) -> String:
 			await stager.stage(sname)
 			Settings.lang = lang
 			Loc.code = lang
+			if Nav.current_name == "seating" and name.ends_with("_good"):
+				Nav.current.refresh()               # снимок ставит ползунки кодом — подписи пересчитать
 			await _frames(2)
 			var want: Array = ref[lang][name]
 			var got: Array = kb_rows()
@@ -2947,8 +2955,11 @@ func _kb_order_ref(langs: Array) -> String:
 			n_items += want.size()
 			n_bad += cmp[0]
 			n_lab += cmp[1]
+			if KB_KNOWN.has(name):
+				n_known += cmp[0]
 			if cmp[0] > 0 or cmp[1] > 0:
-				report.append("== %s %s: расхождений %d, подписей «Кнопки» %d" % [lang, name, cmp[0], cmp[1]])
+				report.append("== %s %s: расхождений %d, подписей «Кнопки» %d%s" % [lang, name, cmp[0], cmp[1],
+					(" — известное: " + KB_KNOWN[name]) if KB_KNOWN.has(name) else ""])
 				for i in maxi(want.size(), got.size()):
 					var w: Array = want[i] if i < want.size() else ["—", "", ""]
 					var g: Array = got[i] if i < got.size() else ["—", ""]
@@ -2967,10 +2978,10 @@ func _kb_order_ref(langs: Array) -> String:
 ".join(report) + "
 ")
 	f.close()
-	var line := "KB ORDER: %d состояний, %d пунктов, расхождений %d (подписей «Кнопки» не как в game.py: %d)" % [
-		n_states, n_items, n_bad, n_lab]
+	var line := "KB ORDER: %d состояний, %d пунктов, расхождений %d (из них известных %d; подписей «Кнопки» не как в game.py: %d)" % [
+		n_states, n_items, n_bad, n_known, n_lab]
 	print(line)
-	if n_bad > 0:
+	if n_bad > n_known:
 		err(line + " — tests/out/kb_order_diff.txt")
 	return line
 
@@ -2984,11 +2995,18 @@ func kb_rows() -> Array:
 
 
 const KB_SHUFFLED := ["Диагноз", "Выводы", "Варианты"]
+## Расхождения, которые не от порядка обхода (описаны в PORT_PLAN, шаг 4): в счёт идут, ошибкой не считаются.
+const KB_KNOWN := {
+	"help": "справка F1 в game.py — один пункт «Закрыть справку» (Enter/Esc), в Godot у окна справки пунктов нет: Esc/Enter/F1 закрывают так же",
+	"settings_graphics": "в Godot нет пунктов «разрешение» (АВТО / 1280×720) и «3D через видеокарту» — их нет в переносе",
+}
 
 
 static func _kb_norm(g: String, l: String) -> String:
 	if g == "Диагноз":
 		return RegEx.create_from_string("^[^:]+ [0-9]+: ").sub(l, "")
+	if g == "Поле":                            # коды Godot и game.py — разные строки (zlib), смысл тот же
+		return RegEx.create_from_string("\\b([PJR])\\.\\S+").sub(l, "$1.<код>", true)
 	return l
 
 
@@ -3013,7 +3031,7 @@ func _kb_cmp(want: Array, got: Array) -> Array:
 		elif w[0] == "Кнопки":
 			if w[1] != g[1]:
 				lab += 1
-		elif w[1] != g[1]:
+		elif _kb_norm(w[0], w[1]) != _kb_norm(g[0], g[1]):
 			bad += 1
 	diag_w.sort()
 	diag_g.sort()
@@ -3021,3 +3039,87 @@ func _kb_cmp(want: Array, got: Array) -> Array:
 		if diag_w[i] != diag_g[i]:
 			bad += 1
 	return [bad, lab]
+
+
+# ======================= прохождение одними клавишами (art_tests/keyboard_playthrough.py) =======================
+
+var kb_presses: int = 0
+
+
+## Фокус клавиатуры на пункт c: в режиме «arrows» — только стрелкой ↓ по списку (как незрячий игрок, слушающий
+## подписи), иначе — сразу (grab_focus, прежние проверки).
+func _kb_focus_on(c: Control) -> void:
+	if ctl_mode != "arrows":
+		c.grab_focus()
+		await _frames(1)
+		return
+	var n: int = A11y.kb_items().size() + 2
+	for _i in n:
+		if A11y.kb_cur == c and c.has_focus():
+			return
+		await _key(KEY_DOWN)
+	err("стрелками не дошли до «%s» (%s); в списке: %s" % [c.name, A11y.label_of(c),
+		A11y.kb_items().map(func(x: Control) -> String: return str(x.name))])
+
+
+func _kb_press_on(c: Control) -> void:
+	await _kb_focus_on(c)
+	if A11y.kb_cur == c:
+		await _key(KEY_ENTER)
+
+
+## Как art_tests/keyboard_playthrough.py: титул и вступление — Enter; все задания мастерской, все про-задания
+## Гильдии; в мастерской Tab → клиенты → Enter → двойной Esc; примерка (ползунки ← →) и настройки — только
+## стрелки, Tab, Enter, Esc (события клавиш, без мыши и без фокуса кодом).
+func _flow_arrows() -> String:
+	ctl_mode = "arrows"
+	kb_presses = 0
+	SaveGame.reset()
+	SaveGame.ending_seen = true                  # вечеринка после 21-го ремонта — не в этой проверке
+	Nav.go("title")
+	await _frames(2)
+	Nav.current.st = 3.0
+	await _frames(2)
+	await _key(KEY_ENTER)
+	await _frames(2)
+	for _i in 12:
+		if Nav.current_name != "intro":
+			break
+		await _key(KEY_ENTER)
+		await _frames(1)
+	if Nav.current_name != "job" or Nav.current.job.get("id") != "flat":
+		err("клавиши: титул и вступление по Enter не привели к первому заданию (%s)" % Nav.current_name)
+	SaveGame.tutorial_skipped = true
+	var n_jobs := 0
+	for job: Dictionary in Content.jobs:
+		var e0 := errors.size()
+		await _flow_repair(str(job["id"]) + ":0", true)
+		if errors.size() == e0:
+			n_jobs += 1
+	var n_tech := 0
+	for tj: Dictionary in Content.tech_jobs:
+		var e0 := errors.size()
+		await _flow_tech_events(tj["id"], false, true)
+		if errors.size() == e0:
+			n_tech += 1
+	Nav.go("hub")
+	await _frames(2)
+	await _key(KEY_TAB)                          # фокуса ещё нет — Tab: первая группа, «Клиенты»
+	if A11y.kb_cur == null or A11y.group_of(A11y.kb_cur) != "Клиенты":
+		err("клавиши: Tab в мастерской не встал на клиентов")
+	await _key(KEY_ENTER)
+	await _frames(2)
+	if Nav.current_name != "job":
+		err("клавиши: Enter на клиенте не открыл задание")
+	await _key(KEY_ESCAPE)
+	await _key(KEY_ESCAPE)
+	await _frames(2)
+	if Nav.current_name != "hub":
+		err("клавиши: двойной Esc не вывел из задания")
+	var e1 := errors.size()
+	await _sw_seat_settings()
+	ctl_mode = ""
+	var line := "ПРОЙДЕНО С КЛАВИАТУРЫ: %d заданий, %d Гильдии, %s. Нажатий: %d" % [n_jobs, n_tech,
+		"примерка, настройки" if errors.size() == e1 else "примерка/настройки — ОШИБКИ", kb_presses]
+	print(line)
+	return line

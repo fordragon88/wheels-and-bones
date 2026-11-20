@@ -92,6 +92,11 @@ func build() -> void:
 	move_child(shade, 3)
 	_shade = shade
 	Chrome.add(self, false, true, false)
+	# пункты клавиатуры как a11y_items game.py в титрах: «Меню»: назад, поддержать, настройки, флажок
+	_back.accessibility_name = Loc.t("Назад")
+	sp.accessibility_name = Loc.t("Поддержать GOAT (откроется Zeffy)")
+	for b: Control in [_back, sp]:
+		b.set_meta("a11y_group", "Меню")
 	accessibility_description = summary()
 
 

@@ -54,7 +54,7 @@ func build() -> void:
 	_garage.plain = true
 	_garage.hover_sound = false
 	_garage.on_draw = _draw_garage_label
-	_garage.accessibility_name = Loc.t("[ клик — посмотреть гараж ]").trim_prefix("[ ").trim_suffix(" ]")
+	_garage.accessibility_name = Loc.t("Посмотреть гараж")
 	_garage.pressed.connect(to_garage)
 	add_child(_garage)
 	var cr := GameButton.make(Rect2(UI.W / 2.0 - 215, 560, 200, 40), "ТИТРЫ", UI.GHOST)
@@ -75,6 +75,19 @@ func build() -> void:
 	add_child(_top)
 	move_child(_top, 3 if _barty else 2)
 	Chrome.add(self, true, false, false)
+	# пункты клавиатуры как a11y_items game.py на празднике: «Меню»: гараж, титры, поддержать; потом ◂ назад
+	cr.accessibility_name = Loc.t("Титры")
+	sp.accessibility_name = Loc.t("Поддержать GOAT (откроется Zeffy)")
+	for b: Control in [_garage, cr, sp]:
+		b.set_meta("a11y_group", "Меню")
+	var gear := get_node_or_null("Gear")
+	if gear != null:
+		gear.set_meta("kb_skip", true)          # настроек на празднике в списке game.py нет
+
+
+## Порядок групп клавиатуры как a11y_items game.py на празднике: сначала «Меню», потом «◂ назад».
+func kb_groups() -> Array:
+	return ["Меню"]
 
 
 func first_focus() -> Control:

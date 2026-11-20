@@ -64,13 +64,26 @@ func build() -> void:
 	_update_a11y()
 
 
+## Список клавиатуры как a11y_items game.py во вступлении: «Меню»: далее; «Кнопки»: ◂ назад, пропустить обучение.
+## Шестерёнки в нём нет (в game.py настройки — не во вступлении и не на празднике).
+func kb_order(_items: Array) -> Array:
+	var out: Array = []
+	for n: String in ["Next", "Back", "SkipTutorial"]:
+		var c := get_node_or_null(n) as Control
+		if c != null and c.is_visible_in_tree():
+			out.append(c)
+	return out
+
+
 func first_focus() -> Control:
 	return _next
 
 
 func _update_a11y() -> void:
 	var s: Array = slides()[idx]
-	_next.accessibility_name = "%s. %s. %d/%d" % [Loc.t(s[0]), Loc.t(s[1]), idx + 1, slides().size()]
+	_next.accessibility_name = Loc.t("Далее")       # как пункт «Далее» в a11y_items; сам слайд — в сводке экрана
+	_next.accessibility_description = "%s. %s. %d/%d" % [Loc.t(s[0]), Loc.t(s[1]), idx + 1, slides().size()]
+	_next.set_meta("a11y_group", "Меню")
 
 
 func _lh() -> float:
