@@ -231,8 +231,13 @@ static func _menu_rank(c: Control) -> int:
 static func with_screen_back(items: Array) -> Array:
 	var out := order_groups(items)
 	var back: Node = Nav.current.get_node_or_null("Back") if Nav.current != null else null
-	if back is Control and (back as Control).is_visible_in_tree() and (back as Control).focus_mode != Control.FOCUS_NONE:
-		out.append(back)
+	if back is Control and (back as Control).is_visible_in_tree():
+		var bc := back as Control
+		if bc.has_meta("_focus_mode"):          # экран под окном выключил фокус (UI.set_focus_enabled) — «назад» в списке
+			bc.focus_mode = bc.get_meta("_focus_mode")
+			bc.remove_meta("_focus_mode")
+		if bc.focus_mode != Control.FOCUS_NONE:
+			out.append(bc)
 	return out
 
 

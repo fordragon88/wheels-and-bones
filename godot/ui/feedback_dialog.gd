@@ -95,7 +95,8 @@ func _ready() -> void:
 	sb.set_content_margin_all(8)
 	for s: String in ["normal", "focus", "read_only"]:
 		text.add_theme_stylebox_override(s, sb)
-	text.accessibility_name = Loc.t("Опиши, что не так и как правильно" if general() else "Как правильно, по-твоему? (можно не писать)")
+	text.accessibility_description = Loc.t("Опиши, что не так и как правильно" if general() else "Как правильно, по-твоему? (можно не писать)")
+	text.set_meta("a11y_group", "Комментарий")
 	# как handle_dispute_event в game.py: только печатные знаки (без переводов строки, табуляций и невидимых
 	# U+200B–U+200D, U+2060, U+FEFF), не больше 600; Enter в поле — «ОТПРАВИТЬ» (TextEdit сам вставил бы перевод строки)
 	text.text_changed.connect(func() -> void:
@@ -103,7 +104,8 @@ func _ready() -> void:
 		if clean != text.text:
 			var col := text.get_caret_column()
 			text.text = clean
-			text.set_caret_column(mini(col, clean.length())))
+			text.set_caret_column(mini(col, clean.length()))
+		_text_name())
 	text.gui_input.connect(func(e: InputEvent) -> void:
 		if e is InputEventKey and e.pressed and (e.keycode == KEY_ENTER or e.keycode == KEY_KP_ENTER):
 			text.accept_event()
@@ -136,13 +138,41 @@ func first_focus() -> Control:
 	return _reason_btns[0] if not _reason_btns.is_empty() else text
 
 
+## Список клавиатуры как a11y_items game.py в окне замечания: причины, комментарий, «Отправить», «Отмена».
+func kb_order(items: Array) -> Array:
+	var out := A11y.order_groups(items, ["Причина", "Комментарий"])
+	var send_i := out.find(_send)
+	var cancel := get_node_or_null("Cancel")
+	if send_i >= 0 and cancel in out:
+		out.erase(_send)
+		out.insert(out.find(cancel), _send)
+	return out
+
+
+## Подпись поля: «Комментарий: печатай текст, Enter — отправить» и напечатанное (как raw-пункт game.py).
+func _process(_dt: float) -> void:
+	if text != null and text.text != _named:      # текст поставили кодом (без text_changed) — подпись поля заново
+		_text_name()
+
+
+var _named: String = ""
+
+
+func _text_name() -> void:
+	_named = text.text
+	var t := text.text.strip_edges()
+	text.accessibility_name = Loc.t("Комментарий: печатай текст, Enter — отправить") + (". " + text.text if t != "" else "")
+
+
 func _update() -> void:
 	var rs := reasons()
 	for b in _reason_btns:
 		var i: int = b.get_meta("i")
 		b.active = i == reason
-		b.accessibility_name = Loc.t(rs[i]) + (" ✔" if i == reason else "")
+		b.accessibility_name = Loc.t(rs[i]) + (", " + Loc.t("выбрано") if i == reason else "")
+		b.set_meta("a11y_group", "Причина")
 		b.queue_redraw()
+	_text_name()
 
 
 func _gui_input(e: InputEvent) -> void:

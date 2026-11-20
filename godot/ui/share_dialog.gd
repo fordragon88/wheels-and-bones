@@ -143,7 +143,9 @@ func build() -> void:
 		var fr := field_rect()
 		_field.position = fr.position
 		_field.size = fr.size
-		_field.accessibility_name = Loc.t("Код или ссылка") if fk == "text" else Loc.t("Имя")
+		_field.accessibility_description = Loc.t("Код или ссылка") if fk == "text" else Loc.t("Имя")
+		_field.set_meta("a11y_group", "Поле")
+		_field.name_now()
 		add_child(_field)
 	for pr: Array in pick_rects():
 		var k: String = pr[0]
@@ -183,7 +185,8 @@ func _update_picks() -> void:
 		b.active = on
 		b.color = UI.GOOD if on else UI.CYAN
 		var k: String = b.get_meta("k")
-		b.accessibility_name = ("%d. " % (sel.find(k) + 1) if on else "") + Share.item_label(k)
+		b.accessibility_name = Share.item_label(k) + (", " + Loc.t("выбрано") if on else "")   # как a11y_items
+		b.set_meta("a11y_group", "Задания")
 		b.queue_redraw()
 
 
@@ -396,8 +399,20 @@ class ShareField extends Control:
 		queue_redraw()
 		dlg.queue_redraw()
 
+	## Подпись поля как пункт «Поле» в a11y_items game.py: что делать и напечатанное (raw).
+	func name_now() -> void:
+		var v := value()
+		if v == _named:
+			return
+		_named = v
+		accessibility_name = Loc.t("Поле кода: печатай или Ctrl+V, Enter — применить" if key == "text"
+			else "Имя: печатай, Enter — скопировать") + (". " + v if v != "" else "")
+
+	var _named: String = ""
+
 	func _process(dt: float) -> void:
 		_t += dt
+		name_now()
 		Screen.redraw_on(self, [value(), has_focus() and UI.kb_active, -1 if _web() else int(_t * 2) % 2])   # мигает курсор
 		if _web():
 			_web_sync()

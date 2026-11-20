@@ -98,8 +98,10 @@ func _build() -> void:
 				s.size = Vector2(230 + 24, 40)
 				s.value = float(Settings.vol[key])
 				s.muted = not Settings.vol.get("on", true)
-				s.accessibility_name = Loc.t(VOL_NAMES[key])
+				s.set_meta("a11y_group", "Громкость")
+				s.accessibility_name = "%s: %d%%" % [Loc.t(VOL_NAMES[key]), int(s.value * 100)]   # как a11y_items
 				s.changed.connect(func(v: float) -> void:
+					s.accessibility_name = "%s: %d%%" % [Loc.t(VOL_NAMES[key]), int(v * 100)]
 					Settings.vol[key] = v
 					Settings.save()
 					Audio.apply_volume()
