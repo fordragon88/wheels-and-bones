@@ -702,6 +702,19 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-20 — Claude (Opus 5.5), ветка `godot-port` — **Мартин «живой» во вступлении и на празднике** (слияние
+  `test-build` b7933da: чищеная `martin.png`, петли `martin_forest`/`martin_party`). `sync_content.py` выгружает
+  `idle.scenes` (из `SCENE_LOOPS` + `SCENE_LOOP_BOX` game.py — чисел в Godot нет); `Figure.make_scene`, `Figure.live`,
+  `Figure.want_scene_loops` (зовёт `Screen._process`: лес — на титуле/вступлении, праздник — в мастерской/итоге/гараже
+  при ≥ 20 из 21 и на празднике/титрах); `intro.gd`, `ending.gd` (у петли без качания/подпрыга). Перерисовка — только
+  слой `Figure` (как раньше), экран целиком каждый кадр не рисуется. Браузер: кадры на сайте `frames/anim/martin_*`
+  (в .pck нет; .pck 9,52 МБ). Самопроверка `_flow_martin`, `ref_shots.py` (IDLE_T и для этих
+  петель; эталоны с Мартином пересняты). GODOT SELFTEST OK; check_share — 0 расхождений; web_smoke
+  boot,play,phone,stale — 50 ok, 0 FAIL (в первом прогоне 1 FAIL `net::ERR_NO_BUFFER_SPACE` в stale_w — сбой сокетов
+  Windows, повтор чистый); screens «телефон ×6»: title 60, intro 60, hub 60, ending 59 к/с. (godot/ui/figure.gd,
+  godot/ui/screen.gd, godot/screens/intro.gd, godot/screens/ending.gd, godot/tools/sync_content.py,
+  godot/tools/ref_shots.py, godot/tests/selftest_runner.gd, godot/tests/ref/*, godot/PORT_PLAN.md)
+
 - 2026-11-20 — Claude (Fable 5.2), ветка `godot-port` — **проверка и выкладка d387206 на тестовый адрес** (пакет `wnb-60b7dd53da.pck`, тестовый репозиторий c4a2284). Свой замер «телефон ×6»: урок 1 — 60, примерка 60, ползунок 53 (худший кадр 62 мс), ползунок спереди 60, вопрос 60, три скелета 60, мастерская 60, ремонт 57. Снимки до/после просмотрены — рисунок тот же. web_smoke по живому адресу (boot, play, phone, stale): 50 ok. На телефоне владельца Гильдия — 61 к/с (min10s 60). Ждём его замер Кабинета посадки (AGENTS.md).
 - 2026-11-20 — Claude (Opus 5.5), ветка `godot-port` — **Godot в браузере: Кабинет посадки — фигуры рисунка одной
   пачкой** (остались медленными ползунок примерки 33 к/с и вопрос с тремя скелетами 34 при «телефон ×6»). Причина —

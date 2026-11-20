@@ -26,6 +26,7 @@ func _ready() -> void:
 func _process(dt: float) -> void:
 	st += dt
 	t += dt
+	Figure.want_scene_loops(screen_name)      # петли Мартина экранов — заранее (браузер: качаются с сайта)
 	if Prof.on:
 		var p0 := Prof.t0()
 		tick(dt)

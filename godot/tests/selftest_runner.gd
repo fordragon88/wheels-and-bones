@@ -185,6 +185,7 @@ func _run() -> void:
 	var pad_line: String = await _flow_pad(["flat:0", "brake:0", "lift:0"], ["truing"])
 	var ride_line: String = await _flow_tech_rides()
 	ride_line += "; " + await _flow_brenna()
+	ride_line += "; " + await _flow_martin()
 	Loc.audit = false
 	var n_audit: int = Loc.audited.size()
 	var dump := OS.get_cmdline_user_args().find("--dump-tr")
@@ -2446,6 +2447,8 @@ func _only(what: String) -> void:
 			line = await _flow_tech_rides()
 		"brenna":
 			line = await _flow_brenna()
+		"martin":
+			line = await _flow_martin()
 		"pad":
 			line = await _flow_pad(["flat:0", "brake:0", "lift:0"], ["truing"])
 	Nav.shutdown()
@@ -2762,6 +2765,68 @@ func _flow_tech_rides() -> String:
 		err("проезд Гильдии «Без анимации»: не прежнее поведение")
 	Settings.a11y["calm"] = calm0
 	return "проезд Гильдии петлёй: %d/%d про-заданий (петля, срок, остановка справа, стоит после и после пересборки), «Без анимации» — прежнее" % [ok, at.size()]
+
+
+## Мартин «живой» во вступлении и на празднике (idle.scenes из game_consts.json — SCENE_LOOPS/SCENE_LOOP_BOX
+## game.py): петля экрана выбрана, в боксе картинки с полем, без своего покачивания (на празднике — без качания и
+## подпрыга), стоит там же, где картинка (±2 px); «Без анимации» — картинка.
+func _flow_martin() -> String:
+	var scenes: Dictionary = Content.consts.get("idle", {}).get("scenes", {})
+	var pad := float(Content.consts.get("idle", {}).get("pad", 0.0))
+	if not scenes.has("intro") or not scenes.has("ending"):
+		err("Мартин: нет idle.scenes (intro, ending) в game_consts.json")
+		return "Мартин: нет данных"
+	var calm0: bool = Settings.a11y.get("calm", false)
+	var worst := 0.0
+	var out: Array = []
+	for sc: String in ["intro", "ending"]:
+		var e: Dictionary = scenes[sc]
+		var name := str(e["loop"])
+		var b: Array = e["box"]
+		var bx := Rect2(b[0], b[1], b[2], b[3])
+		if Frames.loop_count(name) < 2:
+			err("Мартин: нет кадров петли " + name)
+			continue
+		Frames.want_loop(name)
+		Frames.flush()
+		await _frames(2)
+		for calm: bool in [false, true]:
+			Settings.a11y["calm"] = calm
+			Nav.go(sc)
+			await _frames(3)
+			Nav.current.st = 5.0                     # въезд слева закончился
+			await _frames(2)
+			var m := Nav.current.get_node_or_null("Martin") as Figure
+			if m == null:
+				err("Мартин: на экране %s нет фигуры Martin" % sc)
+				continue
+			if m.loop != name or not m.loop_still or m.box != bx.size or m.loop_box != Figure.idle_box(Rect2(Vector2.ZERO, bx.size)):
+				err("Мартин (%s): не петлёй экрана %s (loop %s, бокс %s)" % [sc, name, m.loop, m.box])
+			if m.live() == calm:
+				err("Мартин (%s, calm=%s): %s" % [sc, calm, "петля" if m.live() else "картинка"])
+			if not calm and (m.position != bx.position or m.rotation_degrees != 0.0):
+				err("Мартин (%s): петля не на месте картинки — %s, поворот %.1f (ждали %s, 0)" % [sc, m.position, m.rotation_degrees, bx.position])
+			if calm:
+				continue
+			var p := Figure.idle_pick("martin.png", bx, 1.6)    # картинка; петля — кадр в боксе с полем
+			var tex := Frames.loop_frame(name, 1.6)
+			var fr: Vector2 = tex.get_size()
+			var f := UI.fit_rect(fr, Figure.idle_box(bx))
+			var iw := roundf(fr.x / (1 + 2 * pad))
+			var ih := roundf(fr.y / (1 + 2 * pad))
+			var k := f.size / fr
+			var inner := Rect2(f.position + Vector2(floorf((fr.x - iw) / 2), floorf((fr.y - ih) / 2)) * k, Vector2(iw, ih) * k)
+			var s := UI.fit_rect((p["tex"] as Texture2D).get_size(), bx)
+			var d := maxf(maxf(absf(inner.position.x - s.position.x), absf(inner.position.y - s.position.y)),
+				maxf(absf(inner.end.x - s.end.x), absf(inner.end.y - s.end.y)))
+			worst = maxf(worst, d)
+			if d > 2.0:
+				err("Мартин (%s): рисунок в петле %s, картинка %s (сдвиг %.1f px)" % [sc, inner, s, d])
+		out.append("%s — %s" % [sc, name])
+	Settings.a11y["calm"] = calm0
+	Nav.go("title")
+	await _frames(2)
+	return "Мартин петлями экранов (%s): на месте картинки (худший сдвиг %.2f px), «Без анимации» — картинка" % [", ".join(out), worst]
 
 
 ## Бренна «живая» (IDLE_LOOPS/IDLE_PAD из game_consts.json): петля выбрана, «Без анимации» — картинка, рисунок в кадре

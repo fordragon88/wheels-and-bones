@@ -1,6 +1,7 @@
 extends Screen
 ## Финал — вечеринка (draw_ending/click_ending в game.py): после последнего из 21 ремонта (один раз — ending_seen;
-## потом — кнопкой «НА ВЕЧЕРИНКУ!» в мастерской). Мартин танцует в коляске, Барти кружит, конфетти, «ВЕЧЕРИНКА!»,
+## потом — кнопкой «НА ВЕЧЕРИНКУ!» в мастерской). Мартин танцует в коляске (петлёй martin_party — SCENE_LOOPS; «Без
+## анимации» и пока кадры не загружены — картинка качается и подпрыгивает), Барти кружит, конфетти, «ВЕЧЕРИНКА!»,
 ## история, слова Барти, «Коллекция: N колясок…», «[ клик — посмотреть гараж ]», «ТИТРЫ», «ПОДДЕРЖАТЬ GOAT ♥».
 
 var _deco: Control                       # подложка истории
@@ -33,7 +34,7 @@ func toast_bounds() -> Vector2:
 
 func build() -> void:
 	add_child(BgLayer.make("bg_party.png"))
-	_martin = Figure.make("martin.png", Vector2(-260, UI.H - 290), Vector2(240, 270), "none")
+	_martin = Figure.make_scene("ending", "none")
 	_martin.name = "Martin"
 	add_child(_martin)
 	if Settings.barty_on():
@@ -96,11 +97,13 @@ func _gui_input(e: InputEvent) -> void:
 
 
 func tick(_dt: float) -> void:
-	var rock := 6 * UI.wsin(t * 4.2)
-	var bounce := int(8 * absf(UI.wsin(t * 4.2)))
-	_martin.position = Vector2(-260 + int(320 * UI.ease_out(st / 1.2)), UI.H - 290 - bounce)
+	var b: Array = Figure.scene_loop("ending")["box"]
+	var live := _martin.live()                 # петля танцует сама — без своего качания и подпрыга
+	var rock := 0.0 if live else 6 * UI.wsin(t * 4.2)
+	var bounce := 0 if live else int(8 * absf(UI.wsin(t * 4.2)))
+	_martin.position = Vector2(float(b[0]) - 320 + int(320 * UI.ease_out(st / 1.2)), float(b[1]) - bounce)
 	_martin.rotation_degrees = -rock
-	_martin.pivot_offset = Vector2(120, 270)
+	_martin.pivot_offset = Vector2(float(b[2]) / 2, float(b[3]))
 	if _barty:
 		_barty.appear_k = UI.ease_back((st - 0.6) / 0.6)
 		_barty.rotation_degrees = -8 * UI.wsin(t * 2.1)

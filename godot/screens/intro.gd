@@ -2,7 +2,8 @@ extends Screen
 ## Вступление (draw_intro/click_intro в game.py): ночная дорога, Мартин и Барти, 5 слайдов истории (тексты —
 ## intro_slides game.py) печатаются по буквам; клик/тап, Enter или пробел — допечатать, потом следующий слайд; после
 ## последнего — первое задание (flat, обучение). «ПРОПУСТИТЬ ОБУЧЕНИЕ ▸» — сразу в мастерскую со всеми клиентами.
-## На втором слайде нога Мартина упрыгивает (сценка hop).
+## На втором слайде нога Мартина упрыгивает (сценка hop). Мартин — петлёй martin_forest (SCENE_LOOPS), «Без анимации»
+## и пока кадры не загружены — картинкой, дышит.
 
 var idx: int = 0
 var _typing: Array = ["", 0.0]
@@ -35,7 +36,7 @@ func toast_bounds() -> Vector2:
 
 func build() -> void:
 	add_child(BgLayer.make("bg_road.png"))
-	var m := Figure.make("martin.png", Vector2(120, 230), Vector2(200, 280), "breathe")
+	var m := Figure.make_scene("intro", "breathe")
 	m.name = "Martin"
 	add_child(m)
 	var g := Figure.make("ghost.png", Vector2(UI.W - 320, 230), Vector2(200, 280), "float", "barty_wave")
@@ -131,7 +132,7 @@ func _gui_input(e: InputEvent) -> void:
 
 func tick(_dt: float) -> void:
 	var m: Figure = get_node("Martin")
-	m.position.x = 120 - int(300 * (1 - UI.ease_out(st / 0.9)))
+	m.position.x = float(Figure.scene_loop("intro")["box"][0]) - int(300 * (1 - UI.ease_out(st / 0.9)))
 	(get_node("Barty") as Figure).appear_k = UI.ease_back((st - 0.3) / 0.6)
 	_leg.t = (t - float(_typing[1])) if idx == 1 else -1.0
 	# панель слайда въезжает 0,35 с, текст печатается по буквам — потом стоит

@@ -3,6 +3,8 @@ extends Control
 ## Персонаж на экране: картинка из content/img, вписанная в бокс с сохранением пропорций (load_image(name, size)),
 ## «живая» (blit_idle: breathe — дышит торс, float — парит призрак), или петля кадров (Frames.loop_frame), пока она
 ## есть и не «Без анимации». У петли свой бокс (у машущего Мартина кадры с полями — бокс выше).
+## Петли «живых» персонажей: по картинке (IDLE_LOOPS — Бренна) или по экрану (SCENE_LOOPS — Мартин во вступлении
+## и на празднике: make_scene).
 ## Позиция Control = левый верх бокса картинки (как pos у blit_idle).
 
 var image: String = ""
@@ -44,6 +46,36 @@ static func idle_pick(img: String, bx: Rect2, t: float) -> Dictionary:
 	return {"tex": Content.texture(img), "box": bx, "live": false}
 
 
+## Петля экрана (SCENE_LOOPS в game.py: intro → martin_forest, ending → martin_party): {art, loop, box} или {}.
+static func scene_loop(screen: String) -> Dictionary:
+	return Content.consts.get("idle", {}).get("scenes", {}).get(screen, {})
+
+
+## Мартин экрана screen петлёй экрана: в боксе картинки box (с поправкой pos), петля — в боксе с полем, без своего
+## покачивания (loop_still); «Без анимации»/кадров нет — картинка с покачиванием md, как раньше.
+static func make_scene(screen: String, md: String = "breathe") -> Figure:
+	var e := scene_loop(screen)
+	var b: Array = e.get("box", [0, 0, 150, 190])
+	var f := make(str(e.get("art", "martin.png")), Vector2(b[0], b[1]), Vector2(b[2], b[3]), md)
+	f.loop = str(e.get("loop", ""))
+	f.loop_box = idle_box(Rect2(Vector2.ZERO, f.box))
+	f.loop_still = true
+	return f
+
+
+## Заранее загрузить петли экранов (Game._scene_loops_web в game.py; браузер — качать с сайта): лес — на титуле и во
+## вступлении, праздник — в мастерской, итоге и гараже, когда до вечеринки ≤ 1 задания, и на празднике/титрах.
+## Зовёт Screen._process каждый кадр (want_loop держит набор в памяти, пока зовут).
+static func want_scene_loops(screen: String) -> void:
+	if Settings.calm():
+		return
+	if screen == "title" or screen == "intro":
+		Frames.want_loop(str(scene_loop("intro").get("loop", "")))
+	if screen == "ending" or screen == "credits" or ((screen == "hub" or screen == "result" or screen == "garage")
+			and SaveGame.user_done_count() >= Content.jobs.size() - 1):
+		Frames.want_loop(str(scene_loop("ending").get("loop", "")))
+
+
 static func make(img: String, pos: Vector2, bx: Vector2, md: String = "breathe", loop_name: String = "") -> Figure:
 	var f := Figure.new()
 	f.image = img
@@ -61,6 +93,11 @@ static func make(img: String, pos: Vector2, bx: Vector2, md: String = "breathe",
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+## Сейчас рисуется петля (не картинка): кадры загружены и не «Без анимации».
+func live() -> bool:
+	return loop != "" and Frames.loop_frame(loop, idle_t if loop_still and idle_t >= 0.0 else t) != null
 
 
 func _process(dt: float) -> void:
