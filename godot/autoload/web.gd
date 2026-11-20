@@ -174,6 +174,11 @@ func net_take(url: String) -> PackedByteArray:
 	return b if b is PackedByteArray else PackedByteArray()
 
 
+## Почему файл не пришёл (после net_take с пустым ответом): "missing" (404/410), "bad" (не WebP), "net" (сеть).
+func net_why(url: String) -> String:
+	return str(JavaScriptBridge.eval("wnbNet.why(%s)" % JSON.stringify(url), true))
+
+
 ## Убрать из очереди страницы ещё не начатые загрузки с этим началом адреса (коляска сменилась).
 func net_drop(prefix: String) -> void:
 	JavaScriptBridge.eval("wnbNet.drop(%s)" % JSON.stringify(prefix), true)
@@ -347,8 +352,8 @@ func _hint(scr: Node) -> Array:
 				var m: MiniGame = mg
 				match m.kind:
 					"pump":
-						var lo := int(m.cfg["lo"])
-						var hi := int(m.cfg["hi"])
+						var lo := ceili(float(m.cfg["lo"]))
+						var hi := floori(float(m.cfg["hi"]))
 						if m.value < lo:
 							return ["Pump"]
 						if m.value > hi:

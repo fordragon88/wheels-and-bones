@@ -216,13 +216,23 @@ func _run() -> void:
 		var w: Array = want_spots.get(sp[0], [])
 		if w.is_empty() or absi(sp[1] - w[0]) > 1 or absi(sp[2] - w[1]) > 1 or sp[3] != w[2]:
 			err("кружок %s: %s, в pygame %s" % [sp[0], sp.slice(1, 4), w])
+	var fx_line: String = await _fixes()
 	# --- сценарий мышью: титул → мастерская → flat → осмотр → неверный → верный диагноз ---
 	SaveGame.reset()
 	await _flow_mouse()
 	await _flow_keyboard()
 	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; Коды и ссылки: кодов game.py прочитано %d (P/J/R, те же данные), битых отвергнуто %d, ссылок и разборов = game.py %d, своих кодов и ссылок для check_share.py %d; прогресс: копировать → сбросить → вставить → тот же, «вернуть прежний»; %s; «продолжить / обычная игра»; итог в таблицу = game.py (в сеть — ничего); Озвучка: %d/%d сводок, подписей фокуса и фраз клавиш = game.py (RU/EN), в тестах голос не звучит; %s; %s; %s; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, sh[0], sh[1], sh[2], share_out.size(), sh_line, sp_res[0], sp_res[1], sw_line, pad_line, ride_line, n_gd, n_audit,
-		"" if _drawn > 0 else " (без окна _draw не вызывается — проверены строки данных и обработчиков)"],
+		"" if _drawn > 0 else " (без окна _draw не вызывается — проверены строки данных и обработчиков)"] + "; " + fx_line,
 		n_jobs, n_var, n_tech)
+
+
+## Находки аудита 20.11 (tests/fixes_check.gd).
+func _fixes() -> String:
+	var fx: Node = (load("res://tests/fixes_check.gd") as GDScript).new()
+	add_child(fx)
+	var line: String = await fx.run(self)
+	fx.queue_free()
+	return line
 
 
 func _frames(n: int) -> void:
@@ -438,10 +448,10 @@ func _open_job(key: String) -> Node:
 func _solve_mini(m: MiniGame) -> void:
 	match m.kind:
 		"pump":
-			m.value = int(m.cfg["lo"])
+			m.value = ceili(float(m.cfg["lo"]))
 			m.pump_done()
 		"gap":
-			m.gap_set(int(m.cfg["lo"]))
+			m.gap_set(ceili(float(m.cfg["lo"])))
 			m.gap_check()
 		"ping":
 			for i: int in m.dull.keys():
@@ -637,9 +647,9 @@ func _negatives() -> void:
 		err("насос: мини-игра не открылась")
 		return
 	var m1: int = scr.mistakes
-	scr.mini.value = int(scr.mini.cfg["hi"]) + 1
+	scr.mini.value = floori(float(scr.mini.cfg["hi"])) + 1
 	scr.mini.pump_done()
-	if scr.mistakes != m1 + 1 or scr.mini.value >= int(scr.mini.cfg["lo"]):
+	if scr.mistakes != m1 + 1 or scr.mini.value >= ceili(float(scr.mini.cfg["lo"])):
 		err("насос: «перекачал» не засчитан ошибкой")
 	scr.mini.value = 0
 	scr.mini.pump_done()
@@ -727,8 +737,8 @@ func _flow_repair(key: String, keyboard: bool) -> void:
 func _mini_events(m: MiniGame, keyboard: bool, how: String, key: String) -> void:
 	match m.kind:
 		"pump":
-			var lo := int(m.cfg["lo"])
-			var hi := int(m.cfg["hi"])
+			var lo := ceili(float(m.cfg["lo"]))
+			var hi := floori(float(m.cfg["hi"]))
 			for _i in 80:
 				if m.value >= lo and m.value <= hi:
 					break
@@ -736,7 +746,7 @@ func _mini_events(m: MiniGame, keyboard: bool, how: String, key: String) -> void
 			await _press(m.get_node("Done"), keyboard)
 		"gap":
 			var tr: GapTrack = m.get_node("Track")
-			var lo := int(m.cfg["lo"])
+			var lo := ceili(float(m.cfg["lo"]))
 			if keyboard and ctl_mode == "switch":
 				await _sw_slider(tr, func() -> int: return m.value, lo)
 			elif keyboard:
@@ -2462,6 +2472,8 @@ func _only(what: String) -> void:
 			line = await _kb_order_ref(["ru"])
 		"arrows":
 			line = await _flow_arrows()
+		"fixes":
+			line = await _fixes()
 	Nav.shutdown()
 	await _frames(10)
 	for e in errors:

@@ -11,6 +11,8 @@ extends Node
 ## (Worker, web/shell.html), игра раз в кадр забирает готовые RGBA-пиксели (или, где фонового потока нет, сырые байты и
 ## распаковывает сама) и строит текстуры в пределах NET_BUDGET_MS (не меньше одного кадра за кадр игры). 404/обрыв — один повтор, потом
 ## кадр считается неудачным: петля так и не станет «готовой» (рисуют статичную картинку), поворот — ближайшим кадром.
+## Сбой сети (не 404: обрыв, тайм-аут страницы, «нет сети») помечает набор «netfail»: при следующей смене экрана
+## (Nav.go → retry_failed) неудачные кадры таких наборов запрашиваются снова — сеть вернулась, петли догружаются.
 
 signal loaded(key: String)
 
@@ -285,6 +287,33 @@ func _store(key: String, i: int, img: Image) -> void:
 		loaded.emit(key)
 
 
+## Браузер: наборы, где кадры не пришли из-за сети (не 404), — неудачные кадры снова в очередь (зовёт Nav.go при
+## смене экрана: «сеть вернулась — при следующем входе петли догружаются»). Пока кадры в пути — ничего не делаем.
+func retry_failed() -> int:
+	var n := 0
+	for key: String in _sets:
+		var s: Dictionary = _sets[key]
+		if not s.get("netfail", false):
+			continue
+		var busy := false
+		for q: Array in _net_inflight.values():
+			if q[0] == key:
+				busy = true
+				break
+		if busy:
+			continue
+		s["netfail"] = false
+		s["retry"] = {}
+		var lost := int(s["failed"])
+		s["failed"] = 0
+		failed_total = maxi(0, failed_total - lost)
+		for i in (s["tex"] as Array).size():
+			if s["tex"][i] == null:
+				_queue.append([key, i])
+				n += 1
+	return n
+
+
 ## Дождаться задач в потоках (выход из игры/тестов: иначе поток пишет в уже удалённый узел).
 func wait_tasks() -> void:
 	for id: int in _inflight.keys():
@@ -379,10 +408,13 @@ func _pump_net() -> void:
 		var s: Dictionary = _sets.get(r[0], {})
 		if s.is_empty() or s["tex"][r[1]] != null:
 			continue
-		if bytes.is_empty() and int(s["retry"].get(r[1], 0)) < 1:
-			s["retry"][r[1]] = 1                # обрыв/404 — ещё раз, в конце очереди
-			_queue.append([r[0], r[1]])
-			continue
+		if bytes.is_empty():
+			if Web.net_why(r[2]) != "missing":
+				s["netfail"] = true             # сеть/обрыв/битый ответ — повторить при следующем входе на экран
+			if int(s["retry"].get(r[1], 0)) < 1:
+				s["retry"][r[1]] = 1            # обрыв/404 — ещё раз, в конце очереди
+				_queue.append([r[0], r[1]])
+				continue
 		var t1 := Time.get_ticks_usec()
 		var img: Image = null
 		if dims.x > 0 and bytes.size() == dims.x * dims.y * 4:

@@ -31,6 +31,8 @@ html, body { width: 100%; height: 100%; background: #18161e; overflow: hidden; t
 #wnb-load progress { width: min(460px, 80vw); height: 14px; accent-color: #e8a33d; }
 #wnb-load .m { font: bold 15px sans-serif; color: #ece6d4; text-shadow: 0 1px 6px #000; margin-top: 10px; min-height: 20px;
   text-align: center; padding: 0 16px; }
+#wnb-reload { display: none; margin-top: 14px; min-height: 44px; padding: 8px 24px; border: 2px solid #f0b85a;
+  border-radius: 10px; background: #2a2632; color: #f0b85a; font: bold 17px sans-serif; cursor: pointer; }
 #wnb-load .e { display: none; max-width: 640px; margin: 12px 16px 0; padding: 12px; border-radius: 8px;
   background: #5b3943; border: 1px solid #9b3943; color: #eee; font: 14px sans-serif; text-align: center; }
 #wnb-field { position: fixed; z-index: 5; display: none; box-sizing: border-box; margin: 0; border: 0; outline: none;
@@ -53,8 +55,10 @@ html, body, #canvas { overscroll-behavior: none; }
 #wnb-full, #wnb-exitfs.touch { left: 6px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px;
   font: bold 20px sans-serif; }
 #wnb-exitfs { display: none; }
-#wnb-exitfs:not(.touch) { left: 50%; bottom: 4px; transform: translateX(-50%); padding: 5px 12px; border-radius: 8px;
-  background: rgba(0,0,0,.55); font: bold 13px sans-serif; opacity: .85; }
+/* компьютер: у верхнего края по центру, видна 4 с после входа в полный экран и пока указатель у самого верхнего края
+   (или на ней) — в остальное время кнопок игры не закрывает (внизу закрывала ◀ ▶ гаража) */
+#wnb-exitfs:not(.touch) { left: 50%; top: 0; transform: translateX(-50%); padding: 4px 12px; border-radius: 0 0 8px 8px;
+  background: rgba(0,0,0,.6); font: bold 13px sans-serif; opacity: .9; }
 @media (max-height: 480px) { #wnb-load { padding-bottom: 3vh; } #wnb-load .t { margin-bottom: 4px; } }
 </style>
 <script>
@@ -63,8 +67,12 @@ html, body, #canvas { overscroll-behavior: none; }
   'use strict';
   // --- сеть: кадры поворота и петли (frames/…), музыка — файлами рядом с игрой. fetch в браузере идёт параллельно
   // и мимо игрового кадра; игра раз в кадр забирает готовое (next/take), декодирует WebP сама.
-  var net = { want: [], active: 0, max: 6, done: [], bufs: {}, dims: {}, ok: 0, fail: 0, bytes: 0, dec: 0, decMs: 0,
-              worker: null, mode: 'worker' };
+  var net = { want: [], active: 0, max: 6, done: [], bufs: {}, dims: {}, why: {}, ok: 0, fail: 0, bytes: 0, dec: 0,
+              decMs: 0, worker: null, mode: 'worker', bad: 0, badRun: 0, timeouts: 0 };
+  // Запрос, который не ответил за NET_TIMEOUT мс (сервер «повис», мобильная сеть пропала без ошибки), прерывается
+  // (AbortController) и считается сбоем этого файла — игра повторит его сама; иначе 6 зависших запросов занимали все
+  // места загрузки до конца сеанса.
+  var NET_TIMEOUT = 18000;
   // Кадры (WebP) распаковывает фоновый поток страницы (Worker): createImageBitmap → WebGL2 → readPixels даёт
   // RGBA как есть (без домножения на прозрачность — цвет под прозрачными пикселями не теряется, как при чтении через
   // 2D-холст). Игре остаётся скопировать готовые пиксели и построить mipmaps — в игровом кадре втрое-вчетверо меньше
@@ -98,11 +106,11 @@ html, body, #canvas { overscroll-behavior: none; }
       createImageBitmap(new Blob([d.buf]), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }).then(function (bmp) {
         var px = viaGL(bmp), w = bmp.width, h = bmp.height;
         bmp.close();
-        if (!px) throw new Error('no webgl2');
+        if (!px) { postMessage({ u: d.u, w: 0, h: 0, px: d.buf, ms: 0, raw: true }, [d.buf]); return; }   // нет WebGL2
         postMessage({ u: d.u, w: w, h: h, px: px.buffer, ms: performance.now() - t0 }, [px.buffer]);
-      }).catch(function () {
-        postMessage({ u: d.u, w: 0, h: 0, px: d.buf, ms: 0, raw: true }, [d.buf]);
-      });
+      }, function () {
+        postMessage({ u: d.u, w: 0, h: 0, ms: 0, bad: true });   // файл не распаковался — сбой этого файла
+      }).catch(function () { postMessage({ u: d.u, w: 0, h: 0, ms: 0, bad: true }); });
     };
   }
   try {
@@ -110,31 +118,50 @@ html, body, #canvas { overscroll-behavior: none; }
       net.worker = new Worker(URL.createObjectURL(new Blob(['(' + workerSrc + ')()'], { type: 'text/javascript' })));
       net.worker.onmessage = function (e) {
         var m = e.data;
-        net.bufs[m.u] = m.px;
-        if (m.w > 0) { net.dims[m.u] = m.w + ',' + m.h; net.dec++; net.decMs += m.ms; }
-        else if (m.raw) net.mode = 'godot';        // фоновая распаковка не вышла — дальше игра распаковывает сама
+        if (m.bad) {
+          // Один битый файл — сбой файла (игра повторит, потом запасной вид), а не повод бросать фоновую распаковку.
+          // Только если подряд не распаковались файлы с разными адресами (Worker не умеет WebP) — дальше игра сама.
+          net.bufs[m.u] = null; net.why[m.u] = 'bad'; net.fail++; net.bad++;
+          if (++net.badRun >= 4) net.mode = 'godot';
+        } else {
+          net.bufs[m.u] = m.px;
+          if (m.w > 0) { net.dims[m.u] = m.w + ',' + m.h; net.dec++; net.decMs += m.ms; net.badRun = 0; }
+          else if (m.raw) net.mode = 'godot';      // в Worker нет WebGL2 — дальше игра распаковывает сама
+        }
         net.done.push(m.u);
       };
       net.worker.onerror = function () { net.worker = null; net.mode = 'godot'; };
     } else net.mode = 'godot';
   } catch (e) { net.worker = null; net.mode = 'godot'; }
+  // WebP начинается с «RIFF….WEBP»: сайт с «мягкой 404» отдаёт 200 и страницу HTML — это сбой файла, а не кадр
+  function isWebp(b) {
+    if (b.byteLength < 12) return false;
+    var a = new Uint8Array(b, 0, 12);
+    return a[0] === 82 && a[1] === 73 && a[2] === 70 && a[3] === 70 && a[8] === 87 && a[9] === 69 && a[10] === 66 && a[11] === 80;
+  }
   function pump() {
     while (net.active < net.max && net.want.length) {
       var u = net.want.shift();
       net.active++;
-      fetch(u).then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
+      var ac = window.AbortController ? new AbortController() : null;
+      var tm = setTimeout(function () { if (this) { net.timeouts++; this.abort(); } }.bind(ac), NET_TIMEOUT);
+      fetch(u, ac ? { signal: ac.signal } : undefined).then(function (r) {
+        if (!r.ok) { var e = new Error('HTTP ' + r.status); e.missing = r.status === 404 || r.status === 410; throw e; }
         return r.arrayBuffer();
       }).then(function (b) {
+        var webp = /\.webp(\?|$)/.test(this);
+        if (webp && !isWebp(b)) { var e = new Error('not webp'); e.bad = true; throw e; }
         net.ok++; net.bytes += b.byteLength;
-        if (net.worker && net.mode === 'worker' && /\.webp(\?|$)/.test(this)) {
+        if (net.worker && net.mode === 'worker' && webp) {
           net.worker.postMessage({ u: this, buf: b }, [b]);
         } else {
           net.bufs[this] = b; net.done.push(this);
         }
-      }.bind(u), function () {
-        net.bufs[this] = null; net.fail++; net.done.push(this);
-      }.bind(u)).then(function () { net.active--; pump(); });
+      }.bind(u)).catch(function (e) {
+        // why: missing — 404/410 (файла нет, повторять незачем), bad — не WebP, net — сеть/обрыв/тайм-аут
+        net.bufs[this] = null; net.fail++; net.why[this] = e && e.missing ? 'missing' : (e && e.bad ? 'bad' : 'net');
+        net.done.push(this);
+      }.bind(u)).then(function () { clearTimeout(tm); net.active--; pump(); });
     }
   }
   window.wnbNet = {
@@ -144,6 +171,8 @@ html, body, #canvas { overscroll-behavior: none; }
     // "ш,в" — пиксели RGBA уже распакованы фоновым потоком; "" — сырые байты файла (распаковывает игра)
     dims: function (u) { return net.dims[u] || ''; },
     take: function (u) { var b = net.bufs[u]; delete net.bufs[u]; delete net.dims[u]; return b ? new Uint8Array(b) : null; },
+    // почему файл не пришёл (после take с пустым ответом): 'missing' | 'bad' | 'net' | ''; забирает
+    why: function (u) { var w = net.why[u] || ''; delete net.why[u]; return w; },
     drop: function (prefix) { net.want = net.want.filter(function (u) { return u.indexOf(prefix) !== 0; }); },
     // проверка (web_smoke): распаковать файл тем же фоновым способом → {w, h, b64} (RGBA в base64)
     probe: function (u) {
@@ -162,7 +191,7 @@ html, body, #canvas { overscroll-behavior: none; }
     },
     stats: function () {
       return JSON.stringify({ ok: net.ok, fail: net.fail, bytes: net.bytes, active: net.active, queued: net.want.length,
-        mode: net.mode, worker_decoded: net.dec, worker_ms: net.dec ? +(net.decMs / net.dec).toFixed(2) : 0 });
+        mode: net.mode, bad: net.bad, timeouts: net.timeouts, worker_decoded: net.dec, worker_ms: net.dec ? +(net.decMs / net.dec).toFixed(2) : 0 });
     }
   };
 
@@ -251,11 +280,15 @@ html, body, #canvas { overscroll-behavior: none; }
     ru: { phone: 'Поверни телефон боком, чтобы играть', dev: 'Поверни планшет боком, чтобы играть',
           anyway: 'Играть так (книжная ориентация)', full: 'Полный экран', exit: 'Выйти из полного экрана',
           exitEsc: '\u2716 Выйти из полного экрана (Esc)', f11: 'Нажми F11 (или Esc), чтобы выйти из полного экрана',
-          load: 'Загружаю мастерскую…', start: 'Запуск…', fail: 'Игра не запустилась.' },
+          load: 'Загружаю мастерскую…', start: 'Запуск…', fail: 'Игра не запустилась.',
+          stall: 'Загрузка остановилась — похоже, прервалась сеть.', retry: 'Пробую ещё раз…',
+          reload: 'Обновить страницу', hint: 'Если не помогает — проверь интернет и обнови страницу ещё раз.' },
     en: { phone: 'Turn your phone sideways to play', dev: 'Turn your device sideways to play',
           anyway: 'Play in portrait anyway', full: 'Fullscreen', exit: 'Exit fullscreen',
           exitEsc: '\u2716 Exit fullscreen (Esc)', f11: 'Press F11 (or Esc) to leave full screen',
-          load: 'Loading the workshop…', start: 'Starting…', fail: 'The game could not start.' }
+          load: 'Loading the workshop…', start: 'Starting…', fail: 'The game could not start.',
+          stall: 'Loading has stopped — the connection seems to have dropped.', retry: 'Trying again…',
+          reload: 'Reload', hint: 'If it does not help, check your connection and reload once more.' }
   };
   var lang = '';
   try { lang = localStorage.getItem('wnb-godot:lang') || ''; } catch (e) { lang = ''; }
@@ -280,7 +313,10 @@ html, body, #canvas { overscroll-behavior: none; }
   // RES_DEFAULT и не ниже 1 (только убирает лишнее на экранах с большой плотностью); с ?res= — как задано.
   // window.devicePixelRatio подменён тем же effDpr — чтобы и Godot (screen_get_scale) видел тот же масштаб.
   var RES_DEFAULT = 1080;
-  var qr = /[?&]res=(\d+)/.exec(location.search);
+  // разбор строгий: целое 360…4320 или 0; иначе (1e3, 0.5, мусор) — по умолчанию (раньше «1e3» читалось как 1 —
+  // холст 320×180, «0.5» — как 0)
+  var qr = /[?&]res=([^&#]*)/.exec(location.search);
+  if (qr && !(/^\d{1,5}$/.test(qr[1]) && (+qr[1] === 0 || (+qr[1] >= 360 && +qr[1] <= 4320)))) qr = null;
   var res = qr ? +qr[1] : RES_DEFAULT;
   var dprDesc = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio') ||
                 Object.getOwnPropertyDescriptor(Window.prototype, 'devicePixelRatio');
@@ -462,6 +498,7 @@ $GODOT_HEAD_INCLUDE
   <progress id="wnb-bar"></progress>
   <div class="m" id="wnb-msg"></div>
   <div class="e" id="wnb-err"></div>
+  <button type="button" id="wnb-reload"></button>
 </div>
 <script>
 // Сенсорный экран (как web_setup_touch в game.py): на телефоне в книжной ориентации — заслонка «поверни боком»
@@ -506,7 +543,9 @@ $GODOT_HEAD_INCLUDE
     var x = document.createElement('button'); x.id = 'wnb-exitfs'; x.type = 'button';
     if (touch) x.className = 'touch';
     var big = function () { return !touch && innerWidth >= screen.width - 2 && innerHeight >= screen.height - 2; };
+    var cv = function () { var c = document.getElementById('canvas'); if (c) c.focus(); };   // клавиши — снова игре
     x.onclick = function () {
+      setTimeout(cv, 0);
       if (isFs()) { exitFs(); return; }
       if (inFrame) { try { window.parent.postMessage({ wnb: 'exitfs' }, '*'); } catch (e) {} }   // сайт развернул iframe
       if (touch) return;
@@ -515,12 +554,29 @@ $GODOT_HEAD_INCLUDE
     };
     document.body.appendChild(x);
     // во фрейме сайта своя кнопка у обёртки — наша только при полном экране самого документа
+    var was = false, until = 0, edge = false, over = false;
     var fsShow = function () {
-      x.style.display = (touch ? (isFs() && !document.getElementById('wnb-full'))
-                               : (isFs() || (!inFrame && big()))) ? 'block' : 'none';
+      var want = touch ? (isFs() && !document.getElementById('wnb-full')) : (isFs() || (!inFrame && big()));
+      if (!touch) {
+        if (want && !was) until = Date.now() + 4000;     // только что вошли в полный экран — подсказка на 4 с
+        was = want;
+        want = want && (Date.now() < until || edge || over);
+      }
+      var d = want ? 'block' : 'none';
+      if (x.style.display !== d) x.style.display = d;
     };
+    if (!touch) {
+      document.addEventListener('mousemove', function (e) {
+        var e2 = e.clientY <= 6;
+        if (e2 !== edge) { edge = e2; fsShow(); }
+      }, true);
+      document.addEventListener('mouseleave', function () { if (edge) { edge = false; fsShow(); } });
+      x.addEventListener('mouseenter', function () { over = true; fsShow(); });
+      x.addEventListener('mouseleave', function () { over = false; fsShow(); });
+    }
+    window.wnbExitFs = { state: function () { return { until: until, edge: edge, over: over }; } };
     document.addEventListener('fullscreenchange', fsShow); document.addEventListener('webkitfullscreenchange', fsShow);
-    window.addEventListener('resize', fsShow); setInterval(fsShow, 1000); fsShow();
+    window.addEventListener('resize', fsShow); setInterval(fsShow, 500); fsShow();
     window.wnbOnLang(function () {
       x.textContent = touch ? '\u2716' : T('exitEsc');
       x.setAttribute('aria-label', T('exit'));
@@ -586,20 +642,77 @@ const engine = new Engine(GODOT_CONFIG);
   const bar = document.getElementById('wnb-bar');
   const msg = document.getElementById('wnb-msg');
   const errBox = document.getElementById('wnb-err');
+  const rel = document.getElementById('wnb-reload');
   msg.textContent = wnbT('load');
-  function fail(err) {
+  // Сторож загрузки: полоса не двигается STALL_S секунд (оборвался .wasm/.pck, а загрузчик Godot молча ждёт) или
+  // загрузчик не дошёл до игры за LATE_S после того, как всё скачано, — сообщение и кнопка «Обновить страницу».
+  // До двух раз страница перезагружается сама (счётчик в sessionStorage, сброс — когда игра запустилась). Перезагрузка
+  // сначала обновляет index.html в кеше браузера (fetch cache: 'reload') — после выкладки новой версии старая страница
+  // из кеша ссылалась на пакет, которого уже нет (500/404), и «Обновить» её бы не сменила. ?stall=N — порог (проверка).
+  const qs = /[?&]stall=(\d+)/.exec(location.search);
+  const STALL_S = qs ? Math.max(2, +qs[1]) : 25, LATE_S = qs ? Math.max(4, 2 * +qs[1]) : 60, AUTO = 2;
+  const RKEY = 'wnb-godot:autoreload';
+  let tries = 0;
+  try { tries = +sessionStorage.getItem(RKEY) || 0; } catch (e) { tries = 0; }
+  let lastCur = -1, lastT = performance.now(), allIn = false, done = false, stopped = false;
+  window.wnbLoad = { stalled: false, tries: tries, state: function () { return { stalled: this.stalled, tries: tries,
+    msg: msg.textContent, err: errBox.textContent, reload: rel.style.display === 'inline-block' }; } };
+  function hard() {
+    rel.disabled = true;
+    const go = function () { location.reload(); };
+    try {
+      fetch(location.href, { cache: 'reload' }).then(go, go);
+      setTimeout(go, 4000);
+    } catch (e) { go(); }
+  }
+  function showReload() {
+    rel.textContent = wnbT('reload');
+    rel.style.display = 'inline-block';
+    rel.onclick = function () { try { sessionStorage.removeItem(RKEY); } catch (e) {} hard(); };
+  }
+  function fail(err, auto) {
+    if (done || stopped) return;
     console.error(err);
+    if (auto && tries < AUTO) { stall(); return; }     // пакет не скачался (500/404 — старая страница из кеша?) — ещё раз
+    stopped = true;
     errBox.textContent = (err && err.message) ? err.message : String(err || 'An unknown error occurred.');
     errBox.style.display = 'block';
     msg.textContent = wnbT('fail');
+    showReload();
   }
+  function stall() {
+    if (done || stopped) return;
+    window.wnbLoad.stalled = true;
+    if (tries < AUTO) {
+      stopped = true;
+      try { sessionStorage.setItem(RKEY, String(tries + 1)); } catch (e) {}
+      msg.textContent = wnbT('retry');
+      hard();
+      return;
+    }
+    stopped = true;
+    msg.textContent = wnbT('stall');
+    errBox.textContent = wnbT('hint');
+    errBox.style.display = 'block';
+    showReload();
+  }
+  const watch = setInterval(function () {
+    if (done) { clearInterval(watch); return; }
+    if (stopped) return;
+    const idle = (performance.now() - lastT) / 1000;
+    if (idle > (allIn ? LATE_S : STALL_S)) stall();
+  }, 1000);
   const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
   if (missing.length !== 0) {
+    clearInterval(watch);
     fail('Your browser is missing features the game needs:\n' + missing.join('\n'));
     return;
   }
   engine.startGame({
     onProgress: function (cur, total) {
+      if (cur !== lastCur) { lastCur = cur; lastT = performance.now(); }
+      allIn = total > 0 && cur >= total;
+      if (stopped) return;
       if (cur > 0 && total > 0) {
         bar.max = total; bar.value = cur;
         msg.textContent = wnbT('load') + ' ' + (cur / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1) + ' MB';
@@ -608,6 +721,8 @@ const engine = new Engine(GODOT_CONFIG);
       }
     },
   }).then(function () {
+    done = true;
+    try { sessionStorage.removeItem(RKEY); } catch (e) {}
     window.wnbTimes.started = performance.now();
     bar.max = 1; bar.value = 1;
     msg.textContent = wnbT('start');
@@ -621,7 +736,7 @@ const engine = new Engine(GODOT_CONFIG);
       }
       setTimeout(wait, 100);
     })();
-  }, fail);
+  }, function (e) { fail(e, true); });
 }());
 </script>
 </body>

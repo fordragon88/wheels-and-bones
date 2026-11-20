@@ -101,9 +101,22 @@ func _ready() -> void:
 				if i == 0:
 					_first = b
 	add_child(cancel)
-	_spoke_names()
-	accessibility_name = Loc.t(step["instr"])
+	_lang_names()
+	Loc.changed.connect(_lang_names)
 	UI.focus_later(_first)
+
+
+## Подписи для чтеца экрана на языке игры: окно (инструкция шага), варианты прибора, спицы — и после смены языка при
+## открытом окне (Loc.changed).
+func _lang_names() -> void:
+	accessibility_name = Loc.t(step["instr"])
+	if kind == "meter":
+		var opts: Array = cfg["options"]
+		for i in opts.size():
+			var b := get_node_or_null("Opt_%d" % i) as Control
+			if b:
+				b.accessibility_name = Loc.t(opts[i][0])
+	_spoke_names()
 
 
 func _btn(nm: String, r: Rect2, lbl: String, col: Color, cb: Callable) -> GameButton:
@@ -156,7 +169,7 @@ func _gui_input(_e: InputEvent) -> void:
 
 
 func _say_value() -> void:
-	var zone := int(cfg["lo"]) <= value and value <= int(cfg["hi"])
+	var zone := _in_zone(value)
 	Speech.say("%d %s" % [value, Loc.t(cfg["unit"])] + ((", " + Loc.t("зелёная зона")) if zone else ""), true)
 
 
@@ -184,12 +197,12 @@ func release() -> void:
 
 func pump_done() -> void:
 	var v := value
-	if int(cfg["lo"]) <= v and v <= int(cfg["hi"]):
+	if _in_zone(v):
 		solved.emit()
-	elif v < int(cfg["lo"]):
+	elif v < float(cfg["lo"]):
 		missed.emit(Loc.fmt("Мало ({0} {1}): докачай до зелёной зоны.", [v, cfg["unit"]]), 3.0)
 	else:
-		value = maxi(0, int(cfg["lo"]) - 25)
+		value = maxi(0, floori(float(cfg["lo"]) - 25.0))
 		missed.emit(Loc.fmt("Перекачал ({0} {1}): стравили воздух, заново.", [v, cfg["unit"]]), 3.0)
 
 
@@ -202,10 +215,16 @@ func gap_adj(d: int) -> void:
 	Audio.pitch(float(value - int(cfg["mn"])) / maxf(1, int(cfg["mx"]) - int(cfg["mn"])))
 
 
+## Зелёная зона: lo ≤ v ≤ hi как в game.py — границы бывают дробными (olga_x3: зазор 3,5–4,5 мм), поэтому
+## сравнение числами с дробной частью, не int() (int(3.5) = 3 засчитывал 3 мм).
+func _in_zone(v: float) -> bool:
+	return float(cfg["lo"]) <= v and v <= float(cfg["hi"])
+
+
 func gap_check() -> void:
-	if int(cfg["lo"]) <= value and value <= int(cfg["hi"]):
+	if _in_zone(value):
 		solved.emit()
-	elif value < int(cfg["lo"]):
+	elif value < float(cfg["lo"]):
 		missed.emit(cfg.get("fb_lo", "Слишком мало."), 3.5)
 	else:
 		missed.emit(cfg.get("fb_hi", "Слишком много."), 3.5)

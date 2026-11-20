@@ -85,6 +85,108 @@ func _exit_tree() -> void:
 		_sys_thread.wait_to_finish()
 
 
+# ---------------- хранилище файлов игрока (save.json, settings.json, копии) ----------------
+# Компьютер — файлы user:// (как было). Браузер — localStorage, ключ на файл «wnb-godot:<имя>» (как game.py хранит
+# «wnb:<имя>»; «wnb:» — ключи pygame-версии, их только читаем при переносе). Почему не user://: там IDBFS — каждая
+# вкладка держит копию всей папки и при любой записи синхронизирует её в IndexedDB целиком, удаляя файлы, которых у
+# неё нет: вторая открытая вкладка, сменив настройку, стирала прогресс первой. localStorage синхронен и пишется по
+# ключу. Нет localStorage (SecurityError: запрет cookie, сторонний фрейм) — запасной путь user://.
+
+const STORE_NS := "wnb-godot:"
+const STORE_FILES: Array[String] = ["save.json", "save.prev.json", "save.bak.json", "settings.json"]
+static var _ls: int = -1                   # localStorage: -1 не проверяли, 0 нет, 1 есть
+static var _moved: bool = false           # перенос user:// → localStorage проверен в этом запуске
+
+
+## Браузер и localStorage доступен (запись пробным ключом) — хранение по ключам; иначе файлы user://.
+static func store_ls() -> bool:
+	if _ls < 0:
+		_ls = 0
+		if OS.has_feature("web"):
+			var v: Variant = JavaScriptBridge.eval("(function(){try{var k='wnb-godot:probe';localStorage.setItem(k,'1');"
+				+ "localStorage.removeItem(k);return 1}catch(e){return 0}})()", true)
+			_ls = 1 if v != null and int(v) == 1 else 0
+	return _ls == 1
+
+
+static func _js_key(name: String) -> String:
+	return JSON.stringify(STORE_NS + name)
+
+
+## Один раз: сохранения Godot-версии, записанные до 20.11 в user:// (IndexedDB), — в ключи localStorage. Файлы
+## user:// не удаляются (на случай отката). Отметка «wnb-godot:moved» — переносим только раз (иначе после «Сбросить
+## прогресс» и удаления копии старый файл вернулся бы).
+static func _move_once() -> void:
+	if _moved:
+		return
+	_moved = true
+	var done: Variant = JavaScriptBridge.eval("(function(){try{return localStorage.getItem('wnb-godot:moved')||''}catch(e){return ''}})()", true)
+	if str(done) == "1":
+		return
+	for name: String in STORE_FILES:
+		var p := "user://" + name
+		if FileAccess.file_exists(p) and not _ls_has(name):
+			_ls_set(name, FileAccess.get_file_as_string(p))
+	JavaScriptBridge.eval("(function(){try{localStorage.setItem('wnb-godot:moved','1')}catch(e){}})()", true)
+
+
+static func _ls_has(name: String) -> bool:
+	return bool(JavaScriptBridge.eval("(function(){try{return localStorage.getItem(%s)!==null}catch(e){return false}})()"
+		% _js_key(name), true))
+
+
+static func _ls_set(name: String, text: String) -> bool:
+	var ok: Variant = JavaScriptBridge.eval("(function(){try{localStorage.setItem(%s,%s);return 1}catch(e){return 0}})()"
+		% [_js_key(name), JSON.stringify(text)], true)
+	return ok != null and int(ok) == 1
+
+
+## Текст файла игрока; "" — нет файла.
+static func store_read(name: String) -> String:
+	if store_ls():
+		_move_once()
+		var v: Variant = JavaScriptBridge.eval("(function(){try{return localStorage.getItem(%s)||''}catch(e){return ''}})()"
+			% _js_key(name), true)
+		return str(v) if v != null else ""
+	var p := "user://" + name
+	return FileAccess.get_file_as_string(p) if FileAccess.file_exists(p) else ""
+
+
+static func store_has(name: String) -> bool:
+	if store_ls():
+		_move_once()
+		return _ls_has(name)
+	return FileAccess.file_exists("user://" + name)
+
+
+## Записать файл игрока целиком (компьютер — во временный файл и переименованием).
+static func store_write(name: String, text: String) -> bool:
+	if store_ls():
+		_move_once()
+		if _ls_set(name, text):
+			return true
+		push_warning("%s не записан в localStorage (место кончилось?)" % name)
+		return false
+	var path := "user://" + name
+	var tmp := path + ".tmp"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	if f == null:
+		push_warning("%s не записан: %s" % [name, error_string(FileAccess.get_open_error())])
+		return false
+	f.store_string(text)
+	f.close()
+	return DirAccess.rename_absolute(tmp, path) == OK
+
+
+static func store_remove(name: String) -> void:
+	if store_ls():
+		_move_once()
+		JavaScriptBridge.eval("(function(){try{localStorage.removeItem(%s)}catch(e){}})()" % _js_key(name), true)
+		return
+	if FileAccess.file_exists("user://" + name):
+		DirAccess.remove_absolute("user://" + name)
+
+
 ## Браузер: файл pygame-версии с того же сайта (она хранит save.json/settings.json в localStorage «wnb:<имя>»,
 ## game.web_persist); "" — нет. Только читаем — старое не трогаем.
 static func web_legacy(name: String) -> String:
@@ -98,8 +200,8 @@ static func web_legacy(name: String) -> String:
 func _load() -> void:
 	var text := ""
 	var legacy := false
-	if FileAccess.file_exists(PATH):
-		text = FileAccess.get_file_as_string(PATH)
+	if store_has("settings.json"):
+		text = store_read("settings.json")
 	else:
 		text = web_legacy("settings.json")       # первый запуск в браузере — настройки pygame-версии, если были
 		legacy = text != ""
@@ -157,14 +259,7 @@ func save() -> void:
 	d["lang"] = lang
 	d["glow"] = glow
 	d["a11y"] = a11y.duplicate()
-	var tmp := PATH + ".tmp"
-	var f := FileAccess.open(tmp, FileAccess.WRITE)
-	if f == null:
-		push_warning("settings.json не записан: %s" % error_string(FileAccess.get_open_error()))
-		return
-	f.store_string(JSON.stringify(d, "  "))
-	f.close()
-	DirAccess.rename_absolute(tmp, PATH)
+	store_write("settings.json", JSON.stringify(d, "  "))
 
 
 ## Разбор JSON без ERROR в журнале (битый файл сохранения — обычное дело, а не ошибка движка): null — не JSON.
@@ -240,6 +335,11 @@ func set_lang(code: String) -> void:
 func text_k() -> float:
 	var k: float = TEXT_K[clampi(int(a11y.get("text", 0)), 0, TEXT_K.size() - 1)]
 	return minf(k, text_cap) if text_cap > 0.0 else k
+
+
+## Окно второго Esc (выйти из ремонта / из игры): с «Одной кнопкой» — 10 с, иначе 2,5 с (как esc_timer в game.py).
+func esc_secs() -> float:
+	return 10.0 if int(a11y.get("scan", 0)) != 0 else 2.5
 
 
 func calm() -> bool:

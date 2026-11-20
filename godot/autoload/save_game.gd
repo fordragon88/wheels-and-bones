@@ -4,6 +4,11 @@ extends Node
 ## пока задание активно, обычный прогресс не меняется). Перед заменой прогресса кодом — копия save.bak.json.
 ## Запись: сначала копия прежнего файла (save.prev.json), потом новый — во временный файл и переименованием.
 ## Битый файл не затирается молча: копия save.json.bad (как в game.py).
+## Браузер: хранение по ключам localStorage (Settings.store_*). Перед каждой записью хранимое перечитывается и
+## объединяется «только растущими» полями (merge_saves): вторая вкладка со старым прогрессом не затирает задание,
+## пройденное в первой. «gen» — поколение сохранения: сброс, загрузка кода и «Вернуть прежний прогресс» его
+## увеличивают, и вкладка, загруженная до сброса, при записи берёт сброшенное + только своё новое (сброс не
+## «воскресает»). На компьютере файл один на игру — без объединения и без «gen» (как было).
 
 signal changed
 
@@ -25,12 +30,16 @@ var _bak_mem: Variant = null           # тесты: копия прогресс
 
 
 var migrated: bool = false            # браузер: прогресс взят из pygame-версии (localStorage) в этом запуске
+var gen: int = 0                      # браузер: поколение сохранения (см. merge_saves)
+var _base: Dictionary = {}            # браузер: что эта вкладка последний раз прочла/записала (для «своего нового»)
+var _replace: bool = false            # следующая запись заменяет прогресс (сброс/код/копия): gen + 1, без объединения
+var _fresh: Dictionary = {}           # браузер: пройдено с прошлой записи (и переигранное) — «своё новое» после сброса
 
 
 func _ready() -> void:
 	persist = not OS.get_cmdline_user_args().has("--test")
 	if persist:
-		if FileAccess.file_exists(PATH):
+		if Settings.store_has("save.json"):
 			load_file(PATH)
 		elif OS.has_feature("web"):
 			migrate_web()
@@ -48,23 +57,24 @@ func migrate_web() -> bool:
 	migrated = true
 	var bak := Settings.web_legacy("save.bak.json")
 	if bak.begins_with("{") and Settings.parse_json(bak) is Dictionary:
-		var f := FileAccess.open(BAK, FileAccess.WRITE)
-		if f != null:
-			f.store_string(bak)
-			f.close()
+		Settings.store_write("save.bak.json", bak)
 	save()
 	return true
 
 
 func load_file(path: String) -> void:
-	if not FileAccess.file_exists(path):
+	var name := path.get_file()
+	if not Settings.store_has(name):
 		return
-	var data: Variant = Settings.parse_json(FileAccess.get_file_as_string(path))
+	var text := Settings.store_read(name)
+	var data: Variant = Settings.parse_json(text)
 	if not data is Dictionary:
 		push_warning("save.json не читается — копия в save.json.bad")
-		DirAccess.copy_absolute(path, path + ".bad")
+		Settings.store_write(name + ".bad", text)
 		return
 	apply_dict(data)
+	_base = to_dict()
+	_fresh.clear()
 
 
 ## Разбор словаря сохранения: каждое поле отдельно, битые элементы пропускаются (одна ошибка не обнуляет прогресс).
@@ -98,12 +108,14 @@ func apply_dict(d: Dictionary, main: bool = true) -> void:
 	seat_quiz_ok = d.get("seat_quiz_ok") is bool and d["seat_quiz_ok"]
 	tutorial_skipped = d.get("tutorial_skipped") is bool and d["tutorial_skipped"]
 	ending_seen = d.get("ending_seen") is bool and d["ending_seen"]
+	var g: Variant = Settings.py_int(d.get("gen"))
+	gen = maxi(0, g) if g != null else 0
 	if main:
 		assign = assign_state(d.get("assign"))
 	_extra.clear()
 	for k: String in d:
 		if not k in ["done", "garage", "exam_passed", "seat_done", "seat_quiz_ok", "tutorial_skipped", "ending_seen",
-				"assign"]:
+				"assign", "gen"]:
 			_extra[k] = d[k]
 	changed.emit()
 
@@ -131,11 +143,16 @@ func to_dict() -> Dictionary:
 		for k: String in ["id", "jobs", "seat", "from", "title", "done", "errors", "secs", "active", "sent"]:
 			a[k] = assign[k]
 		d["assign"] = a
+	if Settings.store_ls():
+		d["gen"] = gen
 	return d
 
 
 func save() -> bool:
+	if persist and Settings.store_ls():
+		return _save_web()
 	changed.emit()
+	_replace = false
 	if not persist:
 		return true
 	if FileAccess.file_exists(PATH):
@@ -148,6 +165,124 @@ func save() -> bool:
 	f.store_string(JSON.stringify(to_dict(), "  "))
 	f.close()
 	return DirAccess.rename_absolute(tmp, PATH) == OK
+
+
+## Браузер: перечитать хранимое, объединить со своим (merge_saves), прежний текст — в save.prev.json, записать.
+func _save_web() -> bool:
+	var old := Settings.store_read("save.json")
+	var stored: Variant = Settings.parse_json(old)
+	var mine := to_dict()
+	var out: Dictionary
+	if _replace or not stored is Dictionary:
+		out = mine
+		if _replace:
+			var sg: Variant = Settings.py_int((stored as Dictionary).get("gen")) if stored is Dictionary else null
+			out["gen"] = maxi(gen, sg if sg != null else 0) + 1
+	else:
+		out = merge_saves(stored, mine, _base, _fresh)
+	_replace = false
+	_fresh.clear()
+	if out != mine:
+		apply_dict(out)                  # в памяти — объединённое (прогресс другой вкладки виден и здесь)
+	else:
+		changed.emit()
+	gen = int(out.get("gen", 0))
+	var text := JSON.stringify(to_dict(), "  ")
+	if old != "" and old != text:
+		Settings.store_write("save.prev.json", old)
+	var ok := Settings.store_write("save.json", text)
+	_base = to_dict()
+	return ok
+
+
+## Объединение сохранений двух вкладок (браузер). stored — хранимое сейчас, mine — своё в памяти, base — что эта
+## вкладка прочла/записала в прошлый раз. Растут только: done, seat_done (объединение), garage (лучшие звёзды),
+## exam_passed, seat_quiz_ok, tutorial_skipped, ending_seen (или). Задание по ссылке: тот же id — сделанные пункты
+## объединяются (первая попытка — из хранимого), «active» — своё; другой id — своё; своего нет — хранимое.
+## gen: хранимое новее (сброс/код в другой вкладке) — к нему добавляется только своё новое (mine − base), задание —
+## хранимое; одинаковое — объединение целиком; своё новее — своё.
+static func merge_saves(stored: Dictionary, mine: Dictionary, base: Dictionary, fresh: Dictionary = {}) -> Dictionary:
+	var sg: Variant = Settings.py_int(stored.get("gen"))
+	var mg: Variant = Settings.py_int(mine.get("gen"))
+	var s_gen: int = sg if sg != null else 0
+	var m_gen: int = mg if mg != null else 0
+	if s_gen < m_gen:
+		return mine.duplicate(true)
+	var add := mine
+	if s_gen > m_gen:
+		add = _delta(mine, base, fresh)
+	var out: Dictionary = stored.duplicate(true)
+	for k: String in mine:
+		if not k in GROW + ["assign", "gen"]:
+			out[k] = mine[k]
+	for key: String in ["done", "seat_done"]:
+		var u: Dictionary = {}
+		for x: Variant in _lst(stored, key) + _lst(add, key):
+			u[x] = true
+		var arr: Array = u.keys()
+		arr.sort()
+		out[key] = arr
+	var garage_out: Array = []
+	var idx: Dictionary = {}
+	for e: Variant in _lst(stored, "garage") + _lst(add, "garage"):
+		if not (e is Array and (e as Array).size() == 2):
+			continue
+		var st: Variant = Settings.py_int(e[1])
+		var n: int = st if st != null else 1
+		if idx.has(e[0]):
+			var i: int = idx[e[0]]
+			garage_out[i][1] = maxi(int(garage_out[i][1]), n)
+		else:
+			idx[e[0]] = garage_out.size()
+			garage_out.append([e[0], n])
+	out["garage"] = garage_out
+	for key: String in FLAGS:
+		out[key] = Settings.py_bool(stored.get(key)) or Settings.py_bool(add.get(key))
+	var ma: Variant = mine.get("assign")
+	var sa: Variant = stored.get("assign")
+	if s_gen == m_gen and ma is Dictionary:
+		if sa is Dictionary and sa.get("id") == ma.get("id"):
+			var a: Dictionary = (ma as Dictionary).duplicate(true)
+			for k: String in ["done", "errors", "secs"]:
+				var sv: Variant = sa.get(k)
+				var mv: Variant = a.get(k)
+				if sv is Dictionary and mv is Dictionary:
+					for kk: Variant in sv:
+						mv[kk] = sv[kk]           # первая попытка — какая уже записана
+			a["sent"] = Settings.py_bool(sa.get("sent")) or Settings.py_bool(a.get("sent"))
+			out["assign"] = a
+		else:
+			out["assign"] = (ma as Dictionary).duplicate(true)
+	out["gen"] = s_gen
+	return out
+
+
+const FLAGS: Array[String] = ["exam_passed", "seat_quiz_ok", "tutorial_skipped", "ending_seen"]
+const GROW: Array[String] = ["done", "garage", "seat_done", "exam_passed", "seat_quiz_ok", "tutorial_skipped", "ending_seen"]
+
+
+## Своё новое с прошлого чтения/записи: растущие поля mine, которых нет в base.
+## fresh — пройденное с прошлой записи, даже если оно уже было (переиграла задание, пройденное до сброса).
+static func _delta(mine: Dictionary, base: Dictionary, fresh: Dictionary = {}) -> Dictionary:
+	var d := {}
+	for key: String in ["done", "seat_done"]:
+		var b: Array = _lst(base, key)
+		d[key] = _lst(mine, key).filter(func(x: Variant) -> bool: return not x in b)
+	var bg: Dictionary = {}
+	for e: Variant in _lst(base, "garage"):
+		if e is Array and (e as Array).size() == 2:
+			bg[e[0]] = e[1]
+	d["garage"] = _lst(mine, "garage").filter(func(e: Variant) -> bool:
+		return e is Array and (e as Array).size() == 2 and (not bg.has(e[0]) or int(e[1]) > int(bg[e[0]])))
+	for key: String in FLAGS:
+		d[key] = Settings.py_bool(mine.get(key)) and not Settings.py_bool(base.get(key))
+	for k: String in fresh:
+		if k.begins_with("seat:"):
+			(d["seat_done"] as Array).append(k.trim_prefix("seat:"))
+		else:
+			(d["done"] as Array).append(k)
+			(d["garage"] as Array).append([k, int(fresh[k])])
+	return d
 
 
 ## Прогресс и настройки в виде эталона game.py (tools/save_fixtures.py → tests/saves/expected.json): сверка переноса
@@ -171,6 +306,25 @@ func compat_dump(st: Node) -> Dictionary:
 
 
 ## Отметка ✔: в задании по ссылке — по прогрессу задания, иначе — по обычному.
+## Задание пройдено (обычная игра): done, в гараж — лучшая оценка (переигрывание её не снижает).
+func mark_job(jid: String, stars: int) -> void:
+	done[jid] = true
+	var found := false
+	for g: Array in garage:
+		if g[0] == jid:
+			found = true
+			if stars > int(g[1]):
+				g[1] = stars
+	if not found:
+		garage.append([jid, stars])
+	_fresh[jid] = maxi(stars, int(_fresh.get(jid, 0)))
+
+
+func mark_seat(cid: String) -> void:
+	seat_done[cid] = true
+	_fresh["seat:" + cid] = 1
+
+
 func is_done(jid: String) -> bool:
 	if assign_on():
 		return (assign["done"] as Dictionary).has(jid)
@@ -218,13 +372,19 @@ func available_jobs() -> Array:
 func reset() -> void:
 	apply_dict({})
 	_bak_mem = null
+	Nav.hub_page = 0
+	Nav.garage_page = 0
 
 
 ## «Сбросить прогресс» в настройках (reset_progress): задание по ссылке остаётся, как в game.py.
 func reset_progress() -> void:
 	var a := assign
+	var keep := gen
 	apply_dict({})
 	assign = a
+	gen = keep
+	_replace = true
+	Nav.hub_page = 0                     # как reset_progress в game.py
 
 
 # ---------------- задание по ссылке (docs/SHARE_LINKS.md) ----------------
@@ -272,12 +432,14 @@ func start_assignment(a: Dictionary) -> void:
 	else:
 		assign = a.duplicate(true)
 		assign.merge({"done": {}, "errors": {}, "secs": {}, "active": true, "sent": false}, true)
+	Nav.hub_page = 0                     # как start_assignment в game.py
 	save()
 
 
 func exit_assignment() -> void:
 	if not assign.is_empty():
 		assign["active"] = false
+	Nav.hub_page = 0                     # как exit_assignment в game.py
 	save()
 
 
@@ -316,7 +478,7 @@ func seat_idx() -> Array:
 # ---------------- копия прогресса перед заменой кодом ----------------
 
 func has_backup() -> bool:
-	return _bak_mem != null if not persist else FileAccess.file_exists(BAK)
+	return _bak_mem != null if not persist else Settings.store_has("save.bak.json")
 
 
 func backup_progress() -> void:
@@ -325,9 +487,8 @@ func backup_progress() -> void:
 	if not persist:
 		_bak_mem = d
 		return
-	var f := FileAccess.open(BAK, FileAccess.WRITE)
-	if f:
-		f.store_string(JSON.stringify(d, "  "))
+	d.erase("gen")
+	Settings.store_write("save.bak.json", JSON.stringify(d, "  "))
 
 
 ## Заменить прогресс проверенными полями кода (Share.progress_unpack); старый — в копию.
@@ -345,6 +506,8 @@ func apply_progress(p: Dictionary) -> void:
 	tutorial_skipped = p["tutorial_skipped"]
 	if not assign.is_empty():
 		assign["active"] = false                # загрузили свой прогресс — обычная игра
+	Nav.hub_page = 0                         # как _progress_reset_scene в game.py
+	_replace = true
 	save()
 
 
@@ -357,8 +520,12 @@ func restore_backup() -> void:
 		d = _bak_mem
 		_bak_mem = null
 	else:
-		d = Settings.parse_json(FileAccess.get_file_as_string(BAK))
-		DirAccess.remove_absolute(BAK)
+		d = Settings.parse_json(Settings.store_read("save.bak.json"))
+		Settings.store_remove("save.bak.json")
 	if d is Dictionary:
+		var keep := gen
 		apply_dict(d, false)
+		gen = keep
+	Nav.hub_page = 0                         # как _progress_reset_scene в game.py
+	_replace = true
 	save()

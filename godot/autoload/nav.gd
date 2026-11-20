@@ -28,6 +28,8 @@ var current_name: String = ""
 var params: Dictionary = {}
 var history: Array = []                   # [[имя, параметры]] — откуда пришли
 var test_mode: bool = false
+var hub_page: int = 0                     # страница очереди мастерской (game.py self.hub_page) — переживает экран
+var garage_page: int = 0                  # страница гаража (game.py self.garage_page)
 var host: Control                         # здесь живёт текущий экран
 var overlay: CanvasLayer                  # поверх: сообщение, настройки, переход
 var toast: Toast
@@ -87,6 +89,8 @@ func go(name: String, p: Dictionary = {}, remember: bool = true) -> void:
 	toast.on_input()                       # итог хода прошлого экрана не висит на новом
 	params = p
 	current_name = name
+	if Frames.net:
+		Frames.retry_failed()                  # браузер: кадры, не пришедшие из-за сети, — ещё раз (сеть могла вернуться)
 	var scene := load(SCREENS[name]) as PackedScene
 	current = scene.instantiate() as Screen
 	current.params = p
@@ -417,6 +421,9 @@ func _unhandled_input(e: InputEvent) -> void:
 			if k.keycode == KEY_ESCAPE:
 				close_settings()
 				get_viewport().set_input_as_handled()
+			elif k.keycode == KEY_M and not k.echo:    # как game.py: M работает и при открытых настройках
+				_toggle_sound_key()
+				get_viewport().set_input_as_handled()
 			return
 		if A11y.key(k):
 			get_viewport().set_input_as_handled()
@@ -431,8 +438,7 @@ func _unhandled_input(e: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 			KEY_M:
 				if not k.echo:
-					var on := Audio.toggle_sound()
-					flash("Звук включён" if on else "Звук выключен (M — включить)", UI.GHOST, 1.8)
+					_toggle_sound_key()
 				get_viewport().set_input_as_handled()
 			KEY_F11:
 				_toggle_fullscreen()
@@ -444,6 +450,11 @@ func _unhandled_input(e: InputEvent) -> void:
 	elif e is InputEventJoypadButton and e.pressed and (e as InputEventJoypadButton).button_index == JOY_BUTTON_B:
 		back()                                     # (геймпад переводится в клавиши в _input — сюда не доходит)
 		get_viewport().set_input_as_handled()
+
+
+func _toggle_sound_key() -> void:
+	var on := Audio.toggle_sound()
+	flash("Звук включён" if on else "Звук выключен (M — включить)", UI.GHOST, 1.8)
 
 
 func _toggle_fullscreen() -> void:
@@ -485,5 +496,5 @@ func quit_request() -> void:
 			shutdown()
 			get_tree().quit.call_deferred()
 		return
-	_esc_t = 2.5
+	_esc_t = Settings.esc_secs()
 	flash("Ещё раз Esc — выйти из игры.", UI.AMBER, _esc_t)

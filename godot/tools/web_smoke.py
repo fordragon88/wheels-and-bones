@@ -16,6 +16,7 @@
 Код выхода 1 — что-то не так."""
 import asyncio
 import json
+import re
 import os
 import sys
 import time
@@ -164,7 +165,8 @@ class Page:
 
 
 async def new_page(b, name, touch=False, mobile=False, w=1280, h=720, dpr=1.0, legacy=None, motion="no-preference",
-                   block_frames=False, legacy_raw=None):
+                   block_frames=False, legacy_raw=None, hook=None):
+    """hook(route, path) — свой ответ на запрос к игре (True — обработан): обрыв, 500, «висящий» ответ, мусор."""
     opts = dict(viewport={"width": w, "height": h}, device_scale_factor=dpr, reduced_motion=motion)
     if mobile:
         opts.update(is_mobile=True, has_touch=True)
@@ -184,6 +186,8 @@ async def new_page(b, name, touch=False, mobile=False, w=1280, h=720, dpr=1.0, l
         u = urllib.parse.urlsplit(r.request.url)
         if u.netloc != host:
             await r.abort()                            # наружу — ничего (таблица замечаний, счётчики)
+        elif hook and await hook(r, u.path):
+            pass
         elif block_frames and "/frames/" in u.path:
             await r.fulfill(status=404, body="not found")
         else:
@@ -1417,9 +1421,369 @@ async def sc_plates(b):
         await p.ctx.close()
 
 
+# ---------------- хранение в браузере, загрузчик, сбои сети (находки аудита 20.11) ----------------
+
+SKIP_SEED = {"save.json": {"done": [], "tutorial_skipped": True}}
+
+
+async def job_to_hub(p, jid):
+    """Из мастерской: карточка jid → по подсказкам до итога → в мастерскую (без ожидания петли проезда)."""
+    await p.press("Card_" + jid, wait=1200)
+    if not await p.wait(lambda s: s.get("screen") == "job", f"задание {jid}", 15):
+        return {}
+    st = await follow_hints(p, lambda s: s.get("phase") == "test", 240)
+    await p.press("TestDrive")
+    await p.wait(lambda s: s.get("ride_done"), "проезд закончился", 40)
+    await p.press("TestDrive", wait=50)
+    await p.wait(lambda s: s.get("screen") == "result", "итог", 15)
+    await p.press("ToHub", wait=1200)
+    return await p.wait(lambda s: s.get("screen") == "hub", "в мастерскую", 15)
+
+
+async def to_hub(p):
+    await title_ready(p)
+    await p.press("Start", wait=1200)
+    return await p.wait(lambda s: s.get("screen") == "hub", "мастерская", 15)
+
+
+async def tab(p, name):
+    """Ещё одна вкладка того же браузера (тот же сайт, то же хранилище)."""
+    q = Page(p.ctx, await p.ctx.new_page(), name)
+    await q.boot()
+    return q
+
+
+async def sc_tabs(b):
+    """Две вкладки одного сайта (сохранение — ключами localStorage «wnb-godot:<файл>», SaveGame.merge_saves):
+    1) A проходит задание, B (загружена раньше) меняет настройку (M) — прогресс A на месте (раньше IDBFS B стирал его);
+    2) B со старым прогрессом проходит своё задание — в хранилище оба (объединение растущих полей);
+    3) «Сбросить прогресс» в A при открытой B, B проходит задание — старое не «воскресает» (поколение сохранения)."""
+    a = await new_page(b, "tabs_A", legacy=SKIP_SEED)
+    await a.boot()
+    bq = await tab(a, "tabs_B")
+    await a.pg.bring_to_front()
+    await to_hub(a)
+    st = await job_to_hub(a, "flat")
+    check("flat" in st.get("done", []), f"tabs: A прошла flat ({st.get('done')})")
+    await bq.pg.bring_to_front()
+    await bq.key("m", 1500)
+    st = await bq.state()
+    check(st.get("sound") is False, f"tabs: B выключила звук (M)")
+    c = await tab(a, "tabs_C")
+    st = await c.state()
+    check("flat" in st.get("done", []) and st.get("sound") is False,
+          f"tabs: смена настройки во вкладке B не стёрла прогресс A — новая вкладка: done={st.get('done')}, звук={st.get('sound')}")
+    await c.pg.close()
+    raw = await a.pg.evaluate("[localStorage.getItem('wnb-godot:save.json'), localStorage.getItem('wnb-godot:settings.json')]")
+    check(bool(raw[0]) and bool(raw[1]), "tabs: сохранение и настройки — ключами localStorage wnb-godot:save.json / settings.json")
+    # 2) B не знает про flat (загружена до него) — проходит caster
+    await bq.pg.bring_to_front()
+    await to_hub(bq)
+    st = await job_to_hub(bq, "caster")
+    check(sorted(st.get("done", [])) == ["caster", "flat"],
+          f"tabs: B со старым прогрессом сохранила caster — в ней теперь {st.get('done')} (flat из A подхвачен)")
+    c = await tab(a, "tabs_D")
+    st = await c.state()
+    check(sorted(st.get("done", [])) == ["caster", "flat"], f"tabs: в хранилище оба задания — {st.get('done')}")
+    await c.pg.close()
+    # 3) сброс в A, B (до сброса знала flat и caster) снова проходит flat (переигранное — тоже «своё новое»)
+    await a.pg.bring_to_front()
+    await a.pg.wait_for_timeout(500)
+    await a.press("Gear", wait=600)
+    await a.press("Tab_game", wait=400)
+    await a.press("Reset", wait=400)
+    await a.press("ResetYes", wait=1200)
+    st = await a.wait(lambda s: s.get("screen") == "title", "A: титул после сброса", 15)
+    check(st.get("done") == [], f"tabs: A сбросила прогресс ({st.get('done')})")
+    await bq.pg.bring_to_front()
+    st = await job_to_hub(bq, "flat")
+    check(st.get("done") == ["flat"], f"tabs: B после сброса в A снова прошла flat — старое не воскресло: {st.get('done')}")
+    c = await tab(a, "tabs_E")
+    st = await c.state()
+    check(st.get("done") == ["flat"], f"tabs: в хранилище после сброса — только новое из B: {st.get('done')}")
+    prev = await a.pg.evaluate("localStorage.getItem('wnb-godot:save.prev.json') || ''")
+    check('"done"' in prev, "tabs: копия прежнего сохранения (save.prev.json) пишется")
+    for p in (a, bq, c):
+        p.check_console()
+    await a.ctx.close()
+
+
+NOLS_JS = """if (/[?&]nols=1/.test(location.search)) Object.defineProperty(window, 'localStorage', { configurable: true,
+    get() { throw new DOMException('The operation is insecure.', 'SecurityError'); } });"""
+
+
+async def sc_store(b):
+    """Запасные пути хранения: без localStorage (SecurityError) — игра стартует и пишет в user:// (IndexedDB); те же
+    сохранения Godot-версии потом, когда localStorage есть, один раз переносятся в ключи «wnb-godot:*» (так переедут
+    сохранения тестеров, записанные до 20.11). Без IndexedDB — тоже стартует и играется."""
+    p = await new_page(b, "store_nols")
+    await p.ctx.add_init_script(NOLS_JS)
+    st, secs, _ = await p.boot("&nols=1")
+    check(st.get("screen") == "title", f"store: без localStorage игра стартует ({st.get('screen')}, {secs:.0f} с)")
+    await title_ready(p)
+    await p.press("Start", wait=1200)
+    await p.wait(lambda s: s.get("screen") == "intro", "вступление", 15)
+    await p.press("SkipTutorial", wait=1200)
+    await p.wait(lambda s: s.get("screen") == "hub", "мастерская после «пропустить»", 15)
+    st = await job_to_hub(p, "flat")
+    check("flat" in st.get("done", []), f"store: без localStorage задание пройдено ({st.get('done')})")
+    await p.pg.wait_for_timeout(1500)                    # запись user:// дошла до IndexedDB
+    await p.pg.goto(URL + "?test=1")                     # теперь localStorage есть
+    st = await p.wait(lambda s: s.get("screen") in ("title", "hub"), "после смены адреса", 60)
+    keys = await p.pg.evaluate("[localStorage.getItem('wnb-godot:moved'), !!localStorage.getItem('wnb-godot:save.json')]")
+    check("flat" in st.get("done", []) and keys == ["1", True],
+          f"store: сохранение Godot из user:// (IndexedDB) перенесено в localStorage один раз: done={st.get('done')}, "
+          f"moved={keys[0]}, ключ save.json={keys[1]}")
+    p.allow += ["SecurityError", "insecure"]
+    p.check_console()
+    await p.ctx.close()
+    for tag, js in (("throw", "Object.defineProperty(window, 'indexedDB', { configurable: true, get() { throw new "
+                              "DOMException('denied', 'SecurityError'); } });"),
+                    ("open", "window.indexedDB.open = function () { throw new DOMException('quota', 'QuotaExceededError'); };")):
+        q = await new_page(b, "store_noidb_" + tag)
+        await q.ctx.add_init_script(js)
+        st, secs, _ = await q.boot()
+        ok = st.get("screen") == "title"
+        if ok:
+            await title_ready(q)
+            await q.press("Start", wait=1200)
+            st = await q.wait(lambda s: s.get("screen") in ("intro", "hub"), "после «начать»", 15)
+        check(st.get("screen") in ("intro", "hub"), f"store: без IndexedDB ({tag}) игра стартует и играется ({st.get('screen')})")
+        await q.ctx.close()
+
+
+async def load_state(p):
+    return await p.pg.evaluate("window.wnbLoad ? window.wnbLoad.state() : null")
+
+
+async def sc_loader(b):
+    """Сторож загрузки (web/shell.html): движок «повис» (полоса стоит) — два автоповтора, потом сообщение и кнопка
+    «Обновить страницу»; она работает. Пакет отдаёт 500 (старая страница из кеша после выкладки) — то же."""
+    hang = {"on": True, "wasm": 0, "pck": 0, "index": 0}
+
+    async def hook(r, path):
+        if path.endswith(".wasm"):
+            hang["wasm"] += 1
+            if hang["on"]:
+                await asyncio.sleep(40)
+                try:
+                    await r.abort()
+                except Exception:
+                    pass
+                return True
+        if path.endswith("/") or path.endswith("index.html"):
+            hang["index"] += 1
+        return False
+    p = await new_page(b, "loader_hang", hook=hook)
+    p.allow += ["net::", "Failed to load", "ERR_"]
+    await p.pg.goto(URL + "?test=1&stall=3")
+    t0 = time.time()
+    s = None
+    while time.time() - t0 < 60:
+        try:
+            s = await load_state(p)
+        except Exception:
+            s = None                                     # страница перезагружается
+        if s and s.get("reload"):
+            break
+        await p.pg.wait_for_timeout(500)
+    check(bool(s and s.get("reload")) and hang["wasm"] == 3,
+          f"loader: движок не качается — после {hang['wasm'] - 1} автоповторов сообщение и кнопка «Обновить» ({s})")
+    await p.shot("1_stalled")
+    hang["on"] = False
+    n_index = hang["index"]
+    await p.pg.click("#wnb-reload")
+    st = await p.wait(lambda s: s.get("screen") == "title", "титул после «Обновить»", 90)
+    check(st.get("screen") == "title" and hang["index"] > n_index,
+          f"loader: кнопка «Обновить страницу» перезагрузила страницу (index.html запрошен заново), игра запустилась")
+    await p.ctx.close()
+
+    cnt = {"pck": 0}
+
+    async def hook500(r, path):
+        if path.endswith(".pck"):
+            cnt["pck"] += 1
+            await r.fulfill(status=500, body="err")
+            return True
+        return False
+    p = await new_page(b, "loader_pck500", hook=hook500)
+    p.allow += ["500", "Failed loading", "Failed to load"]
+    await p.pg.goto(URL + "?test=1&stall=3")
+    t0 = time.time()
+    s = None
+    while time.time() - t0 < 90:
+        try:
+            s = await load_state(p)
+        except Exception:
+            s = None
+        if s and s.get("reload"):
+            break
+        await p.pg.wait_for_timeout(500)
+    check(bool(s and s.get("reload")) and s.get("tries") == 2,
+          f"loader: пакет 500 — два автоповтора, потом «Игра не запустилась» и кнопка «Обновить» ({s}, запросов .pck {cnt['pck']})")
+    await p.shot("2_pck500")
+    await p.ctx.close()
+
+
+def frames_of(st, key):
+    return (st.get("frames", {}).get("sets", {}) or {}).get(key)
+
+
+async def sc_netfail(b):
+    """Сбои сети при подгрузке кадров: зависшие запросы (тайм-аут страницы), «200 + HTML» вместо WebP, сеть пропала
+    и вернулась (петли догружаются при следующем входе в задание)."""
+    async def hang6(r, path):
+        if re.search(r"/frames/anim/barty_wave/0[0-5]\.webp", path):
+            await asyncio.sleep(60)
+            try:
+                await r.abort()
+            except Exception:
+                pass
+            return True
+        return False
+    p = await new_page(b, "net_hang", legacy=SKIP_SEED, hook=hang6)
+    p.allow += ["Frames: кадры", "at: push_warning", "net::"]
+    await p.boot()
+    await to_hub(p)
+    await p.press("Card_flat", wait=1200)
+    await p.wait(lambda s: s.get("screen") == "job", "задание", 15)
+    st = await p.wait(lambda s: (frames_of(s, "tt:chair_basic.png") or [0, 1])[0] == (frames_of(s, "tt:chair_basic.png") or [0, 1])[1],
+                      "кадры коляски при 6 зависших запросах", 45)
+    check(bool(st), f"net: 6 зависших запросов не мешают кадрам коляски ({frames_of(st, 'tt:chair_basic.png')}, "
+                    f"тайм-аутов страницы {st.get('net', {}).get('timeouts')})")
+    await p.ctx.close()
+
+    async def garbage(r, path):
+        if path.endswith("/frames/anim/barty_wave/03.webp"):
+            await r.fulfill(status=200, content_type="image/webp", body="<html>not found</html>")
+            return True
+        return False
+    p = await new_page(b, "net_garbage", legacy=SKIP_SEED, hook=garbage)
+    p.allow += ["Frames: кадры", "at: push_warning"]
+    await p.boot()
+    await p.pg.wait_for_timeout(6000)
+    await to_hub(p)
+    await p.press("Card_flat", wait=1200)
+    st = await p.wait(lambda s: (frames_of(s, "tt:chair_basic.png") or [0, 1])[0] == 36, "кадры коляски", 30)
+    corrupt = [c for c in p.console if "ERR_FILE_CORRUPT" in c or "webp_load" in c]
+    check(st.get("net", {}).get("mode") == "worker" and not corrupt,
+          f"net: «200 + HTML» вместо кадра — сбой одного файла, фоновая распаковка осталась "
+          f"(mode={st.get('net', {}).get('mode')}, битых {st.get('net', {}).get('bad')}, ERR_FILE_CORRUPT в консоли: {len(corrupt)})")
+    await p.ctx.close()
+
+    p = await new_page(b, "net_offline", legacy=SKIP_SEED)
+    p.allow += ["Frames: кадры", "at: push_warning", "net::", "Failed to load"]
+    await p.boot()
+    await to_hub(p)
+    await p.pg.wait_for_timeout(2000)
+    await p.ctx.set_offline(True)
+    await p.press("Card_flat", wait=1200)
+    await p.wait(lambda s: s.get("screen") == "job", "задание без сети", 15)
+    await p.pg.wait_for_timeout(6000)
+    st = await p.state()
+    info(f"net offline: без сети {st.get('frames', {}).get('sets')}")
+    await p.key("Escape", 300)
+    await p.key("Escape", 800)
+    await p.wait(lambda s: s.get("screen") == "hub", "в мастерскую", 10)
+    await p.ctx.set_offline(False)
+    await p.pg.wait_for_timeout(500)
+    await p.press("Card_flat", wait=1200)
+    keys = ("tt:chair_basic.png", "loop:ride_martin", "loop:magic_martin")
+
+    def full(s):
+        return all((frames_of(s, k) or [0, 1])[0] == (frames_of(s, k) or [0, 1])[1] for k in keys)
+    st = await p.wait(full, "кадры и петли после возврата сети", 40, quiet=True)
+    st = st or await p.state()
+    check(full(st), f"net: сеть вернулась — при следующем входе в задание коляска и петли проезда/волшебства догрузились "
+                    f"({[frames_of(st, k) for k in keys]})")
+    await p.shot("back_online")
+    await p.ctx.close()
+
+
+FS_STAGES = ["title", "hub", "intro_1", "intro_5", "job_flat_diagnose", "job_flat_repair", "mini_pump", "mini_gap",
+             "mini_ping", "mini_meter", "ride_martin", "result_lift", "hub_done", "garage", "garage_open", "ending",
+             "credits", "feedback_general", "help", "settings_sound", "settings_game", "guild_open", "tech_ops",
+             "tech_mini", "tech_result", "exam_ticket", "exam_passed", "seat_fit_troll", "seat_lessons"]
+
+
+async def exitfs_rect(p):
+    return await p.pg.evaluate("(()=>{const x=document.getElementById('wnb-exitfs'); if(!x) return null; const r="
+                               "x.getBoundingClientRect(); return [getComputedStyle(x).display, r.left, r.top, r.width, "
+                               "r.height, x.textContent]})()")
+
+
+async def sc_fsexit(b):
+    """Компьютер, полный экран (окно = экран, как F11): надпись «✖ Выйти из полного экрана (Esc)» видна 4 с после входа
+    и пока указатель у верхнего края; в остальное время не закрывает ни одной кнопки игры ни на одном экране при
+    1280×720, 1366×768, 1920×1080; после нажатия на неё клавиши снова у игры (фокус — холсту)."""
+    for w, h in ((1280, 720), (1366, 768), (1920, 1080)):
+        p = await new_page(b, f"fsexit_{w}", w=w, h=h, legacy=SKIP_SEED)
+        await p.boot()
+        r = await exitfs_rect(p)
+        check(bool(r) and r[0] == "block", f"fsexit {w}×{h}: при входе в полный экран надпись видна ({r})")
+        await p.pg.mouse.move(w / 2, h / 2)
+        await p.pg.wait_for_timeout(4500)
+        hits, shown = [], []
+        for s in FS_STAGES:
+            await p.pg.evaluate("(n) => { window.wnbStaged = ''; window.wnbStage(n); }", s)
+            for _ in range(60):
+                if await p.pg.evaluate("window.wnbStaged || ''") == s:
+                    break
+                await p.pg.wait_for_timeout(250)
+            await p.pg.wait_for_timeout(600)
+            st = await p.state()
+            r = await exitfs_rect(p)
+            if r[0] != "none":
+                shown.append(s)
+                for bt in st.get("buttons", []):
+                    x0, y0 = await p.at(bt[1], bt[2])
+                    x1, y1 = await p.at(bt[1] + bt[3], bt[2] + bt[4])
+                    if x0 < r[1] + r[3] and x1 > r[1] and y0 < r[2] + r[4] and y1 > r[2]:
+                        hits.append((s, bt[0]))
+            if s == "garage":
+                await p.shot("garage")
+        check(not hits and not shown, f"fsexit {w}×{h}: надпись не видна и не закрывает кнопок на {len(FS_STAGES)} экранах "
+                                      f"(видна на {shown}, закрывает {hits})")
+        await p.pg.mouse.move(w / 2, 2)
+        await p.pg.wait_for_timeout(700)
+        r = await exitfs_rect(p)
+        check(r[0] == "block" and r[2] <= 1, f"fsexit {w}×{h}: указатель у верхнего края — надпись появилась сверху ({r})")
+        if w == 1280:
+            await p.shot("garage_reveal")
+        await p.ctx.close()
+    # фокус после нажатия
+    p = await new_page(b, "fsexit_focus", legacy=SKIP_SEED)
+    await p.boot()
+    await to_hub(p)
+    await p.pg.mouse.move(640, 2)
+    await p.pg.wait_for_timeout(500)
+    r = await exitfs_rect(p)
+    await p.pg.mouse.click(r[1] + r[3] / 2, r[2] + r[4] / 2)
+    await p.pg.wait_for_timeout(500)
+    act = await p.pg.evaluate("document.activeElement.id || document.activeElement.tagName")
+    k0 = (await p.state()).get("kb")
+    await p.key("ArrowDown", 300)
+    await p.key("ArrowDown", 300)
+    k1 = (await p.state()).get("kb")
+    check(act == "canvas" and k1 and k1 != k0, f"fsexit: после нажатия надписи фокус у холста ({act}), стрелки работают ({k0} → {k1})")
+    await p.ctx.close()
+
+
+async def sc_resparam(b):
+    """?res= разбирается строго: мусор (1e3, 0.5, -5, 99) — по умолчанию (1080), 720 и 0 — как заданы."""
+    for q, want in (("1e3", 1080), ("0.5", 1080), ("-5", 1080), ("99", 1080), ("720", 720), ("0", 0)):
+        p = await new_page(b, "res_" + q.replace(".", "_"), legacy=SKIP_SEED)
+        await p.boot("&res=" + q)
+        cap = await p.pg.evaluate("window.wnbRes.cap")
+        c = await p.canvas()
+        check(cap == want and c[4] >= 640, f"res: ?res={q} → потолок {cap} (ждали {want}), холст {c[4]}×{c[5]}")
+        await p.ctx.close()
+
+
 SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
              "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "feedback": sc_feedback, "perf": sc_perf,
-             "prof": sc_prof, "screens": sc_screens}
+             "prof": sc_prof, "screens": sc_screens, "tabs": sc_tabs, "store": sc_store, "loader": sc_loader,
+             "netfail": sc_netfail, "fsexit": sc_fsexit, "res": sc_resparam}
 TIMEOUT = {"screens": 5400}                               # все экраны × 4 прохода — долго
 
 

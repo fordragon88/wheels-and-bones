@@ -599,7 +599,7 @@ func stage(name: String) -> void:
 		scr.part_clicked(st["part"])
 		var m: MiniGame = scr.mini
 		if kind == "pump":
-			m.value = (int(m.cfg["lo"]) + int(m.cfg["hi"])) / 2
+			m.value = (ceili(float(m.cfg["lo"])) + floori(float(m.cfg["hi"]))) / 2
 		elif kind == "ping":
 			m.dull = {1: true, 5: true}
 			m.tested = {0: true, 1: true}
