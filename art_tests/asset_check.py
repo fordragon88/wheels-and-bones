@@ -65,9 +65,10 @@ for name in anims:
             bad.append(f"anim/{name}: нет маски {os.path.basename(a)}")
         elif pygame.image.load(a).get_size() != pygame.image.load(f"{d}/{f}").get_size():
             bad.append(f"anim/{name}: маска {os.path.basename(a)} не того размера")
-# «живые» персонажи вместо картинки (game.IDLE_LOOPS: Бренна — brenna_wave): петля есть, картинка есть,
-# пропорции кадра — как у картинки (кадр = холст картинки + поле IDLE_PAD с каждой стороны)
-for art, name in sorted(getattr(g, "IDLE_LOOPS", {}).items()):
+# «живые» персонажи вместо картинки (game.IDLE_LOOPS: Бренна — brenna_wave; game.SCENE_LOOPS — петли экрана: Мартин
+# во вступлении martin_forest и на празднике martin_party): петля есть, картинка есть, пропорции кадра — как у
+# картинки (кадр = холст картинки + поле IDLE_PAD с каждой стороны)
+for art, name in sorted(set(getattr(g, "IDLE_LOOPS", {}).items()) | set(getattr(g, "SCENE_LOOPS", {}).values())):
     if name not in anims:
         bad.append(f"IDLE_LOOPS: нет петли assets/anim/{name} для {art}")
     elif not os.path.exists(f"assets/{art}"):

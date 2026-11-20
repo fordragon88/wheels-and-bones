@@ -42,9 +42,12 @@ def main():
     ap.add_argument("--hole", default="", help="x0,dy0,x1,dy1 в кадре петли (dy — от макушки силуэта): «зажатый» фон в "
                                                "просвете (очки Бренны) — бирюзовое (G − R > 30) там закрашивается по соседям")
     ap.add_argument("--no-tone", action="store_true", help="не подгонять тон под исходную картинку")
+    ap.add_argument("--key", default="green", choices=["green", "magenta"],
+                    help="цвет фона клипа: magenta — где зелёное в герое (Мартин; make_martin_idle.py)")
+    ap.add_argument("--art-file", default="", help="картинка для сверки и тона, если она ещё не в assets/")
     args = ap.parse_args()
 
-    art = Image.open(os.path.join(ROOT, "assets", args.art)).convert("RGBA")
+    art = Image.open(args.art_file or os.path.join(ROOT, "assets", args.art)).convert("RGBA")
     fr = R.read_frames(args.mp4)
     bgs = [R.bg_color(f) for f in fr]
     Hc, Wc = fr[0].shape[:2]
@@ -68,7 +71,7 @@ def main():
           f"скорость {speed:.2f}, фон {bgs[s].round().astype(int).tolist()}")
 
     def warp(i):
-        rgb, a = R.key_frame(fr[i], bgs[i], "green", args.lo, args.hi, args.choke, args.thin)
+        rgb, a = R.key_frame(fr[i], bgs[i], args.key, args.lo, args.hi, args.choke, args.thin)
         a = a.astype(np.float32)
         fl = cv2.WARP_INVERSE_MAP | cv2.INTER_LINEAR
         pm = cv2.warpAffine(rgb.astype(np.float32) * a[..., None], M, (ow, oh), flags=fl)
