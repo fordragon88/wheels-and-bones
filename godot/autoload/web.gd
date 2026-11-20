@@ -276,6 +276,7 @@ func state() -> Dictionary:
 		"settings": Nav.settings != null, "errors": Content.errors.size(), "migrated": SaveGame.migrated,
 		"fullscreen": DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN,
 		"text_k": Settings.a11y.get("text", 0), "speech_on": Settings.a11y.get("on", false),
+		"kb": str(A11y.kb_cur.name) if is_instance_valid(A11y.kb_cur) else "",
 		"music": Audio._cur_theme, "buttons": _buttons(), "hint": [], "covered": covered, "paused": get_tree().paused}
 	# окно Godot (= буфер холста) и где в нём игровая картинка 1280×720 после растяжения (x, y, ш, в) — для проверки,
 	# что картинка целиком на экране (web_smoke stale)

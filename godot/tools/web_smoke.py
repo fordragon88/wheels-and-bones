@@ -865,7 +865,36 @@ async def sc_a11y(b):
         await p.press("Fullscreen", wait=800)
     p.check_console()
     await p.ctx.close()
+    await kb_order_web(b)
     await calm_priority(b)
+
+
+async def kb_order_web(b):
+    """Обход с клавиатуры в браузере — по списку game.py (A11y.kb_items): в мастерской фокуса клавиатуры ещё нет,
+    ↓ — первая карточка, ↑ с неё — заворот на последний пункт («Меню»), Tab — первая группа («Клиенты»), Enter —
+    задание; в задании ↓ — первая деталь списка (кружки на коляске в список не входят)."""
+    p = await new_page(b, "kb_order", legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+    await p.boot()
+    await title_ready(p)
+    await p.press("Start", wait=1200)
+    await p.wait(lambda s: s.get("screen") == "hub", "мастерская", 10)
+    await p.pg.wait_for_timeout(600)
+    await p.key("ArrowDown", 300)
+    st = await p.state()
+    check(st.get("kb") == "Card_flat", f"{p.name}: ↓ в мастерской — первая карточка ({st.get('kb')})")
+    await p.key("ArrowUp", 300)
+    st = await p.state()
+    check(st.get("kb") in ("Lang", "Flag", "Gear"), f"{p.name}: ↑ с первого пункта — заворот на последний ({st.get('kb')})")
+    await p.key("Tab", 300)
+    st = await p.state()
+    check(st.get("kb") == "Card_flat", f"{p.name}: Tab с «Меню» — заворот на первую группу, «Клиенты» ({st.get('kb')})")
+    await p.key("Enter", 1200)
+    st = await p.wait(lambda s: s.get("screen") == "job", "задание по Enter", 10)
+    await p.key("ArrowDown", 300)
+    st = await p.state()
+    check(str(st.get("kb", "")).startswith("Part_"), f"{p.name}: ↓ в задании — первая деталь списка ({st.get('kb')})")
+    p.check_console()
+    await p.ctx.close()
 
 
 async def calm_priority(b):
