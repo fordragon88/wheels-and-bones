@@ -62,15 +62,20 @@ func migrate_web() -> bool:
 	return true
 
 
+## Сохранение игрока (PATH) — из хранилища (Settings.store_*: в браузере — localStorage); другой путь (проверка
+## tests/save_compat.gd) — файлом, копия битого — рядом.
 func load_file(path: String) -> void:
-	var name := path.get_file()
-	if not Settings.store_has(name):
+	var own := path == PATH
+	if not (Settings.store_has("save.json") if own else FileAccess.file_exists(path)):
 		return
-	var text := Settings.store_read(name)
+	var text := Settings.store_read("save.json") if own else FileAccess.get_file_as_string(path)
 	var data: Variant = Settings.parse_json(text)
 	if not data is Dictionary:
 		push_warning("save.json не читается — копия в save.json.bad")
-		Settings.store_write(name + ".bad", text)
+		if own:
+			Settings.store_write("save.json.bad", text)
+		else:
+			DirAccess.copy_absolute(path, path + ".bad")
 		return
 	apply_dict(data)
 	_base = to_dict()
