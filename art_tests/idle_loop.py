@@ -47,6 +47,10 @@ def main():
     ap.add_argument("--xfade", type=int, default=0,
                     help="сколько последних кадров петли плавно перевести в кадры ПЕРЕД её началом (шов спокойной "
                          "петли: поза в конце чуть не та, что в начале — без перехода голова «перещёлкивает»)")
+    ap.add_argument("--no-reg", action="store_true",
+                    help="не подгонять кадр клипа №1 под картинку (по умолчанию — подгонка сдвига и масштаба до долей "
+                         "пикселя: H3 сажает героя на пиксель-другой мимо листа, и петля «прыгает» относительно "
+                         "картинки и волшебства magic_* — замечание владельца 20.11)")
     ap.add_argument("--art-file", default="", help="картинка для сверки и тона, если она ещё не в assets/")
     args = ap.parse_args()
 
@@ -99,6 +103,24 @@ def main():
     art_c.paste(art.resize((iw, ih), Image.LANCZOS), ((ow - iw) // 2, (oh - ih) // 2))
     art_n = np.asarray(art_c).astype(np.float32)
     r1, a1f, _ = warp(1)
+    if not args.no_reg:                                             # кадр №1 = поза картинки: совместить их точно
+        def gray(rgb, a):                                           # на сером: кромка альфы не даёт ложных краёв
+            return (rgb @ np.float32([0.299, 0.587, 0.114])) * a + 128.0 * (1 - a)
+        tg, ig = gray(art_n[..., :3], art_n[..., 3] / 255.0), gray(r1, a1f)
+        msk = ((art_n[..., 3] > 127) | (a1f > 0.5)).astype(np.uint8)
+        msk[: oh * 55 // 100] = 0                                   # только низ — коляска: она не двигается, а герой
+        msk = cv2.dilate(msk, np.ones((9, 9), np.uint8)) * 255      # в клипе уже чуть ожил
+        W = np.eye(2, 3, dtype=np.float32)
+        try:
+            _, W = cv2.findTransformECC(tg.astype(np.float32), ig.astype(np.float32), W, cv2.MOTION_AFFINE,
+                                        (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 300, 1e-7), msk, 5)
+            M3 = np.vstack([M, [0, 0, 1]]).astype(np.float64) @ np.vstack([W, [0, 0, 1]]).astype(np.float64)
+            M = np.float32(M3[:2])
+            print(f"{args.name}: подгонка к картинке — сдвиг {W[0, 2]:+.2f}, {W[1, 2]:+.2f} px кадра, "
+                  f"масштаб {W[0, 0]:.4f} × {W[1, 1]:.4f}")
+            r1, a1f, _ = warp(1)
+        except cv2.error as ex:
+            print(f"{args.name}: подгонка к картинке не сошлась ({ex.err}) — кадры как есть")
     both = (a1f > 0.98) & (art_n[..., 3] > 250)
     both = cv2.erode(both.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0   # без кромок: там позы расходятся на пиксель
     gain = np.ones(3, np.float32) if args.no_tone else art_n[..., :3][both].mean(0) / r1[both].mean(0)

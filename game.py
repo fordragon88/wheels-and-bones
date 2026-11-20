@@ -1160,9 +1160,37 @@ def anim_frame(name, size, t, fps=ANIM_FPS):
 
 def _anim_load(name, size, i):
     fn = f"anim/{name}/{i:02d}.png"                   # asset_path найдёт NN.jpg + NN.a.png
+    if size[0] == "fit":                              # точная постановка (place_exact): поля + размер в px экрана
+        return _anim_load_fit(fn, size)
     img = load_image(fn, size)
     _img_cache.pop((fn, size), None)
     return None if fn in ASSET_MISS else img           # битый кадр — лучше статичная картинка, чем мигающая заглушка
+
+
+def _anim_load_fit(fn, key):
+    """Кадр для точной постановки: key = ("fit", kx, поле слева, справа, ширина, ky, поле сверху, снизу, высота) —
+    кадр файла увеличивается в kx × ky раз без сглаживания (обычно 1 — не нужно), к нему добавляются прозрачные
+    поля, и он масштабируется smoothscale до (ширина, высота) px экрана: рисунок встаёт с точностью до долей
+    пикселя (place_exact, _fit_axis). None — кадр не читается."""
+    _, kx, a, b, tw, ky, c, d, th = key
+    path = asset_path(fn)
+    try:
+        ap = path[:-4] + ".a.png"
+        real = (_load_split(path, ap) if path.endswith(".jpg") and os.path.exists(ap)
+                else pygame.image.load(path)).convert_alpha()
+        if kx > 1 or ky > 1:
+            w, h = real.get_size()
+            real = pygame.transform.scale(real, (w * kx, h * ky))
+        if a or b or c or d:
+            w, h = real.get_size()
+            pad = pygame.Surface((w + a + b, h + c + d), pygame.SRCALPHA)
+            pad.fill((0, 0, 0, 0))
+            pad.blit(real, (a, c), special_flags=pygame.BLEND_RGBA_MAX)  # копия без смешивания с полем
+            real = pad
+        return Surf.adopt(pygame.transform.smoothscale(real, (tw, th)))
+    except Exception:
+        ASSET_MISS.add(fn)
+        return None
 
 
 def anim_prefetch(name, size, k=1):
@@ -1245,16 +1273,155 @@ def idle_loop_box(box):
     return (x - pw, y - ph, w + 2 * pw, h + 2 * ph)
 
 
+# Точная постановка (20.11, владелец: «небольшой пиксельный сдвиг между Мартином, который выпускает светлячка, и
+# Мартином, который просто двигается»). Кадр петли и кадр «волшебства» не вписываются в округлённый логический бокс
+# (целый размер после масштабирования + целые координаты — до ±1 px экрана, при ×2 — до 2 px, и в разные стороны),
+# а ставятся под то, куда load_image РЕАЛЬНО кладёт картинку в этом боксе: для каждой оси подбираются прозрачные поля
+# у исходного кадра (целые px файла) и целый размер после smoothscale так, чтобы рисунок картинки в кадре лёг на
+# картинку с точностью до долей пикселя (подгонка — один раз на размер бокса и RS; кадры масштабируются один раз,
+# как раньше). Зависит только от размера бокса: картинка в боксе (x, y) стоит ровно на round(x·RS), round(y·RS)
+# дальше, чем в боксе (0, 0), — подпрыг и въезд сдвигают кадр на те же целые пиксели, кэш не множится.
+IDLE_CUT_H = 512                    # высота кадра, с которой art_tests/idle_loop.py режет петли (--height)
+_FIT = {}
+
+
+def _smooth_map(n, t):
+    """pygame.transform.smoothscale n -> t px по оси: точка q исходника (непрерывные координаты, край пикселя 0 — 0)
+    ложится на m0 + m1·q результата -> (m0, m1). Уменьшение — по площади (края к краям), увеличение — билинейно
+    по центрам: пиксель x результата берёт исходник в x·(n−1)/t (проверено на pygame 2.6)."""
+    if t == n or n < 2:
+        return 0.0, (t / n if n else 1.0)
+    if t < n:
+        return 0.0, t / n
+    m1 = t / (n - 1)
+    return 0.5 - 0.5 * m1, m1
+
+
+def _fit_axis(n, A, B, kmax=8):
+    """Ось точной постановки: исходник n px нужно нарисовать так, чтобы его точка q легла на A + B·q (px экрана).
+    -> (k, поле до, поле после — px исходника ×k, размер после smoothscale, целая позиция, ошибка px на краях).
+    Поля в целых px исходника сдвигают рисунок на шаг ≈ B px экрана — при B около 1 (и 2, 3…) это целые пиксели,
+    доли не набрать; тогда исходник сначала увеличивается в k раз без сглаживания (pygame.transform.scale: каждый
+    пиксель — k×k, геометрия точная), поля — в px увеличенного, и уменьшение smoothscale по площади даёт тот же
+    результат, что обычное, но с шагом сдвига B/k. Берётся наименьшее k, при котором ошибка ≤ 0,1 px."""
+    key = (n, round(A, 4), round(B, 7))
+    if key in _FIT:
+        return _FIT[key]
+    best = None
+    for k in (1, 2, 3, 4):
+        nk, Bk = n * k, B / k
+        for a in range(kmax + 1):
+            for b in range(kmax + 1):
+                N = nk + a + b
+                for T in {round(N * Bk) + j for j in (-1, 0, 1)} | {round((N - 1) * Bk) + j for j in (-1, 0, 1)}:
+                    if T < 2:
+                        continue
+                    m0, m1 = _smooth_map(N, T)
+                    p0 = A - m0 - m1 * a                  # позиция, при которой точно ляжет q = 0 ...
+                    p1 = A + B * n - m0 - m1 * (nk + a)   # ... и q = n
+                    P = round((p0 + p1) / 2)
+                    err = max(abs(P - p0), abs(P - p1))
+                    c = (round(err, 3), a + b, a, T)
+                    if best is None or c < best[0]:
+                        best = (c, (k, a, b, T, P, err))
+        if best[1][5] <= 0.1:
+            break
+    _FIT[key] = best[1]
+    return best[1]
+
+
+def _src_size(name):
+    """Размер файла картинки assets/<name> (px; кадры петель — по NN.jpg) или None — нет/не читается."""
+    key = ("src", name)
+    if key not in _FIT:
+        path, sz = asset_path(name), None
+        try:
+            sz = pygame.image.load(path).get_size() if path else None
+        except Exception:
+            sz = None
+        _FIT[key] = sz
+    return _FIT[key]
+
+
+def pic_px_map(art, size):
+    """Как load_image ставит картинку art в бокс размера size (логические px) при текущем RS: ((ax, bx), (ay, by))
+    — точка u картинки (px файла) ложится на ax + bx·u (и так же по y) пикселей экрана от (round(x·RS),
+    round(y·RS)) бокса. None — картинки нет."""
+    src = _src_size(art)
+    if not src:
+        return None
+    aw, ah = src
+    w, h = size
+    k = min(w * RS / aw, h * RS / ah)
+    iw, ih = max(1, round(aw * k)), max(1, round(ah * k))
+    mx, my = _smooth_map(aw, iw), _smooth_map(ah, ih)
+    return ((round((w * RS - iw) / 2) + mx[0], mx[1]), (round((h * RS - ih) / 2) + my[0], my[1]))
+
+
+def place_exact(src, inner, art, size):
+    """Кадр файла размера src, в котором рисунок картинки art стоит в inner (x, y, w, h — px файла кадра,
+    непрерывные), поставить так, чтобы рисунок лёг на картинку в боксе размера size -> (ключ кадра для anim_frame,
+    dx, dy — px экрана от round(x·RS), round(y·RS) бокса, ошибка px) или None."""
+    m, aw = pic_px_map(art, size), _src_size(art)
+    if not m or not src:
+        return None
+    out, err = [], 0.0
+    for (ap, bp), n, i0, il, al in zip(m, src, inner[:2], inner[2:], aw):
+        B = bp * al / il                                  # кадр q -> картинка (q − i0)·al/il -> экран ap + bp·u
+        k, a, b, T, P, e = _fit_axis(n, ap - B * i0, B)
+        out.append((k, a, b, T, P))
+        err = max(err, e)
+    (kx, a, b, tw, px), (ky, c, d, th, py) = out
+    return ("fit", kx, a, b, tw, ky, c, d, th), px, py, err
+
+
+def idle_inner(art, src):
+    """Где в кадре петли (размер файла src) стоит рисунок картинки art: центральная часть 1/(1+2·IDLE_PAD) кадра,
+    нарезанного idle_loop.py высотой IDLE_CUT_H (целые px той нарезки; ужатый для браузера кадр — пропорционально)."""
+    aw, ah = _src_size(art)
+    ow, oh = round(IDLE_CUT_H * aw / ah), IDLE_CUT_H
+    iw, ih = round(ow / (1 + 2 * IDLE_PAD)), round(oh / (1 + 2 * IDLE_PAD))
+    kx, ky = src[0] / ow, src[1] / oh
+    return ((ow - iw) // 2 * kx, (oh - ih) // 2 * ky, iw * kx, ih * ky)
+
+
+def idle_place(art, size, name):
+    """Точная постановка кадра петли name для картинки art в боксе размера size: (ключ, dx, dy, ошибка) или None."""
+    key = ("idle", art, tuple(size), name, RS)
+    if key not in _FIT:
+        src = _src_size(f"anim/{name}/00.png") if anim_count(name) else None
+        _FIT[key] = place_exact(src, idle_inner(art, src), art, size) if src and _src_size(art) else None
+    return _FIT[key]
+
+
+def idle_key(art, box, name):
+    """Ключ кадров петли name в _anim_cache для картинки art в боксе box (как их кэширует idle_img)."""
+    p = idle_place(art, tuple(box[2:]), name)
+    return (name, p[0] if p else tuple(idle_loop_box(box)[2:]))
+
+
+def _idle_frame(art, box, t, name):
+    """Кадр петли name для картинки art в боксе box -> (кадр, (x, y) px экрана) или None (нет кадров, «Без
+    анимации»). Точная постановка (idle_place); не вышла (нет размеров) — в округлённом боксе idle_loop_box."""
+    p = idle_place(art, tuple(box[2:]), name)
+    if p:
+        img = anim_frame(name, p[0], t)
+        return None if img is None else (img, (round(box[0] * RS) + p[1], round(box[1] * RS) + p[2]))
+    lb = idle_loop_box(box)
+    img = anim_frame(name, tuple(lb[2:]), t)
+    return None if img is None else (img, (round(lb[0] * RS), round(lb[1] * RS)))
+
+
 def idle_img(art, box, t, color=GHOST, loop=None):
     """Персонаж art для бокса box -> (картинка, её бокс, петля ли): кадр петли (loop — петля экрана из SCENE_LOOPS,
-    иначе IDLE_LOOPS по картинке) в боксе с полем или статичная картинка в самом box («Без анимации», петли или
-    кадров нет — в браузере и пока петля не скачалась)."""
+    иначе IDLE_LOOPS по картинке) в боксе с полем (бокс — idle_loop_box, логический, примерно; точно кадр ставит
+    _idle_frame) или статичная картинка в самом box («Без анимации», петли или кадров нет — в браузере и пока петля
+    не скачалась)."""
     name = loop or IDLE_LOOPS.get(art)
     if name:
-        lb = idle_loop_box(box)
-        img = anim_frame(name, tuple(lb[2:]), t)
-        if img is not None:
-            return img, lb, True
+        fr = _idle_frame(art, box, t, name)
+        if fr is not None:
+            return fr[0], idle_loop_box(box), True
     return load_image(art, tuple(box[2:]), color), tuple(box), False
 
 
@@ -1262,12 +1429,17 @@ def blit_hero(surf, art, box, t, mode="breathe", phase=0.0, k=1.0, color=GHOST, 
     """Персонаж art в боксе box. Есть петля (IDLE_LOOPS или loop — петля экрана) — кадр петли без покачивания
     blit_idle (клип сам парит, дышит, танцует; второе покачивание поверх — «морская болезнь»), остаётся только
     появление k. Нет — blit_idle как раньше (mode, phase, k). True — нарисована петля."""
-    img, b, live = idle_img(art, box, t, color, loop)
-    if not live:
-        blit_idle(surf, img, b[:2], t, mode, phase, k)
+    name = loop or IDLE_LOOPS.get(art)
+    fr = _idle_frame(art, box, t, name) if name else None
+    if fr is None:
+        blit_idle(surf, load_image(art, tuple(box[2:]), color), box[:2], t, mode, phase, k)
         return False
+    img, b = fr[0], idle_loop_box(box)
     if k == 1:
-        surf.blit(img, b[:2])
+        if isinstance(surf, Surf):                     # точно: в пикселях экрана (рисунок — на месте картинки)
+            pygame.Surface.blit(surf, img, fr[1])
+        else:
+            surf.blit(img, b[:2])
         return True
     out = TF.rotozoom(img, 0, k)
     if mode == "float":                                # как blit_idle: призрак растёт из центра, стоящий — от низа
@@ -1465,9 +1637,31 @@ def _load_split(jpg, apng):
     rgb = pygame.image.load(jpg).convert_alpha()
     mask = pygame.image.load(apng).convert_alpha()
     if mask.get_size() != rgb.get_size():
-        mask = pygame.transform.smoothscale(mask, rgb.get_size())
+        mask = _stretch_exact(mask, rgb.get_size(), (255, 255, 255, 0))
     rgb.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     return rgb
+
+
+def _stretch_exact(img, size, fill=(0, 0, 0, 0)):
+    """smoothscale img до size так, чтобы края легли на края (как PIL resize, которым маску ужимали): увеличение
+    smoothscale берёт пиксели по центрам и растягивает рисунок на ~1,5 px шире — у маски кадров браузера (вдвое
+    меньше кадра) кромка уезжала вниз-вправо до 1,8 px экрана (20.11). Поля fill и размер — _fit_axis."""
+    (w, h), out = img.get_size(), []
+    for n, N in zip((w, h), size):
+        out.append(_fit_axis(n, 0.0, N / n))
+    (kx, a, b, tw, px, _), (ky, c, d, th, py, _) = out
+    if kx > 1 or ky > 1:
+        img = pygame.transform.scale(img, (w * kx, h * ky))
+    if a or b or c or d:
+        pad = pygame.Surface((img.get_width() + a + b, img.get_height() + c + d), pygame.SRCALPHA)
+        pad.fill(fill)
+        pad.blit(img, (a, c), special_flags=pygame.BLEND_RGBA_MAX)     # копия без смешивания с полем
+        img = pad
+    img = pygame.transform.smoothscale(img, (tw, th))
+    res = pygame.Surface(size, pygame.SRCALPHA)
+    res.fill(fill)
+    res.blit(img, (px, py), special_flags=pygame.BLEND_RGBA_MAX)
+    return res
 
 
 ASSET_MISS = set()                     # картинки, вместо которых нарисована заглушка (проверка web_smoke)
@@ -8151,6 +8345,29 @@ class Game:
         y = round(ry + rh / 2 - (fy + fh / 2) * k - oy)
         return L, x, y
 
+    def _magic_place(self, name, box=None):
+        """Где и каким рисовать кадр волшебства: (ключ кадра для anim_frame, x, y в пикселях экрана). У героя с
+        «живым» портретом (IDLE_LOOPS, Мартин) — точная постановка place_exact: портрет в кадре ложится на
+        картинку (и на кадр петли, поставленный так же) с точностью до долей пикселя — стык «петля ↔ волшебство»
+        без скачка (замечание владельца 20.11). Остальные — как раньше (_magic_layout): их кадры не меняются."""
+        box = tuple(box or self.PORTRAIT_BOX)
+        art = self.cur["client_art"]
+        if art in IDLE_LOOPS:
+            key = ("magic", name, art, box[2:], RS)
+            if key not in _FIT:
+                e = magic_index()[name]
+                src = _src_size(f"anim/{name}/00.png")
+                p = None
+                if src:
+                    kx, ky = src[0] / e["size"][0], src[1] / e["size"][1]   # ужатый кадр — пропорционально
+                    fx, fy, fw, fh = e["portrait"]
+                    p = place_exact(src, (fx * kx, fy * ky, fw * kx, fh * ky), art, box[2:])
+                _FIT[key] = p
+            p = _FIT[key]
+            if p:
+                return p[0], round(box[0] * RS) + p[1], round(box[1] * RS) + p[2]
+        return self._magic_layout(name, box)
+
     def portrait_rect(self):
         """Бокс портрета клиента (логические px) — клик/тап по нему повторяет «волшебство» (задание или итог)."""
         return pygame.Rect(self._magic_box()[0] or self.PORTRAIT_BOX)
@@ -8229,15 +8446,15 @@ class Game:
         return self._idle_t0 + per * max(0, math.ceil((self.t - self._idle_t0) / per - 1e-6))
 
     def _blit_portrait(self, surf, box, k_t=None):
-        """Портрет героя задания в боксе box (как load_image): «живой» — кадр петли по _portrait_t (k_t — свои часы),
-        иначе картинка с дыханием blit_idle. True — нарисована петля."""
+        """Портрет героя задания в боксе box (как load_image): «живой» — кадр петли по _portrait_t (k_t — свои часы)
+        с точной постановкой (_idle_frame: рисунок — на картинке и на кадре волшебства), иначе картинка с дыханием
+        blit_idle. True — нарисована петля."""
         art = self.cur["client_art"]
         name = self._portrait_live()
         if name:
-            lb = idle_loop_box(box)
-            img = anim_frame(name, tuple(lb[2:]), self._portrait_t() if k_t is None else k_t)
-            if img is not None:
-                surf.blit(img, lb[:2])
+            fr = _idle_frame(art, box, self._portrait_t() if k_t is None else k_t, name)
+            if fr is not None:
+                pygame.Surface.blit(surf, fr[0], fr[1])
                 self._portrait_drawn = name
                 return True
         blit_idle(surf, load_image(art, tuple(box[2:]), GHOST), box[:2], self.t)
@@ -8271,7 +8488,7 @@ class Game:
             return
         if not self.magic_anim():
             return
-        L, _, _ = self._magic_layout(name, box)
+        L, _, _ = self._magic_place(name, box)
         n = int(magic_index()[name]["n"])
         have = anim_prefetch(name, L) or 0                    # по кадру за кадр игры (браузер: десятки мс на
                                                              # кадр — не заикаться); выгрузка — штатно, ANIM_KEEP_MS
@@ -8303,7 +8520,7 @@ class Game:
         dur = n / fps
         if u >= dur or u < 0:
             return False
-        L, x, y = self._magic_layout(name, box)
+        L, x, y = self._magic_place(name, box)
         img = anim_frame(name, L, min(u, dur - 0.5 / fps), fps)
         if img is None:
             return False
@@ -8429,10 +8646,10 @@ class Game:
         for i in range(4):                                  # пыль из-под колёс
             add_glow(surf, (x + 40 - i * 30, y + 240), 18, (80, 70, 55), 0.7 - 0.15 * i)
         live = None if tech or art in self.RIDE_FLIP else self._portrait_live()
-        frame = live and anim_frame(live, tuple(idle_loop_box((0, 0, 230, 250))[2:]), self.t)
-        if frame is not None and live:                 # нет петли проезда, а «живой» портрет есть (Мартин,
-            lb = idle_loop_box((x, y, 230, 250))       # браузер: ride_martin не скачалась) — едет он, наклон тот же
-            blit_idle(surf, frame, lb[:2], self.t, rock=-3)
+        fr = _idle_frame(art, (x, y, 230, 250), self.t, live) if live else None
+        if fr is not None:                             # нет петли проезда, а «живой» портрет есть (Мартин, браузер:
+            blit_idle(surf, fr[0], (fr[1][0] / RS, fr[1][1] / RS), self.t, rock=-3)   # ride_martin не скачалась) —
+            # едет он, наклон тот же; кадры — те же, что у портрета после проезда (кэш один)
         else:
             blit_idle(surf, img, (x, y + 20 if tech else y), self.t, rock=-3)
         if tech:
@@ -15114,7 +15331,7 @@ def _idle_selftest(failures):
                 for box in boxes:
                     img, b, live = idle_img(art, box, 1.6, GHOST, loop)
                     want = tuple(idle_loop_box(box)) if not calm_on else tuple(box)
-                    if live == calm_on or tuple(b) != want or img.get_size() != tuple(want[2:]):
+                    if live == calm_on or tuple(b) != want or (calm_on and img.get_size() != tuple(want[2:])):
                         failures.append(f"Петля {name}: calm={calm_on} бокс {box[2:]} — "
                                         f"{'петля' if live else 'картинка'} {img.get_size()} в {b}")
                     if blit_hero(sc, art, box, 1.6, "float", k=0.7, loop=loop) == calm_on:
@@ -15144,7 +15361,7 @@ def _idle_selftest(failures):
                 failures.append(f"Сцены с Бренной (calm={calm_on}): {ex!r}")
         for sc_name, box in SCENE_LOOP_BOX.items():           # Мартин петлёй экрана:
             name = SCENE_LOOPS[sc_name][1]                     # во вступлении и на празднике — кадр петли в боксе
-            key = (name, tuple(idle_loop_box(box)[2:]))        # картинки с полем, «Без анимации» — картинка
+            key = idle_key(SCENE_LOOPS[sc_name][0], box, name)  # картинки с полем, «Без анимации» — картинка
             for calm_on in (False, True):
                 A11Y["calm"] = calm_on
                 try:
@@ -15160,8 +15377,60 @@ def _idle_selftest(failures):
                 except Exception as ex:
                     failures.append(f"Экран {sc_name} с Мартином (calm={calm_on}): {ex!r}")
         _martin_portrait_selftest(failures)
+        _loop_shift_selftest(failures)
     finally:
         A11Y["calm"] = calm0
+
+
+def _loop_shift_selftest(failures):
+    """Стык «петля ↔ волшебство ↔ картинка» (замечание владельца 20.11: Мартин прыгал на пиксель-два, когда
+    выпускает светлячка): точная постановка place_exact кладёт рисунок картинки в кадре петли и портрет в кадре
+    волшебства на картинку не дальше 0,15 px экрана по каждой оси (значит, друг на друга — не дальше 0,3) — при
+    рендере ×0,75…×3 (и дробных, по размеру окна), в боксах портрета задания, итога и у коляски после проезда, для
+    кадров exe и ужатых для браузера (build_web.shrink_anim, 400 px); кадр после smoothscale — того размера, что
+    в ключе; петли экранов и Бренна — так же. Замер по пикселям — art_tests/loop_shift.py."""
+    global RS
+    rs0 = RS
+    mname = magic_for_art("martin.png")
+    cases = [("martin.png", IDLE_LOOPS["martin.png"], b[2:], b in (Game.PORTRAIT_BOX, Game.RESULT_BOX))
+             for b in (Game.PORTRAIT_BOX, Game.RESULT_BOX, (0, 0, 230, 250), (24, 300, 90, 110))]
+    cases += [(art, name, SCENE_LOOP_BOX[sc][2:], False) for sc, (art, name) in SCENE_LOOPS.items()]
+    cases += [("master.png", "brenna_wave", b[2:], False) for b in IDLE_TEST_BOXES[:1]]
+    worst = 0.0
+    try:
+        for rs in (0.75, 1.0, 1.25, 1.37, 1.5, 1.875, 2.0, 3.0):
+            RS = rs
+            for art, name, size, magic in cases:
+                src = _src_size(f"anim/{name}/00.png")
+                if not src or not _src_size(art):
+                    failures.append(f"Стык {name}: нет кадров или {art}")
+                    continue
+                webs = [src] + ([(round(src[0] * 400 / src[1]), 400)] if src[1] > 400 else [])
+                for f in webs:
+                    p = place_exact(f, idle_inner(art, f), art, size)
+                    if not p or p[3] > 0.15:
+                        failures.append(f"Стык {name} ×{rs} бокс {size} кадр {f}: петля мимо картинки на "
+                                        f"{(p[3] if p else float('nan')):.2f} px экрана (> 0,15)")
+                    else:
+                        worst = max(worst, p[3])
+                if magic and mname:
+                    e = magic_index()[mname]
+                    ms = _src_size(f"anim/{mname}/00.png")
+                    kx, ky = ms[0] / e["size"][0], ms[1] / e["size"][1]
+                    fx, fy, fw, fh = e["portrait"]
+                    p = place_exact(ms, (fx * kx, fy * ky, fw * kx, fh * ky), art, size)
+                    if not p or p[3] > 0.15:
+                        failures.append(f"Стык {mname} ×{rs} бокс {size}: волшебство мимо картинки на "
+                                        f"{(p[3] if p else float('nan')):.2f} px экрана (> 0,15)")
+        RS = 1.5                                            # кадр после полей и smoothscale — размера из ключа
+        p = idle_place("martin.png", Game.PORTRAIT_BOX[2:], IDLE_LOOPS["martin.png"])
+        img = p and _anim_load_fit(f"anim/{IDLE_LOOPS['martin.png']}/00.png", p[0])
+        if not img or pygame.Surface.get_size(img) != (p[0][4], p[0][8]):
+            failures.append(f"Стык: кадр точной постановки не того размера ({img and pygame.Surface.get_size(img)}, "
+                            f"ждали {p and (p[0][4], p[0][8])})")
+    finally:
+        RS = rs0
+    print(f"  стык петля/волшебство/картинка: худшая ошибка постановки {worst:.3f} px экрана")
 
 
 def _martin_portrait_selftest(failures):
@@ -15226,13 +15495,13 @@ def _martin_portrait_selftest(failures):
     g.ghost_line = "Мартин: «Проверка.»"                    # пузырь реплики — петлёй (широкий 90×110)
     _anim_cache.clear()
     g._draw_ghost_bubble(sc, 300)
-    if (name, tuple(idle_loop_box((24, 300, 90, 110))[2:])) not in _anim_cache:
+    if idle_key("martin.png", (24, 300, 90, 110), name) not in _anim_cache:
         failures.append("Мартин: пузырь реплики не петлёй martin_idle")
     g.magic_t0 = None                                       # после проезда — петлёй с кадра 0
     g.phase, g.ride_done, g._ride_end_t = "test", True, g.t
     _anim_cache.clear()
     g.draw(sc)
-    if (name, tuple(idle_loop_box((0, 0, 230, 250))[2:])) not in _anim_cache:
+    if idle_key("martin.png", (0, 0, 230, 250), name) not in _anim_cache:
         failures.append("Мартин: после проезда не петлёй martin_idle")
     g.finish_test()                                         # итог: подпрыг на кадре 0, петлёй
     step(g, 10)
