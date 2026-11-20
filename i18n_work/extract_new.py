@@ -26,7 +26,7 @@ def add(ru, node, fmt):
 
 
 SKIP_FN = {"run_selftest", "print_assets", "main", "_selftest_play", "_idle_selftest",
-           "_martin_portrait_selftest"}
+           "_martin_portrait_selftest", "_loop_shift_selftest"}
 
 
 class V(ast.NodeVisitor):
