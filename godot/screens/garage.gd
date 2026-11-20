@@ -5,7 +5,12 @@ extends Screen
 
 const PER := 9
 
-var page: int = 0
+## Страница гаража — вне экрана (Nav.garage_page), как self.garage_page в game.py (не сбрасывается за сеанс).
+var page: int:
+	get:                                    # как game.py: min(garage_page, страниц − 1), само число не трогаем
+		return clampi(Nav.garage_page, 0, pages() - 1)
+	set(v):
+		Nav.garage_page = v
 var open_idx: int = -1
 var _cards: Array[GameButton] = []
 var _popup: Control
@@ -46,7 +51,6 @@ func build() -> void:
 	_deco.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_deco.draw.connect(_draw_deco)
 	add_child(_deco)
-	page = clampi(page, 0, pages() - 1)
 	var items: Array = range(SaveGame.garage.size()).slice(page * PER, (page + 1) * PER)
 	for k in items.size():
 		var i: int = items[k]

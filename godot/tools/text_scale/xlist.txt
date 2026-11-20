@@ -1,0 +1,8 @@
+x:diag:dracul_speed:1 x:diag:lift:1 x:diag:iris_tilt:0 x:diag:whill_code:0 x:diag:focuscr_cable:0
+x:insp:lift:0:wiring x:insp:lift:1:seat_lift x:insp:whill_code:0:joystick x:insp:aeroz_lock:0:brake
+x:wrong:focuscr_cable:0 x:wrong:iris_tilt:0 x:wrong:cross6_back:0 x:wrong:f5_charge:0
+x:step:lift:0:3 x:step:dracul_speed:0:7 x:step:f5_charge:0:2 x:done:f5_charge:0:2 x:done:lift:0:3 x:back:lift:0:3 x:back:f5_charge:0:2 x:wrongtool:iris_tilt:0:0
+x:mini:dracul_speed:1:1 x:mini:lift:1:2 x:mini:lift:1:8 x:mini:iris_tilt:0:0 x:mini:focuscr_cable:0:0
+x:test:iris_tilt:0 x:result:lift:0 x:result:focuscr_cable:0 x:result:f5_charge:0 x:result:dracul_speed:0
+x:techops:t_pulse6 x:techops:t_battery_q6 x:techspec:t_battery_q6:q_in x:techspec:t_battery_q6:q_cover x:techfail:t_battery_q6:q_disc_neg x:techfail:t_pulse6:q_runin x:techfail:t_pulse6:q_disc x:techmanual:t_battery_q6 x:techresult:t_battery_q6 x:techresult:t_pulse6
+x:lesson:3 x:lesson:1 x:lesson:4 x:quiz:3 x:quiz:5:wrong x:quiz:6:wrong x:quiz:3:right

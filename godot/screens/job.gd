@@ -10,9 +10,10 @@ extends Screen
 ## Улики, итоги ходов и ошибки — сообщением сверху (flash). Параметры: {"job": id, "variant": индекс или −1}.
 
 const CHAIR_CX := 575.0                  # центр зоны коляски: между портретом и правой колонкой
-const QUIP_IDLE := [35.0, 50.0]          # пауза между шутками Барти на диагностике
-const CLIENT_IDLE := [22.0, 32.0]        # пауза между репликами клиента
-const TALK_GAP := 5.0                    # между репликами персонажей — не меньше
+# паузы реплик — из game.py (Game.QUIP_IDLE, CLIENT_IDLE, TALK_GAP) через game_consts.json → talk_pace
+var QUIP_IDLE: Array = Content.consts.get("talk_pace", {}).get("quip_idle", [35.0, 50.0])      # между шутками Барти на диагностике
+var CLIENT_IDLE: Array = Content.consts.get("talk_pace", {}).get("client_idle", [22.0, 32.0])  # между репликами клиента
+var TALK_GAP: float = float(Content.consts.get("talk_pace", {}).get("gap", 5.0))               # между репликами персонажей — не меньше
 const PREV_RECT := Rect2(836, 58, 40, 30)
 const SKIP_RECT := Rect2(882, 58, 88, 30)
 const TEST_BTN := Rect2(UI.W / 2.0 - 170, 560, 340, 64)
@@ -449,7 +450,22 @@ func rebuild() -> void:
 		if w and w.get_parent() == self:
 			remove_child(w)
 			keep.append(w)
+	# смена языка/размера текста/шрифта/контраста посреди проезда пересобирает экран: проезд переживает пересборку
+	# (как tech.gd rebuild), иначе новый RideView пуст — проезд обрывался, кнопка «ПРОКАТИТЬ» появлялась снова
+	var rs := {}
+	if ride and ride.active:
+		rs = {"stay": ride.stay, "loop": ride.loop_name, "t": ride.t, "t0": ride.t0, "drawn": ride.drawn}
 	super.rebuild()
+	if not rs.is_empty():
+		ride.loop_name = rs["loop"]
+		ride.t = rs["t"]
+		ride.t0 = rs["t0"]
+		ride.drawn = rs["drawn"]
+		ride.stay = rs["stay"]
+		ride.active = true
+		chair.visible = false
+		portrait.paused = true
+		_test_btn.visible = not ride.riding()
 	for w in keep:
 		add_child(w)
 	if not keep.is_empty():
@@ -567,7 +583,7 @@ func do_action(tid: String, pid: String) -> String:
 		else:
 			msg = "Не то. Перечитай шаг и подсказку."
 	dispute["msg"] = msg
-	Nav.flash(msg, UI.BAD, 4.0, true)
+	Nav.flash(msg, UI.BAD, 4.0)               # как game.py (self.flash(msg, BAD, 4)): гаснет само, не «итог хода»
 	react_mistake()
 	return "wrong"
 
@@ -833,15 +849,7 @@ func finish_test() -> void:
 	if SaveGame.assign_on():                   # задание по ссылке: свой прогресс, обычный (done, гараж) не трогаем
 		SaveGame.assign_record(jid, mistakes, int(t))
 	else:
-		SaveGame.done[jid] = true
-		var found := false
-		for g: Array in SaveGame.garage:
-			if g[0] == jid:
-				found = true
-				if stars > int(g[1]):          # переигрывание: в гараже — лучшая оценка
-					g[1] = stars
-		if not found:
-			SaveGame.garage.append([jid, stars])
+		SaveGame.mark_job(jid, stars)          # done + гараж (переигрывание — лучшая оценка)
 	var gag := ""
 	if randf() < 0.5:                          # то нога отвалится, то Мартин сам себя похвалит/подколет
 		var legs: Array = Content.talk.get("leg_gags", []).filter(func(g: String) -> bool:
@@ -879,7 +887,7 @@ func go_back() -> void:
 		esc_t = 0.0
 		Nav.go("hub")
 		return
-	esc_t = 2.5
+	esc_t = Settings.esc_secs()
 	Nav.flash("Ещё раз Esc — покинуть ремонт (прогресс задания сбросится).", UI.AMBER, esc_t)
 
 

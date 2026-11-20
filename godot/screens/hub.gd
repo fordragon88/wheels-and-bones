@@ -10,7 +10,13 @@ extends Screen
 const COLS := 4
 const ROWS := 2
 
-var page: int = 0
+## Страница очереди живёт вне экрана (Nav.hub_page), как self.hub_page в game.py: вход в задание и выход из него её
+## не сбрасывают; сбрасывают задание по ссылке (вход/выход), сброс прогресса и загрузка кода (SaveGame).
+var page: int:
+	get:
+		return clampi(Nav.hub_page, 0, _pages() - 1)
+	set(v):
+		Nav.hub_page = v
 var _cards: Array[ClientCard] = []
 var _note: Control
 var _deco: Control
@@ -32,7 +38,6 @@ func build() -> void:
 	add_child(_deco)
 	var ids := SaveGame.available_jobs()
 	var pages := _pages()
-	page = clampi(page, 0, pages - 1)
 	var per := COLS * ROWS
 	var i := 0
 	for jid: String in ids.slice(page * per, (page + 1) * per):
@@ -111,7 +116,7 @@ static func assign_label() -> String:
 func _build_normal() -> void:
 	var seat_ok := SaveGame.tutorial_ok()
 	var seat := GameButton.make(Rect2(UI.W - 360, UI.H - 290, 300, 54), "КАБИНЕТ ПОСАДКИ", UI.GOOD,
-		Loc.fmt("примерки {0}/{1}", [SaveGame.seat_done.size(), 9]) + (" · зачёт ✔" if SaveGame.seat_quiz_ok else "")
+		Loc.fmt("примерки {0}/{1}", [SaveGame.seat_done.size(), SeatLogic.cases().size()]) + (" · зачёт ✔" if SaveGame.seat_quiz_ok else "")
 		if seat_ok else "откроется после первого ремонта")
 	seat.name = "Seating"
 	seat.enabled = seat_ok

@@ -80,10 +80,25 @@ static func clear_text_cache() -> void:
 	_tw_n = 0
 
 
-## Размер шрифта в пикселях холста: логический размер game.py × TEXT_K (× 1,08 у Atkinson).
+## Размер шрифта в пикселях холста — как LFont в game.py: px = max(1, round(size × text_k())), у Atkinson
+## («лёгкий шрифт») max(1, round(px × 1,08)); round — питоновский (половина к чётному: 22,5 → 22, 27,5 → 28), а не
+## roundi (половина вверх): при 125 % и 150 % размеры с ,5 были на 1 px крупнее, чем в game.py.
 static func fs(size: float) -> int:
-	var k := Settings.text_k() * (1.08 if Settings.easy_font() else 1.0)
-	return maxi(1, roundi(size * k))
+	var px := maxi(1, py_round(size * Settings.text_k()))
+	if Settings.easy_font():
+		px = maxi(1, py_round(px * 1.08))
+	return px
+
+
+## round(x) Python 3: половина — к ближайшему чётному.
+static func py_round(x: float) -> int:
+	var f := floorf(x)
+	var d := x - f
+	if d > 0.5:
+		return int(f) + 1
+	if d < 0.5:
+		return int(f)
+	return int(f) if posmod(int(f), 2) == 0 else int(f) + 1
 
 
 static func text_width(text: String, size: float, bold: bool = false) -> float:
@@ -147,13 +162,20 @@ static func line_height(size: float, bold: bool = false) -> float:
 ## (_chair_rect зависит от высоты строк симптома) съезжают на 1–2 px. У Atkinson — как считает Godot.
 static func px_height(px: int, bold: bool = false) -> float:
 	if Settings.easy_font():
-		return font(bold).get_height(px)
+		# как LFont.get_height в game.py: max(DejaVu размера base, Atkinson размера px = round(base × 1,08)); у SDL_ttf
+		# высота — ceil((ascender − descender) × px / em): Atkinson 1240/1000. font.get_height() Godot — иначе (на 1–3 px
+		# больше: межстрочный уроков посадки был шире, текст не влезал)
+		var base := py_round(px / 1.08)
+		for b in [base - 1, base + 1]:
+			if py_round(b * 1.08) == px:
+				base = b
+		return maxf(ceilf(base * 2384.0 / 2048.0 - 0.0001), ceilf(px * 1240.0 / 1000.0 - 0.0001))
 	return ceilf(px * 2384.0 / 2048.0 - 0.0001)
 
 
 ## Минимальный размер подписи кнопки (_min_btn_sz): при крупном тексте — те же экранные пиксели.
 static func min_btn_size() -> int:
-	return maxi(8, roundi(11.0 / Settings.text_k()))
+	return maxi(8, py_round(11.0 / Settings.text_k()))
 
 
 ## Размер, при котором строка влезает в ширину (не меньше lo); как циклы `while sz > … and size > w: sz -= 1`.
