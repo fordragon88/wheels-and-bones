@@ -309,6 +309,23 @@ html, body, #canvas { overscroll-behavior: none; }
     }
   };
 
+  // --- замечания игроков и итоги заданий в Google-таблицу — как в game.py (web_setup): тело — строка JSON от игры
+  // (autoload/feedback.gd py_dumps = json.dumps), fetch no-cors text/plain; сначала в очередь localStorage
+  // «wnb:outbox» (общая с pygame-версией, последние 20), убирается после ответа сервера; нет сети — дошлёт wnbFlush
+  // при следующем запуске.
+  function wnbQ(f) { try { var q = JSON.parse(localStorage.getItem('wnb:outbox') || '[]'); q = f(q);
+    localStorage.setItem('wnb:outbox', JSON.stringify(q.slice(-20))); } catch (e) {} }
+  function wnbPost(url, body) {
+    try { fetch(url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: body })
+            .then(function () { wnbQ(function (q) { var i = q.indexOf(body); if (i >= 0) q.splice(i, 1); return q; }); })
+            .catch(function () {}); } catch (e) {}
+  }
+  window.wnbSend = function (url, body) { wnbQ(function (q) { q.push(body); return q; }); wnbPost(url, body); };
+  window.wnbQueue = function (body) { wnbQ(function (q) { if (q.indexOf(body) < 0) q.push(body); return q; }); };
+  window.wnbFlush = function (url) {
+    try { JSON.parse(localStorage.getItem('wnb:outbox') || '[]').forEach(function (b) { wnbPost(url, b); }); } catch (e) {}
+  };
+
   // --- время загрузки: игра отмечает первый кадр титула (wnbMark('title')), страница — начало загрузки.
   window.wnbTimes = { start: performance.now() };
   window.wnbMark = function (k) { if (!(k in window.wnbTimes)) window.wnbTimes[k] = performance.now(); };

@@ -320,7 +320,8 @@ func _buttons() -> Array:
 func _collect(n: Node, out: Array) -> void:
 	if n is CanvasItem and not (n as CanvasItem).visible:
 		return
-	if (n is BaseButton and not (n as BaseButton).disabled or n is Control and str(n.name).begins_with("Slider_")) \
+	if (n is BaseButton and not (n as BaseButton).disabled or n is TextEdit or n is LineEdit \
+			or n is Control and str(n.name).begins_with("Slider_")) \
 			and (n as Control).mouse_filter != Control.MOUSE_FILTER_IGNORE:
 		var c := n as Control
 		var r := c.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, c.size)

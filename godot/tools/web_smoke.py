@@ -1148,6 +1148,140 @@ async def sc_fpshud(b):
     await p.ctx.close()
 
 
+async def feedback_page(b, name, lang, outbox=None):
+    """Страница с перехватом адреса таблицы замечаний: запросы записываются, наружу ничего не уходит (fulfill 200
+    или abort — «нет сети»). outbox — очередь pygame-версии в localStorage «wnb:outbox» до запуска."""
+    raw = {"save.json": json.dumps({"done": ["flat"], "garage": [["flat", 3]], "tutorial_skipped": True}),
+           "settings.json": json.dumps({"lang": lang})}
+    if outbox is not None:
+        raw["outbox"] = json.dumps(outbox)
+    p = await new_page(b, name, legacy_raw=raw)
+    p.fb = []
+    p.fb_mode = ["ok"]
+    furl = json.load(open(os.path.join(build_web.OUT, "..", "..", "content", "data", "game_consts.json"),
+                          encoding="utf-8"))["feedback_url"]
+    p.furl = furl
+
+    async def route(r):
+        rq = r.request
+        p.fb.append({"method": rq.method, "url": rq.url, "headers": await rq.all_headers(), "body": rq.post_data,
+                     "mode": p.fb_mode[0]})
+        if p.fb_mode[0] == "ok":
+            await r.fulfill(status=200, body="ok")
+        else:
+            await r.abort("internetdisconnected")
+    host = urllib.parse.urlsplit(furl).netloc
+    await p.ctx.route(lambda u: urllib.parse.urlsplit(u).netloc == host, route)   # раньше общего «наружу — abort»
+    return p
+
+
+async def type_text(p, text):
+    """Набор как с физической клавиатуры (русская раскладка — keydown с key «п» и кодом клавиши): keyboard.type
+    Playwright вставляет не-латиницу через insertText без нажатий — холст Godot их не видит."""
+    cdp = await p.ctx.new_cdp_session(p.pg)
+    for ch in text:
+        ev = {"key": ch, "text": ch, "unmodifiedText": ch, "code": "KeyA" if ch.isalpha() else "Digit1"}
+        if ch == " ":
+            ev.update(code="Space", windowsVirtualKeyCode=32)
+        await cdp.send("Input.dispatchKeyEvent", dict(ev, type="keyDown"))
+        await cdp.send("Input.dispatchKeyEvent", {"type": "keyUp", "key": ch, "code": ev["code"]})
+    await cdp.detach()
+
+
+async def fb_send(p, stage, reason, text, enter=False):
+    """Открыть ⚑ на экране stage, причина reason, напечатать text в поле, «ОТПРАВИТЬ» (или Enter в поле)."""
+    await p.pg.evaluate("(n) => { window.wnbStaged = ''; window.wnbStage(n); }", stage)
+    t0 = time.time()
+    while time.time() - t0 < 30 and await p.pg.evaluate("window.wnbStaged || ''") != stage:
+        await p.pg.wait_for_timeout(200)
+    await p.pg.wait_for_timeout(800)
+    await p.press("Flag", wait=600)
+    await p.press("Reason_%d" % reason, wait=200)
+    await p.press("Comment", wait=200)
+    await type_text(p, text)
+    await p.pg.wait_for_timeout(300)
+    n0 = len(p.fb)
+    if enter:
+        await p.key("Enter", 600)
+    else:
+        await p.press("Send", wait=600)
+    t0 = time.time()
+    while time.time() - t0 < 8 and len(p.fb) == n0:
+        await p.pg.wait_for_timeout(200)
+    return p.fb[n0] if len(p.fb) > n0 else None
+
+
+async def sc_feedback(b):
+    """Отправка замечания в браузере ↔ game.py (без настоящей таблицы: адрес перехвачен, ответ — локальный).
+    Адрес, метод, заголовок, тело (поля = эталон game.py content/feedback_ref.json, формат = json.dumps: кириллица
+    в виде \\uXXXX), RU и EN, обрезка длинного текста (600), Enter в поле — отправка, нет сети — очередь «wnb:outbox» и
+    досылка при следующем запуске, недосланное pygame-версией — тоже досылается."""
+    ref = json.load(open(os.path.join(build_web.OUT, "..", "..", "content", "feedback_ref.json"), encoding="utf-8"))
+    leftover = json.dumps(dict(ref["general_hub"], time="2026-11-01T10:00:00", platform="web", uid="pygame-left"))
+    p = await feedback_page(b, "feedback", "ru", outbox=[leftover])
+    await p.boot()
+    t0 = time.time()
+    while time.time() - t0 < 10 and not p.fb:
+        await p.pg.wait_for_timeout(200)
+    await p.pg.wait_for_timeout(800)
+    q = await p.pg.evaluate("localStorage.getItem('wnb:outbox')")
+    check(len(p.fb) == 1 and p.fb[0]["body"] == leftover and q == "[]",
+          f"{p.name}: недосланное pygame-версией ушло при запуске тем же телом, очередь пуста ({len(p.fb)} запр., {q})")
+
+    def same(p, r, key, what):
+        if not check(r is not None, f"{p.name}: {what}: запрос ушёл"):
+            return {}
+        body = r["body"] or ""
+        d = json.loads(body)
+        exp = {k: v for k, v in ref[key].items() if not k.startswith("_")}
+        diff = {k: (v, d.get(k)) for k, v in exp.items() if d.get(k) != v}
+        check(r["url"] == p.furl and r["method"] == "POST" and r["headers"].get("content-type") == "text/plain",
+              f"{p.name}: {what}: адрес = FEEDBACK_URL game.py, POST, Content-Type {r['headers'].get('content-type')}")
+        check(not diff and d.get("platform") == "godot-web" and d.get("uid") and d.get("time"),
+              f"{p.name}: {what}: поля = game.py ({len(exp)}), platform {d.get('platform')}"
+              + (f" — РАЗНИЦА {json.dumps(diff, ensure_ascii=False)[:300]}" if diff else ""))
+        check(body.isascii() and body == json.dumps(d),
+              f"{p.name}: {what}: тело как json.dumps game.py (ASCII, «, »/«: »; {len(body)} байт, снимок "
+              f"{len(d.get('screenshot_jpg_b64', '')) // 1024} КБ)")
+        return d
+
+    r = await fb_send(p, "hub", 1, ref["general_hub"]["comment"])
+    same(p, r, "general_hub", "⚑ мастерская RU")
+    await p.shot("1_after_send")
+    long = ("Длинный текст ёжика — " * 40)[:650]
+    r = await fb_send(p, "hub", 1, long, enter=True)
+    d = json.loads(r["body"]) if r else {}
+    check(d.get("comment") == long[:600].strip(), f"{p.name}: Enter в поле отправляет; длинный текст обрезан как в "
+                                                  f"game.py: {len(d.get('comment', ''))} знаков из {len(long)}")
+    p.fb_mode[0] = "abort"
+    p.allow += ["ERR_INTERNET_DISCONNECTED"]              # ожидаемо: «нет сети» для запроса в таблицу
+    r = await fb_send(p, "hub", 0, "нет сети")
+    await p.pg.wait_for_timeout(800)
+    q = json.loads(await p.pg.evaluate("localStorage.getItem('wnb:outbox') || '[]'"))
+    check(r is not None and q == [r["body"]], f"{p.name}: нет сети — замечание осталось в очереди wnb:outbox ({len(q)})")
+    st = await p.state()
+    check(bool(st.get("screen")), f"{p.name}: игра живёт после обрыва ({st.get('screen')}, тост «{st.get('toast')}»)")
+    p.fb_mode[0] = "ok"
+    n0 = len(p.fb)
+    await p.pg.reload()
+    await p.wait(lambda s: s.get("screen") in ("title", "hub"), "перезагрузка", 60)
+    t0 = time.time()
+    while time.time() - t0 < 10 and len(p.fb) == n0:
+        await p.pg.wait_for_timeout(200)
+    await p.pg.wait_for_timeout(800)
+    q2 = await p.pg.evaluate("localStorage.getItem('wnb:outbox')")
+    check(len(p.fb) == n0 + 1 and r is not None and p.fb[-1]["body"] == r["body"] and q2 == "[]",
+          f"{p.name}: следующий запуск дослал то же тело, очередь пуста ({len(p.fb) - n0} запр., {q2})")
+    p.check_console()
+    await p.ctx.close()
+    e = await feedback_page(b, "feedback_en", "en")
+    await e.boot()
+    r = await fb_send(e, "garage", 3, ref["general_garage_en"]["comment"])
+    same(e, r, "general_garage_en", "⚑ гараж EN")
+    e.check_console()
+    await e.ctx.close()
+
+
 PLATE_STAGES = ["title", "hub", "guild_open", "job_flat_repair"]
 
 
@@ -1199,7 +1333,7 @@ async def sc_plates(b):
 
 
 SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
-             "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "perf": sc_perf,
+             "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "feedback": sc_feedback, "perf": sc_perf,
              "prof": sc_prof, "screens": sc_screens}
 TIMEOUT = {"screens": 5400}                               # все экраны × 4 прохода — долго
 

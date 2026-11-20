@@ -96,9 +96,18 @@ func _ready() -> void:
 	for s: String in ["normal", "focus", "read_only"]:
 		text.add_theme_stylebox_override(s, sb)
 	text.accessibility_name = Loc.t("Опиши, что не так и как правильно" if general() else "Как правильно, по-твоему? (можно не писать)")
+	# как handle_dispute_event в game.py: только печатные знаки (без переводов строки, табуляций и невидимых
+	# U+200B–U+200D, U+2060, U+FEFF), не больше 600; Enter в поле — «ОТПРАВИТЬ» (TextEdit сам вставил бы перевод строки)
 	text.text_changed.connect(func() -> void:
-		if text.text.length() > 600:
-			text.text = text.text.substr(0, 600))
+		var clean := _printable(text.text).substr(0, 600)
+		if clean != text.text:
+			var col := text.get_caret_column()
+			text.text = clean
+			text.set_caret_column(mini(col, clean.length())))
+	text.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventKey and e.pressed and (e.keycode == KEY_ENTER or e.keycode == KEY_KP_ENTER):
+			text.accept_event()
+			send())
 	add_child(text)
 	var cancel := GameButton.make(Rect2(P.position.x + 28, P.end.y - 62, 160, 44), "ОТМЕНА", UI.GREY)
 	cancel.name = "Cancel"
@@ -111,6 +120,16 @@ func _ready() -> void:
 	accessibility_name = Loc.t("СООБЩИТЬ О НЕТОЧНОСТИ" if general() else "Я НЕ СОГЛАСЕН С ИГРОЙ")
 	_update()
 	UI.focus_later(_reason_btns[0] if not _reason_btns.is_empty() else text)
+
+
+static func _printable(s: String) -> String:
+	var out := ""
+	for i in s.length():
+		var c := s.unicode_at(i)
+		if c < 0x20 or (c >= 0x7F and c < 0xA0) or c in [0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF, 0x2028, 0x2029]:
+			continue
+		out += char(c)
+	return out
 
 
 func first_focus() -> Control:
