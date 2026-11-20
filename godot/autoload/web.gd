@@ -63,22 +63,23 @@ func _ready() -> void:
 	if test:                                 # web_smoke screens: любое состояние экрана без прохождения
 		_stage_cb = JavaScriptBridge.create_callback(_on_stage)
 		JavaScriptBridge.get_interface("window").wnbStage = _stage_cb
-	if fps_on:
+	if fps_on and not on:
+		# компьютер (-- --fps): одна строка мелко у нижнего края — там на всех экранах нет кнопок (см. PORT_PLAN,
+		# «Плашка замера»). В браузере плашка — в странице (wnbHud в web/shell.html): в чёрных полях по бокам, если они
+		# есть, иначе узкой полосой у нижнего края; касания сквозь неё проходят в игру.
 		var layer := CanvasLayer.new()
 		layer.name = "FpsHud"
 		layer.layer = 128
 		_hud = Label.new()
 		_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_hud.add_theme_font_size_override("font_size", 24 if _touch else 13)   # телефон: 1280×720 → ~360 px CSS
+		_hud.add_theme_font_size_override("font_size", 10)
 		_hud.add_theme_color_override("font_color", Color.WHITE)
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0, 0, 0, 0.66)
-		sb.content_margin_left = 4
-		sb.content_margin_right = 4
-		sb.content_margin_top = 1
-		sb.content_margin_bottom = 1
+		sb.bg_color = Color(0, 0, 0, 0.5)
+		sb.content_margin_left = 3
+		sb.content_margin_right = 3
 		_hud.add_theme_stylebox_override("normal", sb)
-		_hud.position = Vector2(4, 720 - 24)
+		_hud.position = Vector2(2, 720 - 14)
 		_hud.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 		_hud.accessibility_name = ""
 		layer.add_child(_hud)
@@ -232,19 +233,21 @@ func _process(dt: float) -> void:
 		if _hist.size() > 10:
 			_hist.pop_front()
 		fps_min10 = _hist.min()
-		if _hud != null:
+		if fps_on:
 			var ws := DisplayServer.window_get_size()
-			var page := ""
-			if on:                               # окно в CSS-пикселях, devicePixelRatio (→ с потолком ?res)
-				page = str(JavaScriptBridge.eval("window.wnbRes ? wnbRes.line() : ''", true))
-				# размер окна Godot — в строку размеров страницы (wnbView.line, сверху над игрой)
-				JavaScriptBridge.eval("window.wnbGodotSize = '%d\\u00d7%d'" % [ws.x, ws.y], true)
-			var a := "fps %.0f · min10s %.0f · max %.0f ms%s" % [fps, fps_min10, _worst_ms, " · touch" if _touch else ""]
-			var b := "%s %d×%d%s · %s" % [Loc.t("холст"), ws.x, ws.y, (" · " + page) if page != "" else "", Frames.status_line()]
-			_hud.text = (a + "
-" + b) if _touch else (a + " · " + b)
-			_hud.reset_size()
-			_hud.position = Vector2(4, 720 - _hud.size.y - 4)
+			var parts: Array = ["fps %.0f" % fps, "min10s %.0f" % fps_min10, "max %.0f ms" % _worst_ms]
+			if _touch:
+				parts.append("touch")
+			if on:                               # окно Godot — в строку размеров страницы, поля — в плашку страницы
+				parts.append(Frames.status_line())
+				JavaScriptBridge.eval("window.wnbGodotSize = '%d\u00d7%d'; window.wnbHud && wnbHud(%s)" % [ws.x, ws.y,
+					JSON.stringify(parts)], true)
+			elif _hud != null:
+				parts.append("%s %d×%d" % [Loc.t("холст"), ws.x, ws.y])
+				parts.append(Frames.status_line())
+				_hud.text = " · ".join(parts)
+				_hud.reset_size()
+				_hud.position = Vector2(2, 720 - _hud.size.y)
 	if on and fps_on:
 		_log_t += dt
 		if _log_t >= 3.0:                     # журнал замеров — только с ?fps=1 (как game.py)

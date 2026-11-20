@@ -1110,8 +1110,58 @@ async def sc_fpshud(b):
     await p.ctx.close()
 
 
+PLATE_STAGES = ["title", "hub", "guild_open", "job_flat_repair"]
+
+
+async def plates_clear(p, tag):
+    """?fps=1: плашка кадров/с (#wnb-hud) и строка размеров (#wnb-diag) видны целиком (текст не обрезан) и не
+    закрывают ни одной кнопки игры (wnbState.buttons, 1280×720 → CSS) и кнопки ⛶; касания сквозь них (pointer-events)."""
+    r = await p.pg.evaluate("""(()=>{const o={};for(const id of ['wnb-hud','wnb-diag','wnb-full']){const e=document.
+        getElementById(id);if(!e||getComputedStyle(e).display==='none'){o[id]=null;continue}const b=e.getBoundingClientRect();
+        o[id]={r:[b.left,b.top,b.width,b.height],t:e.textContent,mode:e.getAttribute('data-mode'),
+        full:e.scrollHeight<=e.clientHeight+1,pe:getComputedStyle(e).pointerEvents}}return o})()""")
+    gr, c, st = await game_rect(p)
+    k = gr[2] / 1280
+    btns = [(x[0], gr[0] + x[1] * k, gr[1] + x[2] * k, x[3] * k, x[4] * k) for x in st.get("buttons", [])]
+    if r.get("wnb-full"):
+        btns.append(("⛶",) + tuple(r["wnb-full"]["r"]))
+
+    def hit(a, b):
+        return a[0] < b[0] + b[2] - 0.5 and b[0] < a[0] + a[2] - 0.5 and a[1] < b[1] + b[3] - 0.5 and b[1] < a[1] + a[3] - 0.5
+    for pid in ("wnb-hud", "wnb-diag"):
+        e = r.get(pid)
+        if not check(bool(e) and bool(e["t"]), f"{p.name} {tag}: {pid} есть"):
+            continue
+        over = [b[0] for b in btns if hit(e["r"], b[1:])]
+        check(not over and e["full"] and e["pe"] == "none",
+              f"{p.name} {tag}: {pid} ({e['mode']}, {e['r'][0]:.0f},{e['r'][1]:.0f} {e['r'][2]:.0f}×{e['r'][3]:.0f}) "
+              f"не закрывает кнопок{(' — закрывает ' + ', '.join(over)) if over else ''}, текст целиком={e['full']}, "
+              f"касания сквозь={e['pe'] == 'none'}")
+
+
+async def sc_plates(b):
+    """Плашки ?fps=1 на телефоне 2220×1080 (поля по бокам) и в окнах компьютера 16:9 (без полей) и шире 16:9."""
+    for name, kw in (("plates_phone", dict(touch=True, mobile=True, w=740, h=360, dpr=3)),
+                     ("plates_desk", dict(w=1280, h=720)), ("plates_wide", dict(w=1536, h=730))):
+        p = await new_page(b, name, legacy={"save.json": {"done": [], "tutorial_skipped": True}}, **kw)
+        if kw.get("mobile"):
+            await orient(p, kw["w"], kw["h"], True, kw["dpr"])
+        await p.boot("&fps=1")
+        await p.pg.wait_for_timeout(2500)
+        for stage in PLATE_STAGES:
+            await p.pg.evaluate("(n) => window.wnbStage(n)", stage)
+            t0 = time.time()
+            while time.time() - t0 < 30 and await p.pg.evaluate("window.wnbStaged || ''") != stage:
+                await p.pg.wait_for_timeout(200)
+            await p.pg.wait_for_timeout(1800)
+            await plates_clear(p, stage)
+            await p.shot(stage)
+        p.check_console()
+        await p.ctx.close()
+
+
 SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
-             "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "perf": sc_perf,
+             "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "perf": sc_perf,
              "prof": sc_prof, "screens": sc_screens}
 TIMEOUT = {"screens": 5400}                               # все экраны × 4 прохода — долго
 
