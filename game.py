@@ -1222,6 +1222,15 @@ def ghost_img(size, t):
 # при «Без анимации». Godot берёт IDLE_PAD из эталона game_consts.json.
 IDLE_LOOPS = {"master.png": "brenna_wave"}
 IDLE_PAD = 0.08
+# Петля, которая зависит не от картинки, а от экрана (20.11, владелец: «у Марти на первом экране, где он ещё в лесу,
+# слишком видно обводку коляски… сделаем небольшую анимацию, и там, где он на празднике, тоже»): сцена -> (картинка,
+# петля). Устроены как brenna_wave (кадр = холст картинки + IDLE_PAD, кадр 0 = поза картинки) — рисуются в
+# idle_loop_box(бокс картинки), без своего покачивания. В браузере их нет в пакете — качаются с сайта заранее
+# (Game._scene_loops_web): лес — уже на титуле, праздник — когда до него остаётся одно задание.
+SCENE_LOOPS = {"intro": ("martin.png", "martin_forest"), "ending": ("martin.png", "martin_party")}
+INTRO_MARTIN = (120, 230, 200, 280)                 # бокс Мартина во вступлении (после въезда слева)
+ENDING_MARTIN = (60, HEIGHT - 290, 240, 270)        # бокс Мартина на празднике (после въезда слева)
+SCENE_LOOP_BOX = {"intro": INTRO_MARTIN, "ending": ENDING_MARTIN}   # Godot берёт оба словаря из game_consts.json
 
 
 def idle_loop_box(box):
@@ -1232,10 +1241,11 @@ def idle_loop_box(box):
     return (x - pw, y - ph, w + 2 * pw, h + 2 * ph)
 
 
-def idle_img(art, box, t, color=GHOST):
-    """Персонаж art для бокса box -> (картинка, её бокс, петля ли): кадр петли IDLE_LOOPS в боксе с полем или
-    статичная картинка в самом box («Без анимации», петли или кадров нет)."""
-    name = IDLE_LOOPS.get(art)
+def idle_img(art, box, t, color=GHOST, loop=None):
+    """Персонаж art для бокса box -> (картинка, её бокс, петля ли): кадр петли (loop — петля экрана из SCENE_LOOPS,
+    иначе IDLE_LOOPS по картинке) в боксе с полем или статичная картинка в самом box («Без анимации», петли или
+    кадров нет — в браузере и пока петля не скачалась)."""
+    name = loop or IDLE_LOOPS.get(art)
     if name:
         lb = idle_loop_box(box)
         img = anim_frame(name, tuple(lb[2:]), t)
@@ -1244,11 +1254,11 @@ def idle_img(art, box, t, color=GHOST):
     return load_image(art, tuple(box[2:]), color), tuple(box), False
 
 
-def blit_hero(surf, art, box, t, mode="breathe", phase=0.0, k=1.0, color=GHOST):
-    """Персонаж art в боксе box. Есть петля (IDLE_LOOPS) — кадр петли без покачивания blit_idle (клип сам парит
-    и дышит; второе покачивание поверх — «морская болезнь»), остаётся только появление k. Нет — blit_idle как
-    раньше (mode, phase, k). True — нарисована петля."""
-    img, b, live = idle_img(art, box, t, color)
+def blit_hero(surf, art, box, t, mode="breathe", phase=0.0, k=1.0, color=GHOST, loop=None):
+    """Персонаж art в боксе box. Есть петля (IDLE_LOOPS или loop — петля экрана) — кадр петли без покачивания
+    blit_idle (клип сам парит, дышит, танцует; второе покачивание поверх — «морская болезнь»), остаётся только
+    появление k. Нет — blit_idle как раньше (mode, phase, k). True — нарисована петля."""
+    img, b, live = idle_img(art, box, t, color, loop)
     if not live:
         blit_idle(surf, img, b[:2], t, mode, phase, k)
         return False
@@ -1802,9 +1812,9 @@ ANIM_WEB = {}                          # браузер: имя петли -> An
 
 
 def anim_web_index():
-    """Браузер: манифест петель героев, которые НЕ лежат в пакете игры — проезд ride_* и «волшебство» на портрете
-    magic_* (assets/anim/web_index.json: имя -> кадров; собирает build_web.stage). На компьютере — пусто: все кадры
-    в assets/anim."""
+    """Браузер: манифест петель героев, которые НЕ лежат в пакете игры — проезд ride_*, «волшебство» на портрете
+    magic_* и петли Мартина экранов SCENE_LOOPS (assets/anim/web_index.json: имя -> кадров; собирает
+    build_web.stage). На компьютере — пусто: все кадры в assets/anim."""
     if "index" not in ANIM_WEB:
         idx = {}
         if IS_WEB:
@@ -8933,7 +8943,8 @@ class Game:
                     ride=self.ride_anim(), ride_on=self.ride_t0 is not None, ride_done=self.ride_done,
                     ride_drawn=self._ride_drawn,
                     magic=self._magic_name if self.magic_t0 is not None else None, magic_drawn=self._magic_drawn,
-                    magic_plays=self.magic_plays)
+                    magic_plays=self.magic_plays,
+                    martin=getattr(self, "_martin_loop", None))     # вступление/праздник: петля Мартина или None
 
     # ---------- геймпад ----------
     def _pad_key(self, k, down=True, mod=0):
@@ -9913,6 +9924,18 @@ class Game:
             out.append(self._test_btn_rect())
         return out
 
+    def _scene_loops_web(self):
+        """Браузер: петли Мартина экранов (SCENE_LOOPS, 5,6 МБ) лежат на сайте, не в пакете, — качать заранее: лес —
+        уже на титуле (вступление сразу после него) и во вступлении; праздник — когда до вечеринки остаётся не больше
+        одного задания (мастерская, итог, гараж), и на самом празднике. Пока не скачалось или сеть
+        подвела — Мартин картинкой (idle_img)."""
+        sc = self.scene
+        if sc in ("title", "intro"):
+            anim_web_want(SCENE_LOOPS["intro"][1])
+        if sc in ("ending", "credits") or (sc in ("hub", "result", "garage")
+                                           and self.user_done_count() >= len(JOBS) - 1):
+            anim_web_want(SCENE_LOOPS["ending"][1])
+
     def update(self, dt):
         self.t += dt
         self._touch_text()
@@ -9937,6 +9960,8 @@ class Game:
             for name in (self._ride_hero(), self._magic_hero()):   # пока открыто его задание
                 if name:
                     anim_web_want(name)
+        if IS_WEB:
+            self._scene_loops_web()
         self._magic_tick()
         if self.ride_t0 is not None and self.scene != "job":
             self.ride_t0 = None                       # ушли из задания — проезд отменён
@@ -10794,8 +10819,10 @@ class Game:
         title, text = self.intro_slides[idx]
         # портреты Мартина и призрака
         st = self.st
-        mx = 120 - int(300 * (1 - ease_out(st / 0.9)))
-        blit_idle(surf, load_image("martin.png", (200, 280), GHOST), (mx, 230), self.t)
+        mx = INTRO_MARTIN[0] - int(300 * (1 - ease_out(st / 0.9)))
+        art, loop = SCENE_LOOPS["intro"]                # Мартин в лесу — петлёй martin_forest (нет — картинкой, дышит)
+        live = blit_hero(surf, art, (mx,) + INTRO_MARTIN[1:], self.t, loop=loop)
+        self._martin_loop = loop if live else None      # debug_state (web_smoke: петля скачалась и рисуется)
         blit_idle(surf, ghost_img((200, 280), self.t),
                   (WIDTH - 320, 230), self.t, "float", k=ease_back((st - 0.3) / 0.6))
         if idx == 1:
@@ -14865,11 +14892,17 @@ class Game:
         self._bg(surf, "bg_party.png", GHOST)
         st = self.st
         # Мартин танцует в коляске (качается и подпрыгивает), Барти кружит рядом
-        rock = 6 * wsin(self.t * 4.2)
-        bounce = int(8 * abs(wsin(self.t * 4.2)))
-        mx = -260 + int(320 * ease_out(st / 1.2))
-        blit_idle(surf, load_image("martin.png", (240, 270), GHOST), (mx, HEIGHT - 290 - bounce), self.t,
-                  rock=rock)
+        # (петля martin_party танцует сама — без своего качания и подпрыга, иначе движение удвоится)
+        mx = ENDING_MARTIN[0] - 320 + int(320 * ease_out(st / 1.2))
+        art, loop = SCENE_LOOPS["ending"]
+        box = (mx,) + ENDING_MARTIN[1:]
+        self._martin_loop = loop if idle_img(art, box, self.t, GHOST, loop)[2] else None
+        if self._martin_loop:
+            blit_hero(surf, art, box, self.t, loop=loop)
+        else:                                         # «Без анимации» / петля ещё не скачалась — картинка, как раньше
+            bounce = int(8 * abs(wsin(self.t * 4.2)))
+            blit_idle(surf, load_image(art, ENDING_MARTIN[2:], GHOST), (mx, ENDING_MARTIN[1] - bounce), self.t,
+                      rock=6 * wsin(self.t * 4.2))
         if barty_on():                                # «Призрак Барти: выкл» — без призрака и его реплики
             blit_idle(surf, ghost_img((170, 220), self.t), (WIDTH - 230, HEIGHT - 300), self.t,
                       "float", rock=8 * wsin(self.t * 2.1), k=ease_back((st - 0.6) / 0.6))
@@ -14929,12 +14962,17 @@ def idle_inner_px(frame, box, rs):
 
 
 def _idle_selftest(failures):
-    """Петли «живых» персонажей (IDLE_LOOPS): кадры есть и одного размера; при анимации — кадр петли в боксе с
-    полем, «Без анимации» — статичная картинка; рисунок в кадре петли стоит там же, где картинка (±2 px экрана),
-    во всех боксах, где Бренну рисуют, — при рендере ×1, ×1,5, ×2 и с кадрами, ужатыми для браузера (400 px)."""
+    """Петли «живых» персонажей (IDLE_LOOPS — Бренна, SCENE_LOOPS — Мартин во вступлении и на празднике): кадры
+    есть и одного размера; при анимации — кадр петли в боксе с полем, «Без анимации» — статичная картинка; рисунок
+    в кадре петли стоит там же, где картинка (±2 px экрана, при ×2 — ±2,4: целые px нарезки дают Мартину на празднике
+    2,2), во всех боксах, где героя рисуют, — при рендере ×1, ×1,5, ×2 и с кадрами, ужатыми для браузера (400 px);
+    экраны вступления и праздника рисуют Мартина петлёй, а «Без анимации» — картинкой."""
     calm0 = A11Y["calm"]
+    cases = ([(art, name, IDLE_TEST_BOXES, None) for art, name in IDLE_LOOPS.items()] +      # Бренна — по картинке
+             [(art, name, (SCENE_LOOP_BOX[sc],), name)                                        # Мартин — по экрану
+              for sc, (art, name) in SCENE_LOOPS.items()])
     try:
-        for art, name in IDLE_LOOPS.items():
+        for art, name, boxes, loop in cases:
             n = anim_count(name)
             if n < 2:
                 failures.append(f"Петля {name}: нет кадров assets/anim/{name}")
@@ -14948,36 +14986,36 @@ def _idle_selftest(failures):
             if abs(fr[0] / fr[1] - st[0] / st[1]) > 0.01:
                 failures.append(f"Петля {name}: пропорции кадра {fr} не как у {art} {st}")
             web = (round(fr[0] * 400 / fr[1]), 400) if fr[1] > 400 else fr       # build_web.shrink_anim
-            for box in IDLE_TEST_BOXES:
+            for box in boxes:
                 for rs in (1.0, 1.5, 2.0):
                     for f in (fr, web):
                         a, b = _fit_px(st, box, rs), idle_inner_px(f, box, rs)
                         d = max(abs(a[0] - b[0]), abs(a[1] - b[1]), abs(a[0] + a[2] - b[0] - b[2]),
                                 abs(a[1] + a[3] - b[1] - b[3]))
-                        if d > 2:
+                        if d > max(2.0, 1.2 * rs):          # ±2 px экрана, при ×2 — 1,2 логических px
                             failures.append(f"Петля {name}: бокс {box[2:]} ×{rs} кадр {f}: рисунок сдвинут на "
                                             f"{d:.1f} px (картинка {a}, в петле {tuple(round(v, 1) for v in b)})")
             A11Y["calm"] = False                               # поле IDLE_PAD — то же, с каким резали петлю: площадь
-            box = IDLE_TEST_BOXES[0]                           # Бренны в кадре 0 — как у картинки (поле 0,06 или 0,10
+            box = boxes[0]                                     # героя в кадре 0 — как у картинки (поле 0,06 или 0,10
             a_st = pygame.mask.from_surface(load_image(art, tuple(box[2:])), 128).count()    # дало бы −8 % / +6 %)
-            f0 = idle_img(art, box, 0.0)[0]
+            f0 = idle_img(art, box, 0.0, GHOST, loop)[0]
             a_lp = pygame.mask.from_surface(f0, 128).count()
             if not a_st or abs(a_lp / a_st - 1) > 0.03:
-                failures.append(f"Петля {name}: в боксе {box[2:]} Бренна петлёй {a_lp} px, картинкой {a_st} px — "
+                failures.append(f"Петля {name}: в боксе {box[2:]} герой петлёй {a_lp} px, картинкой {a_st} px — "
                                 f"поле IDLE_PAD={IDLE_PAD} не то, с каким резали петлю?")
             sc = pygame.display.get_surface()
             for calm_on in (False, True):
                 A11Y["calm"] = calm_on
-                for box in IDLE_TEST_BOXES:
-                    img, b, live = idle_img(art, box, 1.6)
+                for box in boxes:
+                    img, b, live = idle_img(art, box, 1.6, GHOST, loop)
                     want = tuple(idle_loop_box(box)) if not calm_on else tuple(box)
                     if live == calm_on or tuple(b) != want or img.get_size() != tuple(want[2:]):
                         failures.append(f"Петля {name}: calm={calm_on} бокс {box[2:]} — "
                                         f"{'петля' if live else 'картинка'} {img.get_size()} в {b}")
-                    if blit_hero(sc, art, box, 1.6, "float", k=0.7) == calm_on:
+                    if blit_hero(sc, art, box, 1.6, "float", k=0.7, loop=loop) == calm_on:
                         failures.append(f"Петля {name}: blit_hero при calm={calm_on} рисует не то")
-                if not calm_on and anim_frame(name, tuple(idle_loop_box(IDLE_TEST_BOXES[0])[2:]), 1.6) is \
-                        anim_frame(name, tuple(idle_loop_box(IDLE_TEST_BOXES[0])[2:]), 0.0):
+                if not calm_on and anim_frame(name, tuple(idle_loop_box(boxes[0])[2:]), 1.6) is \
+                        anim_frame(name, tuple(idle_loop_box(boxes[0])[2:]), 0.0):
                     failures.append(f"Петля {name}: кадр не меняется со временем")
         g = Game(headless=True)                                # сцены с Бренной рисуются и с петлёй, и без
         sc = pygame.display.get_surface()
@@ -14999,6 +15037,23 @@ def _idle_selftest(failures):
                     g.draw(sc)
             except Exception as ex:
                 failures.append(f"Сцены с Бренной (calm={calm_on}): {ex!r}")
+        for sc_name, box in SCENE_LOOP_BOX.items():           # Мартин петлёй экрана:
+            name = SCENE_LOOPS[sc_name][1]                     # во вступлении и на празднике — кадр петли в боксе
+            key = (name, tuple(idle_loop_box(box)[2:]))        # картинки с полем, «Без анимации» — картинка
+            for calm_on in (False, True):
+                A11Y["calm"] = calm_on
+                try:
+                    g.scene = sc_name
+                    g.draw(sc)
+                    g.scene_t0, g._fade_from = g.t - 3.0, None     # въезд слева закончился — Мартин на месте
+                    _anim_cache.pop(key, None)
+                    g.draw(sc)
+                    if (key in _anim_cache) == calm_on:
+                        failures.append(f"Экран {sc_name} (calm={calm_on}): Мартин "
+                                        f"{'петлёй' if key in _anim_cache else 'картинкой'} {name}, ждали "
+                                        f"{'картинку' if calm_on else 'петлю'} в боксе {idle_loop_box(box)}")
+                except Exception as ex:
+                    failures.append(f"Экран {sc_name} с Мартином (calm={calm_on}): {ex!r}")
     finally:
         A11Y["calm"] = calm0
 
@@ -16106,7 +16161,7 @@ def run_selftest():
             failures.append(f"Проезд Гильдии {jid}: не завершился или герой не остался стоять")
         elif gr._ride_last[1][0] + gr._ride_last[0].get_width() / 2 < WIDTH / 2:
             failures.append(f"Проезд Гильдии {jid}: остановка не справа ({gr._ride_last[1]})")
-    _idle_selftest(failures)                                   # Бренна петлёй (brenna_wave): кадры, calm, геометрия
+    _idle_selftest(failures)                                   # Бренна (brenna_wave), Мартин (martin_forest/party): кадры, calm, геометрия
     calm0 = A11Y["calm"]                                       # «волшебство» героев на портрете (magic_index.json)
     A11Y["calm"] = False
     try:
