@@ -702,6 +702,7 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-20 — Claude (Fable 5.2) — **Мартин «живой» выложен на тестовые адреса** (тестовый репозиторий bec7092): pygame из `test-build` b7933da (apk 15,3 МБ, метка `b5353df552`, петли `anim/martin_forest|martin_party` качаются с сайта) и Godot из `godot-port` a2681ee (пакет `wnb-6414a8724a.pck`, кадры `frames/anim/martin_*`). По живым адресам: pygame web_smoke 73 ok, Godot (boot, play, phone, stale) 50 ok. Картинка `martin.png` заменена чищеной (без белого ореола вырезки). В main и на основной сайт — только по команде владельца (AGENTS.md).
 - 2026-11-20 — Claude (Opus 5.5), ветка `godot-port` — **Мартин «живой» во вступлении и на празднике** (слияние
   `test-build` b7933da: чищеная `martin.png`, петли `martin_forest`/`martin_party`). `sync_content.py` выгружает
   `idle.scenes` (из `SCENE_LOOPS` + `SCENE_LOOP_BOX` game.py — чисел в Godot нет); `Figure.make_scene`, `Figure.live`,
