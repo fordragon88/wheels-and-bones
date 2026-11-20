@@ -19,6 +19,7 @@ var flip: bool = false
 var loop_still: bool = false               # петля «живого» персонажа (Бренна): клип сам парит — без своего покачивания
 var clock_t: float = -1.0                  # ≥ 0 — часы петли задаёт хозяин (портрет со стыком волшебства: MagicPortrait)
 var fallback_idle: bool = false            # своей петли нет — «живая» петля картинки (титул: нет martin_wave → martin_idle)
+var idle_exact: bool = false               # петля «живого» (кадр = холст картинки + IDLE_PAD): кадр — idle_rect, точно на картинке
 
 ## Снимки (tests/shots.gd): ≥ 0 — петли «живых» персонажей берут кадр на это время (как ref_shots.py), иначе свой t.
 static var idle_t: float = -1.0
@@ -37,15 +38,37 @@ static func idle_box(bx: Rect2) -> Rect2:
 	return Rect2(bx.position - p, bx.size + 2 * p)
 
 
-## Персонаж img для бокса bx на время t (idle_img в game.py): {tex, box, live} — кадр петли в боксе с полем или
-## статичная картинка в самом bx («Без анимации», петли нет или ещё не загружена).
+## Где рисовать кадр петли «живого» картинки img в боксе bx, чтобы рисунок в кадре лёг точно на картинку
+## (UI.fit_rect картинки в bx; 20.11, как place_exact в game.py — владелец заметил сдвиг петли и волшебства).
+## Рисунок в кадре — центральная часть 1/(1+2·IDLE_PAD), как её кладёт art_tests/idle_loop.py при нарезке высотой
+## idle.cut_h (целые px той нарезки: (ow − iw) // 2); кадр ужат для браузера (348×400) — те же доли. Прежний расчёт —
+## кадр вписан в idle_box (поле округлено до целых px, пропорции ужатого кадра не те) — давал до 0,8 px.
+static func idle_rect(img: String, bx: Rect2) -> Rect2:
+	var st := Content.texture(img)
+	if st == null:
+		return idle_box(bx)
+	var ts: Vector2 = st.get_size()
+	var s := UI.fit_rect(ts, bx)
+	var idl: Dictionary = Content.consts.get("idle", {})
+	var pad := float(idl.get("pad", 0.0))
+	var oh := float(idl.get("cut_h", 512))
+	var ow := roundf(oh * ts.x / ts.y)
+	var inner := Vector2(roundf(ow / (1 + 2 * pad)), roundf(oh / (1 + 2 * pad)))
+	var off := Vector2(floorf((ow - inner.x) / 2), floorf((oh - inner.y) / 2))
+	var sz := s.size * Vector2(ow, oh) / inner
+	return Rect2(s.position - off / Vector2(ow, oh) * sz, sz)
+
+
+## Персонаж img для бокса bx на время t (idle_img в game.py): {tex, box, rect, live} — кадр петли (rect — где
+## рисовать: idle_rect) или статичная картинка в самом bx («Без анимации», петли нет или ещё не загружена).
 static func idle_pick(img: String, bx: Rect2, t: float) -> Dictionary:
 	var n := idle_loop(img)
 	if n != "":
 		var tex := Frames.loop_frame(n, idle_t if idle_t >= 0.0 else t)
 		if tex != null:
-			return {"tex": tex, "box": idle_box(bx), "live": true}
-	return {"tex": Content.texture(img), "box": bx, "live": false}
+			return {"tex": tex, "box": idle_box(bx), "rect": idle_rect(img, bx), "live": true}
+	var st := Content.texture(img)
+	return {"tex": st, "box": bx, "rect": UI.fit_rect(st.get_size(), bx) if st else bx, "live": false}
 
 
 ## Петля экрана (SCENE_LOOPS в game.py: intro → martin_forest, ending → martin_party): {art, loop, box} или {}.
@@ -62,6 +85,7 @@ static func make_scene(screen: String, md: String = "breathe") -> Figure:
 	f.loop = str(e.get("loop", ""))
 	f.loop_box = idle_box(Rect2(Vector2.ZERO, f.box))
 	f.loop_still = true
+	f.idle_exact = true
 	return f
 
 
@@ -92,6 +116,7 @@ static func make(img: String, pos: Vector2, bx: Vector2, md: String = "breathe",
 		f.loop = idle_loop(img)
 		f.loop_box = idle_box(Rect2(Vector2.ZERO, bx))
 		f.loop_still = true
+		f.idle_exact = true
 	return f
 
 
@@ -122,21 +147,24 @@ func _draw() -> void:
 	var tex: Texture2D = null
 	var bx := Rect2(Vector2.ZERO, box)
 	var still := loop_still
+	var exact := false
 	if loop != "":
 		tex = Frames.loop_frame(loop, _loop_t(loop_still))
 		if tex != null and loop_box.size != Vector2.ZERO:
 			bx = loop_box
+			exact = idle_exact
 	if tex == null and fallback_idle and idle_loop(image) != "":     # blit_hero: петля картинки в боксе с полем
 		tex = Frames.loop_frame(idle_loop(image), _loop_t(true))
 		bx = idle_box(Rect2(Vector2.ZERO, box))
 		still = true
+		exact = true
 	var live := tex != null
 	if tex == null:
 		tex = Content.texture(image)
 		bx = Rect2(Vector2.ZERO, box)
 	if tex == null:
 		return
-	var r := UI.fit_rect(tex.get_size(), bx)
+	var r := idle_rect(image, Rect2(Vector2.ZERO, box)) if exact else UI.fit_rect(tex.get_size(), bx)
 	if live and still:                              # blit_hero: только появление k (призрак — из центра)
 		if appear_k == 1.0:
 			draw_texture_rect(tex, r, false)

@@ -2798,7 +2798,6 @@ func _flow_tech_rides() -> String:
 ## подпрыга), стоит там же, где картинка (±2 px); «Без анимации» — картинка.
 func _flow_martin() -> String:
 	var scenes: Dictionary = Content.consts.get("idle", {}).get("scenes", {})
-	var pad := float(Content.consts.get("idle", {}).get("pad", 0.0))
 	if not scenes.has("intro") or not scenes.has("ending"):
 		err("Мартин: нет idle.scenes (intro, ending) в game_consts.json")
 		return "Мартин: нет данных"
@@ -2834,25 +2833,73 @@ func _flow_martin() -> String:
 				err("Мартин (%s): петля не на месте картинки — %s, поворот %.1f (ждали %s, 0)" % [sc, m.position, m.rotation_degrees, bx.position])
 			if calm:
 				continue
-			var p := {"tex": Content.texture("martin.png")}    # картинка; петля — кадр в боксе с полем
-			var tex := Frames.loop_frame(name, 1.6)
-			var fr: Vector2 = tex.get_size()
-			var f := UI.fit_rect(fr, Figure.idle_box(bx))
-			var iw := roundf(fr.x / (1 + 2 * pad))
-			var ih := roundf(fr.y / (1 + 2 * pad))
-			var k := f.size / fr
-			var inner := Rect2(f.position + Vector2(floorf((fr.x - iw) / 2), floorf((fr.y - ih) / 2)) * k, Vector2(iw, ih) * k)
-			var s := UI.fit_rect((p["tex"] as Texture2D).get_size(), bx)
-			var d := maxf(maxf(absf(inner.position.x - s.position.x), absf(inner.position.y - s.position.y)),
-				maxf(absf(inner.end.x - s.end.x), absf(inner.end.y - s.end.y)))
+			var d := _idle_rect_err("martin.png", name, bx)
 			worst = maxf(worst, d)
-			if d > 2.0:
-				err("Мартин (%s): рисунок в петле %s, картинка %s (сдвиг %.1f px)" % [sc, inner, s, d])
+			if d > 0.02:
+				err("Мартин (%s): рисунок в кадре петли %s мимо картинки на %.3f px" % [sc, name, d])
 		out.append("%s — %s" % [sc, name])
 	Settings.a11y["calm"] = calm0
 	Nav.go("title")
 	await _frames(2)
-	return "Мартин петлями экранов (%s): на месте картинки (худший сдвиг %.2f px), «Без анимации» — картинка" % [", ".join(out), worst]
+	for n: String in ["martin_idle", "brenna_wave", "magic_martin"]:
+		Frames.want_loop(n)
+	Frames.flush()
+	await _frames(2)
+	for bb: Array in [[24, 70, 150, 190], [24, 300, 210, 250], [525.5, 275, 230, 250], [24, 300, 90, 110], [986, 158, 46, 56]]:
+		var bx2 := Rect2(bb[0], bb[1], bb[2], bb[3])           # «живой» Мартин (martin_idle) и Бренна во всех боксах
+		for pair: Array in [["martin.png", "martin_idle"], ["master.png", "brenna_wave"]]:
+			var d2 := _idle_rect_err(pair[0], pair[1], bx2)
+			worst = maxf(worst, d2)
+			if d2 > 0.02:
+				err("%s: рисунок в кадре петли мимо картинки на %.3f px (бокс %s)" % [pair[1], d2, bx2])
+	for bb: Array in [[24, 70, 150, 190], [24, 300, 210, 250]]:   # волшебство: портрет в кадре — на картинке
+		var m := MagicPortrait.make("martin.png", Rect2(bb[0], bb[1], bb[2], bb[3]), 0.0, false)
+		m.loop_name = "magic_martin"
+		var e: Dictionary = Frames.magic.get("magic_martin", {})
+		var fr := m.frame_rect()
+		m.free()
+		if e.is_empty() or fr.size == Vector2.ZERO:
+			err("волшебство Мартина: нет magic_martin в anim_magic_index.json")
+			continue
+		var sz: Array = e["size"]
+		var pr: Array = e["portrait"]
+		var k := fr.size / Vector2(float(sz[0]), float(sz[1]))
+		var inner := Rect2(fr.position + Vector2(float(pr[0]), float(pr[1])) * k, Vector2(float(pr[2]), float(pr[3])) * k)
+		var d3 := _rect_err(inner, UI.fit_rect(Content.texture("martin.png").get_size(), Rect2(bb[0], bb[1], bb[2], bb[3])))
+		worst = maxf(worst, d3)
+		if d3 > 0.02:
+			err("волшебство Мартина: портрет в кадре мимо картинки на %.3f px (бокс %s)" % [d3, bb])
+	return "Мартин петлями экранов (%s), martin_idle, brenna_wave, magic_martin: рисунок в кадре на месте картинки (худший сдвиг %.3f px), «Без анимации» — картинка" % [", ".join(out), worst]
+
+
+static func _rect_err(a: Rect2, b: Rect2) -> float:
+	return maxf(maxf(absf(a.position.x - b.position.x), absf(a.position.y - b.position.y)),
+		maxf(absf(a.end.x - b.end.x), absf(a.end.y - b.end.y)))
+
+
+## Где рисунок картинки art в кадре петли name, нарисованном Figure.idle_rect в боксе bx, против самой картинки
+## (UI.fit_rect), логические px. Рисунок в кадре — по нарезке idle_loop.py (idle.cut_h, IDLE_PAD), независимо от
+## размера файла кадра (ужатый 348×400 — те же доли); пропорции кадра — проверка, что cut_h/pad те, с какими резали.
+## Прежний расчёт (кадр вписан в idle_box с полем, округлённым до целых px; доли — от ужатого кадра) давал 0,8 px.
+func _idle_rect_err(art: String, name: String, bx: Rect2) -> float:
+	var st := Content.texture(art)
+	var tex := Frames.loop_frame(name, 1.6)
+	var r := Figure.idle_rect(art, bx)
+	if st == null or tex == null:
+		err("%s: нет картинки %s или кадров" % [name, art])
+		return 0.0
+	var idl: Dictionary = Content.consts.get("idle", {})
+	var pad := float(idl.get("pad", 0.0))
+	var oh := float(idl.get("cut_h", 0))
+	var ow := roundf(oh * st.get_size().x / st.get_size().y)
+	var fr: Vector2 = tex.get_size()
+	if oh <= 0.0 or absf(fr.x / fr.y - ow / oh) > 0.005 or absf(r.size.x / r.size.y - ow / oh) > 0.005:
+		err("%s: пропорции кадра %s не как у нарезки %dx%d (idle.cut_h в game_consts.json?)" % [name, fr, ow, oh])
+	var iw := roundf(ow / (1 + 2 * pad))
+	var ih := roundf(oh / (1 + 2 * pad))
+	var k := r.size / Vector2(ow, oh)
+	var inner := Rect2(r.position + Vector2(floorf((ow - iw) / 2), floorf((oh - ih) / 2)) * k, Vector2(iw, ih) * k)
+	return _rect_err(inner, UI.fit_rect(st.get_size(), bx))
 
 
 ## «Живой» Мартин (IDLE_LOOPS martin.png → martin_idle, 20.11 как _martin_portrait_selftest в game.py): портрет его
@@ -2988,7 +3035,6 @@ func _flow_brenna() -> String:
 	await _frames(2)
 	var calm0: bool = Settings.a11y.get("calm", false)
 	Settings.a11y["calm"] = false
-	var st := Content.texture("master.png").get_size()
 	var boxes := [Rect2(UI.W - 300, 130, 200, 280), Rect2(986, 158, 46, 56), Rect2(24, 300, 90, 110),
 		Rect2(24, 70, 150, 190), Rect2(24, 300, 210, 250)]
 	var worst := 0.0
@@ -2997,18 +3043,12 @@ func _flow_brenna() -> String:
 		if not p["live"]:
 			err("Бренна: в боксе %s не петля" % bx.size)
 			continue
-		var fr: Vector2 = (p["tex"] as Texture2D).get_size()
-		var f := UI.fit_rect(fr, p["box"])
-		var iw := roundf(fr.x / (1 + 2 * pad))
-		var ih := roundf(fr.y / (1 + 2 * pad))
-		var k := f.size / fr
-		var inner := Rect2(f.position + Vector2(floorf((fr.x - iw) / 2), floorf((fr.y - ih) / 2)) * k, Vector2(iw, ih) * k)
-		var s := UI.fit_rect(st, bx)
-		var d := maxf(maxf(absf(inner.position.x - s.position.x), absf(inner.position.y - s.position.y)),
-			maxf(absf(inner.end.x - s.end.x), absf(inner.end.y - s.end.y)))
+		if p["rect"] != Figure.idle_rect("master.png", bx):
+			err("Бренна: бокс %s — кадр не в Figure.idle_rect" % bx.size)
+		var d := _idle_rect_err("master.png", name, bx)      # рисунок в кадре — на картинке (20.11: было ±2 px)
 		worst = maxf(worst, d)
-		if d > 2.0:
-			err("Бренна: бокс %s — рисунок в петле %s, картинка %s (сдвиг %.1f px)" % [bx.size, inner, s, d])
+		if d > 0.02:
+			err("Бренна: бокс %s — рисунок в петле мимо картинки на %.3f px" % [bx.size, d])
 	Settings.a11y["calm"] = true
 	if Figure.idle_pick("master.png", boxes[0], 1.6)["live"]:
 		err("Бренна: «Без анимации» — всё равно петля")
@@ -3030,7 +3070,7 @@ func _flow_brenna() -> String:
 		if c == null or c.loop != name or not c.loop_still:
 			err("Бренна: портрет про-задания %s не петлёй" % tj)
 	Settings.a11y["calm"] = calm0
-	return "Бренна петлёй %s: Гильдия, пузырь, портрет и итог про-задания; рисунок совпадает с картинкой (худший сдвиг %.2f px), «Без анимации» — картинка" % [name, worst]
+	return "Бренна петлёй %s: Гильдия, пузырь, портрет и итог про-задания; рисунок совпадает с картинкой (худший сдвиг %.3f px), «Без анимации» — картинка" % [name, worst]
 
 
 # ======================= порядок обхода с клавиатуры =======================

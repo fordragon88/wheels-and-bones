@@ -738,6 +738,19 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-20 — Claude (Opus 5.5), ветка `godot-port` — **Godot: точная постановка петли и волшебства Мартина**
+  (перенос test-build 409274e; слияние отдельным коммитом, окончания строк сверены побайтно). `sync_content.py`:
+  перерезанные кадры `martin_idle`/`martin_forest`/`martin_party` (103 кадра), `idle.cut_h` в game_consts.json.
+  `Figure.idle_rect` — кадр «живой» петли так, что рисунок в нём ровно на `UI.fit_rect` картинки (Figure, пузырь,
+  запасной проезд); `MagicPortrait.frame_rect` — портрет в кадре волшебства на картинке по обеим осям. Причина «0,80 px»
+  в самопроверке: доли рисунка от ужатого кадра 348×400 + `idle_box` с округлённым полем. Новый замер
+  `godot/tools/loop_shift.py` (+ `tests/loop_shift.gd`, `loop_shift_runner.gd`): «петля → волшебство» ≤ 0,13 px,
+  «картинка → петля» ≤ 0,07 px при 1280×720, 1920×1080, 2340×1080 (старый расчёт с новыми кадрами — до 0,36 и 0,68).
+  Самопроверка `_flow_martin`/`_flow_brenna`: ≤ 0,02 px (было ±2 px), пропорции кадра — как у нарезки. Проверки: GODOT
+  SELFTEST OK, check_share 0 расхождений, SAVE COMPAT 12/156/0, WEB SMOKE 144 ok / 0 FAIL, телефон ×6 (5 экранов) —
+  ниже 50 к/с нет. (godot/ui/figure.gd, magic_portrait.gd, ride_view.gd, speech_bubble.gd, godot/tests/selftest_runner.gd,
+  loop_shift.gd, loop_shift_runner.gd, godot/tools/sync_content.py, loop_shift.py, PORT_PLAN.md)
+
 - 2026-11-20 — Claude (Opus 5.5), ветка `test-build` — **Мартин не прыгает на стыке петли и волшебства** (владелец:
   «небольшой пиксельный сдвиг между Мартином, который выпускает светлячка, и Мартином, который просто двигается»).
   Причина 1 — клип H3 сажал героя ~0,8 px мимо картинки: `idle_loop.py` подгоняет кадр №1 к картинке (ECC), петли

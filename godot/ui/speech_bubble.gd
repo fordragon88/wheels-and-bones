@@ -172,7 +172,7 @@ func _draw_speaker(img: String, bx: Rect2) -> void:
 		var p := Figure.idle_pick(img, bx, t)
 		tex = p["tex"]
 		if tex != null and p["live"]:
-			ci.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), p["box"]), false)
+			ci.draw_texture_rect(tex, p["rect"], false)     # точно на месте картинки (Figure.idle_rect)
 			return
 	if tex == null:
 		return

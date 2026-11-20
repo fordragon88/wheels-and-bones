@@ -204,6 +204,20 @@ func _alpha() -> float:
 	return clampf(minf(u, _dur() - u) / float(_c.get("fade", 0.25)), 0.0, 1.0)
 
 
+## Где рисовать кадр волшебства (экран): портрет в кадре (portrait из anim_magic_index.json) — точно на картинке
+## UI.fit_rect(картинка, бокс) по обеим осям (20.11; раньше ширина — по масштабу высоты).
+func frame_rect() -> Rect2:
+	var e: Dictionary = Frames.magic.get(loop_name, {})
+	var st_tex := Content.texture(art)
+	if e.is_empty() or st_tex == null:
+		return Rect2()
+	var real := UI.fit_rect(st_tex.get_size(), box)
+	var sz: Array = e["size"]
+	var pr: Array = e["portrait"]
+	var k := real.size / Vector2(float(pr[2]), float(pr[3]))
+	return Rect2(real.position - Vector2(float(pr[0]), float(pr[1])) * k, Vector2(float(sz[0]), float(sz[1])) * k)
+
+
 func _draw_frame() -> void:
 	if magic_t0 < 0.0 or hop > 0.0:
 		return
@@ -216,11 +230,6 @@ func _draw_frame() -> void:
 	if tex == null or st_tex == null:
 		return
 	var a := _alpha()                            # переход: статичный портрет под кадром
-	var real := UI.fit_rect(st_tex.get_size(), box)
-	var sz: Array = e["size"]
-	var pr: Array = e["portrait"]
-	var sf := real.size.y / float(pr[3])
-	var pos := Vector2(real.position.x + real.size.x / 2 - (float(pr[0]) + float(pr[2]) / 2) * sf,
-		real.position.y + real.size.y / 2 - (float(pr[1]) + float(pr[3]) / 2) * sf)
-	_layer.draw_texture_rect(tex, Rect2(pos - position, Vector2(float(sz[0]), float(sz[1])) * sf), false, Color(1, 1, 1, a))
+	var fr := frame_rect()
+	_layer.draw_texture_rect(tex, Rect2(fr.position - position, fr.size), false, Color(1, 1, 1, a))
 	drawn += 1

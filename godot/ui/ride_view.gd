@@ -175,10 +175,11 @@ func _draw() -> void:
 		var bx := Rect2(x, y, 230, 250)
 		var idle := "" if flip else Figure.idle_loop(art)    # нет петли проезда, а «живой» портрет есть (Мартин,
 		var fr := Frames.loop_frame(idle, t) if idle != "" else null   # браузер: ride_martin не скачалась) — едет он
+		var r := UI.fit_rect(tex.get_size(), bx)
 		if fr != null:
 			tex = fr
+			r = Figure.idle_rect(art, bx)               # рисунок кадра — точно там, где была бы картинка
 			bx = Figure.idle_box(bx)
-		var r := UI.fit_rect(tex.get_size(), bx)
 		var mb := Vector2(bx.get_center().x, bx.end.y)   # покачивание -3° вокруг низа (blit_idle rock)
 		draw_set_transform(mb, deg_to_rad(3), Vector2(-1 if flip else 1, 1))
 		var lr := Rect2(r.position - mb, r.size)
