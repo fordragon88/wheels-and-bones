@@ -219,7 +219,10 @@ def game_tables():
                   "leg_gag_kind": list(game.LEG_GAG_KIND), "amb_vol": {k: v[1] for k, v in game._AMB_BUILD.items()},
                   "magic": {"box": list(G.PORTRAIT_BOX), "delay": G.MAGIC_DELAY, "auto_secs": G.MAGIC_AUTO_SECS,
                             "fade": G.MAGIC_FADE, "top": G.MAGIC_TOP, "result_box": list(G.RESULT_BOX),
-                            "result_hop": G.RESULT_HOP, "result_delay": G.RESULT_DELAY, "repeat": G.MAGIC_REPEAT}}
+                            "result_hop": G.RESULT_HOP, "result_delay": G.RESULT_DELAY, "repeat": G.MAGIC_REPEAT,
+                            # «живой» портрет (IDLE_LOOPS — Мартин) и стык с волшебством: кадр 0 до первого
+                            # волшебства (не дольше hold), клик ждёт стыка ближе seam_wait
+                            "hold": G.MAGIC_HOLD, "seam_wait": G.MAGIC_SEAM_WAIT}}
         json.dump(consts, open(os.path.join(DST, "data", "game_consts.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         # живые реплики (в pygame-версии пока в коде): клиенты по заданиям, Барти, Мартин, шутки про ногу
         talk = {"client": game.CLIENT_TALK, "barty": game.BARTY_TALK, "martin": game.MARTIN_TALK,

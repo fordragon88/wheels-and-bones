@@ -23,6 +23,7 @@ func build() -> void:
 	add_child(_deco)
 	_martin = Figure.make("martin.png", Vector2(-260, UI.H - 300), Vector2(230, 260), "breathe", "martin_wave")
 	_martin.loop_box = Rect2(0, -30, 230, 290)       # кадры петли с полями: (230, 290) на 30 px выше — тот же рост
+	_martin.fallback_idle = true                     # нет кадров martin_wave — «живой» martin_idle (blit_hero)
 	_martin.name = "Martin"
 	add_child(_martin)
 	_barty = Figure.make("ghost.png", Vector2(UI.W - 250, UI.H - 330), Vector2(190, 240), "float", "barty_wave")

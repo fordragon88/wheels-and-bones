@@ -306,6 +306,7 @@ func state() -> Dictionary:
 		var mp: Variant = scr.get("portrait") if "portrait" in scr else null
 		if mp is MagicPortrait:
 			d["magic"] = {"loop": mp.loop_name, "playing": mp.magic_t0 >= 0.0, "ready": mp.loop_name != "" and Frames.loop_ready(mp.loop_name)}
+			d["portrait"] = mp.live_loop() if mp._fig.live() else ""     # «живой» портрет (martin_idle) или картинка
 		var mg: Variant = scr.get("mini") if "mini" in scr else null
 		if mg is MiniGame:
 			d["mini"] = {"kind": mg.kind, "value": mg.value, "cfg": mg.cfg}

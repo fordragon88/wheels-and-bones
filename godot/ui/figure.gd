@@ -17,6 +17,8 @@ var appear_k: float = 1.0                  # масштаб появления (
 var t: float = 0.0
 var flip: bool = false
 var loop_still: bool = false               # петля «живого» персонажа (Бренна): клип сам парит — без своего покачивания
+var clock_t: float = -1.0                  # ≥ 0 — часы петли задаёт хозяин (портрет со стыком волшебства: MagicPortrait)
+var fallback_idle: bool = false            # своей петли нет — «живая» петля картинки (титул: нет martin_wave → martin_idle)
 
 ## Снимки (tests/shots.gd): ≥ 0 — петли «живых» персонажей берут кадр на это время (как ref_shots.py), иначе свой t.
 static var idle_t: float = -1.0
@@ -63,12 +65,14 @@ static func make_scene(screen: String, md: String = "breathe") -> Figure:
 	return f
 
 
-## Заранее загрузить петли экранов (Game._scene_loops_web в game.py; браузер — качать с сайта): лес — на титуле и во
-## вступлении, праздник — в мастерской, итоге и гараже, когда до вечеринки ≤ 1 задания, и на празднике/титрах.
-## Зовёт Screen._process каждый кадр (want_loop держит набор в памяти, пока зовут).
+## Заранее загрузить петли экранов (Game._scene_loops_web в game.py; браузер — качать с сайта): «живой» Мартин
+## (IDLE_LOOPS martin.png → martin_idle: реплики, его задание) — с титула и на любом экране (игра могла открыться
+## ссылкой-заданием), лес — на титуле и во вступлении, праздник — в мастерской, итоге и гараже, когда до вечеринки
+## ≤ 1 задания, и на празднике/титрах. Зовёт Screen._process каждый кадр (want_loop держит набор в памяти, пока зовут).
 static func want_scene_loops(screen: String) -> void:
 	if Settings.calm():
 		return
+	Frames.want_loop(idle_loop("martin.png"))
 	if screen == "title" or screen == "intro":
 		Frames.want_loop(str(scene_loop("intro").get("loop", "")))
 	if screen == "ending" or screen == "credits" or ((screen == "hub" or screen == "result" or screen == "garage")
@@ -95,9 +99,16 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
+## Время кадра петли: снимки (idle_t) у петель «живых», часы хозяина (clock_t) или свои.
+func _loop_t(still: bool) -> float:
+	if still and idle_t >= 0.0:
+		return idle_t
+	return clock_t if clock_t >= 0.0 else t
+
+
 ## Сейчас рисуется петля (не картинка): кадры загружены и не «Без анимации».
 func live() -> bool:
-	return loop != "" and Frames.loop_frame(loop, idle_t if loop_still and idle_t >= 0.0 else t) != null
+	return loop != "" and Frames.loop_frame(loop, _loop_t(loop_still)) != null
 
 
 func _process(dt: float) -> void:
@@ -110,10 +121,15 @@ func _draw() -> void:
 		return
 	var tex: Texture2D = null
 	var bx := Rect2(Vector2.ZERO, box)
+	var still := loop_still
 	if loop != "":
-		tex = Frames.loop_frame(loop, idle_t if loop_still and idle_t >= 0.0 else t)
+		tex = Frames.loop_frame(loop, _loop_t(loop_still))
 		if tex != null and loop_box.size != Vector2.ZERO:
 			bx = loop_box
+	if tex == null and fallback_idle and idle_loop(image) != "":     # blit_hero: петля картинки в боксе с полем
+		tex = Frames.loop_frame(idle_loop(image), _loop_t(true))
+		bx = idle_box(Rect2(Vector2.ZERO, box))
+		still = true
 	var live := tex != null
 	if tex == null:
 		tex = Content.texture(image)
@@ -121,7 +137,7 @@ func _draw() -> void:
 	if tex == null:
 		return
 	var r := UI.fit_rect(tex.get_size(), bx)
-	if live and loop_still:                              # blit_hero: только появление k (призрак — из центра)
+	if live and still:                              # blit_hero: только появление k (призрак — из центра)
 		if appear_k == 1.0:
 			draw_texture_rect(tex, r, false)
 			return

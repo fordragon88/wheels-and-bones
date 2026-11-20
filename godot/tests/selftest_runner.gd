@@ -188,6 +188,7 @@ func _run() -> void:
 	var ride_line: String = kbo_line + "; " + arrows_line + "; " + await _flow_tech_rides()
 	ride_line += "; " + await _flow_brenna()
 	ride_line += "; " + await _flow_martin()
+	ride_line += "; " + await _flow_martin_live()
 	Loc.audit = false
 	var n_audit: int = Loc.audited.size()
 	var dump := OS.get_cmdline_user_args().find("--dump-tr")
@@ -2463,7 +2464,7 @@ func _only(what: String) -> void:
 		"brenna":
 			line = await _flow_brenna()
 		"martin":
-			line = await _flow_martin()
+			line = await _flow_martin() + "; " + await _flow_martin_live()
 		"pad":
 			line = await _flow_pad(["flat:0", "brake:0", "lift:0"], ["truing"])
 		"kborder":
@@ -2833,7 +2834,7 @@ func _flow_martin() -> String:
 				err("Мартин (%s): петля не на месте картинки — %s, поворот %.1f (ждали %s, 0)" % [sc, m.position, m.rotation_degrees, bx.position])
 			if calm:
 				continue
-			var p := Figure.idle_pick("martin.png", bx, 1.6)    # картинка; петля — кадр в боксе с полем
+			var p := {"tex": Content.texture("martin.png")}    # картинка; петля — кадр в боксе с полем
 			var tex := Frames.loop_frame(name, 1.6)
 			var fr: Vector2 = tex.get_size()
 			var f := UI.fit_rect(fr, Figure.idle_box(bx))
@@ -2852,6 +2853,121 @@ func _flow_martin() -> String:
 	Nav.go("title")
 	await _frames(2)
 	return "Мартин петлями экранов (%s): на месте картинки (худший сдвиг %.2f px), «Без анимации» — картинка" % [", ".join(out), worst]
+
+
+## «Живой» Мартин (IDLE_LOOPS martin.png → martin_idle, 20.11 как _martin_portrait_selftest в game.py): портрет его
+## задания, пузырь реплики (90×110 и 46×56), после проезда и итог — петлёй, «Без анимации» — картинкой; волшебство
+## начинается и кончается на кадре 0 петли (поза картинки): первое — пока петля стоит на кадре 0, после него петля с
+## кадра 0, клик у стыка ждёт стыка, посреди петли — сразу. Портрет шагается вручную (1/30 с) — без скачков кадров.
+func _flow_martin_live() -> String:
+	var name := Figure.idle_loop("martin.png")
+	var jid := ""
+	for j: Dictionary in Content.jobs:
+		if j.get("client_art", "") == "martin.png" and j.get("track", "") != "tech":
+			jid = j["id"]
+			break
+	if name == "" or jid == "" or Frames.loop_count(name) < 2:
+		err("«Живой» Мартин: нет петли %s или задания с martin.png" % name)
+		return "«Живой» Мартин: нет данных"
+	var n := Frames.loop_count(name)
+	var per := n / Frames.anim_fps
+	var calm0: bool = Settings.a11y.get("calm", false)
+	var idle_t0 := Figure.idle_t
+	Figure.idle_t = -1.0
+	Settings.a11y["calm"] = false
+	Frames.want_loop(name)
+	Frames.flush()
+	Nav.go("job", {"job": jid, "variant": 0})
+	await _frames(2)
+	var scr: Node = Nav.current
+	var p: MagicPortrait = scr.get("portrait")
+	p.set_process(false)
+	if p.loop_name != "":
+		Frames.want_loop(p.loop_name)
+		Frames.flush()
+	var step := func(k: int) -> void:
+		for i in k:
+			p._process(1.0 / 30)
+	step.call(1)
+	if not p._fig.live() or p.portrait_frame() != 0:
+		err("Мартин в задании %s: портрет не петлёй %s на кадре 0 (кадр %d)" % [jid, name, p.portrait_frame()])
+	var magic := p.loop_name
+	var notes: Array = []
+	if magic != "":
+		var dur := p._dur()
+		for i in int((float(Content.consts["magic"].get("hold", 3.0)) + 1) * 30):
+			step.call(1)
+			if p.playing():
+				break
+		if not p.playing() or p.portrait_frame() != 0:
+			err("Мартин: волшебство не началось на кадре 0 петли (кадр %d)" % p.portrait_frame())
+		step.call(int((dur - 0.15) * 30))                  # последние доли — под волшебством кадр 0
+		if not p.playing() or p.portrait_frame() != 0:
+			err("Мартин: к концу волшебства под ним не кадр 0 петли (кадр %d)" % p.portrait_frame())
+		step.call(10)
+		if p.playing() or not p._fig.live() or p.portrait_frame() < 0 or p.portrait_frame() > 4:
+			err("Мартин: после волшебства петля не с кадра 0 (кадр %d)" % p.portrait_frame())
+		p.idle_t0 = p.t - per + 0.2                      # до стыка 0,2 с: клик ждёт стыка
+		var at := 0.0
+		if not p.queue(true) or p.playing() or p.magic_at < 0.0:
+			err("Мартин: клик у стыка петли не ждёт стыка")
+		at = p.magic_at
+		step.call(9)
+		if not p.playing() or absf(p.magic_t0 - at) > 1e-6 or p.portrait_frame() != 0:
+			err("Мартин: волшебство по клику не началось на стыке (кадр петли %d)" % p.portrait_frame())
+		step.call(int(dur * 30) + 3)
+		p.idle_t0 = p.t - 1.0                            # середина петли: клик — сразу (переход fade)
+		if not p.queue(true) or not p.playing():
+			err("Мартин: клик посреди петли не запустил волшебство сразу")
+		notes.append("волшебство %s на стыке" % magic)
+	else:
+		err("Мартин: нет петли волшебства у задания %s" % jid)
+	for bx: Rect2 in [Rect2(24, 300, 90, 110), Rect2(986, 158, 46, 56)]:   # пузырь реплики — петлёй
+		if not Figure.idle_pick("martin.png", bx, 0.5)["live"]:
+			err("Мартин: пузырь реплики %s не петлёй %s" % [bx.size, name])
+	var mentor: SpeechBubble = scr.get("_mentor")
+	if mentor.speaker_img("Мартин: «Проверка.»") != "martin.png":
+		err("Мартин: пузырь реплики — не его портрет")
+	scr.set("phase", "test")                             # после проезда — петлёй с кадра 0
+	scr.call("rebuild")
+	await _frames(1)
+	scr.call("_ride_finished")
+	await _frames(1)
+	var after: Figure = scr.get("_after")
+	if after == null or not after.visible or not after.live() or int(after.t * Frames.anim_fps) % n > 3:
+		err("Мартин: после проезда не петлёй %s с кадра 0" % name)
+	scr.call("finish_test")                              # итог: подпрыг на кадре 0, петлёй
+	await _frames(2)
+	if Nav.current_name != "result":
+		err("Мартин: итог не открылся")
+	else:
+		var rp: MagicPortrait = Nav.current.get("portrait")
+		if not rp._fig.live() or rp.portrait_frame() != 0:
+			err("Мартин на итоге: не петлёй на кадре 0 при подпрыге (кадр %d)" % rp.portrait_frame())
+	Settings.a11y["calm"] = true                         # «Без анимации» — везде картинка
+	Nav.go("job", {"job": jid, "variant": 0})
+	await _frames(3)
+	var pc: MagicPortrait = Nav.current.get("portrait")
+	if pc._fig.live() or pc.portrait_frame() >= 0 or Figure.idle_pick("martin.png", Rect2(24, 300, 90, 110), 0.5)["live"]:
+		err("Мартин «Без анимации»: портрет или пузырь петлёй, ждали картинку")
+	Nav.current.set("phase", "test")
+	Nav.current.call("rebuild")
+	await _frames(1)
+	Nav.current.call("_ride_finished")
+	await _frames(1)
+	var ac: Figure = Nav.current.get("_after")
+	if ac != null and ac.live():
+		err("Мартин «Без анимации»: после проезда петлёй")
+	Nav.current.call("finish_test")
+	await _frames(2)
+	if Nav.current_name == "result" and (Nav.current.get("portrait") as MagicPortrait)._fig.live():
+		err("Мартин «Без анимации»: на итоге петлёй")
+	Settings.a11y["calm"] = calm0
+	Figure.idle_t = idle_t0
+	Nav.go("title")
+	await _frames(2)
+	return "«Живой» Мартин %s: портрет, пузырь, после проезда, итог — петлёй (%s), «Без анимации» — картинкой" % [
+		name, ", ".join(notes)]
 
 
 ## Бренна «живая» (IDLE_LOOPS/IDLE_PAD из game_consts.json): петля выбрана, «Без анимации» — картинка, рисунок в кадре

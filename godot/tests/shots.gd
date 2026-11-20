@@ -456,8 +456,9 @@ func _run() -> void:
 	if want.is_empty():
 		want = ALL
 	seed(1)
-	Figure.idle_t = IDLE_T                    # Бренна (brenna_wave) — тот же кадр петли, что в ref_shots.py
+	Figure.idle_t = IDLE_T                    # Бренна, Мартин (IDLE_LOOPS) — тот же кадр петли, что в ref_shots.py
 	Frames.want_loop(str(Content.consts.get("idle", {}).get("loops", {}).get("master.png", "")))
+	Frames.want_loop(str(Content.consts.get("idle", {}).get("loops", {}).get("martin.png", "")))   # «живой» Мартин
 	if "--big" in args:
 		Settings.a11y["text"] = 3
 	Settings.lang = "ru"

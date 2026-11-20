@@ -65,6 +65,8 @@ var _m3d_state: Dictionary = {}          # ракурс коляски пере�
 var _ok_t: float = -9.0
 var _ok_pos: Vector2
 var _portrait_state: Array = []
+var ride_end_t: float = 0.0               # когда кончился проезд (часы экрана t): «живой» портрет у коляски — с кадра 0
+var _after: Figure                        # «живой» герой (IDLE_LOOPS — Мартин) у коляски после проезда
 var _bar: TopBar
 var _dispute_btn: GameButton
 var _rows_sig: Array = []                # от чего зависят строки деталей и диагнозы (перерисовка только при смене)
@@ -260,6 +262,7 @@ func build() -> void:
 	if not _portrait_state.is_empty():                       # пересборка: волшебство не начинается заново
 		portrait.t = _portrait_state[0]
 		portrait.auto = _portrait_state[1]
+		portrait.idle_t0 = _portrait_state[2]                # петля «живого» портрета — по тем же часам
 		portrait.enter_t = 0.0
 	add_child(portrait)
 	_deco = Control.new()
@@ -268,6 +271,14 @@ func build() -> void:
 	_deco.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_deco.draw.connect(_draw_deco)
 	add_child(_deco)
+	_after = null
+	if Figure.idle_loop(job["client_art"]) != "":           # Мартин после проезда — петлёй (_blit_portrait, с кадра 0)
+		var ac := chair_rect().get_center()
+		_after = Figure.make(job["client_art"], ac - Vector2(115, 125), Vector2(230, 250), "breathe")
+		_after.name = "AfterRide"
+		_after.t = t - ride_end_t
+		_after.visible = ride_done
+		add_child(_after)
 	_client_bubble = SpeechBubble.make(SpeechBubble.Kind.CLIENT)
 	_client_bubble.bottom = 572.0 if phase == "diagnose" else 548.0
 	_client_bubble.say(client_line)
@@ -444,7 +455,7 @@ func rebuild() -> void:
 	if chair:
 		_m3d_state = {"yaw": chair.view_yaw(), "zoom_k": chair.zoom_k}
 	if portrait:
-		_portrait_state = [portrait.t, portrait.auto]
+		_portrait_state = [portrait.t, portrait.auto, portrait.idle_t0 if not portrait.playing() else portrait.t]
 	var keep: Array[Control] = []                            # окна мини-игры и сносок переживают пересборку
 	for w: Control in [mini, notes]:
 		if w and w.get_parent() == self:
@@ -834,6 +845,10 @@ func start_ride() -> void:
 func _ride_finished() -> void:
 	ride.active = false
 	ride_done = true
+	ride_end_t = t
+	if _after:                                   # «живой» портрет у коляски — с кадра 0
+		_after.t = 0.0
+		_after.visible = true
 	portrait.paused = false
 	ghost_line = "Бартоломью: «Едет как надо! Дочитаешь — жми ГОТОВО.»"
 	_test_btn.visible = true
@@ -1073,8 +1088,8 @@ func _draw_deco() -> void:
 		"test":
 			UI.draw_text(_deco, Loc.t("ТЕСТ-ДРАЙВ"), Vector2(360, 70), 20, UI.GOOD, true)
 			UI.draw_wrapped(_deco, Loc.t(job.get("test", "")), Vector2(360, 100), 560, 19, UI.WHITE)
-			if ride_done:                       # клиент в починенной коляске
-				var tex := Content.texture(job["client_art"])
+			if ride_done:                       # клиент в починенной коляске («живой» — своим слоем _after)
+				var tex: Texture2D = null if _after else Content.texture(job["client_art"])
 				if tex:
 					var cr := chair_rect()
 					_deco.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(cr.get_center() - Vector2(115, 125),

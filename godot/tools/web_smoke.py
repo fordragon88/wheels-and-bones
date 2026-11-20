@@ -236,6 +236,9 @@ async def follow_hints(p, until, timeout=240, on_state=None, max_steps=400):
     return st
 
 
+PORTRAIT_SEEN = {}   # задание -> какими петлями рисовался портрет героя ("" — картинкой); debug state «portrait»
+
+
 async def play_job(p, jid, expect_loop, shots=True):
     """Задание jid до итога по подсказкам: осмотр, диагноз, шаги инструментами, мини-игры, проезд, итог."""
     st = await p.wait(lambda s: s.get("screen") == "job" and s.get("job") == jid, f"открыто задание {jid}", 30)
@@ -245,9 +248,11 @@ async def play_job(p, jid, expect_loop, shots=True):
         await p.pg.wait_for_timeout(2500)
         await p.shot(f"{jid}_1_diagnose")
     seen_magic = {"ready": False, "playing": False}
+    PORTRAIT_SEEN[jid] = set()
 
     async def watch(s):
         m = s.get("magic") or {}
+        PORTRAIT_SEEN[jid].add(s.get("portrait", ""))
         seen_magic["ready"] |= bool(m.get("ready"))
         seen_magic["playing"] |= bool(m.get("playing"))
         if s.get("mini") and shots and not seen_magic.get("mini_shot"):
@@ -364,6 +369,12 @@ async def sc_play(b):
     p = await new_page(b, "play")
     st, _, _ = await p.boot()
     await p.wait(lambda s: "Start" in [x[0] for x in s.get("buttons", [])], "кнопка «начать»", 10)
+    # «живой» Мартин (IDLE_LOOPS martin_idle): качается с сайта уже на титуле (как game.py _scene_loops_web)
+    k = "loop:martin_idle"
+    st = await p.wait(lambda s: s["frames"]["sets"].get(k, [0, 1])[0] == s["frames"]["sets"].get(k, [0, 1])[1],
+                      "martin_idle скачалась на титуле", 60)
+    check(bool(st) and st.get("screen") == "title",
+          f"{p.name}: петля martin_idle скачана на титуле ({(st or {}).get('frames', {}).get('sets', {}).get(k)})")
     await p.press("Start", wait=800)
     st = await p.wait(lambda s: s.get("screen") == "intro", "вступление", 10)
     mus = await p.pg.evaluate("wnbMusic.state()")
@@ -371,6 +382,8 @@ async def sc_play(b):
     await p.shot("1_intro")
     st = await follow_hints(p, lambda s: s.get("screen") == "job", 60)
     st = await play_job(p, "flat", "ride_martin")
+    check("martin_idle" in PORTRAIT_SEEN.get("flat", set()),
+          f"{p.name}: портрет в задании Мартина рисуется петлёй martin_idle ({PORTRAIT_SEEN.get('flat')})")
     await p.shot("5_hub")
     # F2: озвучка — голос браузера (заглушка) и скрытая область aria-live
     await p.key("F2", 800)

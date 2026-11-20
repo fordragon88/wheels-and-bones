@@ -3,7 +3,8 @@ extends Control
 ## Тест-драйв: клиент проезжает через мастерскую (_draw_ride/_draw_ride_anim в game.py). С петлёй ride_* (у всех 21
 ## героя): въезд из-за левого края, полный ход 60 % времени, плавное торможение по косинусу до центра зоны коляски;
 ## кадр петли — по пройденному пути (колёса не проскальзывают), предел ускорения из ride.json. Без петли — скользящий
-## портрет (4 с, RIDE_FLIP — отражённый). Линии скорости и пыль из-под колёс.
+## портрет (4 с, RIDE_FLIP — отражённый; «живой» — кадром своей петли IDLE_LOOPS, наклон тот же). Линии скорости и
+## пыль из-под колёс.
 ## Гильдия (RIDE_ANIM_TECH, 19.11): петля по id про-задания (Бренна в коляске задания, Тавр пешком, Аэлин), свой срок
 ## (RIDE_ANIM_T: Тавр — 7 с), въезд слева и остановка справа от кнопки (RIDE_TECH_STOP), после проезда герой стоит
 ## там (stay — последний кадр петли). Нет петли или «Без анимации» — прежнее: коляска скользит, Бренна парит.
@@ -170,9 +171,15 @@ func _draw() -> void:
 			draw_set_transform(Vector2.ZERO)
 		drawn += 1
 	elif tex:
-		var r := UI.fit_rect(tex.get_size(), Rect2(x, y, 230, 250))
 		var flip: bool = art in _r.get("flip", [])
-		var mb := Vector2(x + 115, y + 250)           # покачивание -3° вокруг низа (blit_idle rock)
+		var bx := Rect2(x, y, 230, 250)
+		var idle := "" if flip else Figure.idle_loop(art)    # нет петли проезда, а «живой» портрет есть (Мартин,
+		var fr := Frames.loop_frame(idle, t) if idle != "" else null   # браузер: ride_martin не скачалась) — едет он
+		if fr != null:
+			tex = fr
+			bx = Figure.idle_box(bx)
+		var r := UI.fit_rect(tex.get_size(), bx)
+		var mb := Vector2(bx.get_center().x, bx.end.y)   # покачивание -3° вокруг низа (blit_idle rock)
 		draw_set_transform(mb, deg_to_rad(3), Vector2(-1 if flip else 1, 1))
 		var lr := Rect2(r.position - mb, r.size)
 		if flip:
