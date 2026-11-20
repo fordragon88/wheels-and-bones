@@ -702,6 +702,19 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-20 — Claude (Opus 5.5), ветка `godot-port` — **хвосты перед заменой сайта**: (1) плашки замера ?fps=1
+  (кадры/с и размеры страницы) — в странице, в чёрных полях по бокам / полосой у нижнего края, кнопок не закрывают,
+  касания сквозь (`godot/web/shell.html` wnbHud/wnbView, `godot/autoload/web.gd`; web_smoke `plates`); (2) перенос
+  сохранений сверен на 12 настоящих сохранениях, записанных самой game.py (`godot/tools/save_fixtures.py`,
+  `godot/tests/saves/`, `godot/tests/save_compat.gd`, web_smoke `migrate`): 0 расхождений после правок
+  `save_game.gd`/`settings.gd` (звёзды гаража строкой/флажком, seat_done только известные, громкости строкой, bool()
+  для on/glow, язык без регистра, битый JSON без ERROR); (3) отправка замечаний — тело байт в байт как json.dumps
+  game.py, браузер шлёт через страницу как game.py (очередь `wnb:outbox` общая с pygame), Enter в поле — отправка
+  (`godot/autoload/feedback.gd`, `godot/ui/feedback_dialog.gd`, `godot/tools/feedback_compare.py`,
+  `godot/tests/feedback_net.gd`, web_smoke `feedback`; в таблицу ничего не уходило); (4) «Без анимации» по системе
+  на Windows (PowerShell → SPI_GETCLIENTAREAANIMATION), выбор игрока главнее (`godot/autoload/settings.gd`);
+  (5) порядок обхода с клавиатуры — только оценка (~3–5 ч, `godot/PORT_PLAN.md` шаг 4). Открыто: game.py в
+  браузере стартует всегда по-английски, Godot — на языке из настроек (решение владельца). (godot/PORT_PLAN.md)
 - 2026-11-20 — Claude (Fable 5.2) — **Мартин «живой» выложен на тестовые адреса** (тестовый репозиторий bec7092): pygame из `test-build` b7933da (apk 15,3 МБ, метка `b5353df552`, петли `anim/martin_forest|martin_party` качаются с сайта) и Godot из `godot-port` a2681ee (пакет `wnb-6414a8724a.pck`, кадры `frames/anim/martin_*`). По живым адресам: pygame web_smoke 73 ok, Godot (boot, play, phone, stale) 50 ok. Картинка `martin.png` заменена чищеной (без белого ореола вырезки). В main и на основной сайт — только по команде владельца (AGENTS.md).
 - 2026-11-20 — Claude (Opus 5.5), ветка `godot-port` — **Мартин «живой» во вступлении и на празднике** (слияние
   `test-build` b7933da: чищеная `martin.png`, петли `martin_forest`/`martin_party`). `sync_content.py` выгружает
