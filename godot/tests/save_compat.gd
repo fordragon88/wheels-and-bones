@@ -43,6 +43,20 @@ func _run() -> void:
 		out[name] = row
 		st.free()
 	sg.call("reset")
+	# «Без анимации» по системе (пункт 4): ответ системы «выкл» действует, только пока игрок не выбрал сам
+	var pri := {}
+	for c: Array in [["set_off", '{"a11y": {"calm": false, "calm_set": true}}'], ["set_on", '{"a11y": {"calm": true, "calm_set": true}}'],
+			["unset", '{"a11y": {"calm": true}}'], ["none", ""]]:
+		var res: Array = []
+		for sys_off: bool in [true, false]:
+			var st2: Node = settings_gd.new()
+			if c[1] != "":
+				st2.call("load_text", c[1])
+			st2.call("apply_system_calm", sys_off)
+			res.append(st2.call("calm"))
+			st2.free()
+		pri[c[0]] = res
+	out["_calm_priority"] = pri
 	var f := FileAccess.open(out_path, FileAccess.WRITE)
 	f.store_string(JSON.stringify(out, " "))
 	f.close()

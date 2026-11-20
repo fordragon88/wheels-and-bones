@@ -234,6 +234,7 @@ def norm(v):
 def check(dump_path, web_only=False):
     exp = json.load(open(os.path.join(OUT, "expected.json"), encoding="utf-8"))
     got = json.load(open(dump_path, encoding="utf-8-sig"))
+    got.pop("_calm_priority", None)
     bad = compare(exp, got)
     for b in bad:
         print("  РАЗНИЦА " + b)
@@ -274,10 +275,14 @@ def run_godot():
         print(r.stdout[-2000:], r.stderr[-2000:])
         return False
     got = json.load(open(dump, encoding="utf-8"))
+    pri = got.pop("_calm_priority", None)
+    want = {"set_off": [False, False], "set_on": [True, True], "unset": [True, False], "none": [True, False]}
+    print(f"  «Без анимации» [система выкл, вкл] по выбору игрока: {pri} — "
+          + ("как game.py" if pri == want else f"РАЗНИЦА, ждали {want}"))
     kept = [n for n, v in got.items() if not v.get("kept")]
     for n in kept:
         print(f"  РАЗНИЦА {n}: файл сохранения изменён при чтении")
-    return check(dump) and not kept
+    return check(dump) and not kept and pri == want
 
 
 if __name__ == "__main__":

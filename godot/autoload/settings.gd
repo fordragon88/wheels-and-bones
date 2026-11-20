@@ -18,6 +18,7 @@ var a11y: Dictionary = {
 var persist: bool = true               # тесты (--test): файл не читаем и не пишем
 var text_cap: float = 0.0              # потолок крупного текста для плотных окон (как text_cap() в game.py); 0 — нет
 var _extra: Dictionary = {}            # ключи pygame-версии, которых тут нет: пишем обратно как были
+var _sys_thread: Thread                # Windows: опрос «Эффектов анимации» в фоне
 
 
 func _init() -> void:
@@ -30,12 +31,55 @@ func _init() -> void:
 	var i := args.find("--lang")
 	if i >= 0 and i + 1 < args.size():
 		lang = "ru" if args[i + 1] == "ru" else "en"
-	if not a11y.get("calm_set", false) and OS.has_feature("web") and not args.has("--test"):
-		# «Без анимации» по системе: в браузере — prefers-reduced-motion (в Godot 4.7 своего API нет; на Windows —
-		# SPI_GETCLIENTAREAANIMATION, из GDScript недоступно — остаётся выбор игрока)
-		a11y["calm"] = bool(JavaScriptBridge.eval("!!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)", true))
+	# «Без анимации» по системе, пока игрок не выбрал сам (calm_set) — как system_reduced_motion() в game.py:
+	# браузер — prefers-reduced-motion; Windows — «Эффекты анимации» (SPI_GETCLIENTAREAANIMATION). В тестах (--test)
+	# система не спрашивается; «-- --system-calm=0|1» — подменить ответ системы (проверка приоритета выбора игрока).
+	var sys_arg := ""
+	for a: String in args:
+		if a.begins_with("--system-calm="):
+			sys_arg = a.trim_prefix("--system-calm=")
+	if sys_arg != "":
+		apply_system_calm(sys_arg == "1")
+	elif not args.has("--test"):
+		if OS.has_feature("web"):
+			apply_system_calm(bool(JavaScriptBridge.eval("!!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)", true)))
+		elif OS.get_name() == "Windows" and not a11y.get("calm_set", false):
+			_sys_thread = Thread.new()          # PowerShell отвечает ~0,6–1 с — не держать запуск игры
+			_sys_thread.start(func() -> void:
+				var v: Variant = windows_animations_off()
+				if v != null:
+					apply_system_calm.call_deferred(v))
 	if args.has("--calm"):
 		a11y["calm"] = true
+
+
+## Ответ системы «анимации выключены» → «Без анимации», если игрок не выбирал сам (calm_set — его выбор главнее).
+func apply_system_calm(off: bool) -> void:
+	if a11y.get("calm_set", false) or bool(a11y.get("calm", false)) == off:
+		return
+	a11y["calm"] = off
+	changed.emit("calm")
+
+
+## Windows: SystemParametersInfo(SPI_GETCLIENTAREAANIMATION) — тот же вызов, что в game.py (ctypes). Из GDScript
+## user32 не позвать, поэтому — через PowerShell (есть в каждой Windows, без сторонних библиотек): true —
+## анимации выключены, false — включены, null — не удалось узнать (тогда как раньше: решает игрок).
+static func windows_animations_off() -> Variant:
+	var ps := "Add-Type -Name W -Namespace WnbSpi -MemberDefinition '[DllImport(\"user32.dll\")] public static extern " 		+ "bool SystemParametersInfo(int a, int b, ref int c, int d);'; $v = 1; " 		+ "if ([WnbSpi.W]::SystemParametersInfo(0x1042, 0, [ref]$v, 0)) { [Console]::Out.Write($v) } else { [Console]::Out.Write('x') }"
+	var out: Array = []
+	var code := OS.execute("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+		"-EncodedCommand", Marshalls.raw_to_base64(ps.to_utf16_buffer())], out)
+	var r := str(out[0]).strip_edges() if code == 0 and not out.is_empty() else ""
+	if r == "0":
+		return true
+	if r == "1":
+		return false
+	return null
+
+
+func _exit_tree() -> void:
+	if _sys_thread != null and _sys_thread.is_started():
+		_sys_thread.wait_to_finish()
 
 
 ## Браузер: файл pygame-версии с того же сайта (она хранит save.json/settings.json в localStorage «wnb:<имя>»,

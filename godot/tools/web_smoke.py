@@ -840,6 +840,35 @@ async def sc_a11y(b):
         await p.press("Fullscreen", wait=800)
     p.check_console()
     await p.ctx.close()
+    await calm_priority(b)
+
+
+async def calm_priority(b):
+    """«Без анимации»: выбор игрока (calm_set в settings.json) главнее системы — как load_settings в game.py; выбор,
+    сделанный в игре, переживает перезагрузку при системном reduce."""
+    cases = [("calm_off_set", "reduce", {"a11y": {"calm": False, "calm_set": True}}, False),
+             ("calm_on_set", "no-preference", {"a11y": {"calm": True, "calm_set": True}}, True),
+             ("calm_unset", "reduce", {"a11y": {"calm": False, "calm_set": False}}, True),
+             ("calm_sys_off", "no-preference", {"a11y": {"calm": True}}, False)]
+    for name, motion, sets, want in cases:
+        p = await new_page(b, name, motion=motion, legacy={"settings.json": sets})
+        st, _, _ = await p.boot()
+        check(st.get("calm") is want, f"{p.name}: система {motion}, настройки {json.dumps(sets['a11y'])} → "
+                                      f"«Без анимации» {st.get('calm')} (ждали {want}, как game.py)")
+        if name == "calm_unset":                       # игрок сам выключил «Без анимации» — после перезагрузки так же
+            await p.pg.wait_for_timeout(2500)
+            await p.press("Gear", wait=900)
+            await p.press("Tab_access", wait=400)
+            await p.press("Acc_calm", wait=400)
+            await p.press("Done", wait=400)
+            st = await p.state()
+            await p.pg.reload()
+            st2 = await p.wait(lambda s: s.get("screen") in ("title", "hub", "intro"), "перезагрузка", 60)
+            check(st.get("calm") is False and st2.get("calm") is False,
+                  f"{p.name}: игрок выключил «Без анимации» при системном reduce — {st.get('calm')}, после "
+                  f"перезагрузки {st2.get('calm')}")
+        p.check_console()
+        await p.ctx.close()
 
 
 async def drag_chair(p, secs):
