@@ -31,6 +31,9 @@ func _init() -> void:
 	var i := args.find("--lang")
 	if i >= 0 and i + 1 < args.size():
 		lang = "ru" if args[i + 1] == "ru" else "en"
+	if OS.has_feature("web"):
+		lang = "en"                        # как game.py: set_lang("en" if IS_WEB …) — в браузере всегда по-английски,
+		                                   # русский — только переключателем в игре (решение владельца 20.11)
 	# «Без анимации» по системе, пока игрок не выбрал сам (calm_set) — как system_reduced_motion() в game.py:
 	# браузер — prefers-reduced-motion; Windows — «Эффекты анимации» (SPI_GETCLIENTAREAANIMATION). В тестах (--test)
 	# система не спрашивается; «-- --system-calm=0|1» — подменить ответ системы (проверка приоритета выбора игрока).

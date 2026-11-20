@@ -476,7 +476,8 @@ async def sc_migrate(b):
     st, _, _ = await p.boot()
     check(st.get("migrated") is True, f"{p.name}: прогресс pygame-версии перенесён (migrated)")
     check(sorted(st.get("done", [])) == sorted(LEGACY_SAVE["done"]), f"{p.name}: done = {st.get('done')}")
-    check(st.get("lang") == "ru", f"{p.name}: настройки перенесены (язык {st.get('lang')})")
+    check(st.get("lang") == "en" and st.get("sound") is True,
+          f"{p.name}: настройки перенесены, язык при старте английский, как game.py в браузере (язык {st.get('lang')})")
     old = await p.pg.evaluate("localStorage.getItem('wnb:save.json')")
     check(old and json.loads(old) == LEGACY_SAVE, f"{p.name}: старое сохранение pygame не тронуто")
     await p.press("Start", wait=1200)
@@ -486,17 +487,40 @@ async def sc_migrate(b):
     st = await p.wait(lambda s: s.get("screen") == "title", "титул после перезагрузки", 60)
     check(st.get("migrated") is False and sorted(st.get("done", [])) == sorted(LEGACY_SAVE["done"]),
           f"{p.name}: второй запуск — своё сохранение, без повторного переноса")
+    await lang_restart(p)
     p.check_console()
     await p.ctx.close()
     await migrate_real(b)
+
+
+async def title_ready(p):
+    """Титул показал кнопки (до этого щелчки по нему не доходят) — «начать» видна."""
+    await p.wait(lambda s: s.get("screen") == "title" and any(b_[0] == "Start" for b_ in s.get("buttons", [])),
+                 "кнопки титула", 20)
+
+
+async def lang_restart(p):
+    """Язык в браузере как game.py: старт всегда английский (даже с «lang: ru» в настройках); русский — переключателем
+    RU/EN в игре, он сохраняется в настройки, но после перезагрузки страницы игра снова стартует по-английски
+    (game.py: set_lang("en" if IS_WEB …) при каждом запуске)."""
+    st = await p.state()
+    check(st.get("lang") == "en", f"{p.name}: настройки с lang ru — старт по-английски ({st.get('lang')})")
+    await title_ready(p)
+    await p.press("Lang", wait=600)
+    st = await p.state()
+    check(st.get("lang") == "ru", f"{p.name}: переключатель RU/EN в игре — русский ({st.get('lang')})")
+    await p.pg.wait_for_timeout(800)                    # настройки записаны (user://settings.json)
+    await p.pg.reload()
+    st = await p.wait(lambda s: s.get("screen") == "title", "титул после перезагрузки", 60)
+    check(st.get("lang") == "en", f"{p.name}: после перезагрузки снова английский, как game.py ({st.get('lang')})")
 
 
 async def migrate_real(b):
     """Настоящие сохранения pygame-версии (их пишет сама game.py: tools/save_fixtures.py → tests/saves/) переносятся
     поле в поле так, как их читает game.py (tests/saves/expected.json); битые — игра стартует, старое не тронуто.
     Отличия браузера в эталоне: размер текста по умолчанию 125 % (text 2), «Без анимации» без выбора игрока — как в
-    системе (здесь prefers-reduced-motion: no-preference → выкл). Язык — тот, что выбрал игрок (game.py в браузере
-    всегда стартует по-английски — см. PORT_PLAN «Перенос сохранений»)."""
+    системе (здесь prefers-reduced-motion: no-preference → выкл). Язык при старте — всегда английский, как game.py в
+    браузере (set_lang("en" if IS_WEB …)), при любом «lang» в настройках."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import save_fixtures as sf
     exp = json.load(open(os.path.join(sf.OUT, "expected.json"), encoding="utf-8"))
@@ -513,6 +537,7 @@ async def migrate_real(b):
             e["a11y"] = dict(e["a11y"], text=2)
         if e["calm"] == "system":
             e["calm"] = False
+        e["lang"] = "en"                                  # браузер: старт всегда по-английски, как game.py
         got = dict(got, calm=got.get("calm") if got.get("calm") != "system" else
                    (await p.state()).get("calm"))
         bad = sf.compare({name: e}, {name: got})
@@ -1249,6 +1274,8 @@ async def sc_feedback(b):
     leftover = json.dumps(dict(ref["general_hub"], time="2026-11-01T10:00:00", platform="web", uid="pygame-left"))
     p = await feedback_page(b, "feedback", "ru", outbox=[leftover])
     await p.boot()
+    await title_ready(p)
+    await p.press("Lang", wait=500)                       # браузер стартует по-английски (как game.py) — русский кнопкой
     t0 = time.time()
     while time.time() - t0 < 10 and not p.fb:
         await p.pg.wait_for_timeout(200)
