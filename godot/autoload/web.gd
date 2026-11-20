@@ -285,6 +285,8 @@ func state() -> Dictionary:
 	d["game"] = [snappedf(gr.position.x, 0.1), snappedf(gr.position.y, 0.1), snappedf(gr.size.x, 0.1), snappedf(gr.size.y, 0.1)]
 	if prof_on:
 		d["prof"] = Prof.summary
+	if flag("compat"):                       # web_smoke migrate: прогресс и настройки — сверка с эталоном game.py
+		d["compat"] = SaveGame.compat_dump(Settings)
 	if scr != null:
 		for k: String in ["phase", "step_idx", "sel_tool", "mistakes", "ride_done"]:
 			if k in scr:

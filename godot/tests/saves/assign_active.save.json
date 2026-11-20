@@ -1,0 +1,42 @@
+{
+  "done": [
+    "flat"
+  ],
+  "garage": [
+    [
+      "flat",
+      3
+    ]
+  ],
+  "exam_passed": false,
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "ending_seen": false,
+  "assign": {
+    "id": "350d10dc",
+    "jobs": [
+      "caster",
+      "brake"
+    ],
+    "seat": [
+      "seat_troll"
+    ],
+    "from": "Анна Петровна",
+    "title": "Домашка №3",
+    "done": {
+      "caster": 1,
+      "brake": 1
+    },
+    "errors": {
+      "caster": 2,
+      "brake": 1
+    },
+    "secs": {
+      "caster": 95,
+      "brake": 0
+    },
+    "active": true,
+    "sent": false
+  }
+}

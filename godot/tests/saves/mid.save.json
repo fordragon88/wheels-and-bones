@@ -1,0 +1,34 @@
+{
+  "done": [
+    "brake",
+    "caster",
+    "flat",
+    "lift"
+  ],
+  "garage": [
+    [
+      "flat",
+      3
+    ],
+    [
+      "caster",
+      3
+    ],
+    [
+      "brake",
+      1
+    ],
+    [
+      "lift",
+      2
+    ]
+  ],
+  "exam_passed": false,
+  "seat_done": [
+    "seat_elf",
+    "seat_troll"
+  ],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "ending_seen": false
+}

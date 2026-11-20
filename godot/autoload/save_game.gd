@@ -41,13 +41,13 @@ func _ready() -> void:
 ## прогресс»). Старое не стираем: pygame-версия продолжает работать как была.
 func migrate_web() -> bool:
 	var text := Settings.web_legacy("save.json")
-	var data: Variant = JSON.parse_string(text) if text != "" else null
+	var data: Variant = Settings.parse_json(text)
 	if not data is Dictionary:
 		return false
 	apply_dict(data)
 	migrated = true
 	var bak := Settings.web_legacy("save.bak.json")
-	if bak.begins_with("{") and JSON.parse_string(bak) is Dictionary:
+	if bak.begins_with("{") and Settings.parse_json(bak) is Dictionary:
 		var f := FileAccess.open(BAK, FileAccess.WRITE)
 		if f != null:
 			f.store_string(bak)
@@ -59,7 +59,7 @@ func migrate_web() -> bool:
 func load_file(path: String) -> void:
 	if not FileAccess.file_exists(path):
 		return
-	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var data: Variant = Settings.parse_json(FileAccess.get_file_as_string(path))
 	if not data is Dictionary:
 		push_warning("save.json не читается — копия в save.json.bad")
 		DirAccess.copy_absolute(path, path + ".bad")
@@ -81,14 +81,19 @@ func apply_dict(d: Dictionary, main: bool = true) -> void:
 	garage.clear()
 	var seen: Dictionary = {}
 	for e: Variant in _lst(d, "garage"):
-		if e is Array and e.size() == 2 and e[0] is String and valid.has(e[0]) and not seen.has(e[0]) \
-				and (e[1] is float or e[1] is int):
-			garage.append([e[0], clampi(int(e[1]), 1, 3)])
-			seen[e[0]] = true
+		# как game.py: j, st_ = e; int(st_) — звёзды и флажком/строкой-целым (старые файлы)
+		if e is Array and e.size() == 2 and e[0] is String and valid.has(e[0]) and not seen.has(e[0]):
+			var stars: Variant = Settings.py_int(e[1])
+			if stars != null:
+				garage.append([e[0], clampi(stars, 1, 3)])
+				seen[e[0]] = true
 	exam_passed = d.get("exam_passed") is bool and d["exam_passed"]
 	seat_done.clear()
+	var seat_ids: Dictionary = {}
+	for c: Dictionary in SeatLogic.cases():
+		seat_ids[c["id"]] = true
 	for c: Variant in _lst(d, "seat_done"):
-		if c is String:
+		if c is String and seat_ids.has(c):    # только известные примерки (как game.py)
 			seat_done[c] = true
 	seat_quiz_ok = d.get("seat_quiz_ok") is bool and d["seat_quiz_ok"]
 	tutorial_skipped = d.get("tutorial_skipped") is bool and d["tutorial_skipped"]
@@ -143,6 +148,26 @@ func save() -> bool:
 	f.store_string(JSON.stringify(to_dict(), "  "))
 	f.close()
 	return DirAccess.rename_absolute(tmp, PATH) == OK
+
+
+## Прогресс и настройки в виде эталона game.py (tools/save_fixtures.py → tests/saves/expected.json): сверка переноса
+## сохранений — tests/save_compat.gd (компьютер) и web_smoke migrate (браузер, wnbState.compat). st — узел настроек.
+func compat_dump(st: Node) -> Dictionary:
+	var d := to_dict()
+	var a: Variant = d.get("assign")
+	if a is Dictionary:
+		var dn: Array = (a["done"] as Dictionary).keys()
+		dn.sort()
+		a["done"] = dn
+	var acc: Dictionary = st.get("a11y")
+	var a11y := {}
+	for k: String in ["on", "voices", "rate", "contrast", "instant", "speech_set", "text", "text_set", "calm_set", "font",
+			"barty", "quiet", "quiet_set"]:
+		a11y[k] = acc[k]
+	return {"done": d["done"], "garage": d["garage"], "exam_passed": d["exam_passed"], "seat_done": d["seat_done"],
+		"seat_quiz_ok": d["seat_quiz_ok"], "tutorial_skipped": d["tutorial_skipped"], "ending_seen": d["ending_seen"],
+		"assign": a if a is Dictionary else null, "volume": st.get("vol"), "lang": st.get("lang"), "glow": st.get("glow"),
+		"a11y": a11y, "calm": acc["calm"] if acc["calm_set"] else "system"}
 
 
 ## Отметка ✔: в задании по ссылке — по прогрессу задания, иначе — по обычному.
@@ -332,7 +357,7 @@ func restore_backup() -> void:
 		d = _bak_mem
 		_bak_mem = null
 	else:
-		d = JSON.parse_string(FileAccess.get_file_as_string(BAK))
+		d = Settings.parse_json(FileAccess.get_file_as_string(BAK))
 		DirAccess.remove_absolute(BAK)
 	if d is Dictionary:
 		apply_dict(d, false)

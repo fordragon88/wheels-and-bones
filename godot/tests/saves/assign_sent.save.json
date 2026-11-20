@@ -1,0 +1,38 @@
+{
+  "done": [],
+  "garage": [],
+  "exam_passed": false,
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": true,
+  "ending_seen": false,
+  "assign": {
+    "id": "d45399c4",
+    "jobs": [
+      "flat"
+    ],
+    "seat": [
+      "seat_troll",
+      "seat_elf"
+    ],
+    "from": "Teacher",
+    "title": "Week 1",
+    "done": {
+      "flat": 1,
+      "seat_troll": 1,
+      "seat_elf": 1
+    },
+    "errors": {
+      "flat": 0,
+      "seat_troll": 3,
+      "seat_elf": 1
+    },
+    "secs": {
+      "flat": 61,
+      "seat_troll": 200,
+      "seat_elf": 45
+    },
+    "active": false,
+    "sent": true
+  }
+}

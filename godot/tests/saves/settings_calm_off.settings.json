@@ -1,0 +1,33 @@
+{
+  "volume": {
+    "master": 0.8,
+    "music": 0.45,
+    "sfx": 0.9,
+    "amb": 0.45,
+    "on": true
+  },
+  "lang": "en",
+  "fullscreen": false,
+  "glow": true,
+  "res": null,
+  "gpu3d": true,
+  "a11y": {
+    "on": false,
+    "voices": true,
+    "rate": 0,
+    "contrast": false,
+    "instant": false,
+    "speech_set": false,
+    "text": 1,
+    "text_set": true,
+    "calm": false,
+    "calm_set": true,
+    "scan": 0,
+    "font": false,
+    "barty": true,
+    "quiet": false,
+    "quiet_set": false
+  },
+  "web_quality": "auto",
+  "web_quality_user": false
+}

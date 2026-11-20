@@ -1,0 +1,1 @@
+{"volume": {"master": 0.5, "music": 2, "sfx": -1, "amb": null, "on": true}, "lang": "ru", "glow": true, "a11y": {"rate": "fast", "on": "false", "instant": null, "text": 2.9, "text_set": true, "barty": false, "contrast": 1, "calm": true}, "fullscreen": false, "res": [1600, 900], "gpu3d": true}

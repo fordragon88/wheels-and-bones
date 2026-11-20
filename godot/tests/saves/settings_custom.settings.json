@@ -1,0 +1,33 @@
+{
+  "volume": {
+    "master": 0.35,
+    "music": 0.0,
+    "sfx": 0.6,
+    "amb": 0.15,
+    "on": false
+  },
+  "lang": "ru",
+  "fullscreen": true,
+  "glow": false,
+  "res": null,
+  "gpu3d": true,
+  "a11y": {
+    "on": true,
+    "voices": false,
+    "rate": 4,
+    "contrast": true,
+    "instant": true,
+    "speech_set": true,
+    "text": 3,
+    "text_set": true,
+    "calm": true,
+    "calm_set": true,
+    "scan": 0,
+    "font": true,
+    "barty": false,
+    "quiet": true,
+    "quiet_set": true
+  },
+  "web_quality": "auto",
+  "web_quality_user": false
+}

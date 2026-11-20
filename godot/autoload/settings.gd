@@ -56,27 +56,35 @@ func _load() -> void:
 	else:
 		text = web_legacy("settings.json")       # первый запуск в браузере — настройки pygame-версии, если были
 		legacy = text != ""
-	var data: Variant = JSON.parse_string(text) if text != "" else null
-	if not data is Dictionary:
-		return
-	if legacy:
+	if load_text(text) and legacy:
 		save.call_deferred()                     # дальше — свой файл
+
+
+## Разбор текста settings.json (как load_settings в game.py: каждое поле отдельно, неверный тип — значение по
+## умолчанию). false — не словарь JSON (битый/пустой файл): ничего не меняется. Сверка с game.py — tests/save_compat.gd.
+func load_text(text: String) -> bool:
+	var data: Variant = parse_json(text)
+	if not data is Dictionary:
+		return false
 	var d: Dictionary = data
 	for k: String in d:
 		if not k in ["volume", "lang", "glow", "a11y"]:
 			_extra[k] = d[k]
+	# как game.py: float(x) (числа, флажки, строки с числом), «on»/«glow» — bool(x) (пустое/0/null — нет)
 	var v: Variant = d.get("volume")
 	if v is Dictionary:
 		for k: String in ["master", "music", "sfx", "amb"]:
-			var x: Variant = v.get(k)
-			if (x is float or x is int) and is_finite(float(x)):
-				vol[k] = clampf(float(x), 0.0, 1.0)
-		if v.get("on") is bool:
-			vol["on"] = v["on"]
-	if d.get("glow") is bool:
-		glow = d["glow"]
-	if d.get("lang") is String and d["lang"] in ["ru", "en"]:
-		lang = d["lang"]
+			if v.has(k):
+				var x: Variant = py_float(v[k])
+				if x != null and is_finite(x):
+					vol[k] = clampf(x, 0.0, 1.0)
+		if v.has("on"):
+			vol["on"] = py_bool(v["on"])
+	if d.has("glow"):
+		glow = py_bool(d["glow"])
+	var lv: Variant = d.get("lang")             # set_lang(str(x).lower()): незнакомый — английский
+	if py_bool(lv):
+		lang = "ru" if str(lv).to_lower() == "ru" else "en"
 	var acc: Variant = d.get("a11y")
 	if acc is Dictionary:
 		for k: String in a11y:
@@ -91,6 +99,7 @@ func _load() -> void:
 			elif (x is float or x is int) and not x is bool and is_finite(float(x)):
 				a11y[k] = int(clampf(float(x), -10, 10))
 	a11y["scan"] = 0                       # режим одной кнопки выключен (SCAN_ENABLED = False в game.py)
+	return true
 
 
 func save() -> void:
@@ -109,6 +118,53 @@ func save() -> void:
 	f.store_string(JSON.stringify(d, "  "))
 	f.close()
 	DirAccess.rename_absolute(tmp, PATH)
+
+
+## Разбор JSON без ERROR в журнале (битый файл сохранения — обычное дело, а не ошибка движка): null — не JSON.
+static func parse_json(text: String) -> Variant:
+	if text.strip_edges() == "":
+		return null
+	var j := JSON.new()
+	return j.data if j.parse(text) == OK else null
+
+
+## bool(x) Python для значения JSON: null, false, 0, "", [], {} — ложь.
+static func py_bool(x: Variant) -> bool:
+	if x == null:
+		return false
+	if x is bool:
+		return x
+	if x is int or x is float:
+		return x != 0
+	if x is String or x is Array or x is Dictionary:
+		return not x.is_empty()
+	return true
+
+
+## float(x) Python для значения JSON (флажок → 0/1, строка с числом); нельзя — null.
+static func py_float(x: Variant) -> Variant:
+	if x is bool:
+		return 1.0 if x else 0.0
+	if x is int or x is float:
+		return float(x)
+	if x is String:
+		var t: String = x.strip_edges()
+		if t.is_valid_float() or t.is_valid_int():
+			return t.to_float()
+	return null
+
+
+## int(x) Python для значения JSON (дробь — к нулю, флажок → 0/1, строка — только целое); нельзя — null.
+static func py_int(x: Variant) -> Variant:
+	if x is bool:
+		return 1 if x else 0
+	if x is int or (x is float and is_finite(x)):
+		return int(x)
+	if x is String:
+		var t: String = x.strip_edges().replace("_", "")
+		if t.is_valid_int():
+			return t.to_int()
+	return null
 
 
 ## Поменять настройку и сохранить: set_a11y("calm", true) / set_vol("music", 0.3)

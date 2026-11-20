@@ -1,0 +1,718 @@
+{
+ "all_done": {
+  "a11y": {
+   "barty": true,
+   "calm_set": false,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 0,
+   "text_set": false,
+   "voices": true
+  },
+  "assign": null,
+  "calm": "system",
+  "done": [
+   "aeroz_lock",
+   "bearing",
+   "brake",
+   "caster",
+   "cross6_back",
+   "cushion",
+   "dracul_speed",
+   "f5_charge",
+   "flat",
+   "focuscr_cable",
+   "freewheel",
+   "gorynych_jazzy",
+   "iris_tilt",
+   "joystick",
+   "leshy_x8",
+   "lift",
+   "olga_x3",
+   "ra_emotion",
+   "spokes",
+   "t_battery",
+   "t_battery_q6",
+   "t_pulse6",
+   "t_q6brake",
+   "toe",
+   "truing",
+   "whill_code",
+   "yaga_d100"
+  ],
+  "ending_seen": true,
+  "exam_passed": true,
+  "garage": [
+   [
+    "flat",
+    3
+   ],
+   [
+    "caster",
+    3
+   ],
+   [
+    "brake",
+    2
+   ],
+   [
+    "spokes",
+    2
+   ],
+   [
+    "bearing",
+    1
+   ],
+   [
+    "cushion",
+    1
+   ],
+   [
+    "lift",
+    3
+   ],
+   [
+    "joystick",
+    3
+   ],
+   [
+    "freewheel",
+    2
+   ],
+   [
+    "aeroz_lock",
+    2
+   ],
+   [
+    "cross6_back",
+    1
+   ],
+   [
+    "iris_tilt",
+    1
+   ],
+   [
+    "focuscr_cable",
+    3
+   ],
+   [
+    "whill_code",
+    3
+   ],
+   [
+    "f5_charge",
+    2
+   ],
+   [
+    "dracul_speed",
+    2
+   ],
+   [
+    "yaga_d100",
+    1
+   ],
+   [
+    "olga_x3",
+    1
+   ],
+   [
+    "leshy_x8",
+    3
+   ],
+   [
+    "ra_emotion",
+    3
+   ],
+   [
+    "gorynych_jazzy",
+    2
+   ],
+   [
+    "truing",
+    3
+   ],
+   [
+    "t_battery",
+    3
+   ],
+   [
+    "toe",
+    3
+   ],
+   [
+    "t_pulse6",
+    3
+   ],
+   [
+    "t_q6brake",
+    3
+   ],
+   [
+    "t_battery_q6",
+    3
+   ]
+  ],
+  "glow": true,
+  "lang": "en",
+  "seat_done": [
+   "seat_aeroz",
+   "seat_dryad",
+   "seat_elf",
+   "seat_fairy",
+   "seat_golem",
+   "seat_iris",
+   "seat_orc",
+   "seat_owl",
+   "seat_troll"
+  ],
+  "seat_quiz_ok": true,
+  "tutorial_skipped": true,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
+   "sfx": 0.9
+  }
+ },
+ "assign_active": {
+  "a11y": {
+   "barty": true,
+   "calm_set": false,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 0,
+   "text_set": false,
+   "voices": true
+  },
+  "assign": {
+   "active": true,
+   "done": [
+    "brake",
+    "caster"
+   ],
+   "errors": {
+    "brake": 1,
+    "caster": 2
+   },
+   "from": "Анна Петровна",
+   "id": "350d10dc",
+   "jobs": [
+    "caster",
+    "brake"
+   ],
+   "seat": [
+    "seat_troll"
+   ],
+   "secs": {
+    "brake": 0,
+    "caster": 95
+   },
+   "sent": false,
+   "title": "Домашка №3"
+  },
+  "calm": "system",
+  "done": [
+   "flat"
+  ],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [
+   [
+    "flat",
+    3
+   ]
+  ],
+  "glow": true,
+  "lang": "en",
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
+   "sfx": 0.9
+  }
+ },
+ "assign_sent": {
+  "a11y": {
+   "barty": true,
+   "calm_set": false,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 0,
+   "text_set": false,
+   "voices": true
+  },
+  "assign": {
+   "active": false,
+   "done": [
+    "flat",
+    "seat_elf",
+    "seat_troll"
+   ],
+   "errors": {
+    "flat": 0,
+    "seat_elf": 1,
+    "seat_troll": 3
+   },
+   "from": "Teacher",
+   "id": "d45399c4",
+   "jobs": [
+    "flat"
+   ],
+   "seat": [
+    "seat_troll",
+    "seat_elf"
+   ],
+   "secs": {
+    "flat": 61,
+    "seat_elf": 45,
+    "seat_troll": 200
+   },
+   "sent": true,
+   "title": "Week 1"
+  },
+  "calm": "system",
+  "done": [],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [],
+  "glow": true,
+  "lang": "en",
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": true,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
+   "sfx": 0.9
+  }
+ },
+ "broken_empty": {
+  "a11y": {
+   "barty": true,
+   "calm_set": false,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 0,
+   "text_set": false,
+   "voices": true
+  },
+  "assign": null,
+  "calm": "system",
+  "done": [],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [],
+  "glow": true,
+  "lang": "en",
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
+   "sfx": 0.9
+  }
+ },
+ "broken_list": {
+  "a11y": {
+   "barty": true,
+   "calm_set": false,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 0,
+   "text_set": false,
+   "voices": true
+  },
+  "assign": null,
+  "calm": "system",
+  "done": [],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [],
+  "glow": true,
+  "lang": "en",
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
+   "sfx": 0.9
+  }
+ },
+ "broken_truncated": {
+  "a11y": {
+   "barty": true,
+   "calm_set": false,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 0,
+   "text_set": false,
+   "voices": true
+  },
+  "assign": null,
+  "calm": "system",
+  "done": [],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [],
+  "glow": true,
+  "lang": "en",
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
+   "sfx": 0.9
+  }
+ },
+ "fresh_intro": {
+  "a11y": {
+   "barty": true,
+   "calm_set": false,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 0,
+   "text_set": false,
+   "voices": true
+  },
+  "assign": null,
+  "calm": "system",
+  "done": [],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [],
+  "glow": true,
+  "lang": "en",
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
+   "sfx": 0.9
+  }
+ },
+ "mid": {
+  "a11y": {
+   "barty": true,
+   "calm_set": false,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 0,
+   "text_set": false,
+   "voices": true
+  },
+  "assign": null,
+  "calm": "system",
+  "done": [
+   "brake",
+   "caster",
+   "flat",
+   "lift"
+  ],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [
+   [
+    "flat",
+    3
+   ],
+   [
+    "caster",
+    3
+   ],
+   [
+    "brake",
+    1
+   ],
+   [
+    "lift",
+    2
+   ]
+  ],
+  "glow": true,
+  "lang": "en",
+  "seat_done": [
+   "seat_elf",
+   "seat_troll"
+  ],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
+   "sfx": 0.9
+  }
+ },
+ "old_format": {
+  "a11y": {
+   "barty": false,
+   "calm_set": false,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 2,
+   "text_set": true,
+   "voices": true
+  },
+  "assign": {
+   "active": true,
+   "done": [
+    "caster"
+   ],
+   "errors": {
+    "caster": 2,
+    "seat_elf": 0
+   },
+   "from": "Иван",
+   "id": "57b4f908",
+   "jobs": [
+    "caster"
+   ],
+   "seat": [
+    "seat_elf",
+    "seat_troll"
+   ],
+   "secs": {
+    "caster": 1000000
+   },
+   "sent": false,
+   "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "calm": "system",
+  "done": [
+   "caster",
+   "flat",
+   "spokes"
+  ],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [
+   [
+    "flat",
+    3
+   ],
+   [
+    "spokes",
+    2
+   ],
+   [
+    "joystick",
+    1
+   ],
+   [
+    "lift",
+    1
+   ],
+   [
+    "brake",
+    2
+   ]
+  ],
+  "glow": true,
+  "lang": "ru",
+  "seat_done": [
+   "seat_troll"
+  ],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": true,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.5,
+   "music": 1.0,
+   "on": true,
+   "sfx": 0.0
+  }
+ },
+ "old_format2": {
+  "a11y": {
+   "barty": true,
+   "calm_set": true,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": -10,
+   "speech_set": false,
+   "text": 0,
+   "text_set": false,
+   "voices": true
+  },
+  "assign": null,
+  "calm": false,
+  "done": [
+   "flat"
+  ],
+  "ending_seen": false,
+  "exam_passed": true,
+  "garage": [
+   [
+    "flat",
+    3
+   ]
+  ],
+  "glow": false,
+  "lang": "ru",
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.25,
+   "music": 1.0,
+   "on": false,
+   "sfx": 0.9
+  }
+ },
+ "settings_calm_off": {
+  "a11y": {
+   "barty": true,
+   "calm_set": true,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 1,
+   "text_set": true,
+   "voices": true
+  },
+  "assign": null,
+  "calm": false,
+  "done": [],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [],
+  "glow": true,
+  "lang": "en",
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
+   "sfx": 0.9
+  }
+ },
+ "settings_custom": {
+  "a11y": {
+   "barty": false,
+   "calm_set": true,
+   "contrast": true,
+   "font": true,
+   "instant": true,
+   "on": true,
+   "quiet": true,
+   "quiet_set": true,
+   "rate": 4,
+   "speech_set": true,
+   "text": 3,
+   "text_set": true,
+   "voices": false
+  },
+  "assign": null,
+  "calm": true,
+  "done": [
+   "flat"
+  ],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [
+   [
+    "flat",
+    3
+   ]
+  ],
+  "glow": false,
+  "lang": "ru",
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.15,
+   "master": 0.35,
+   "music": 0.0,
+   "on": false,
+   "sfx": 0.6
+  }
+ }
+}

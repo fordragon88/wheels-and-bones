@@ -164,7 +164,7 @@ class Page:
 
 
 async def new_page(b, name, touch=False, mobile=False, w=1280, h=720, dpr=1.0, legacy=None, motion="no-preference",
-                   block_frames=False):
+                   block_frames=False, legacy_raw=None):
     opts = dict(viewport={"width": w, "height": h}, device_scale_factor=dpr, reduced_motion=motion)
     if mobile:
         opts.update(is_mobile=True, has_touch=True)
@@ -172,9 +172,10 @@ async def new_page(b, name, touch=False, mobile=False, w=1280, h=720, dpr=1.0, l
     u = urllib.parse.urlsplit(URL)
     await ctx.grant_permissions(["clipboard-read", "clipboard-write"], origin=f"{u.scheme}://{u.netloc}")
     await ctx.add_init_script(INIT_JS)
-    if legacy:
-        js = "".join(f"localStorage.setItem({json.dumps('wnb:' + k)}, {json.dumps(json.dumps(v))});"
-                     for k, v in legacy.items())
+    if legacy or legacy_raw:                           # legacy — словари, legacy_raw — текст файла как есть
+        raw = {k: json.dumps(v) for k, v in (legacy or {}).items()}
+        raw.update(legacy_raw or {})
+        js = "".join(f"localStorage.setItem({json.dumps('wnb:' + k)}, {json.dumps(v)});" for k, v in raw.items())
         await ctx.add_init_script("if (!sessionStorage.getItem('wnb-test-seeded')) {" + js +
                                   "sessionStorage.setItem('wnb-test-seeded', '1');}")
     host = urllib.parse.urlsplit(URL).netloc
@@ -487,6 +488,43 @@ async def sc_migrate(b):
           f"{p.name}: второй запуск — своё сохранение, без повторного переноса")
     p.check_console()
     await p.ctx.close()
+    await migrate_real(b)
+
+
+async def migrate_real(b):
+    """Настоящие сохранения pygame-версии (их пишет сама game.py: tools/save_fixtures.py → tests/saves/) переносятся
+    поле в поле так, как их читает game.py (tests/saves/expected.json); битые — игра стартует, старое не тронуто.
+    Отличия браузера в эталоне: размер текста по умолчанию 125 % (text 2), «Без анимации» без выбора игрока — как в
+    системе (здесь prefers-reduced-motion: no-preference → выкл). Язык — тот, что выбрал игрок (game.py в браузере
+    всегда стартует по-английски — см. PORT_PLAN «Перенос сохранений»)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import save_fixtures as sf
+    exp = json.load(open(os.path.join(sf.OUT, "expected.json"), encoding="utf-8"))
+    for name, e in exp.items():
+        raw = {"save.json": open(os.path.join(sf.OUT, name + ".save.json"), encoding="utf-8").read()}
+        sp = os.path.join(sf.OUT, name + ".settings.json")
+        if os.path.exists(sp):
+            raw["settings.json"] = open(sp, encoding="utf-8").read()
+        p = await new_page(b, "migrate_" + name, legacy_raw=raw)
+        st, _, _ = await p.boot("&compat=1")
+        got = st.get("compat") or {}
+        e = dict(e)
+        if not e["a11y"]["text_set"]:
+            e["a11y"] = dict(e["a11y"], text=2)
+        if e["calm"] == "system":
+            e["calm"] = False
+        got = dict(got, calm=got.get("calm") if got.get("calm") != "system" else
+                   (await p.state()).get("calm"))
+        bad = sf.compare({name: e}, {name: got})
+        broken = name.startswith("broken")
+        check(not bad and bool(st.get("screen")) and st.get("migrated") is (not broken and name != "broken_list"),
+              f"{p.name}: прогресс и настройки = game.py ({len(e)} полей; перенос {st.get('migrated')})"
+              + ("" if not bad else " — " + "; ".join(bad)[:400]))
+        left = await p.pg.evaluate("[localStorage.getItem('wnb:save.json'), localStorage.getItem('wnb:settings.json')]")
+        check(left[0] == raw["save.json"] and left[1] == raw.get("settings.json"),
+              f"{p.name}: сохранение pygame-версии в localStorage не тронуто")
+        p.check_console()
+        await p.ctx.close()
 
 
 async def sc_net404(b):
