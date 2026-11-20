@@ -44,6 +44,9 @@ def main():
     ap.add_argument("--no-tone", action="store_true", help="не подгонять тон под исходную картинку")
     ap.add_argument("--key", default="green", choices=["green", "magenta"],
                     help="цвет фона клипа: magenta — где зелёное в герое (Мартин; make_martin_idle.py)")
+    ap.add_argument("--xfade", type=int, default=0,
+                    help="сколько последних кадров петли плавно перевести в кадры ПЕРЕД её началом (шов спокойной "
+                         "петли: поза в конце чуть не та, что в начале — без перехода голова «перещёлкивает»)")
     ap.add_argument("--art-file", default="", help="картинка для сверки и тона, если она ещё не в assets/")
     args = ap.parse_args()
 
@@ -106,9 +109,20 @@ def main():
         shutil.rmtree(out)
     os.makedirs(out)
     o_rgb, o_a, edge_hit, holes = [], [], 0.0, []
+    K = min(args.xfade, max(0, (s // args.step)))                  # перед началом должно хватить кадров клипа
+    if args.xfade and K < args.xfade:
+        print(f"{args.name}: переход шва урезан до {K} кадров (петля начинается с кадра {s})")
     for n, i in enumerate(idx):
         r2, a2, holed = warp(i)
         holes.append(holed)
+        m = n - (len(idx) - K)
+        if K and m >= 0:                                            # хвост → кадры перед началом: после последнего
+            j = s - (K - m) * args.step                             # кадра идёт кадр s, а он следует за s − step
+            rb, ab, _ = warp(j)
+            w = (m + 1) / (K + 1)
+            pa = a2 * (1 - w) + ab * w
+            r2 = (r2 * (a2 * (1 - w))[..., None] + rb * (ab * w)[..., None]) / np.maximum(pa, 1e-4)[..., None]
+            a2 = pa
         r2 = np.clip(r2 * gain, 0, 255) * (a2 > 1e-4)[..., None]
         r2 = R.bleed(r2, a2)
         edge_hit = max(edge_hit, float(max(a2[0].max(), a2[-1].max(), a2[:, 0].max(), a2[:, -1].max())))

@@ -1220,7 +1220,11 @@ def ghost_img(size, t):
 # art_tests/idle_loop.py --pad): рисунок картинки — в центре кадра, первый кадр совпадает с картинкой. Поэтому
 # петлю рисуем в боксе картинки, раздвинутом на то же поле, — Бренна стоит там же и того же размера, что и
 # при «Без анимации». Godot берёт IDLE_PAD из эталона game_consts.json.
-IDLE_LOOPS = {"master.png": "brenna_wave"}
+# 20.11 (владелец: «Если анимация выключена — они везде только картинки. Если включена — оба живые») — и Мартин:
+# спокойная петля martin_idle (дышит, моргает, руки на коленях) везде, где он картинкой ≥ 90 px (пузырь реплики,
+# портрет и итог его задания, после проезда, запасные ветки титула и проезда). Экраны со своей петлёй (титул
+# martin_wave, вступление и праздник — SCENE_LOOPS) главнее; значки ≤ 70 px и гараж — картинкой, как у всех.
+IDLE_LOOPS = {"master.png": "brenna_wave", "martin.png": "martin_idle"}
 IDLE_PAD = 0.08
 # Петля, которая зависит не от картинки, а от экрана (20.11, владелец: «у Марти на первом экране, где он ещё в лесу,
 # слишком видно обводку коляски… сделаем небольшую анимацию, и там, где он на празднике, тоже»): сцена -> (картинка,
@@ -6386,6 +6390,10 @@ class Game:
         self._magic_name = None
         self._magic_auto = False          # первый показ после открытия задания ещё впереди
         self._magic_next = None           # экран итога: когда сыграть снова (раз в минуту)
+        self._magic_at = None             # волшебство ждёт стыка петли «живого» портрета (queue_magic)
+        self._idle_t0 = None              # часы петли портрета (_portrait_t); None — стоит на кадре 0
+        self._screen_t0 = 0.0             # когда открыт экран с портретом (задание, итог)
+        self._portrait_drawn = None       # какой петлёй нарисован портрет героя (debug_state; None — картинкой)
         self._magic_drawn = 0             # сколько кадров «волшебства» нарисовано (web_smoke)
         self.magic_plays = 0              # сколько раз запускалось (selftest)
         self.ride_done = False            # проезд закончился — ждём «ГОТОВО» (успеть дочитать — отзыв игрока)
@@ -8069,6 +8077,13 @@ class Game:
     RESULT_HOP = 1.6                      # подпрыг героя при открытии итога (draw_result)
     RESULT_DELAY = 1.8                    # первый показ — после подпрыга (кадры к этому времени уже в памяти)
     MAGIC_REPEAT = 60.0                   # повтор на экране итога
+    # «Живой» портрет (IDLE_LOOPS, Мартин — martin_idle) и волшебство: кадр 0 петли = поза картинки = кадр 0
+    # волшебства. Поэтому петля портрета идёт по своим часам (_idle_t0): после входа стоит на кадре 0, пока не
+    # сыграет первое волшебство (не дольше MAGIC_HOLD с от входа), волшебство само стартует на стыке петли (кадр 0),
+    # к концу волшебства под ним — кадр 0, и петля после него снова с кадра 0 — скачка позы нет. Клик: стык ближе
+    # MAGIC_SEAM_WAIT с — ждём его, иначе сразу (MAGIC_FADE — переход от текущего кадра петли).
+    MAGIC_HOLD = 3.0
+    MAGIC_SEAM_WAIT = 0.4
 
     def _magic_hero(self):
         """Имя петли «волшебства» героя текущего задания (по портрету) или None — без проверки кадров."""
@@ -8144,22 +8159,90 @@ class Game:
         """Экран итога: герой ещё подпрыгивает (draw_result) или сцена ещё не нарисована — волшебство ждёт."""
         return self._scene_seen != "result" or self.st < self.RESULT_HOP
 
-    def start_magic(self):
-        """Сыграть «волшебство» с начала (True — началось)."""
+    def start_magic(self, at=None):
+        """Сыграть «волшебство» с начала (True — началось); at — с какого момента (стык петли портрета)."""
         name = self.magic_anim()
+        self._magic_at = None
         if not name or self.ride_t0 is not None or self._magic_box()[0] is None:
             return False
+        t0 = self.t if at is None else min(self.t, at)
         if self.scene == "result":
             if self._result_hopping():
                 return False
-            self._magic_next = self.t + self.MAGIC_REPEAT        # следующий сам — через минуту от этого
-        self.magic_t0, self._magic_name, self._magic_auto = self.t, name, False
+            self._magic_next = t0 + self.MAGIC_REPEAT            # следующий сам — через минуту от этого
+        self.magic_t0, self._magic_name, self._magic_auto = t0, name, False
         self.magic_plays += 1
         return True
 
+    def queue_magic(self, click=False):
+        """Волшебство на стыке «живого» портрета: петля вернулась к кадру 0 (поза картинки = кадр 0 волшебства).
+        Портрет не живой (нет петли, «Без анимации», не скачалась) или петля стоит на кадре 0 — сразу. Клик: стык
+        дальше MAGIC_SEAM_WAIT — тоже сразу (переход MAGIC_FADE от текущего кадра). True — началось или ждёт стыка."""
+        if self.magic_t0 is not None or self._magic_at is not None:
+            return False
+        at = self._portrait_seam()
+        if at is None or at <= self.t or (click and at - self.t > self.MAGIC_SEAM_WAIT):
+            return self.start_magic()
+        if not self.magic_anim() or self.ride_t0 is not None or (self.scene == "result" and self._result_hopping()):
+            return False
+        self._magic_at = at
+        return True
+
     def _magic_reset(self):
-        """Новый экран с портретом (задание, итог): волшебство не играет, первый показ впереди."""
-        self.magic_t0, self._magic_auto, self._magic_next = None, True, None
+        """Новый экран с портретом (задание, итог): волшебство не играет, первый показ впереди; петля портрета
+        стоит на кадре 0 до первого волшебства (не дольше MAGIC_HOLD)."""
+        self.magic_t0, self._magic_auto, self._magic_next, self._magic_at = None, True, None, None
+        self._idle_t0, self._screen_t0 = None, self.t
+
+    def _portrait_live(self):
+        """Петля «живого» портрета героя задания (IDLE_LOOPS), если её кадры есть и анимация включена, иначе None."""
+        name = IDLE_LOOPS.get(self.cur.get("client_art")) if self.cur else None
+        if not name or calm() or not anim_web_ready(name) or not anim_count(name):
+            return None
+        return name
+
+    def _portrait_t(self):
+        """Часы петли портрета (задание, итог): от _idle_t0 с кадра 0; до него — кадр 0. Пока играет волшебство:
+        первая половина — кадр петли, на котором оно началось (переход от него в кадр 0 волшебства; на стыке это
+        кадр 0), вторая — кадр 0 (из последнего кадра волшебства — в позу картинки), после — снова с кадра 0.
+        Герой без волшебства — общие часы."""
+        if self._magic_hero() is None:
+            return self.t
+        t0, now = self._idle_t0, self.t
+        if self.magic_t0 is not None:
+            e = magic_index().get(self._magic_name)
+            dur = int(e["n"]) / float(e["fps"]) if e else 0.0
+            if self.t - self.magic_t0 >= dur / 2:
+                t0 = self.magic_t0 + dur
+            else:
+                now = self.magic_t0
+        return 0.0 if t0 is None else max(0.0, now - t0) + 1e-4   # на стыке k·период — кадр 0, не последний
+
+    def _portrait_seam(self):
+        """Ближайший стык петли портрета (момент, когда она снова на кадре 0) или None — портрет не живой."""
+        name = self._portrait_live()
+        if not name:
+            return None
+        if self._idle_t0 is None:
+            return self.t
+        per = anim_count(name) / ANIM_FPS
+        return self._idle_t0 + per * max(0, math.ceil((self.t - self._idle_t0) / per - 1e-6))
+
+    def _blit_portrait(self, surf, box, k_t=None):
+        """Портрет героя задания в боксе box (как load_image): «живой» — кадр петли по _portrait_t (k_t — свои часы),
+        иначе картинка с дыханием blit_idle. True — нарисована петля."""
+        art = self.cur["client_art"]
+        name = self._portrait_live()
+        if name:
+            lb = idle_loop_box(box)
+            img = anim_frame(name, tuple(lb[2:]), self._portrait_t() if k_t is None else k_t)
+            if img is not None:
+                surf.blit(img, lb[:2])
+                self._portrait_drawn = name
+                return True
+        blit_idle(surf, load_image(art, tuple(box[2:]), GHOST), box[:2], self.t)
+        self._portrait_drawn = None
+        return False
 
     def _magic_tick(self):
         """Из update: кадры — в память заранее (первый показ не заикается); первый показ; на итоге — повтор."""
@@ -8169,12 +8252,22 @@ class Game:
             self.magic_t0 = None
             return
         if calm() or self.ride_t0 is not None:               # «Без анимации», проезд — портрет как раньше
-            self.magic_t0 = None
+            if self.magic_t0 is not None or self._idle_t0 is None:
+                self._idle_t0 = self.t                       # петля портрета — с кадра 0
+            self.magic_t0 = self._magic_at = None
             return
         if self.magic_t0 is not None:
             e = magic_index()[self._magic_name]
-            if self.t - self.magic_t0 >= int(e["n"]) / float(e["fps"]):
-                self.magic_t0 = None                         # доиграло — снова статичный портрет
+            end = self.magic_t0 + int(e["n"]) / float(e["fps"])
+            if self.t >= end:
+                self.magic_t0 = None                         # доиграло — снова портрет: петля с кадра 0
+                self._idle_t0 = end
+            return
+        if self._idle_t0 is None and self.t - self._screen_t0 > self.MAGIC_HOLD:
+            self._idle_t0 = self.t                           # первое волшебство не готово — петля портрета пошла
+        if self._magic_at is not None:                       # ждём стыка петли портрета
+            if self.t >= self._magic_at:
+                self.start_magic(self._magic_at)
             return
         if not self.magic_anim():
             return
@@ -8187,13 +8280,13 @@ class Game:
             due = ((self._magic_auto and since >= self.RESULT_DELAY)
                    or (self._magic_next is not None and self.t >= self._magic_next))
             if due and have >= n:
-                self.start_magic()
+                self.queue_magic()                           # на стыке «живого» портрета
             return
         since = self.t - getattr(self, "_job_t0", self.t)
         if self._magic_auto and since > self.MAGIC_AUTO_SECS:
             self._magic_auto = False
         if self._magic_auto and have >= n and since >= self.MAGIC_DELAY:
-            self.start_magic()
+            self.queue_magic()                               # петля портрета ещё на кадре 0 — сразу, иначе на стыке
 
     def _draw_magic(self, surf):
         """Кадр «волшебства» вместо статичного портрета (бокс и граница сверху — _magic_box). False — не играет
@@ -8215,8 +8308,8 @@ class Game:
         if img is None:
             return False
         a = clamp01(min(u, dur - u) / self.MAGIC_FADE)
-        if a < 1:                                            # переход: статичный портрет под кадром
-            blit_idle(surf, load_image(self.cur["client_art"], tuple(box[2:]), GHOST), box[:2], self.t)
+        if a < 1:                                            # переход: портрет под кадром («живой» — кадр петли,
+            self._blit_portrait(surf, box)                   # на котором волшебство началось / кадр 0 к концу)
         clip = pygame.Surface.get_clip(surf)
         top = round(top * _rs(surf))
         pygame.Surface.set_clip(surf, pygame.Rect(0, top, pygame.Surface.get_width(surf),
@@ -8335,7 +8428,13 @@ class Game:
             DR.line(surf, (200, 200, 210), (x - 30 - ln - 20 * i % 50, ly), (x - 30 - 20 * i % 50, ly), 2)
         for i in range(4):                                  # пыль из-под колёс
             add_glow(surf, (x + 40 - i * 30, y + 240), 18, (80, 70, 55), 0.7 - 0.15 * i)
-        blit_idle(surf, img, (x, y + 20 if tech else y), self.t, rock=-3)
+        live = None if tech or art in self.RIDE_FLIP else self._portrait_live()
+        frame = live and anim_frame(live, tuple(idle_loop_box((0, 0, 230, 250))[2:]), self.t)
+        if frame is not None and live:                 # нет петли проезда, а «живой» портрет есть (Мартин,
+            lb = idle_loop_box((x, y, 230, 250))       # браузер: ride_martin не скачалась) — едет он, наклон тот же
+            blit_idle(surf, frame, lb[:2], self.t, rock=-3)
+        else:
+            blit_idle(surf, img, (x, y + 20 if tech else y), self.t, rock=-3)
         if tech:
             blit_idle(surf, load_image(art, (130, 162), GHOST), (x - 100, y - 20), self.t, "float", phase=0.7)
 
@@ -8944,7 +9043,8 @@ class Game:
                     ride_drawn=self._ride_drawn,
                     magic=self._magic_name if self.magic_t0 is not None else None, magic_drawn=self._magic_drawn,
                     magic_plays=self.magic_plays,
-                    martin=getattr(self, "_martin_loop", None))     # вступление/праздник: петля Мартина или None
+                    martin=getattr(self, "_martin_loop", None),     # вступление/праздник: петля Мартина или None
+                    portrait=self._portrait_drawn)                  # задание/итог: петля портрета героя или None
 
     # ---------- геймпад ----------
     def _pad_key(self, k, down=True, mod=0):
@@ -9699,7 +9799,7 @@ class Game:
                 self.show_manual = False
             return
         if (self.magic_t0 is None and self.ride_t0 is None and self.portrait_rect().collidepoint(m)
-                and self.start_magic()):                      # клик/тап по портрету — «волшебство» ещё раз
+                and self.queue_magic(click=True)):                      # клик/тап по портрету — «волшебство» ещё раз
             return
         if TOUCH["on"] and self._hotspot_at(m) is None:          # кружок детали (у него свой запас) — первым
             m = self._touch_snap(m, self._job_touch_targets(), block=(self._chair_rect(),))
@@ -9772,7 +9872,7 @@ class Game:
             self.scene = self._result_next()
             return
         if self.magic_t0 is None and self.portrait_rect().collidepoint(m):
-            self.start_magic()                       # клик/тап по герою — «волшебство» ещё раз
+            self.queue_magic(click=True)             # клик/тап по герою — «волшебство» ещё раз (близкий стык — ждём)
 
     def click_ending(self, m):
         cb = self._credits_btn_rect()
@@ -9925,13 +10025,15 @@ class Game:
         return out
 
     def _scene_loops_web(self):
-        """Браузер: петли Мартина экранов (SCENE_LOOPS, 5,6 МБ) лежат на сайте, не в пакете, — качать заранее: лес —
-        уже на титуле (вступление сразу после него) и во вступлении; праздник — когда до вечеринки остаётся не больше
+        """Браузер: петли Мартина экранов (SCENE_LOOPS, 5,6 МБ) и «живой» Мартин martin_idle лежат на сайте, не в
+        пакете, — качать заранее: martin_idle — с титула (на любом экране: игра могла открыться ссылкой-заданием),
+        лес — уже на титуле (вступление сразу после него) и во вступлении; праздник — когда до вечеринки остаётся не больше
         одного задания (мастерская, итог, гараж), и на самом празднике. Пока не скачалось или сеть
         подвела — Мартин картинкой (idle_img)."""
         sc = self.scene
         if sc in ("title", "intro"):
             anim_web_want(SCENE_LOOPS["intro"][1])
+        anim_web_want(IDLE_LOOPS["martin.png"])          # «живой» Мартин (реплики, его задание) — с титула и дальше
         if sc in ("ending", "credits") or (sc in ("hub", "result", "garage")
                                            and self.user_done_count() >= len(JOBS) - 1):
             anim_web_want(SCENE_LOOPS["ending"][1])
@@ -9968,6 +10070,7 @@ class Game:
         if self.ride_t0 is not None and self.t - self.ride_t0 >= self.ride_secs():
             self.ride_t0 = None
             self.ride_done = True                      # дочитать текст и реплику — итог по «ГОТОВО» (отзыв)
+            self._ride_end_t = self.t                  # «живой» портрет после проезда — с кадра 0
             if self.cur and self.cur.get("track") != "tech":
                 self.ghost_line = "Бартоломью: «Едет как надо! Дочитаешь — жми ГОТОВО.»"
             elif self.cur:
@@ -10790,7 +10893,7 @@ class Game:
         if wave is not None:                                       # в кадрах 385×560 поля: при (230, 260) Мартин был в 1,7 раза
             surf.blit(wave, (mx, HEIGHT - 330))                    # мельче статичного; (230, 290) — тот же рост, ступни на той же линии
         else:
-            blit_idle(surf, load_image("martin.png", (230, 260), GHOST), (mx, HEIGHT - 300), self.t)
+            blit_hero(surf, "martin.png", (mx, HEIGHT - 300, 230, 260), self.t)   # нет кадров — martin_idle / картинка
         gk = ease_back((st - 1.4) / 0.6)
         if gk > 0.01:
             img = ghost_img((190, 240), self.t)
@@ -13734,8 +13837,8 @@ class Game:
         mouse = mouse_pos()
 
         # клиент слева (у героя с «волшебством» — пока оно играет, кадр петли поверх портрета)
-        if not self._draw_magic(surf):
-            blit_idle(surf, load_image(job["client_art"], (150, 190), GHOST), (24, 70), self.t)
+        if not self._draw_magic(surf):            # Мартин (martin_idle) — «живой», без своего дыхания
+            self._blit_portrait(surf, self.PORTRAIT_BOX)
         draw_text(surf, job["client"], (24, 266), 16, WHITE, bold=True)
         if self.ride_t0 is None:
             self._draw_client_bubble(surf)
@@ -13744,8 +13847,8 @@ class Game:
         crect = self._chair_rect()
         if self.ride_t0 is None:
             if self.ride_done:                    # после проезда клиент в починенной коляске (и без анимации —
-                img = load_image(job["client_art"], (230, 250), GHOST)   # «не было картинки проезда»)
-                blit_idle(surf, img, img.get_rect(center=crect.center).topleft, self.t)
+                box = (crect.centerx - 115, crect.centery - 125, 230, 250)   # «не было картинки проезда»); «живой»
+                self._blit_portrait(surf, box, self.t - getattr(self, "_ride_end_t", self.t))   # — с кадра 0
             elif self._m3d_mesh() is not None:
                 self._draw_m3d(surf, crect, mouse)
                 if self._m3d_zoom_on():
@@ -14729,7 +14832,9 @@ class Game:
         # довольный клиент слева, Барти справа
         hop = int(18 * abs(wsin(st * 6)) * max(0.0, 1 - st / 1.6))
         if hop or not self._draw_magic(surf):        # волшебство — после подпрыга, на месте героя (интерфейс сверху)
-            blit_hero(surf, job["client_art"], (24, 300 - hop, 210, 250), self.t)   # Бренна (Гильдия) — петлёй
+            self._blit_portrait(surf, (self.RESULT_BOX[0], self.RESULT_BOX[1] - hop) + self.RESULT_BOX[2:])
+            # Бренна (Гильдия), Мартин — петлёй; Мартин подпрыгивает на кадре 0 (поза картинки) — петля пойдёт
+            # с первым волшебством (_portrait_t), движение не удваивается
         if barty_on():
             blit_idle(surf, ghost_img((150, 200), self.t), (WIDTH - 200, 290), self.t, "float",
                       k=ease_back((st - 0.5) / 0.5))
@@ -15054,8 +15159,97 @@ def _idle_selftest(failures):
                                         f"{'картинку' if calm_on else 'петлю'} в боксе {idle_loop_box(box)}")
                 except Exception as ex:
                     failures.append(f"Экран {sc_name} с Мартином (calm={calm_on}): {ex!r}")
+        _martin_portrait_selftest(failures)
     finally:
         A11Y["calm"] = calm0
+
+
+def _martin_portrait_selftest(failures):
+    """«Живой» Мартин (IDLE_LOOPS martin_idle) в его задании: портрет, пузырь реплики, после проезда, итог — петлёй,
+    «Без анимации» — картинкой; волшебство magic_martin начинается и кончается на кадре 0 петли (поза картинки):
+    первое — пока петля стоит на кадре 0, после него петля с кадра 0, клик у стыка ждёт стыка, далеко — сразу."""
+    name = IDLE_LOOPS.get("martin.png")
+    jid = next((j["id"] for j in JOBS if j.get("client_art") == "martin.png" and j.get("track") != "tech"), None)
+    if not name or not jid or not anim_count(name):
+        failures.append(f"«Живой» Мартин: нет петли {name} или задания с martin.png")
+        return
+    n, sc = anim_count(name), pygame.display.get_surface()
+    per = n / ANIM_FPS
+
+    def fi(g):                                             # кадр петли портрета сейчас
+        return int(g._portrait_t() * ANIM_FPS) % n
+
+    def step(g, k=1, dt=1 / 30):
+        for _ in range(k):
+            g.update(dt)
+            g.draw(sc)
+
+    def click(g, pos):
+        g.handle_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=pos))
+        g.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=pos))
+
+    A11Y["calm"] = False
+    g = Game(headless=True)
+    g.start_job(jid)
+    step(g)
+    if g._portrait_drawn != name or fi(g):
+        failures.append(f"Мартин в задании {jid}: портрет не петлёй {name} на кадре 0 ({g._portrait_drawn}, кадр {fi(g)})")
+    magic = g.magic_anim()
+    if magic:
+        dur = int(magic_index()[magic]["n"]) / float(magic_index()[magic]["fps"])
+        for _ in range(int((Game.MAGIC_HOLD + 1) * 30)):
+            step(g)
+            if g.magic_t0 is not None:
+                break
+        if g.magic_t0 is None or fi(g):
+            failures.append(f"Мартин: волшебство не началось на кадре 0 петли (кадр {fi(g)})")
+        step(g, int((dur - 0.15) * 30))                    # последние доли — под волшебством кадр 0
+        if g.magic_t0 is None or fi(g):
+            failures.append(f"Мартин: к концу волшебства под ним не кадр 0 петли (кадр {fi(g)})")
+        step(g, 10)
+        if g.magic_t0 is not None or g._portrait_drawn != name or fi(g) > 4:
+            failures.append(f"Мартин: после волшебства петля не с кадра 0 (кадр {fi(g)}, {g._portrait_drawn})")
+        pr = g.portrait_rect().center
+        g._idle_t0 = g.t - per + 0.2                       # до стыка 0,2 с: клик ждёт стыка
+        click(g, pr)
+        if g.magic_t0 is not None or g._magic_at is None:
+            failures.append("Мартин: клик у стыка петли не ждёт стыка")
+        at = g._magic_at
+        step(g, 9)
+        if g.magic_t0 is None or at is None or abs(g.magic_t0 - at) > 1e-6 or fi(g):
+            failures.append(f"Мартин: волшебство по клику не началось на стыке (кадр петли {fi(g)})")
+        step(g, int(dur * 30) + 3)
+        g._idle_t0 = g.t - 1.0                             # середина петли: клик — сразу (переход MAGIC_FADE)
+        click(g, pr)
+        if g.magic_t0 is None:
+            failures.append("Мартин: клик посреди петли не запустил волшебство сразу")
+    g.ghost_line = "Мартин: «Проверка.»"                    # пузырь реплики — петлёй (широкий 90×110)
+    _anim_cache.clear()
+    g._draw_ghost_bubble(sc, 300)
+    if (name, tuple(idle_loop_box((24, 300, 90, 110))[2:])) not in _anim_cache:
+        failures.append("Мартин: пузырь реплики не петлёй martin_idle")
+    g.magic_t0 = None                                       # после проезда — петлёй с кадра 0
+    g.phase, g.ride_done, g._ride_end_t = "test", True, g.t
+    _anim_cache.clear()
+    g.draw(sc)
+    if (name, tuple(idle_loop_box((0, 0, 230, 250))[2:])) not in _anim_cache:
+        failures.append("Мартин: после проезда не петлёй martin_idle")
+    g.finish_test()                                         # итог: подпрыг на кадре 0, петлёй
+    step(g, 10)
+    if g.scene != "result" or g._portrait_drawn != name or fi(g):
+        failures.append(f"Мартин на итоге: не петлёй на кадре 0 при подпрыге ({g._portrait_drawn}, кадр {fi(g)})")
+    A11Y["calm"] = True                                     # «Без анимации» — везде картинка
+    gc = Game(headless=True)
+    gc.start_job(jid)
+    _anim_cache.clear()
+    step(gc, 5)
+    gc.ghost_line = "Мартин: «Проверка.»"
+    gc.draw(sc)
+    gc.finish_test()
+    step(gc, 5)
+    if gc._portrait_drawn is not None or any(k[0] == name for k in _anim_cache):
+        failures.append("Мартин «Без анимации»: нарисован петлёй, ждали картинку")
+    A11Y["calm"] = False
 
 
 def run_selftest():

@@ -516,7 +516,8 @@ async def magic(b, mode):
 async def martin(b, mode):
     """Петли Мартина экранов (game.SCENE_LOOPS) лежат на сайте (anim/martin_forest, anim/martin_party), не в пакете.
     ok — лес качается уже на титуле, во вступлении Мартин рисуется петлёй martin_forest; праздник до последнего
-    задания не качается; 404 — сайт кадры не отдаёт: во вступлении Мартин картинкой, без ошибок в консоли."""
+    задания не качается; «живой» Мартин martin_idle (game.IDLE_LOOPS) тоже качается на титуле, в его задании (flat)
+    портрет рисуется петлёй; 404 — сайт кадры не отдаёт: во вступлении и в задании Мартин картинкой, без ошибок."""
     ctx = await b.new_context(viewport={"width": 1280, "height": 720})
     p = Page(await ctx.new_page(), "martin_" + mode)
     asked = []
@@ -530,6 +531,9 @@ async def martin(b, mode):
           f"{p.name}: петля martin_forest скачана ещё на титуле — {want} ({st.get('ride_web')})")
     check("martin_party" not in st.get("ride_web", {}) and not any("/martin_party/" in u for u in asked),
           f"{p.name}: праздник на титуле не качается ({st.get('ride_web')})")
+    st = await p.wait(lambda s: s.get("ride_web", {}).get("martin_idle") == want, f"живой Мартин на титуле: {want}", 60)
+    check(st.get("scene") == "title" and st.get("ride_web", {}).get("martin_idle") == want,
+          f"{p.name}: петля martin_idle скачана ещё на титуле — {want} ({st.get('ride_web')})")
     await p.click(640, 470, 1500)                                # начать
     st = await p.wait(lambda s: s["scene"] == "intro", "вступление")
     st = await p.wait(lambda s: s.get("martin") == ("martin_forest" if mode == "ok" else None) and s["scene"] == "intro",
@@ -539,6 +543,17 @@ async def martin(b, mode):
           f"(martin={st.get('martin')})")
     await p.pg.wait_for_timeout(1000)
     await p.shot("1_intro")
+    await p.click(1125, 667, 2000)                               # пропустить обучение
+    await p.wait(lambda s: s["scene"] == "hub", "мастерская")
+    await p.click(160, 250, 1500)                                # Мартин
+    await p.wait(lambda s: s["scene"] == "job" and s["job"] == "flat", "задание Мартина")
+    live = "martin_idle" if mode == "ok" else None
+    st = await p.wait(lambda s: s.get("portrait") == live, f"портрет Мартина: {live}", 10)
+    check(st.get("portrait") == live,
+          f"{p.name}: в задании портрет Мартина {'петлёй martin_idle' if live else 'картинкой'} "
+          f"(portrait={st.get('portrait')})")
+    await p.pg.wait_for_timeout(1500)
+    await p.shot("2_job")
     p.check_console()
     await ctx.close()
 
