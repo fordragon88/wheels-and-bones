@@ -428,7 +428,7 @@ func check_fit() -> void:
 		if SaveGame.assign_on():               # задание по ссылке: обычный прогресс не трогаем
 			SaveGame.assign_record(c["id"], fails, int(t - case_t0))
 		else:
-			SaveGame.seat_done[c["id"]] = true
+			SaveGame.mark_seat(c["id"])
 			SaveGame.save()
 		Audio.sfx("fanfare")
 		Nav.flash(c["fact"], UI.GOOD, 6)
@@ -462,7 +462,7 @@ func quiz_next() -> void:
 		picked = -1
 	else:
 		quiz_done = true
-		var ok := score >= SeatLogic.QUIZ_PASS
+		var ok := score >= SeatLogic.quiz_pass()
 		say = mentor("pass" if ok else "nopass")
 		if ok:
 			if not SaveGame.assign_on():
@@ -586,7 +586,7 @@ func _place_figure() -> void:
 		fig.place(lay[5], lay[4])
 	else:
 		if quiz_done:
-			var ok := score >= SeatLogic.QUIZ_PASS
+			var ok := score >= SeatLogic.quiz_pass()
 			fig.mode = "puppet"
 			fig.targets = [[CV.get_center().x + 40, CV.get_center().y - 52, UI.GOOD if ok else UI.AMBER, true]]
 			fig.puppet_bad = not ok
@@ -826,11 +826,11 @@ func _draw_fit(ci: CanvasItem) -> void:
 
 func _draw_quiz(ci: CanvasItem) -> void:
 	if quiz_done:
-		var ok := score >= SeatLogic.QUIZ_PASS
+		var ok := score >= SeatLogic.quiz_pass()
 		var cc := CV.get_center()
 		_text_plate(ci, Loc.t("Верно %d из %d" % [score, quiz.size()]), Vector2(cc.x + 40, cc.y - 20), 30,
 			UI.GOOD if ok else UI.AMBER, true, 1)
-		_text_plate(ci, Loc.t("Зачёт по посадке сдан!" if ok else "Для зачёта нужно %d. Перечитай уроки." % SeatLogic.QUIZ_PASS),
+		_text_plate(ci, Loc.t("Зачёт по посадке сдан!" if ok else "Для зачёта нужно %d. Перечитай уроки." % SeatLogic.quiz_pass()),
 			Vector2(cc.x + 40, cc.y + 24), 18, UI.WHITE, false, 1)
 		return
 	var q: Dictionary = quiz[quiz_i]

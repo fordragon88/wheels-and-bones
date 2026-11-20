@@ -140,9 +140,31 @@ static func _b64_ok(s: String) -> bool:
 
 # ---------------- строки из ссылки ----------------
 
-## Печатный ли знак (str.isprintable в Python): без управляющих, форматных и «невидимых» пробелов (кроме обычного).
+## Непечатные диапазоны из Python (sync_content.py → content/data/nonprintable.json, str.isprintable()).
+static var _np: Array = []
+
+
+## Печатный ли знак (str.isprintable в Python): без управляющих, форматных, неназначенных и «невидимых» пробелов
+## (кроме обычного). Есть таблица Python — по ней (двоичный поиск), иначе — по списку ниже (без неназначенных).
 static func _printable(ch: String) -> bool:
 	var c := ch.unicode_at(0)
+	if _np.is_empty():
+		var p := "res://content/data/nonprintable.json"
+		var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(p)) if FileAccess.file_exists(p) else null
+		_np = d["ranges"] if d is Dictionary and d.get("ranges") is Array else [[-1, -1]]
+	if _np.size() > 1:
+		var lo := 0
+		var hi := _np.size() - 1
+		while lo <= hi:
+			var mid := (lo + hi) >> 1
+			var r: Array = _np[mid]
+			if c < int(r[0]):
+				hi = mid - 1
+			elif c > int(r[1]):
+				lo = mid + 1
+			else:
+				return false
+		return true
 	if c < 32 or (c >= 127 and c <= 160) or c == 0xAD:
 		return false
 	if c == 0x1680 or c == 0x180E or (c >= 0x2000 and c <= 0x200F) or (c >= 0x2028 and c <= 0x202F):

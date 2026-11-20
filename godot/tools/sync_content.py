@@ -209,6 +209,7 @@ def game_tables():
                   "tt_spin": G.TT_SPIN,
                   "seat_sliders": {k: list(v) for k, v in game.SEAT_SLIDERS.items()},
                   "seat_quiz_pass": game.SEAT_QUIZ_PASS, "seat_fix": [G.SEAT_FIX_DUR, G.SEAT_FIX_WAIT],
+                  "talk_pace": {"client_idle": list(G.CLIENT_IDLE), "quip_idle": list(G.QUIP_IDLE), "gap": G.TALK_GAP},
                   "intro_slides": [list(x) for x in game.Game(headless=True).intro_slides],
                   "help_keys": [list(x) for x in G.A11Y_KEYS], "setting_help": dict(G.SETTING_HELP),
                   "tool_sound": dict(game.TOOL_SOUND), "rot_tools": sorted(game.ROT_TOOLS),
@@ -224,6 +225,20 @@ def game_tables():
         talk = {"client": game.CLIENT_TALK, "barty": game.BARTY_TALK, "martin": game.MARTIN_TALK,
                 "leg_gags": list(game.LEG_GAGS)}
         json.dump(talk, open(os.path.join(DST, "data", "talk.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        # непечатные знаки по str.isprintable() этого Python (имя «от кого»/заголовок из ссылки, Share.clean_line):
+        # диапазоны [от, до] — в том числе неназначенные (Cn), которых таблица в коде Godot не знает
+        rng, st = [], None
+        for c in range(0x110000):
+            bad = not chr(c).isprintable()
+            if bad and st is None:
+                st = c
+            elif not bad and st is not None:
+                rng.append([st, c - 1])
+                st = None
+        if st is not None:
+            rng.append([st, 0x10FFFF])
+        json.dump({"python": sys.version.split()[0], "unicode": __import__("unicodedata").unidata_version, "ranges": rng},
+                  open(os.path.join(DST, "data", "nonprintable.json"), "w", encoding="utf-8"), separators=(",", ":"))
         return n
     finally:
         os.chdir(cwd)

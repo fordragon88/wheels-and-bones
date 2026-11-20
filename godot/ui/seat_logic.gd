@@ -3,7 +3,9 @@ class_name SeatLogic
 ## список проверок [ключ, верно?, текст] и параметры позы для рисунка. Плюс поза уроков и вопросов зачёта
 ## (_seat_demo_pose, _seat_fix_pose), подпись значения ползунка (seat_val_text), строка мерок.
 
-const QUIZ_PASS := 6
+## Сколько верных ответов нужно для зачёта: game.py SEAT_QUIZ_PASS (game_consts.json → seat_quiz_pass).
+static func quiz_pass() -> int:
+	return int(Content.consts.get("seat_quiz_pass", 6))
 
 
 static func sliders() -> Dictionary:

@@ -10,8 +10,8 @@ extends Screen
 const TEST_BTN := Rect2(UI.W / 2.0 - 170, 560, 340, 64)
 const MANUAL_BTN := Rect2(UI.W - 204, 62, 180, 40)
 const SKIP_BTN := Rect2(UI.W - 384, 60, 170, 26)
-const CLIENT_IDLE := [22.0, 32.0]
-const TALK_GAP := 5.0
+var CLIENT_IDLE: Array = Content.consts.get("talk_pace", {}).get("client_idle", [22.0, 32.0])   # game.py Game.CLIENT_IDLE (game_consts.json)
+var TALK_GAP: float = float(Content.consts.get("talk_pace", {}).get("gap", 5.0))
 
 var job: Dictionary = {}
 var exam: bool = false
@@ -551,15 +551,7 @@ func finish_test() -> void:
 		return
 	var stars := maxi(1, 3 - mistakes / 2)
 	var jid: String = job["id"]
-	SaveGame.done[jid] = true
-	var found := false
-	for g: Array in SaveGame.garage:
-		if g[0] == jid:
-			found = true
-			if stars > int(g[1]):
-				g[1] = stars
-	if not found:
-		SaveGame.garage.append([jid, stars])
+	SaveGame.mark_job(jid, stars)
 	var gag := ""
 	if randf() < 0.5:
 		var legs: Array = Content.talk.get("leg_gags", []).filter(func(g: String) -> bool:
@@ -586,7 +578,7 @@ func go_back() -> void:
 		esc_t = 0.0
 		Nav.go("guild")
 		return
-	esc_t = 2.5
+	esc_t = Settings.esc_secs()
 	Nav.flash("Ещё раз Esc — покинуть ремонт (прогресс задания сбросится).", UI.AMBER, esc_t)
 
 
@@ -643,18 +635,20 @@ func _show_client(line: String) -> void:
 	ghost_quip_until = t + maxf(7.0, 3.0 + line.length() / 12.0)
 
 
-func _pick(kind: String) -> String:
-	var lines: Array = Content.client_talk(job["id"]).get(kind, [])
+func _pick(kind: String, key: String = "", from: Variant = null) -> String:
+	var lines: Array = from if from is Array else Content.client_talk(job["id"]).get(kind, [])
+	if key == "":
+		key = kind
 	if lines.is_empty():
 		return ""
-	var used: Array = talk_used.get(kind, [])
+	var used: Array = talk_used.get(key, [])
 	var left: Array = lines.filter(func(l: String) -> bool: return not l in used)
 	if left.is_empty():
 		used.clear()
 		left = lines.duplicate()
 	var line: String = left.pick_random()
 	used.append(line)
-	talk_used[kind] = used
+	talk_used[key] = used
 	return line
 
 
@@ -669,8 +663,22 @@ func react_mistake() -> void:
 func react_good() -> void:
 	if exam or Settings.quiet_talk():
 		return
-	if randf() < 0.3:
+	var r := randf()                             # как react_good в game.py: изредка — и Барти
+	if r < 0.3:
 		talk_later = [t + 1.8, "client", "good"]
+	elif r < 0.42:
+		talk_later = [t + 1.8, "barty", "good"]
+
+
+## Шутка Барти в пузыре наставника (barty_quip в game.py; в Гильдии кроме экзамена).
+func barty_quip(kind: String, secs: float = 6.5) -> void:
+	if exam or not Settings.barty_on() or Settings.quiet_talk():
+		return
+	var line := _pick(kind, "b:" + kind, Content.talk.get("barty", {}).get(kind, []))
+	if line != "":
+		ghost_quip = line
+		ghost_quip_until = t + maxf(secs, 3.0 + line.length() / 12.0)
+		last_talk_t = t
 
 
 func _talk_tick() -> void:
@@ -691,7 +699,10 @@ func _talk_tick() -> void:
 			return
 		var later := talk_later
 		talk_later = []
-		_show_client(_pick(later[2]))
+		if later[1] == "barty":
+			barty_quip(later[2], 5.0)
+		else:
+			_show_client(_pick(later[2]))
 		return
 	if phase == "test" or exam:
 		return
