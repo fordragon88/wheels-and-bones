@@ -419,7 +419,7 @@ async def ride(b, mode):
     ctx = await b.new_context(viewport={"width": 1280, "height": 720})
     p = Page(await ctx.new_page(), "ride_" + mode)
     asked = []
-    p.pg.on("request", lambda r: asked.append(r.url) if "/anim/" in r.url else None)
+    p.pg.on("request", lambda r: asked.append(r.url) if "/anim/ride_" in r.url or "/anim/magic_" in r.url else None)
     if mode == "404":
         await p.pg.route("**/anim/ride_*/**", lambda r: r.fulfill(status=404, body="no"))
     await p.boot()
@@ -435,8 +435,9 @@ async def ride(b, mode):
     check(st.get("ride_web", {}).get("ride_martin") == want, f"{p.name}: петля Мартина с сайта — {want} ({st.get('ride_web')})")
     mine = {"ride_martin", "magic_martin"}                      # у Мартина с 12.11 есть и волшебство на портрете
     other = sorted({u.split("/anim/")[1].split("/")[0] for u in asked} - mine)
-    check("ride_martin" in st.get("ride_web", {}) and set(st.get("ride_web", {})) <= mine and not other,
-          f"{p.name}: качается только петля открытого героя ({list(st.get('ride_web', {}))}, другие запросы: {other})")
+    heroes = {k for k in st.get("ride_web", {}) if k.startswith(("ride_", "magic_"))}   # martin_forest — с титула
+    check("ride_martin" in heroes and heroes <= mine and not other,
+          f"{p.name}: качается только петля открытого героя ({sorted(heroes)}, другие запросы: {other})")
     for y in (114, 156):                                         # осмотр: две строки списка деталей
         await p.click(1120, y, 700)
     for i in range(3):                                           # диагноз: варианты по очереди, пока не ремонт
@@ -473,7 +474,7 @@ async def magic(b, mode):
     ctx = await b.new_context(viewport={"width": 1280, "height": 720})
     p = Page(await ctx.new_page(), "magic_" + mode)
     asked = []
-    p.pg.on("request", lambda r: asked.append(r.url) if "/anim/" in r.url else None)
+    p.pg.on("request", lambda r: asked.append(r.url) if "/anim/ride_" in r.url or "/anim/magic_" in r.url else None)
     if mode == "404":
         await p.pg.route("**/anim/magic_*/**", lambda r: r.fulfill(status=404, body="no"))
     await p.boot()
@@ -512,6 +513,36 @@ async def magic(b, mode):
     await ctx.close()
 
 
+async def martin(b, mode):
+    """Петли Мартина экранов (game.SCENE_LOOPS) лежат на сайте (anim/martin_forest, anim/martin_party), не в пакете.
+    ok — лес качается уже на титуле, во вступлении Мартин рисуется петлёй martin_forest; праздник до последнего
+    задания не качается; 404 — сайт кадры не отдаёт: во вступлении Мартин картинкой, без ошибок в консоли."""
+    ctx = await b.new_context(viewport={"width": 1280, "height": 720})
+    p = Page(await ctx.new_page(), "martin_" + mode)
+    asked = []
+    p.pg.on("request", lambda r: asked.append(r.url) if "/anim/martin_" in r.url else None)
+    if mode == "404":
+        await p.pg.route("**/anim/martin_*/**", lambda r: r.fulfill(status=404, body="no"))
+    await p.boot()
+    want = "ready" if mode == "ok" else "failed"
+    st = await p.wait(lambda s: s.get("ride_web", {}).get("martin_forest") == want, f"лес Мартина на титуле: {want}", 60)
+    check(st.get("scene") == "title" and st.get("ride_web", {}).get("martin_forest") == want,
+          f"{p.name}: петля martin_forest скачана ещё на титуле — {want} ({st.get('ride_web')})")
+    check("martin_party" not in st.get("ride_web", {}) and not any("/martin_party/" in u for u in asked),
+          f"{p.name}: праздник на титуле не качается ({st.get('ride_web')})")
+    await p.click(640, 470, 1500)                                # начать
+    st = await p.wait(lambda s: s["scene"] == "intro", "вступление")
+    st = await p.wait(lambda s: s.get("martin") == ("martin_forest" if mode == "ok" else None) and s["scene"] == "intro",
+                      "Мартин во вступлении", 10)
+    check(st.get("martin") == ("martin_forest" if mode == "ok" else None),
+          f"{p.name}: во вступлении Мартин {'петлёй martin_forest' if mode == 'ok' else 'картинкой'} "
+          f"(martin={st.get('martin')})")
+    await p.pg.wait_for_timeout(1000)
+    await p.shot("1_intro")
+    p.check_console()
+    await ctx.close()
+
+
 async def main():
     os.makedirs(SHOTS, exist_ok=True)
     for f in os.listdir(SHOTS):
@@ -520,7 +551,7 @@ async def main():
         for fn, args in ((desktop, ("site", 1100, 620, 1.0)), (desktop, ("full", 1920, 1080, 1.0)),
                          (desktop, ("laptop125", 1366, 768, 1.25)), (phone, ()), (tablet, ()), (fps, ()),
                          (gamepad, ()), (links, ()), (ride, ("ok",)), (ride, ("404",)),
-                         (magic, ("ok",)), (magic, ("404",))):
+                         (magic, ("ok",)), (magic, ("404",)), (martin, ("ok",)), (martin, ("404",))):
             print(f"— {fn.__name__} {args[0] if args else ''}", flush=True)
             b = await pw.chromium.launch(args=["--autoplay-policy=no-user-gesture-required", "--mute-audio"])   # свой браузер на
             try:                                                                                # сценарий

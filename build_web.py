@@ -50,11 +50,14 @@ def _bleed(im):
     return Image.fromarray(np.uint8(np.clip(out, 0, 255)))
 
 
-WEB_LOOPS = ("ride_", "magic_")          # петли героев, которые качаются с сайта (проезд, «волшебство» на портрете)
+# петли, которые качаются с сайта: проезд, «волшебство» на портрете и петли Мартина экранов (game.SCENE_LOOPS:
+# лес во вступлении, праздник; 5,6 МБ — игра качает их заранее, на титуле и перед вечеринкой)
+WEB_LOOPS = ("ride_", "magic_", "martin_forest", "martin_party")
 
 
 def web_loops():
-    """Петли героев assets/anim/ride_<имя>/ и magic_<имя>/ (NN.jpg + NN.a.png подряд с 00) -> {имя: кадров}.
+    """Петли героев assets/anim/ride_<имя>/, magic_<имя>/ и петли экранов Мартина (WEB_LOOPS; NN.jpg + NN.a.png
+    подряд с 00) -> {имя: кадров}.
     В пакет игры не кладутся: build() выкладывает их рядом с игрой (build/web/anim/), браузер качает петли героя,
     когда открыто его задание (game.AnimWeb); в пакете — только этот список (assets/anim/web_index.json) и
     раскладка «волшебства» assets/anim/magic_index.json."""
