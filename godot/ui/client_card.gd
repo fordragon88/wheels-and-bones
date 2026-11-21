@@ -64,8 +64,18 @@ func _draw_content(b: GameButton, r: Rect2) -> void:
 		if nl <= 2 and tl >= 1:
 			break
 	var ny := UI.draw_wrapped(b, client, r.position + Vector2(12, 162), r.size.x - 24, nsz, UI.WHITE, false, 0, -1, 2)
-	UI.draw_wrapped(b, title, Vector2(r.position.x + 12, ny + 2), r.size.x - 24, 12, UI.GREY, false, 2, -1,
-		maxi(1, mini(4 - mini(nl, 2), tl)))
+	var tsz := 12                                # имя в 2 строки — поломке до 2 строк, если влезает
+	var tmax := maxi(1, mini(4 - mini(nl, 2), tl))
+	if tl < 1:                                   # 150 %: места нет — поломка мельче (до 9); не влезла и так — не рисуем
+		var room := r.size.y - ky_off - 4 - (ny - r.position.y + 2)   # (имя и «РУЧНАЯ/ЭЛЕКТРО» важнее, game.py)
+		tsz = 0
+		for s: int in [11, 10, 9]:
+			if UI.line_height(s) <= room:
+				tsz = s
+				break
+		tmax = 1
+	if tsz > 0:
+		UI.draw_wrapped(b, title, Vector2(r.position.x + 12, ny + 2), r.size.x - 24, tsz, UI.GREY, false, 2, -1, tmax)
 	var power: bool = job.get("kind") == "power"
 	var ky := r.end.y - ky_off
 	var kr := UI.draw_text(b, Loc.t("ЭЛЕКТРО" if power else "РУЧНАЯ"), Vector2(r.position.x + 12, ky), 12,

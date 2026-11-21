@@ -183,8 +183,10 @@ func _draw_card() -> void:
 			_card.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(10, floorf((info.size.y - isz) / 2.0), isz, isz)), false)
 		UI.draw_text(_card, (Loc.t("В РУКЕ: ") if in_hand else "") + Loc.t(Content.tools[tid]["name"]),
 			Vector2(isz + 22, 5 if low else 10), 16 if low else 18, UI.AMBER if in_hand else UI.WHITE, true)
-		UI.draw_wrapped(_card, Loc.t(Content.tools[tid]["hint"]), Vector2(isz + 22, 27 if low else 36), info.size.x - isz - 34,
-			13 if low else 15, UI.GREY)
+		var hint := Loc.t(Content.tools[tid]["hint"])   # 150 %: описание — мельче, пока не поместится в карточку
+		var hy := 27.0 if low else 36.0
+		UI.draw_wrapped(_card, hint, Vector2(isz + 22, hy), info.size.x - isz - 34,
+			UI.fit_wrapped_size(hint, info.size.x - isz - 34, 13 if low else 15, info.size.y - 4 - hy, 9), UI.GREY)
 	elif not want.is_empty():
 		UI.draw_wrapped(_card, Loc.t("Обучение: нужный инструмент обведён зелёным — возьми его, потом коснись детали в зелёном кружке."
 			if UI.touch() else "Обучение: нужный инструмент обведён зелёным — возьми его, потом кликни деталь в зелёном кружке."),

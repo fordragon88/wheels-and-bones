@@ -89,8 +89,11 @@ func _draw_deco() -> void:
 	_deco.draw_rect(dip, Color8(40, 34, 20, 240))
 	UI.draw_round_rect(_deco, dip, Color(0, 0, 0, 0), UI.AMBER, 3, 10)
 	UI.draw_text(_deco, Loc.t("— ДИПЛОМ ГИЛЬДИИ КОЛЁСНИКОВ —"), Vector2(dip.get_center().x, dip.position.y + 16), 20, UI.AMBER, true, 1)
-	UI.draw_text(_deco, Loc.t("Мартин, зомби — сертифицированный техник по ремонту кресел-колясок"),
-		Vector2(dip.get_center().x, dip.position.y + 52), 17, UI.WHITE, false, 1)
+	var dline := Loc.t("Мартин, зомби — сертифицированный техник по ремонту кресел-колясок")
+	var dsz := 17                                # 150 %: строка диплома — в ширину плашки (мельче, по центру)
+	while dsz > 11 and UI.text_width(dline, dsz) > dip.size.x - 32:
+		dsz -= 1
+	UI.draw_text(_deco, dline, Vector2(dip.get_center().x, dip.position.y + 52), dsz, UI.WHITE, false, 1)
 	UI.draw_text(_deco, Loc.t("принято под надзором Мастерицы Бренны (посмертно)"), Vector2(dip.get_center().x, dip.position.y + 84),
 		13, UI.GREY, false, 1)
 	var bt := Loc.t("Бренна: «Сдано. И вот ещё что, Бартоломью... я помню тебя. Ты задавал хорошие вопросы.»")
