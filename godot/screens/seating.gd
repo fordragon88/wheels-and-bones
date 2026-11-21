@@ -1049,8 +1049,8 @@ static var _row_cache := {}
 ## Раскладка подписи кнопки: [иконка px, кегль, строки]. Уступки по порядку: иконка 44 при кегле base, base − 1
 ## (в 1–2 строки), потом иконка 32, потом без иконки; не влезло и так — кегль ещё меньше (до 9), строк не больше 2.
 func _row_fit(text: String, w: float, base: int, bold: bool, with_icon := true) -> Array:
-	var key := "%s|%d|%d|%s|%s|%s|%s" % [text, w, base, bold, Settings.a11y.get("text", 0), Settings.easy_font(),
-		with_icon]
+	# множитель текста, а не выбор игрока: на вкладке примерки потолок 125 % (text_cap) — при 150 % раскладка как при 125 %
+	var key := "%s|%d|%d|%s|%s|%s|%s" % [text, w, base, bold, Settings.text_k(), Settings.easy_font(), with_icon]
 	if _row_cache.has(key):
 		return _row_cache[key]
 	var out: Array = []
@@ -1110,12 +1110,36 @@ func _draw_lesson_btn(b: GameButton, r: Rect2) -> void:
 		i == lesson)
 
 
+func _case_label(i: int) -> String:
+	return ("✔ " if SaveGame.is_done(cases()[i]["id"]) else "") + Loc.t(cases()[i]["client"])
+
+
+## Телефон: портреты на кнопках клиентов — у всех или ни у кого. С портретом имя — портрет 44 или 32 и кегль 14 или
+## 13 (_row_fit: не больше одной ступени мельче соседей); если хоть одно имя так не помещается — портретов нет у всех
+## (единообразно), имена — без иконки, как раньше. Раскладка подписей — в text_sizes["cases"] (проверки).
+func case_icons() -> bool:
+	var w := list_rect(0).size.x
+	var all := true
+	var lay := PackedStringArray()
+	for i: int in SaveGame.seat_idx():
+		var f := _row_fit(_case_label(i), w, 14, false, true)
+		lay.append("%d/%d" % [int(f[0]), int(f[1])])
+		if float(f[0]) <= 0.0:
+			all = false
+	if not all:
+		lay.clear()
+		for i: int in SaveGame.seat_idx():
+			lay.append("0/%d" % int(_row_fit(_case_label(i), w, 14, false, false)[1]))
+	text_sizes["cases"] = " ".join(lay)
+	return all
+
+
 func _draw_case_btn(b: GameButton, r: Rect2) -> void:
 	var i := int(b.get_meta("i"))
 	var done := SaveGame.is_done(cases()[i]["id"])
 	if UI.phone():
-		_draw_row(b, r, ("✔ " if done else "") + Loc.t(cases()[i]["client"]), 14, false,
-			func(ci: CanvasItem, box: Rect2) -> void: _draw_case_icon(ci, i, box))
+		_draw_row(b, r, _case_label(i), 14, false,
+			(func(ci: CanvasItem, box: Rect2) -> void: _draw_case_icon(ci, i, box)) if case_icons() else Callable())
 		return
 	_fit(b, ("✔ " if done else "") + Loc.t(cases()[i]["client"]), r.position + Vector2(10, 8), r.size.x - 20, 14, UI.WHITE)
 

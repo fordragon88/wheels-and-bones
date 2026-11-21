@@ -273,8 +273,9 @@ func run(runner: Node) -> String:
 	return summary(true, on) + "; выключен: %d состояний как эталон (расхождений %d)" % [n_off, n_diff]
 
 
-## Кегли текста Кабинета посадки (seating.gd text_sizes): каждый урок, клиент, вопрос — при RU/EN, 100/125/150 %,
-## обычный и «лёгкий» шрифт (лёгкий — только EN). Ключ «ru 150 lesson 3» → {lesson|warn|q|say: кегль}.
+## Кегли текста Кабинета посадки (seating.gd text_sizes): каждый урок, клиент, вопрос — при RU/EN, 100/112/125/150 %,
+## обычный и «лёгкий» шрифт; у примерки — и подписи кнопок клиентов («cases»: портрет/кегль, 0 — без портрета).
+## Ключ «ru 150 lesson 3» → {lesson|warn|q|say|cases: кегль}.
 ##   … --only seat-sizes [--phone 0|1]  → tests/out/seat_sizes_<0|1>.json
 func seat_sizes(runner: Node, on: bool) -> Dictionary:
 	R = runner
@@ -287,8 +288,8 @@ func seat_sizes(runner: Node, on: bool) -> Dictionary:
 	Settings.a11y["instant"] = true
 	var out := {}
 	for lang: String in ["ru", "en"]:
-		for t: int in [0, 2, 3]:
-			for easy: bool in ([false, true] if lang == "en" else [false]):
+		for t: int in [0, 1, 2, 3]:
+			for easy: bool in [false, true]:
 				Settings.lang = lang
 				Loc.code = lang
 				Settings.a11y["text"] = t
@@ -310,6 +311,12 @@ func seat_sizes(runner: Node, on: bool) -> Dictionary:
 					scr.pick_case(i)
 					await R._frames(2)
 					out["%s fit %d" % [pre, i + 1]] = scr.text_sizes.duplicate()
+				for c: Dictionary in scr.cases():             # все клиенты пройдены — подписи «✔ Имя» (длиннее)
+					SaveGame.seat_done[c["id"]] = true
+				scr.refresh()
+				await R._frames(2)
+				out["%s fit done" % pre] = scr.text_sizes.duplicate()
+				SaveGame.seat_done.clear()
 				scr.set_tab("quiz")
 				for i in scr.quiz.size():
 					scr.quiz_i = i
