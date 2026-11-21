@@ -96,7 +96,7 @@ build_exe.bat                  # один файл dist\WheelsAndBones.exe (PyIn
 | `assets/fonts/` | шрифты и их лицензии |
 | `tools/` | portable Blender, `render_in/`/`render_out/` кадров; не в git |
 | `CLAUDE.md`, `GEMINI.md`, `MUSE_3D_TASK.md` | указатели для агентов (читать AGENTS.md); задание для Muse по 3D (архив) |
-| `godot/` (ветка `godot-port`) | **перенос на Godot 4.7.2**: проект, план и состояние — `godot/PORT_PLAN.md`; содержание берётся из `assets/` скриптом `godot/tools/sync_content.py` (`godot/content/` не в git); самопроверка `tests/selftest.gd`, снимки `tests/shots.gd`, эталоны pygame `tests/ref/`; браузерная сборка — `python godot/tools/build_web.py [--base-url …]` → `godot/build/web/` (не в git; выкладывать папку целиком), проверка в Chromium — `python godot/tools/web_smoke.py` (скриншоты `godot/tests/web_shots/`) |
+| `godot/` (ветка `godot-port`) | **перенос на Godot 4.7.2**: проект, план и состояние — `godot/PORT_PLAN.md`; содержание берётся из `assets/` скриптом `godot/tools/sync_content.py` (`godot/content/` не в git); самопроверка `tests/selftest.gd`, снимки `tests/shots.gd`, эталоны pygame `tests/ref/`; браузерная сборка — `python godot/tools/build_web.py [--base-url …]` → `godot/build/web/` (не в git; выкладывать папку целиком), проверка — `python godot/tools/web_smoke.py [--browser firefox|webkit]` (Chromium по умолчанию; скриншоты `godot/tests/web_shots/[<движок>/]`) |
 
 ## 4. Устройство game.py (по разделам сверху вниз)
 
@@ -737,6 +737,29 @@ python i18n_work/build_lang.py       # перевод полон
 
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
+
+- 2026-11-21 — Claude (Opus 5.5), ветка `godot-port` — **Godot в браузере: Firefox и WebKit, телефон при крупном
+  тексте, хвосты аудита 20.11, уроки посадки с «лёгким» шрифтом** (слияние main 51b44a1; коммиты 0bb6191, 2f33b28,
+  39ccda9, 974cec3). (1) `web_smoke.py --browser firefox|webkit`: звук в ноль без `--mute-audio` (профиль Firefox
+  `media.volume_scale` + init-скрипт `MUTE_JS`), без CDP — экран телефона подменой, кириллица событиями страницы,
+  буфер — что принял `writeText`; perf/prof/screens/bg — «пропущено: только Chromium». Исправлено в игре: без Web Audio
+  (WebKit Playwright) — `Audio._silent` (Godot сыпал «sample playback»), F2 без `SpeechSynthesisUtterance` не падает.
+  WebKit: нет OffscreenCanvas — кадры распаковывает игра (3,2 мс/кадр в игровом кадре), без ошибок. (2) Телефон
+  740/780×360 и компьютер 1920×1080 — картинка та же; найдено: режим касаний game.py (`TOUCH["on"]`, «тап/коснись», без
+  подсказок клавиш) не был перенесён — `UI.touch()` (`pointer: coarse`) и те же строки; в RU строка титула «M — sound…»
+  — на языке игры. Не перенесены запасы попадания пальцем (`inflate(18)`) — решение владельца. Наезды при 150 % (подсказка
+  осмотра под диагнозами, заголовок про-задания под «ПРОПУСТИТЬ», вопрос «90-90-90» на ответе…) — так же в game.py, не
+  трогались. (3) web_smoke `zoom` (50–300 % × dpr × `?res=`), `assign` (ссылка при другом задании, «Назад»/«Вперёд» — как
+  game.py), `pad` (найдено: нет подсказки «Геймпад подключён» и вечный повтор стрелки после выдёргивания — `Nav.
+  _on_pad_connection`), `bg` (фон 70/300 с посреди насоса и проезда — ok). (4) Уроки посадки с «лёгким» шрифтом: размер
+  пунктов — выбор game.py (`sync_content.py seat_lesson_fit` → `content/data/seat_lesson_fit.json`, по md5 текстов);
+  коэффициента ширины нет (SDL_ttf/Godot 0,966–1,024 со сменой знака). Осталось RU 112 % урок 4: Godot 14, pygame 15.
+  Проверки: GODOT SELFTEST OK (KB ORDER 173/1849/8 известных; с клавиатуры 21+6), check_share 0 расхождений, SAVE COMPAT
+  12/156/0, FEEDBACK COMPARE 14 ok, LOOP SHIFT OK; web_smoke Chromium 253 ok / Firefox 254 ok / WebKit 252 ok — 0 FAIL;
+  телефон ×6 (hub, диагноз, ремонт, урок посадки, гараж) — 60 к/с. Окончания строк сверены байтами — без смен. (godot/tools/web_smoke.py, sync_content.py,
+  godot/autoload/audio.gd, speech.gd, web.gd, nav.gd, content.gd, godot/ui/ui.gd, mini_game.gd, tool_panel.gd,
+  godot/screens/title.gd, intro.gd, credits.gd, ending.gd, job.gd, seating.gd, godot/tests/selftest_runner.gd,
+  godot/PORT_PLAN.md)
 
 - 2026-11-20 — Claude (Fable 5.2) — **страница Release v0.5** (владелец: «почему 0.4, мы же перешли на 0.5?» → «Да, заведи v0.5»). Тег `v0.5` на `main` 3bb9841, `gh release create v0.5` — «Wheels & Bones v0.5», Latest, с сегодняшним exe (181 224 408 байт, sha256 068220dd…) и заметками о выпуске по-английски (проезды героев, «волшебство», живые Мартин/Барти/Бренна, ссылки-задания и коды, исправления). На страницу v0.4 возвращён её октябрьский exe из `backups/WheelsAndBones_v0.4-stable.exe` (128 543 289 байт; его selftest — OK): до этого с 16.11 под названием v0.4 лежал exe версии 0.5. `releases/latest/download/WheelsAndBones.exe` отдаёт v0.5 (200). Блок WordPress ссылается на общий список `…/releases` — перевставлять не нужно. §10 поправлен: свежий exe грузить в v0.5 (AGENTS.md).
 - 2026-11-20 — Claude (Fable 5.2) — **exe обновлён второй раз за день** (владелец: «Да, обнови exe»). `build_exe.bat` из `main` (96c767d), 20.11 17:20, 181,2 МБ (181 224 408 байт), sha256 068220dd…; `dist/WheelsAndBones.exe --selftest` — SELFTEST OK (в т. ч. «стык петля/волшебство/картинка: 0.116 px»); загружен в Release `v0.4` (`gh release upload --clobber`). В окне exe не запускался. Владелец спросил, почему «0.4», если игра уже 0.5: `GAME_VERSION` = 0.5, а страница Release на GitHub называется v0.4 с 26.10 и не переименовывалась — решение о новой странице v0.5 за владельцем (AGENTS.md).

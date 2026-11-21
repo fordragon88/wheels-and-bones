@@ -649,7 +649,8 @@ Playwright 1.61: Firefox 151 (`firefox-1532`), WebKit 26.5 (`webkit-2311`). **We
 | fsexit | ok | исправлено (тест): «окно = экран» подменой, 4 с — с загрузки | ok |
 | perf, prof, screens, bg | ok | пропущено: только Chromium (CDP) | пропущено: только Chromium (CDP) |
 
-Итог прогонов 21.11 (сборка с правками): Firefox — 249 ok + 3 FAIL fsexit (тест), после правки теста fsexit + a11y — 31 ok, 0 FAIL; WebKit — 250 ok, 0 FAIL. Осталось: снимки WebKit
+Итог прогонов 21.11 (итоговая сборка `wnb-848c80a902.pck`, весь список без perf): Chromium 253 ok (с perf), Firefox
+254 ok, WebKit 252 ok — 0 FAIL. Осталось: снимки WebKit
 после смены размера окна — без картинки игры (холст WebGL пропадает со снимка даже на пустой странице с одним
 `gl.clear` — особенность Playwright WebKit под Windows; состояние, клики и проверки при этом верны), так что вид после
 поворота/ресайза в Safari — только на устройстве.
