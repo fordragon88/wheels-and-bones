@@ -17,7 +17,7 @@ const EXCEPT := {
 
 ## Ключевые экраны самопроверки (телефон): то, что перестроено.
 const KEY_STATES := ["hub", "job_flat_diagnose", "job_flat_inspected", "job_joystick_inspected", "job_flat_repair",
-	"result_lift", "garage", "garage_open", "settings_sound", "settings_graphics", "settings_access", "settings_game",
+	"result_lift", "garage", "garage_open", "mini_pump", "mini_gap", "mini_ping", "mini_meter", "settings_sound", "settings_graphics", "settings_access", "settings_game",
 	"feedback_general", "feedback_dispute", "share_paste", "share_confirm", "hub_assign", "share_summary", "share_builder"]
 
 
@@ -69,7 +69,7 @@ static func targets() -> Array:
 			elif c is BaseButton:
 				if (c as BaseButton).disabled:
 					continue
-				kind = "btn"
+				kind = "circle" if c is GameButton and (c as GameButton).hit_circle else "btn"
 			elif A11y.is_slider(c) or str(c.name).begins_with("Slider_"):
 				kind = "slider"
 			elif c.has_meta("phone_target"):              # своя зона попадания (спицы, шкала…): Rect2 холста
@@ -120,6 +120,14 @@ static func analyze(state: String, ts: Array) -> Dictionary:
 				continue
 			var ra: Rect2 = a["rect"]
 			var rb: Rect2 = b["rect"]
+			if a["kind"] == "circle" and b["kind"] == "circle":      # круглые зоны: по расстоянию центров
+				var dc := ra.get_center().distance_to(rb.get_center())
+				var rs := (minf(ra.size.x, ra.size.y) + minf(rb.size.x, rb.size.y)) / 2.0
+				if dc < rs - 0.01:
+					over.append([a["name"], b["name"]])
+				elif dc < rs + UI.PHONE_GAP - 0.01:
+					close.append([a["name"], b["name"]])
+				continue
 			var ex := _except(state, a["name"] + "&" + b["name"]) != "" or _except(state, b["name"] + "&" + a["name"]) != ""
 			if ex:
 				continue

@@ -12,7 +12,18 @@ signal solved
 signal missed(msg: String, secs: float)
 signal closed
 
-const P := Rect2(280, 150, 720, 440)
+const P0 := Rect2(280, 150, 720, 440)
+const PP := Rect2(200, 64, 880, 640)      # телефонный режим: окно выше и шире (спицы по кругу 56, «ПОЗЖЕ» 56)
+var P: Rect2:
+	get:
+		return PP if UI.phone() else P0
+const PH_SPOKE_R := 130                   # телефон: кружки спиц 56 на радиусе 130 (между соседними > 8)
+const PH_RIM_R := 170
+
+
+## Центр колеса «спиц».
+func ping_center() -> Vector2:
+	return Vector2(P.get_center().x, P.position.y + (250 if UI.phone() else 230))
 
 var step: Dictionary = {}
 var cfg: Dictionary = {}
@@ -51,7 +62,8 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	var cancel := GameButton.make(Rect2(P.end.x - 160, P.end.y - 56, 140, 42), "ПОЗЖЕ", UI.GREY)
+	var cancel := GameButton.make(Rect2(P.end.x - 160, P.end.y - 64, 140, 56) if UI.phone()
+		else Rect2(P.end.x - 160, P.end.y - 56, 140, 42), "ПОЗЖЕ", UI.GREY)
 	cancel.name = "Later"
 	cancel.pressed.connect(close)
 	match kind:
@@ -65,17 +77,24 @@ func _ready() -> void:
 			_track.mini = self
 			_track.position = Vector2(P.position.x + 60, P.position.y + 170)
 			_track.size = Vector2(600, 30)
+			if UI.phone():                         # телефон: зона пальца 56 (шкала рисуется прежней толщины)
+				_track.position = Vector2(P.get_center().x - 300, P.position.y + 157)
+				_track.size = Vector2(600, 56)
 			UI.touch_block(_track)                     # _click_mini: дорожка зазора — без переноса (block)
 			add_child(_track)
 			_btn("Check", Rect2(P.get_center().x - 130, P.end.y - 130, 260, 56), "ПРОВЕРИТЬ", UI.GOOD, gap_check)
 			_first = _track
 		"ping":
-			var c := Vector2(P.get_center().x, P.position.y + 230)
+			var c := ping_center()
 			var total := int(cfg["total"])
 			for i in total:
 				var ang := deg_to_rad(i * (360.0 / total) - 90)
-				var at := c + Vector2(cos(ang), sin(ang)) * 95
+				var at := c + Vector2(cos(ang), sin(ang)) * (PH_SPOKE_R if UI.phone() else 95)
 				var b := GameButton.make(Rect2(int(at.x) - 17, int(at.y) - 17, 34, 34), "", UI.AMBER)
+				if UI.phone():                     # телефон: кружок 56, попадание — по кругу (соседи не перекрываются)
+					b.position = Vector2(int(at.x) - 28, int(at.y) - 28)
+					b.size = Vector2(56, 56)
+					b.hit_circle = true
 				b.name = "Spoke_%d" % i
 				b.plain = true
 				b.set_meta("i", i)
@@ -291,7 +310,7 @@ func _draw() -> void:
 
 
 func _draw_pump() -> void:
-	var bar := Rect2(P.position.x + 60, P.position.y + 150, 600, 36)
+	var bar := Rect2(P.get_center().x - 300 if UI.phone() else P.position.x + 60, P.position.y + 150, 600, 36)
 	var mx := float(cfg["mx"])
 	UI.draw_round_rect(self, bar, UI.PANEL, Color(), 0, 6)
 	var zx := bar.position.x + bar.size.x * float(cfg["lo"]) / mx
@@ -307,6 +326,8 @@ func _draw_pump() -> void:
 
 func _draw_gap() -> void:
 	var trk := Rect2(_track.position, _track.size)
+	if UI.phone():                               # зона пальца 56, шкала — прежние 30 по её середине
+		trk = Rect2(_track.position + Vector2(0, 13), Vector2(_track.size.x, 30))
 	var mn := float(cfg["mn"])
 	var span := float(cfg["mx"]) - mn
 	UI.draw_round_rect(self, trk, UI.PANEL, Color(), 0, 6)
@@ -331,7 +352,8 @@ func _draw_gap() -> void:
 
 
 func _draw_ping() -> void:
-	var c := Vector2(P.get_center().x, P.position.y + 230)
+	var c := ping_center()
+	var rim := PH_RIM_R if UI.phone() else 150
 	var found := 0
 	for k: int in dull:
 		if tested.has(k):
@@ -339,11 +361,11 @@ func _draw_ping() -> void:
 	UI.draw_text(self, Loc.tf("Касайся спиц, ищи глухие. Найдено: {0}/{1}" if UI.touch() else
 		"Кликай спицы, ищи глухие. Найдено: {0}/{1}", [found, dull.size()]),
 		Vector2(P.position.x + 24, P.end.y - 46), 15, UI.CYAN)
-	UI.draw_ring(self, c, 150, UI.DIM, 3)
+	UI.draw_ring(self, c, rim, UI.DIM, 3)
 	var total := int(cfg["total"])
 	for i in total:
 		var ang := deg_to_rad(i * (360.0 / total) - 90)
-		var e := c + Vector2(cos(ang), sin(ang)) * 148
+		var e := c + Vector2(cos(ang), sin(ang)) * (rim - 2)
 		var col := (UI.BAD if dull.has(i) else UI.DIM) if tested.has(i) else UI.GHOST
 		draw_line(c, e, col, 3.0 if (tested.has(i) and dull.has(i)) else 2.0, true)
 	draw_circle(c, 18, UI.AMBER, true, -1, true)
@@ -352,13 +374,14 @@ func _draw_ping() -> void:
 func _draw_spoke(b: GameButton, _r: Rect2) -> void:
 	var i: int = b.get_meta("i")
 	var c := b.size / 2.0
+	var rr := 22.0 if UI.phone() else 15.0     # телефон: кружок спицы крупнее (зона пальца — круг 56)
 	if tested.has(i):
 		var d := dull.has(i)
-		b.draw_circle(c, 15, UI.BAD if d else UI.PANEL2, true, -1, true)
-		UI.draw_ring(b, c, 15, UI.BAD if d else UI.DIM, 2)
+		b.draw_circle(c, rr, UI.BAD if d else UI.PANEL2, true, -1, true)
+		UI.draw_ring(b, c, rr, UI.BAD if d else UI.DIM, 2)
 	else:
-		b.draw_circle(c, 15, UI.PANEL2, true, -1, true)
-		UI.draw_ring(b, c, 15, UI.AMBER if b.is_hovered() else UI.GREY, 2)
+		b.draw_circle(c, rr, UI.PANEL2, true, -1, true)
+		UI.draw_ring(b, c, rr, UI.AMBER if b.is_hovered() else UI.GREY, 2)
 
 
 func _draw_meter() -> void:

@@ -36,9 +36,13 @@ var touch_yield: Callable
 ## Телефонный режим: рисунок кнопки меньше зоны пальца (кнопки в шапке: рисунок в полосе 54 px, зона — 56 от верха).
 ## Пусто — рисунок во весь размер кнопки, как было.
 var draw_box: Rect2 = Rect2()
+## Телефонный режим: попадание — по кругу, вписанному в кнопку (спицы мини-игры: соседние квадраты перекрылись бы).
+var hit_circle: bool = false
 
 
 func _has_point(p: Vector2) -> bool:
+	if hit_circle:
+		return p.distance_to(size / 2.0) <= minf(size.x, size.y) / 2.0
 	var r := Rect2(Vector2.ZERO, size)
 	if (touch_grow <= 0.0 and touch_pad <= 0.0) or not UI.touch():
 		return r.has_point(p)
