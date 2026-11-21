@@ -229,6 +229,7 @@ func _seat_shot(name: String) -> void:
 			scr.cfg["back_a"] = (int(c0["angle"][0]) + int(c0["angle"][1])) / 2
 			await _wait(0.5)
 		"seat_fit_golem":
+			scr.tab = "fit"                         # сам открывает вкладку примерки (не только после seat_fit_troll)
 			scr.pick_case(3)
 			await _wait(2.5)
 		"seat_fit_dryad_side":

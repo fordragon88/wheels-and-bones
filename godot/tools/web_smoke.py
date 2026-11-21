@@ -2422,9 +2422,9 @@ async def sc_phonetext(b):
 
 PB_STAGES = ["hub", "job_flat_diagnose", "job_flat_repair", "mini_pump", "result_lift", "settings_sound", "settings_access",
              "seat_lesson_slump", "seat_fit_troll", "seat_quiz_q1", "guild_open", "tech_ops", "garage", "share_paste", "title",
-             "tech_ops_t_battery", "tech_ops_t_q6brake"]
+             "tech_ops_t_battery", "tech_ops_t_q6brake", "seat_fit_golem"]
 PB_BIG = ["hub", "job_flat_diagnose", "job_flat_repair", "settings_access", "tech_ops", "seat_lesson_slump", "seat_fit_troll",
-          "seat_quiz_q1", "tech_ops_t_battery"]
+          "seat_quiz_q1", "tech_ops_t_battery", "seat_fit_golem"]
 
 
 async def sc_phonebig(b):

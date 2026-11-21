@@ -962,15 +962,48 @@ func _draw_fit(ci: CanvasItem) -> void:
 		if need <= room or csz <= 10:
 			break
 		csz -= 1
+	# телефон: весь список не помещается и при 10 (или 5 ползунков — Голем, Искра) — только «⚠» кеглем от 13 до 10
+	# (пока не поместятся), «✔» — за ними тем же кеглем, целыми строками, пока помещаются (не мельчим ради «✔»)
+	if UI.phone() and (need > room or keys.size() >= 5):
+		var warns: Array = order.filter(func(ch: Array) -> bool: return not ch[1])
+		csz = 13
+		while true:
+			need = 0.0
+			for ch: Array in warns:
+				need += _check_h(ch, csz)
+			if need <= room or csz <= 10:
+				break
+			csz -= 1
+		for ch: Array in order:
+			if ch[1]:
+				if need + _check_h(ch, csz) > room:
+					break
+				need += _check_h(ch, csz)
+				warns.append(ch)
+		order = warns
 	text_sizes["warn"] = csz
 	text_sizes["warn_over"] = maxi(0, ceili(need - room))   # проверки: сколько px списка не поместилось
+	text_sizes["warn_n"] = "%d⚠ %d✔ из %d" % [order.filter(func(ch: Array) -> bool: return not ch[1]).size(),
+		order.filter(func(ch: Array) -> bool: return ch[1]).size(), checks.size()]
 	var bottom := fit_btn().position.y - (4 if UI.phone() else 6)
+	var first := true
+	text_sizes["warn_shown"] = 0
 	for ch: Array in order:
 		var left := int((bottom - y) / (UI.line_height(csz) + 2))
 		if left < 1:
 			break
+		# телефон: строка списка — целиком или никак (кроме первой: её начало лучше, чем пусто)
+		if UI.phone() and not first and UI.wrap_lines(("✔ " if ch[1] else "⚠ ") + Loc.t(ch[2]), 476, csz).size() > left:
+			break
+		first = false
+		text_sizes["warn_shown"] = int(text_sizes.get("warn_shown", 0)) + 1   # проверки: сколько строк видно
 		y = UI.draw_wrapped(ci, ("✔ " if ch[1] else "⚠ ") + Loc.t(ch[2]), Vector2(780, y), 476, csz,
 			UI.GOOD if ch[1] else UI.AMBER, false, 2, -1, left) + 2
+
+
+## Высота строки списка примерки (с переносом) кеглем sz.
+func _check_h(ch: Array, sz: int) -> float:
+	return UI.wrap_lines(("✔ " if ch[1] else "⚠ ") + Loc.t(ch[2]), 476, sz).size() * (UI.line_height(sz) + 2) + 2
 
 
 func _draw_quiz(ci: CanvasItem) -> void:
