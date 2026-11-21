@@ -10,6 +10,17 @@ extends Screen
 const TEST_BTN := Rect2(UI.W / 2.0 - 170, 560, 340, 64)
 const MANUAL_BTN := Rect2(UI.W - 204, 62, 180, 40)
 const SKIP_BTN := Rect2(UI.W - 384, 60, 170, 26)
+# телефонный режим (UI.phone()): «МАНУАЛ»/«ПРОПУСТИТЬ» 56, «Я НЕ СОГЛАСЕН» — в шапке 56 (рисунок 44)
+const PH_MANUAL := Rect2(UI.W - 204, 64, 180, 56)
+const PH_SKIP := Rect2(UI.W - 384, 64, 170, 56)
+
+
+func manual_rect() -> Rect2:
+	return PH_MANUAL if UI.phone() else MANUAL_BTN
+
+
+func skip_rect() -> Rect2:
+	return PH_SKIP if UI.phone() else SKIP_BTN
 var CLIENT_IDLE: Array = Content.consts.get("talk_pace", {}).get("client_idle", [22.0, 32.0])   # game.py Game.CLIENT_IDLE (game_consts.json)
 var TALK_GAP: float = float(Content.consts.get("talk_pace", {}).get("gap", 5.0))
 
@@ -127,7 +138,7 @@ func hint_line() -> String:
 
 func toast_bounds() -> Vector2:
 	if dispute_visible():
-		return Vector2(54, 346)
+		return Vector2(54, UI.W - _dispute_btn.position.x + 6) if UI.phone() else Vector2(54, 346)
 	return Vector2(54, 164)
 
 
@@ -152,6 +163,8 @@ func op_rect(i: int) -> Rect2:
 	var gx := 16
 	var gy := 10
 	var per_col := maxi(5, (step_order.size() + 1) / 2)
+	if UI.phone() and per_col <= 5:              # телефон: карточки 56 через 64 (до 10 шагов; больше — как было)
+		return Rect2(x0 + (i / per_col) * (w + gx), 160 + (i % per_col) * 64, w, 56)
 	var h: int
 	if per_col > 5:
 		gy = 6
@@ -189,12 +202,12 @@ func build() -> void:
 	_mentor.say(ghost_text())
 	add_child(_mentor)
 	if phase == "repair":
-		var mb := GameButton.make(MANUAL_BTN, "МАНУАЛ", UI.PURPLE)
+		var mb := GameButton.make(manual_rect(), "МАНУАЛ", UI.PURPLE)
 		mb.name = "Manual"
 		mb.pressed.connect(open_manual.bind(""))
 		add_child(mb)
 		if not exam:
-			var sk := GameButton.make(SKIP_BTN, "ПРОПУСТИТЬ ▸", UI.AMBER)
+			var sk := GameButton.make(skip_rect(), "ПРОПУСТИТЬ ▸", UI.AMBER)
 			sk.name = "StepSkip"
 			sk.label_size = 15
 			sk.pressed.connect(step_skip)
@@ -228,7 +241,10 @@ func build() -> void:
 	ride.chair_art = job["chair_art"]
 	ride.job_id = job["id"]
 	add_child(ride)
-	_dispute_btn = GameButton.make(Rect2(UI.W - 340, 10, 176, 34), "Я НЕ СОГЛАСЕН", UI.PURPLE)
+	_dispute_btn = GameButton.make(Rect2(UI.W - 192 - 8 - 176, 0, 176, 56) if UI.phone() else Rect2(UI.W - 340, 10, 176, 34),
+		"Я НЕ СОГЛАСЕН", UI.PURPLE)
+	if UI.phone():
+		_dispute_btn.draw_box = Rect2(0, 5, 176, 44)
 	_dispute_btn.name = "Dispute"
 	_dispute_btn.visible = false
 	_dispute_btn.pressed.connect(open_dispute)
@@ -755,7 +771,10 @@ func tick(dt: float) -> void:
 	var dv := dispute_visible()
 	_dispute_btn.visible = dv
 	_bar.brand = not dv
-	_bar.right_edge = (UI.W - 352.0) if dv else UI.W - 170.0
+	if UI.phone():
+		_bar.right_edge = (_dispute_btn.position.x - 12) if dv else UI.W - 204.0
+	else:
+		_bar.right_edge = (UI.W - 352.0) if dv else UI.W - 170.0
 	if _bar_sig != [_bar.brand, _bar.right_edge]:   # шапка — только когда сменилась
 		_bar_sig = [_bar.brand, _bar.right_edge]
 		_bar.queue_redraw()
@@ -766,12 +785,13 @@ func _draw_deco() -> void:
 	UI.draw_wrapped(_deco, Loc.t(job["client"]), Vector2(24, 266), 168, 15, UI.WHITE, false, 2, -1, 2)
 	if phase == "repair":
 		# 150 %: заголовок — до кнопки «ПРОПУСТИТЬ» (на экзамене — до «МАНУАЛ»), описание — над карточками шагов
-		var hb_x := (UI.W - 204.0) if exam else (UI.W - 384.0)
+		var hb_x := manual_rect().position.x if exam else skip_rect().position.x
 		UI.draw_text_w(_deco, Loc.t("ЭКЗАМЕН ГИЛЬДИИ — подсказок нет, мануал разрешён" if exam
 			else "ЗАДАНИЕ ТЕХНИКА — порядок шагов выбираешь сам"), Vector2(300, 62), hb_x - 10 - 300, 17, UI.CYAN, true)
 		var room := (op_rect(0).position.y if step_order.size() > 0 else 150.0) - 4 - 88
 		var sym := Loc.t(job["symptom"])
-		UI.draw_wrapped(_deco, sym, Vector2(300, 88), 770, UI.fit_wrapped_size(sym, 770, 14, room), UI.WHITE)
+		var sw := hb_x - 10 - 300 if UI.phone() else 770.0     # телефон: описание — до кнопок 56 справа
+		UI.draw_wrapped(_deco, sym, Vector2(300, 88), sw, UI.fit_wrapped_size(sym, sw, 14, room), UI.WHITE)
 		var y_stat := 466.0
 		for i in step_order.size():
 			y_stat = maxf(y_stat, op_rect(i).end.y + 6)

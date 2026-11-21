@@ -29,20 +29,22 @@ func build() -> void:
 	_barty = Figure.make("ghost.png", Vector2(UI.W - 250, UI.H - 330), Vector2(190, 240), "float", "barty_wave")
 	_barty.name = "Barty"
 	add_child(_barty)
-	_start = GameButton.make(Rect2(UI.W / 2.0 - 230, 448, 460, 44), "", UI.AMBER)
+	_start = GameButton.make(Rect2(UI.W / 2.0 - 230, 442, 460, 56) if UI.phone() else Rect2(UI.W / 2.0 - 230, 448, 460, 44), "", UI.AMBER)
 	_start.name = "Start"
 	_start.plain = true
 	_start.hover_sound = false
 	_start.on_draw = _draw_start
 	_start.pressed.connect(start)
 	add_child(_start)
-	_credits = GameButton.make(Rect2(UI.W / 2.0 - 215, 520, 200, 40), "ТИТРЫ", UI.GHOST)
+	_credits = GameButton.make(Rect2(UI.W / 2.0 - 215, 516, 200, 56) if UI.phone() else Rect2(UI.W / 2.0 - 215, 520, 200, 40),
+		"ТИТРЫ", UI.GHOST)
 	_credits.name = "Credits"
 	_credits.pressed.connect(func() -> void:
 		Audio.sfx("tick")
 		Nav.go("credits", {"from": "title"}))
 	add_child(_credits)
-	_support = GameButton.make(Rect2(UI.W / 2.0 + 15, 520, 200, 40), "ПОДДЕРЖАТЬ GOAT ♥", UI.AMBER)
+	_support = GameButton.make(Rect2(UI.W / 2.0 + 15, 516, 200, 56) if UI.phone() else Rect2(UI.W / 2.0 + 15, 520, 200, 40),
+		"ПОДДЕРЖАТЬ GOAT ♥", UI.AMBER)
 	_support.name = "Support"
 	_support.pressed.connect(_open_support)
 	add_child(_support)

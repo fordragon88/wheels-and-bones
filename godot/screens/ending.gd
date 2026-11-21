@@ -49,7 +49,7 @@ func build() -> void:
 	add_child(_deco)
 	_wave = _layer("Title", _draw_wave)        # слои подряд — порядок рисования тот же, что был в одном _deco
 	_text = _layer("Story", _draw_story)
-	_garage = GameButton.make(Rect2(UI.W / 2.0 - 260, 490, 520, 40), "", UI.AMBER)
+	_garage = GameButton.make(Rect2(UI.W / 2.0 - 260, 490, 520, 56) if UI.phone() else Rect2(UI.W / 2.0 - 260, 490, 520, 40), "", UI.AMBER)
 	_garage.name = "ToGarage"
 	_garage.plain = true
 	_garage.hover_sound = false
@@ -57,13 +57,15 @@ func build() -> void:
 	_garage.accessibility_name = Loc.t("Посмотреть гараж")
 	_garage.pressed.connect(to_garage)
 	add_child(_garage)
-	var cr := GameButton.make(Rect2(UI.W / 2.0 - 215, 560, 200, 40), "ТИТРЫ", UI.GHOST)
+	var cr := GameButton.make(Rect2(UI.W / 2.0 - 215, 554, 200, 56) if UI.phone() else Rect2(UI.W / 2.0 - 215, 560, 200, 40),
+		"ТИТРЫ", UI.GHOST)
 	cr.name = "Credits"
 	cr.pressed.connect(func() -> void:
 		Audio.sfx("tick")
 		Nav.go("credits", {"from": "ending"}))
 	add_child(cr)
-	var sp := GameButton.make(Rect2(UI.W / 2.0 + 15, 560, 200, 40), "ПОДДЕРЖАТЬ GOAT ♥", UI.AMBER)
+	var sp := GameButton.make(Rect2(UI.W / 2.0 + 15, 554, 200, 56) if UI.phone() else Rect2(UI.W / 2.0 + 15, 560, 200, 40),
+		"ПОДДЕРЖАТЬ GOAT ♥", UI.AMBER)
 	sp.name = "Support"
 	sp.pressed.connect(Nav.open_support)
 	add_child(sp)

@@ -58,11 +58,13 @@ func _ready() -> void:
 		b.pressed.connect(func() -> void: chosen.emit(i))
 		add_child(b)
 		_opts.append(b)
-	_manual = GameButton.make(Rect2(P.position.x + 24, P.end.y - 60, 220, 46), "ОТКРЫТЬ МАНУАЛ", UI.PURPLE)
+	_manual = GameButton.make(Rect2(P.position.x + 24, P.end.y - 64, 220, 56) if UI.phone()
+		else Rect2(P.position.x + 24, P.end.y - 60, 220, 46), "ОТКРЫТЬ МАНУАЛ", UI.PURPLE)
 	_manual.name = "OpenManual"
 	_manual.pressed.connect(func() -> void: open_manual.emit(spec()["manual"]))
 	add_child(_manual)
-	var later := GameButton.make(Rect2(P.end.x - 190, P.end.y - 60, 166, 46), "ПОЗЖЕ", UI.GREY)
+	var later := GameButton.make(Rect2(P.end.x - 190, P.end.y - 64, 166, 56) if UI.phone()
+		else Rect2(P.end.x - 190, P.end.y - 60, 166, 46), "ПОЗЖЕ", UI.GREY)
 	later.name = "Later"
 	later.pressed.connect(func() -> void:
 		Audio.sfx("tick")

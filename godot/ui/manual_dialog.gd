@@ -34,7 +34,8 @@ func _init() -> void:
 func _ready() -> void:
 	for i in pages.size():
 		var key: String = pages[i]
-		var b := GameButton.make(Rect2(P.position.x + 20, P.position.y + 70 + i * 54, 270, 46), "", UI.PURPLE)
+		var b := GameButton.make(Rect2(P.position.x + 20, P.position.y + 70 + i * 64, 270, 56) if UI.phone()
+			else Rect2(P.position.x + 20, P.position.y + 70 + i * 54, 270, 46), "", UI.PURPLE)
 		b.name = "Page_" + key
 		b.plain = true
 		b.set_meta("key", key)
@@ -48,7 +49,8 @@ func _ready() -> void:
 			_update())
 		add_child(b)
 		_btns.append(b)
-	_close = GameButton.make(Rect2(P.end.x - 200, P.end.y - 64, 180, 46), "ЗАКРЫТЬ [Esc]", UI.AMBER)
+	_close = GameButton.make(Rect2(P.end.x - 200, P.end.y - 72, 180, 56) if UI.phone() else Rect2(P.end.x - 200, P.end.y - 64, 180, 46),
+		"ЗАКРЫТЬ [Esc]", UI.AMBER)
 	_close.name = "Close"
 	_close.pressed.connect(close)
 	add_child(_close)

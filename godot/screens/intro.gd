@@ -56,7 +56,8 @@ func build() -> void:
 	_next.hover_sound = false
 	_next.pressed.connect(advance)
 	add_child(_next)
-	_skip = GameButton.make(Rect2(UI.W - 280, UI.H - 76, 250, 46), "ПРОПУСТИТЬ ОБУЧЕНИЕ ▸", UI.CYAN)
+	_skip = GameButton.make(Rect2(UI.W - 280, UI.H - 80, 250, 56) if UI.phone() else Rect2(UI.W - 280, UI.H - 76, 250, 46),
+		"ПРОПУСТИТЬ ОБУЧЕНИЕ ▸", UI.CYAN)
 	_skip.name = "SkipTutorial"
 	_skip.pressed.connect(skip_tutorial)
 	add_child(_skip)

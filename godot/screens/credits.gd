@@ -75,11 +75,11 @@ func build() -> void:
 	_deco.draw.connect(_draw_deco)
 	add_child(_deco)
 	move_child(_deco, 1)                          # затемнение — под строками
-	_back = GameButton.make(Rect2(UI.W - 200, UI.H - 70, 170, 46), "НАЗАД", UI.GOOD)
+	_back = GameButton.make(Rect2(UI.W - 200, UI.H - 74, 170, 56) if UI.phone() else Rect2(UI.W - 200, UI.H - 70, 170, 46), "НАЗАД", UI.GOOD)
 	_back.name = "BackBtn"
 	_back.pressed.connect(go_back)
 	add_child(_back)
-	var sp := GameButton.make(Rect2(30, UI.H - 70, 230, 46), "ПОДДЕРЖАТЬ GOAT ♥", UI.AMBER)
+	var sp := GameButton.make(Rect2(30, UI.H - 74, 230, 56) if UI.phone() else Rect2(30, UI.H - 70, 230, 46), "ПОДДЕРЖАТЬ GOAT ♥", UI.AMBER)
 	sp.name = "Support"
 	sp.pressed.connect(Nav.open_support)
 	add_child(sp)

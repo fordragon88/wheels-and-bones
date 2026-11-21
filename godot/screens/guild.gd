@@ -72,12 +72,13 @@ func build() -> void:
 		add_child(b)
 		_cards.append(b)
 	if SaveGame.tech_done_count() >= Content.tech_jobs.size():
-		_exam = GameButton.make(Rect2(UI.W - 360, UI.H - 160, 300, 54), "ЭКЗАМЕН ГИЛЬДИИ", UI.GOOD,
+		_exam = GameButton.make(Rect2(UI.W - 360, UI.H - 166, 300, 60) if UI.phone() else Rect2(UI.W - 360, UI.H - 160, 300, 54),
+			"ЭКЗАМЕН ГИЛЬДИИ", UI.GOOD,
 			"диплом есть — но можно блеснуть" if SaveGame.exam_passed else "случайный билет · без подсказок")
 		_exam.name = "Exam"
 		_exam.pressed.connect(start_exam)
 		add_child(_exam)
-	var back := GameButton.make(Rect2(40, UI.H - 70, 160, 48), "НАЗАД", UI.AMBER)
+	var back := GameButton.make(Rect2(40, UI.H - 64, 160, 56) if UI.phone() else Rect2(40, UI.H - 70, 160, 48), "НАЗАД", UI.AMBER)
 	back.name = "BackBtn"
 	back.pressed.connect(go_back)
 	add_child(back)
