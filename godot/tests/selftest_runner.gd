@@ -1523,6 +1523,34 @@ func _flow_seating() -> String:
 	var scr: Node = Nav.current
 	if scr.tab != "lessons" or scr.say != M["intro"]:
 		err("посадка: вход не на «Уроки» или не та реплика Мортимера")
+	# размер пунктов уроков = выбор game.py (seat_lesson_fit.json), в том числе с «лёгким» шрифтом при 112–150 % (21.11)
+	var fit: Dictionary = Content.seating.get("lesson_fit", {})
+	if fit.is_empty():
+		err("посадка: нет content/data/seat_lesson_fit.json (sync_content.py)")
+	else:
+		var keep := [Settings.lang, Loc.code, Settings.a11y.get("text", 0), Settings.a11y.get("font", false)]
+		var diff: Array = []
+		Settings.lang = "en"
+		Loc.code = "en"
+		Settings.a11y["font"] = true
+		for t in [1, 2, 3]:
+			Settings.a11y["text"] = t
+			UI.clear_font_cache()
+			var want: Array = fit["sizes"]["en|%d|1" % t]
+			for i in Content.seating["lessons"].size():
+				var n_l: int = Content.seating["lessons"].size()
+				@warning_ignore("integer_division")
+				var y: float = 112.0 + ((n_l + 1) / 2) * 44 + 10 + 32
+				var got: int = scr._lesson_psz(Content.seating["lessons"][i], y)
+				if got != int(want[i]):
+					diff.append("%d%% урок %d: %d, game.py %d" % [[100, 112, 125, 150][t], i + 1, got, int(want[i])])
+		Settings.lang = keep[0]
+		Loc.code = keep[1]
+		Settings.a11y["text"] = keep[2]
+		Settings.a11y["font"] = keep[3]
+		UI.clear_font_cache()
+		if not diff.is_empty():
+			err("посадка: размер пунктов уроков с лёгким шрифтом не как в game.py: %s" % ", ".join(diff))
 	# уроки: все карточки, «показать норму» — у уроков с ошибочной позой
 	var n_les: int = Content.seating["lessons"].size()
 	var n_toggle := 0
@@ -2720,6 +2748,25 @@ func _flow_pad(jobs: Array, techs: Array) -> String:
 	await _frames(1)
 	if Nav.settings != null:
 		err("геймпад: Start не закрыл настройки")
+	# держат «вниз» и выдёргивают геймпад (Godot отпускания не присылает) — повтор стрелки должен остановиться (21.11)
+	var down := InputEventJoypadButton.new()
+	down.button_index = JOY_BUTTON_DPAD_DOWN
+	down.pressed = true
+	get_viewport().push_input(down)
+	await _frames(1)
+	Nav._on_pad_connection(0, false)
+	var held := A11y.kb_cur
+	Nav._pad_t += 5.0                                # пять секунд «держат» — без отключения было бы ~30 повторов
+	for _i in 6:
+		await _frames(1)
+		Nav._pad_t += 0.5
+	if A11y.kb_cur != held or Nav._pad_dir != 0:
+		err("геймпад: после отключения с зажатой крестовиной стрелка повторяется (%s → %s)" % [held, A11y.kb_cur])
+	Nav.toast.timer = 0.0
+	Nav._on_pad_connection(0, true)
+	if not Nav.toast.text.contains("Геймпад подключён"):
+		err("геймпад: подключили — нет подсказки (как game.py pad_action «added»): «%s»" % Nav.toast.text)
+	Nav.toast.timer = 0.0
 	await _pad_btn(JOY_BUTTON_BACK)
 	await _frames(1)
 	if Nav.help == null:

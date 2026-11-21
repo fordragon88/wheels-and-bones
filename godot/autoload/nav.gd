@@ -46,6 +46,7 @@ var support_opened: int = 0              # сколько раз нажали «
 func _ready() -> void:
 	test_mode = OS.get_cmdline_user_args().has("--test")
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	Input.joy_connection_changed.connect(_on_pad_connection)
 	host = Control.new()
 	host.name = "ScreenHost"
 	host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -288,6 +289,18 @@ var _pad_dir: int = 0                        # клавиша-стрелка, к
 var _pad_next: float = 0.0
 var _pad_t: float = 0.0
 var _stick: Vector2 = Vector2.ZERO
+
+
+## Геймпад подключили / отключили посреди игры (JOYDEVICEADDED/REMOVED в game.py): подключили — подсказка, как
+## game.py pad_action("added"); отключили, держа крестовину или стик, — повтор стрелки останавливается (PAD["dir"] =
+## None): Godot при отключении молча забывает нажатые кнопки, отпускания не присылает — стрелка повторялась бы вечно.
+func _on_pad_connection(_device: int, connected: bool) -> void:
+	if connected:
+		if current != null:
+			flash("Геймпад подключён: крестовина — пункты, A — выбрать, B — назад, Start — настройки.", UI.GOOD, 4.0)
+	else:
+		_pad_dir = 0
+		_stick = Vector2.ZERO
 
 
 func _pad_key(code: Key, down: bool = true, shift: bool = false) -> void:
