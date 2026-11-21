@@ -30,7 +30,8 @@ GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]),            # кра
        "chair_gorynych.png": dict(key="jazzy"), "chair_whillc2.png": dict(key="whill"),
        "chair_yaga.png": dict(key="d100", spokes=[dict(side=1, c=(-214.4, 305.3), hc=(-219.7, 303.5), zp=305, fl=10, cut_r=(42, 244), cut_z=(292, 332), rh=30, rr=247, n=36, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-213.2, 308.6), hc=(-218.7, 304.4), zp=305, fl=10, cut_r=(42, 244), cut_z=(292, 332), rh=30, rr=247, n=36, col=(0.72, 0.72, 0.75))]), "chair_rusalka.png": dict(key="x3", spokes=[dict(side=1, c=(-121.3, 323.3), hc=(-116.9, 317.4), zp=255, fl=14, cut_r=(62, 264), cut_z=(240, 270), rh=32, rr=268, n=24, col=(0.12, 0.12, 0.13)), dict(side=-1, c=(-121.1, 323.3), hc=(-117.1, 320.1), zp=255, fl=14, cut_r=(62, 264), cut_z=(240, 270), rh=32, rr=268, n=24, col=(0.12, 0.12, 0.13))]),
        "chair_ra.png": dict(key="nitrum", spokes=[dict(side=1, c=(-106.7, 328.4), hc=(-106.7, 328.4), zp=252, fl=10, cut_r=(118, 264), cut_z=(240, 263), rh=100, rr=268, n=24, cross=0.05, col=(0.62, 0.62, 0.66)), dict(side=-1, c=(-108.1, 328.6), hc=(-108.1, 328.6), zp=252, fl=10, cut_r=(118, 264), cut_z=(240, 263), rh=100, rr=268, n=24, cross=0.05, col=(0.62, 0.62, 0.66))], hubs=[dict(c=(-106.7, 328.4, 257.5), r=115, w=60), dict(c=(-108.1, 328.6, -257.5), r=115, w=60)]),   # ступицы Alber e-motion
-       "chair_basic.png": dict(key="inv9000"), "chair_troll.png": dict(key="inv9000xdt", attach=[ROHO_XDT]),   # + подушка ROHO
+       "chair_basic.png": dict(key="inv9000", matte=dict(soft=0.35)),   # блеск мягче (21.11)
+       "chair_troll.png": dict(key="inv9000xdt", matte=dict(soft=0.35), attach=[ROHO_XDT]),   # + подушка ROHO
        "chair_fairy.png": dict(key="exelle", recolor=[72, 330, 30, 0.5],   # салатовый -> пастельный розовый
            move=[dict(x=[-428, -392], y=[18, 52], az=[17, 50], delete=True),         # поперечина колёсика
                  dict(x=[-470, -362], y=[-8, 96], az=[50, 115], d=[0, 0, -47])],   # колесо — вплотную к трубе
@@ -42,7 +43,9 @@ GLB = {"chair_m3.png": dict(key="m3", recolor=[0, 275, 28]),            # кра
        "chair_aeroz.png": dict(key="aeroz", antitips=[dict(p0=(-235, 245, s * 172), p1=(-470, 58, s * 172), r=10, wheel=(24, 18)) for s in (1, -1)],   # в модели Meshy их нет
            spokes=[dict(side=1, c=(-205.9, 295.9), hc=(-204.9, 294.6), zp=235, fl=12, cut_r=(40, 228), cut_z=(212, 262), rh=28, rr=232, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-204.6, 302.1), hc=(-204.5, 298.9), zp=235, fl=12, cut_r=(40, 228), cut_z=(212, 262), rh=28, rr=232, n=24, col=(0.72, 0.72, 0.75))]),
        "chair_cross6.png": dict(key="cross6", spokes=[dict(side=1, c=(-146.5, 322.2), hc=(-154.0, 324.4), zp=290, fl=12, cut_r=(40, 255), cut_z=(262, 318), rh=30, rr=258, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-147.1, 322.9), hc=(-152.5, 323.9), zp=290, fl=12, cut_r=(40, 255), cut_z=(262, 318), rh=30, rr=258, n=24, col=(0.72, 0.72, 0.75))]),
-       "chair_orc.png": dict(key="noir", spokes=[dict(side=1, c=(-101.3, 352.8), hc=(-101.7, 357.0), zp=290, fl=12, cut_r=(34, 272), cut_z=(250, 332), rh=28, rr=276, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-101.6, 344.4), hc=(-101.7, 346.8), zp=290, fl=12, cut_r=(34, 272), cut_z=(250, 332), rh=28, rr=276, n=24, col=(0.72, 0.72, 0.75))]),
+       # Progeo Noir: Meshy пометил всё колесо, вместе с резиной, гладким металлом — шины блестели «как в масле»,
+       # обод и обруч — зеркалом. Шины матовые (dark), металл сатиновый (soft=0.5) — вариант «Д», выбор владельца 21.11
+       "chair_orc.png": dict(key="noir", matte=dict(soft=0.5, dark=dict(r=0.72, lo=0.10, hi=0.32, metal=0.9)), spokes=[dict(side=1, c=(-101.3, 352.8), hc=(-101.7, 357.0), zp=290, fl=12, cut_r=(34, 272), cut_z=(250, 332), rh=28, rr=276, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-101.6, 344.4), hc=(-101.7, 346.8), zp=290, fl=12, cut_r=(34, 272), cut_z=(250, 332), rh=28, rr=276, n=24, col=(0.72, 0.72, 0.75))]),
        "chair_elf.png": dict(key="ego", spokes=[dict(side=1, c=(-133.6, 327.9), hc=(-128.1, 327.1), zp=300, fl=12, cut_r=(34, 252), cut_z=(258, 342), rh=28, rr=258, n=24, col=(0.72, 0.72, 0.75)), dict(side=-1, c=(-137.3, 328.0), hc=(-133.7, 327.1), zp=300, fl=12, cut_r=(34, 252), cut_z=(258, 342), rh=28, rr=258, n=24, col=(0.72, 0.72, 0.75))]),
        "chair_q6edge.png": dict(key="q6c",   # классическая Q6 Edge (жёлтая); пульт у Meshy висел в 4 см перед подлокотником —
            move=[dict(x=[-495, -408], y=[425, 565], z=[180, 380], delete=True),   # висящие провода и ремешок сзади (сторона пульта)
@@ -84,7 +87,7 @@ for art in arts:
         xf = json.load(open(os.path.join(HERE, "gen3d", GLB[art]["key"] + "_xform.json"), encoding="utf-8"))
         spec.update(glb=xf["src"], glb_matrix=xf["matrix"], recolor=GLB[art].get("recolor"), hubs=GLB[art].get("hubs"),
                     spokes=GLB[art].get("spokes"), move=GLB[art].get("move"), antitips=GLB[art].get("antitips"), clones=GLB[art].get("clones"),
-                    tubes=GLB[art].get("tubes"), paint=GLB[art].get("paint"), attach=GLB[art].get("attach"))
+                    tubes=GLB[art].get("tubes"), paint=GLB[art].get("paint"), matte=GLB[art].get("matte"), attach=GLB[art].get("attach"))
         json.dump(spec, open(src, "w"), separators=(",", ":"))
     out = os.path.join(ROUT, name)
     for f in glob.glob(os.path.join(out, "*.png")):

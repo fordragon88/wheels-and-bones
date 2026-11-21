@@ -359,6 +359,68 @@ def paint_parts(paints):
         o.data.update()
 
 
+def matte_fix(cfg):
+    """Блеск «как маслом смазано» (владелец, 21.11.2026) — от карт материала Meshy; правим их при рендере, модель
+    не трогаем. Только материалы с КАРТОЙ шероховатости (родные Meshy); дорисованные нами детали (числа) — как были.
+    soft=k — всё чуть матовее: шероховатость r -> k + (1 − k)·r (блики мягче, чёрное остаётся чёрным: Invacare 9000,
+      у неё рама — тёмный металл, и режим dark делал бы её серой и плоской);
+    dark=dict(r, lo, hi, metal) — «тёмное — матовое»: Meshy бывает помечает резину и чёрный пластик гладким металлом
+      (у Progeo Noir — всё колесо вместе с шиной: шина рисовалась чёрным зеркалом с россыпью бликов). Там, где цвет
+      поверхности тёмный (яркость ниже lo — целиком, выше hi — нет, между — плавно), шероховатость не ниже r,
+      металличность гасится на долю metal; светлый металл (обручи, спицы, хром) не меняется."""
+    soft = float(cfg.get("soft") or 0.0)
+    dk = cfg.get("dark")
+
+    def math_node(nt, op, a, b, c=None):
+        n = nt.nodes.new("ShaderNodeMath")
+        n.operation = op
+        for k, v in enumerate((a, b, c)):
+            if v is None:
+                continue
+            if isinstance(v, (int, float)):
+                n.inputs[k].default_value = v
+            else:
+                nt.links.new(v, n.inputs[k])
+        return n
+
+    done = 0
+    for m in bpy.data.materials:
+        if not m.use_nodes:
+            continue
+        nt = m.node_tree
+        for b in [n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"]:
+            ri, mi, ci = b.inputs["Roughness"], b.inputs["Metallic"], b.inputs["Base Color"]
+            if not ri.is_linked:
+                continue
+            rs = ri.links[0].from_socket
+            if soft > 0:
+                rs = math_node(nt, "MULTIPLY_ADD", rs, 1.0 - soft, soft).outputs[0]
+                nt.links.new(rs, ri)
+            if dk and ci.is_linked:
+                r, lo, hi, met = dk.get("r", 0.72), dk.get("lo", 0.10), dk.get("hi", 0.32), dk.get("metal", 0.9)
+                bw = nt.nodes.new("ShaderNodeRGBToBW")
+                nt.links.new(ci.links[0].from_socket, bw.inputs[0])
+                mr = nt.nodes.new("ShaderNodeMapRange")                   # темнота 1…0 по яркости цвета
+                mr.clamp = True
+                mr.inputs[1].default_value, mr.inputs[2].default_value = lo, hi
+                mr.inputs[3].default_value, mr.inputs[4].default_value = 1.0, 0.0
+                nt.links.new(bw.outputs[0], mr.inputs[0])
+                mx = math_node(nt, "MAXIMUM", rs, r)
+                mix = nt.nodes.new("ShaderNodeMix")
+                mix.data_type = "FLOAT"
+                nt.links.new(mr.outputs[0], mix.inputs[0])
+                nt.links.new(rs, mix.inputs[2])
+                nt.links.new(mx.outputs[0], mix.inputs[3])
+                nt.links.new(mix.outputs[0], ri)
+                if mi.is_linked:
+                    ms = mi.links[0].from_socket
+                    inv = math_node(nt, "MULTIPLY_ADD", mr.outputs[0], -met, 1.0)   # 1 − metal·темнота
+                    mm = math_node(nt, "MULTIPLY", ms, inv.outputs[0])
+                    nt.links.new(mm.outputs[0], mi)
+            done += 1
+    print("матовее: материалов", done, "soft", soft, "dark", bool(dk))
+
+
 def add_tube(t):
     """Трубка, которой нет в модели (крепление пульта и т.п.): p0→p1 (мм игры), r — радиус, col — цвет."""
     p0, p1 = np.array(t["p0"], float), np.array(t["p1"], float)
@@ -504,6 +566,8 @@ if d.get("glb"):
             m_.use_backface_culling = True
     if d.get("paint"):
         paint_parts(d["paint"])
+    if d.get("matte"):
+        matte_fix(d["matte"])
     if d.get("spokes"):
         fix_spokes(d["spokes"])
     for cl in d.get("clones") or []:
