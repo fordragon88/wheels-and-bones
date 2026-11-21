@@ -719,6 +719,36 @@ func _fit(ci: CanvasItem, s: String, pos: Vector2, width: float, size_: int, col
 	UI.draw_text(ci, f[0], Vector2(pos.x, pos.y + (size_ - int(f[1])) / 2), f[1], col, bold)
 
 
+## Размер пунктов урока: урок целиком до низа окна (цикл psz 15 → 10, как game.py). С «лёгким» шрифтом SDL_ttf меряет
+## строку Atkinson иначе, чем Godot (хинтованные целые advance + кернинг: на одних размерах шире, на других уже, общего
+## коэффициента нет), и при 150 % Godot выбирал на размер крупнее. Поэтому — число, которое выбрала сама game.py
+## (sync_content.py → content/data/seat_lesson_fit.json), если тексты урока те же (md5 строк «• пункт») и урок при нём
+## помещается и у Godot; иначе — свой цикл.
+func _lesson_psz(les: Dictionary, y: float) -> int:
+	var need_at := func(sz: int) -> float:
+		var need := 0.0
+		for p: String in les["points"]:
+			need += UI.wrap_lines("• " + Loc.t(p), 476, sz).size() * (UI.line_height(sz) + 2) + 8
+		return need
+	var room := UI.H - 16 - y
+	var fit: Dictionary = Content.seating.get("lesson_fit", {})
+	var i := lessons().find(les)
+	var key := "%s|%d|%d" % [Loc.code, clampi(int(Settings.a11y.get("text", 0)), 0, 3), int(Settings.easy_font())]
+	var sizes: Array = fit.get("sizes", {}).get(key, [])
+	var md5s: Array = fit.get("md5", {}).get(Loc.code, [])
+	if i >= 0 and i < sizes.size() and i < md5s.size() and Settings.text_cap <= 0.0:
+		var lines: PackedStringArray = []
+		for p: String in les["points"]:
+			lines.append("• " + Loc.t(p))
+		var sz := int(sizes[i])
+		if "\n".join(lines).md5_text() == str(md5s[i]) and need_at.call(sz) <= room:
+			return sz
+	var psz := 15
+	while psz > 10 and need_at.call(psz) > room:
+		psz -= 1
+	return psz
+
+
 func _draw_fg() -> void:
 	var ci := _fg
 	if tab == "lessons":
@@ -733,14 +763,7 @@ func _draw_fg() -> void:
 		var y := 112.0 + ((lessons().size() + 1) / 2) * 44 + 10
 		UI.draw_text(ci, Loc.t(les["title"]), Vector2(780, y), 20, UI.AMBER, true)
 		y += 32
-		var psz := 15
-		while psz > 10:
-			var need := 0.0
-			for p: String in les["points"]:
-				need += UI.wrap_lines("• " + Loc.t(p), 476, psz).size() * (UI.line_height(psz) + 2) + 8
-			if need <= UI.H - 16 - y:
-				break
-			psz -= 1
+		var psz := _lesson_psz(les, y)
 		for p: String in les["points"]:
 			y = _wrapped_plate(ci, "• " + Loc.t(p), Vector2(780, y), 476, psz, UI.WHITE) + 8
 		UI.draw_text(ci, Loc.t("По руководству Permobil «Seating & Positioning Guide»"), Vector2(CV.end.x - 14, CV.end.y - 18),

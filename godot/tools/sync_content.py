@@ -180,6 +180,7 @@ def game_tables():
         feedback_ref(game)
         guild_ref(game)
         seat_ref(game)
+        seat_lesson_fit(game)
         share_ref(game)
         speech_ref(game)
         consts = {"version": game.GAME_VERSION, "width": game.WIDTH, "height": game.HEIGHT,
@@ -423,6 +424,42 @@ def guild_ref(game):
     p["_wrong_on"] = nxt["id"]
     out["feedback"]["dispute_tech"] = p
     json.dump(out, open(os.path.join(DST, "guild_ref.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
+
+def seat_lesson_fit(game):
+    """Размер текста пунктов урока Кабинета посадки так, как его выбирает game.py (цикл psz 15 → 10 «урок целиком до
+    низа окна», ширина 476), для ru/en, размеров текста 0–3 и «лёгкого» шрифта (только en). Godot сам считает так же,
+    но ширину строки Atkinson SDL_ttf меряет иначе, чем Godot (хинтованные целые advance каждой буквы + кернинг; на
+    одних размерах шире, на других уже — ±1–2 % без общего коэффициента), и при 150 % выбирал на размер крупнее.
+    Godot берёт число отсюда, если тексты урока совпадают (md5 строк «• пункт»), иначе — свой цикл. Мерки — при RS 1
+    (окно 1280×720), как сверяет godot/tools/text_scale. Пишет content/data/seat_lesson_fit.json."""
+    import hashlib
+    out = {"sizes": {}, "md5": {}}
+    keep = (dict(game.A11Y), game.LANG["code"])
+    try:
+        for lang in ("ru", "en"):
+            game.set_lang(lang)
+            out["md5"][lang] = [hashlib.md5("\n".join(game.tr("• " + p) for p in les["points"]).encode("utf-8")).hexdigest()
+                                for les in game.SEAT_LESSONS]
+            for easy in ((False, True) if lang == "en" else (False,)):
+                for text in range(len(game.TEXT_K)):
+                    game.A11Y.update(font=easy, text=text)
+                    game._font_cache.clear()
+                    sizes = []
+                    for les in game.SEAT_LESSONS:
+                        y = 112 + ((len(game.SEAT_LESSONS) + 1) // 2) * 44 + 10 + 32
+                        psz = 15
+                        while psz > 10 and sum(len(game.wrap_lines("• " + pt_, 476, psz)) * (game.font(psz).get_height() + 2)
+                                               + 8 for pt_ in les["points"]) > game.HEIGHT - 16 - y:
+                            psz -= 1
+                        sizes.append(psz)
+                    out["sizes"][f"{lang}|{text}|{int(easy)}"] = sizes
+    finally:
+        game.A11Y.clear()
+        game.A11Y.update(keep[0])
+        game.set_lang(keep[1])
+        game._font_cache.clear()
+    json.dump(out, open(os.path.join(DST, "data", "seat_lesson_fit.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 
 def seat_ref(game):

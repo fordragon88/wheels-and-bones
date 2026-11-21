@@ -40,6 +40,8 @@ func load_all() -> void:
 	seating = {}
 	for nm: String in ["cases", "lessons", "quiz", "mentor"]:
 		seating[nm] = _read("seating/%s.json" % nm, {} if nm == "mentor" else [])
+	# размер пунктов уроков, выбранный game.py (sync_content.py seat_lesson_fit); нет файла — Godot считает сам
+	seating["lesson_fit"] = _read("seat_lesson_fit.json", {}) if FileAccess.file_exists(DATA + "seat_lesson_fit.json") else {}
 	var index: Dictionary = _read("jobs/index.json", {})
 	for group: String in ["jobs", "folk"]:
 		for jid: String in index.get(group, []):
