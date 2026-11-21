@@ -177,7 +177,7 @@ func _web_setup() -> void:
 	  }
 	  window.wnbSay = function(t, intr, voice){
 	    live.textContent = ''; setTimeout(function(){ live.textContent = t; }, 30);
-	    if (!voice || !window.speechSynthesis) return;
+	    if (!voice || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;   // браузер без голоса
 	    if (intr) speechSynthesis.cancel();
 	    var u = new SpeechSynthesisUtterance(t);
 	    u.lang = document.documentElement.getAttribute('data-wnb-lang') || 'en-US';

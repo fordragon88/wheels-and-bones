@@ -33,10 +33,14 @@ var _amb_old: AudioStreamPlayer
 var _amb_name := ""
 var _amb_k := 0.0                        # вступление новой петли 0..1
 var _amb_old_k := 0.0
+var _silent := false                     # браузер без Web Audio (WebKit Playwright под Windows): эффекты не запускать —
+                                         # Godot на каждый писал бы «driver doesn't support sample playback» в консоль
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if OS.has_feature("web"):
+		_silent = str(JavaScriptBridge.eval("typeof (window.AudioContext || window.webkitAudioContext)", true)) == "undefined"
 	for b: String in ["Music", "Sfx"]:
 		if AudioServer.get_bus_index(b) < 0:
 			AudioServer.add_bus()
@@ -81,7 +85,7 @@ func sfx(name: String) -> void:
 	played.append(name)
 	if played.size() > 40:
 		played.remove_at(0)
-	if not Settings.vol.get("on", true):
+	if not Settings.vol.get("on", true) or _silent:
 		return
 	var s: AudioStream = _sfx.get(name)
 	if s == null:
@@ -128,7 +132,7 @@ func ambient(bg: String) -> void:
 	_amb.stop()
 	var key := "amb_" + bg.get_basename()
 	var st: AudioStreamWAV = _sfx.get(key) as AudioStreamWAV
-	if st == null:
+	if st == null or _silent:
 		return
 	if st.loop_mode == AudioStreamWAV.LOOP_DISABLED:
 		st.loop_mode = AudioStreamWAV.LOOP_FORWARD

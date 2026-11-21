@@ -594,6 +594,59 @@ game_consts.json); ближняя к низу экрана точка детал
   gzip) — нужен emsdk и час сборки, решение владельца. Портреты клиентов и арт колясок — 5,2 из 6,6 МБ картинок
   пакета; качество WebP 0,7 вместо 0,8 даст ≈−0,8 МБ (проверить глазами).
 
+### Другие браузеры: Firefox и WebKit (21.11)
+`python godot/tools/web_smoke.py --browser firefox|webkit` (по умолчанию chromium; снимки — `tests/web_shots/<движок>/`).
+Playwright 1.61: Firefox 151 (`firefox-1532`), WebKit 26.5 (`webkit-2311`). **WebKit Playwright под Windows — не Safari:**
+в этой сборке нет Web Audio (`AudioContext`), голоса (`speechSynthesis`), геймпада (`navigator.getGamepads`) и
+`OffscreenCanvas`; с isMobile — нет Fullscreen API (как у Safari на iPhone). Настоящий Safari/iOS проверяет только
+владелец на устройстве.
+- **Без звука:** у Firefox и WebKit нет `--mute-audio`. Firefox — `firefox_user_prefs` `media.volume_scale: "0.0"`; в обоих —
+  init-скрипт `MUTE_JS` до скриптов страницы: `<audio>` — muted при каждом `play()` и при попытке снять, всё WebAudio,
+  что подключается к выходу контекста, — через усиление 0.
+- **Пропускается («пропущено: только Chromium»):** `perf`, `prof`, `screens`, `bg` — нужен CDP (замедление процессора,
+  `Page.setWebLifecycleState`).
+- **Замены без CDP:** экран телефона (`screen.width/height`, `screen.orientation.type`) — подменой (`SCREEN_JS`, `orient`);
+  набор кириллицы в поле замечания — события `keydown/keyup` страницы на холст (Playwright `keyboard.press` в
+  Firefox/WebKit не знает «п»); буфер обмена — что игра отдала в `navigator.clipboard.writeText` и принял ли браузер
+  (`CLIP_JS`, `clip_text`; читать буфер тесту там не дают); «F11» для `fsexit` — экран = окну (`window.__wnbS`).
+  Firefox: `isMobile` не поддерживается (касания и `pointer: coarse` есть). Полный экран без окна Firefox/WebKit
+  растягивают страницу на «экран» компьютера 1366×768 — для телефона в книжной он заглушён (иначе «телефон» сам
+  поворачивался), на компьютере `a11y` сверяет картинку с окном после входа.
+- **Найдено и исправлено в игре:** (1) WebKit без Web Audio — Godot на каждый звук писал в консоль «Trying to play
+  stream … as a sample, but the driver doesn't support sample playback»: `Audio._silent` (нет `AudioContext` — эффекты
+  и фоновые петли не запускаются, музыка — `<audio>` страницы, как была). (2) Без `SpeechSynthesisUtterance` (WebKit
+  Playwright; бывает в урезанных браузерах) F2 бросал `ReferenceError` из `wnbSay` — проверка конструктора
+  (`speech.gd`), текст в `#wnb-live` идёт как раньше.
+- **Распаковка кадров:** Chromium и Firefox — Worker (OffscreenCanvas + WebGL2), пиксели = PIL (разница 0). Firefox без
+  окна: Worker 30–34 мс на кадр (WebGL программный), в игровом кадре 2,0–2,1 мс (у Chromium 0,35). WebKit (нет
+  OffscreenCanvas) — запасной путь, распаковывает игра: 3,2 мс на кадр в игровом кадре (быстрый ПК), без ошибок в
+  консоли; Safari 17+ (OffscreenCanvas с WebGL) пойдёт путём Worker, Safari 16 — запасным.
+- **Сообщение движка в WebKit:** «WebGL: INVALID_OPERATION: glBlitFramebuffer: Read and write color attachments cannot be
+  the same image» — копирование кадра Godot (Compatibility), проверка WebGL в WebKit строже; один раз за загрузку,
+  картинка верная (снимки) — тест его разрешает только в WebKit.
+- **Музыка:** `<audio>` страницы играет после первого нажатия во всех трёх (Playwright помечает страницу «нажатой» —
+  запрет автозапуска не виден); в фоне — пауза (`visibilitychange`).
+
+**Итог (сценарий × движок; ok — все проверки зелёные; исправлено — было FAIL, починено в игре или в тесте):**
+
+| сценарий | Chromium | Firefox | WebKit |
+|---|---|---|---|
+| boot | ok | ok (Worker, пиксели = PIL) | исправлено (тест): нет OffscreenCanvas — проверяется запасной путь распаковки |
+| play | ok | ok | исправлено (игра): F2 без `SpeechSynthesisUtterance`, звук без Web Audio |
+| links | ok | ok (буфер: `writeText` принят) | ok (буфер: `writeText` принят) |
+| migrate, net404, guild, tabs, store, loader, res, plates, stale | ok | ok | исправлено (игра): консоль «sample playback» без Web Audio |
+| phone (+ rotate, tablet, res) | ok | исправлено (тест): полный экран без окна = 1366×768 | исправлено (тест): нет Fullscreen API — кнопки ⛶ нет, как на iPhone |
+| a11y (+ kb_order: Tab/стрелки/F1/Esc, фокус у холста) | ok | исправлено (тест): полный экран = экран 1366×768 | ok |
+| fps, feedback | ok | ok (кириллица — события страницы) | ok |
+| netfail | ok | ok | исправлено (тест): «200 + HTML» — запасной путь распаковки |
+| fsexit | ok | исправлено (тест): «окно = экран» подменой, 4 с — с загрузки | ok |
+| perf, prof, screens, bg | ok | пропущено: только Chromium (CDP) | пропущено: только Chromium (CDP) |
+
+Итог прогонов 21.11 (сборка с правками): Firefox — 249 ok + 3 FAIL fsexit (тест), после правки теста fsexit + a11y — 31 ok, 0 FAIL; WebKit — 250 ok, 0 FAIL. Осталось: снимки WebKit
+после смены размера окна — без картинки игры (холст WebGL пропадает со снимка даже на пустой странице с одним
+`gl.clear` — особенность Playwright WebKit под Windows; состояние, клики и проверки при этом верны), так что вид после
+поворота/ресайза в Safari — только на устройстве.
+
 ### Скорость на слабом процессоре (19.11)
 Замер — `web_smoke.py --only perf` (Chromium, видеокарта, CDP-замедление процессора; телефон — окно 740×360, dpr 3;
 диагноз — стоя и крутя коляску мышью, ремонт — с инструментом в руке у курсора, проезд — петлёй), кадры/с, в скобках
@@ -928,6 +981,22 @@ premultiplied-наложением, в разрешении холста тел�
   `--use-angle=d3d11 --enable-gpu --ignore-gpu-blocklist`. Playwright помечает страницу «уже нажатой»
   (`userActivation.hasBeenActive`), поэтому запрет автозапуска звука до первого нажатия проверкой не виден.
   speechSynthesis на Windows говорит через SAPI мимо `--mute-audio` — в проверке он подменён заглушкой.
+- **Firefox и WebKit в Playwright (21.11):** нет `--mute-audio` — звук в ноль настройкой профиля Firefox
+  (`media.volume_scale`) и init-скриптом в обоих (`MUTE_JS`). Нет CDP — нет замедления процессора, экрана телефона
+  (подмена `screen`/`screen.orientation` скриптом) и «заморозки» вкладки. `keyboard.press("п")` — «Unknown key» (набор
+  кириллицы — событиями страницы на холст). Firefox: `isMobile` не поддерживается; полный экран без окна = «экран»
+  1366×768, а `screen.width/height` не подгоняются под окно (F11-режим `fsexit` — подменой). WebKit под Windows: нет
+  `AudioContext`, `speechSynthesis`, `SpeechSynthesisUtterance`, `getGamepads`, `OffscreenCanvas`; с isMobile — нет
+  Fullscreen API; после `set_viewport_size` холст WebGL пропадает со снимков экрана (даже на пустой странице).
+  Читать буфер обмена тесту Firefox/WebKit не дают — проверяется, что игра отдала в `writeText` и браузер принял.
+- Порт 8071 на этом компьютере занят (HapticService) — для параллельных прогонов `WNB_PORT=8063/8064/8072`.
+- **Браузер без Web Audio** (WebKit Playwright, урезанные встроенные браузеры): Godot на каждый звук пишет «Trying to
+  play stream … as a sample, but the driver doesn't support sample playback» (console.error) — `Audio._silent`.
+- **Godot при отключении геймпада** (`Input.joy_connection_changed(…, false)`) молча забывает нажатые кнопки, отпускания
+  не присылает: зажатая крестовина повторяла бы стрелку вечно — `Nav._on_pad_connection` сбрасывает повтор (21.11).
+- Заморозка вкладки (`Page.setWebLifecycleState frozen`, как фоновая вкладка Chrome) на 70 и 300 с посреди насоса и
+  проезда: кадр после возврата не длинный (худший 16,7 мс — Godot не получает dt в минуты), давление на месте, проезд
+  доезжает, музыка в фоне на паузе и снова играет (web_smoke `bg`).
 
 ## Как запускать
 ```
@@ -955,6 +1024,12 @@ python godot/tools/kb_order_ref.py                      # порядок обх�
 #   … -- --fps — плашка кадров/с (как ?fps=1 в браузере);  -- --prof — профиль кадра в stdout раз в 3 с (как ?prof=1)
 python godot/tools/build_web.py [--base-url https://…/godot/] [--serve 8060]   # браузерная сборка → godot/build/web/
 python godot/tools/web_smoke.py [--no-build] [--only boot,play,links,migrate,net404,guild,phone,stale,a11y,fps,plates,feedback,perf,prof,screens]
+#   --browser firefox|webkit — другой движок (снимки tests/web_shots/<движок>/; perf/prof/screens/bg — только Chromium)
+#   + сценарии 21.11: zoom (масштаб страницы 50–300 % × dpr 1/1,5/2 × ?res=), assign (ссылка-задание при другом
+#   активном задании, «Назад»/«Вперёд» браузера), pad (геймпад подключили/выдернули), bg (вкладка в фоне посреди насоса
+#   и проезда, WNB_BG_SECS=70), phonetext (телефон 740/780×360 и компьютер 1920×1080: все состояния shots.gd при
+#   тексте 100/125/150 % и «лёгком» шрифте → tests/web_shots/phonetext/; WNB_PT_COMBOS=ru150,en150f WNB_PT_VIEWS=
+#   p740,p780,desk WNB_PT_STAGES=… WNB_PT_SKIP=…); window.wnbStage("set:lang=en" | "set:text=3" | "set:font=1")
 #   + сценарии 20.11: tabs (две вкладки), store (без localStorage/IndexedDB, перенос user:// → ключи), loader (сторож
 #   загрузки), netfail (зависшие/битые кадры, сеть пропала и вернулась), fsexit (надпись выхода из полного экрана), res
 python godot/tools/text_scale/run.py [--text 3] [--lang en] [--font] [--x]   # размер текста Godot ↔ pygame (снимки + разница)

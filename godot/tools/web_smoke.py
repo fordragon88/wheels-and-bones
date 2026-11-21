@@ -4,9 +4,14 @@
   python godot/tools/web_smoke.py              — собрать (build_web.py), проверить, всё закрыть
   python godot/tools/web_smoke.py --no-build   — проверить готовую godot/build/web/
   python godot/tools/web_smoke.py --only boot,play   — только эти сценарии
+  python godot/tools/web_smoke.py --browser firefox|webkit   — другой движок (по умолчанию chromium); снимки —
+      godot/tests/web_shots/<движок>/; сценарии на CDP (perf, prof, screens) — только Chromium (пропускаются)
   WNB_URL=https://…/godot/ python godot/tools/web_smoke.py --no-build --only boot,play,perf  — выложенный сайт
 
 Локальный сервер — на своём порту (WNB_PORT, по умолчанию 8061; не 8000/8188/8797), закрывается в конце.
+Firefox и WebKit — тоже без окна и без звука: у них нет --mute-audio, поэтому Firefox — с настройкой профиля
+media.volume_scale 0, а в обоих страница ещё до своих скриптов приглушает <audio> (muted при каждом play) и WebAudio
+(всё, что подключается к выходу AudioContext, идёт через усиление 0) — MUTE_JS.
 Браузер — Chromium без окна, с --mute-audio (у владельца в наушниках НИЧЕГО не звучит; голос браузера speechSynthesis
 подменён заглушкой — на Windows он шёл бы мимо --mute-audio, через SAPI) и с видеокартой (ANGLE D3D11), чтобы кадры/с
 были похожи на настоящие. Игра открывается с ?test=1: раз в 0,25 с кладёт состояние в window.wnbState (autoload/web.gd):
@@ -32,7 +37,11 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 GODOT = os.path.dirname(HERE)
-SHOTS = os.path.join(GODOT, "tests", "web_shots")
+BROWSER = sys.argv[sys.argv.index("--browser") + 1] if "--browser" in sys.argv else "chromium"
+if BROWSER not in ("chromium", "firefox", "webkit"):
+    sys.exit(f"--browser: chromium | firefox | webkit, а не {BROWSER}")
+CHROMIUM = BROWSER == "chromium"                           # CDP (замедление процессора, экран телефона) — только здесь
+SHOTS = os.path.join(GODOT, "tests", "web_shots", *([] if CHROMIUM else [BROWSER]))
 PORT = int(os.environ.get("WNB_PORT", "8061"))
 URL = os.environ.get("WNB_URL", f"http://127.0.0.1:{PORT}/")
 GPU_ARGS = ["--mute-audio", "--autoplay-policy=user-gesture-required", "--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist"]
@@ -53,6 +62,56 @@ INIT_JS = """
   const fake = { speak(u) { said.push(u.text); }, cancel() {}, pause() {}, resume() {}, getVoices() { return []; },
                  speaking: false, pending: false, onvoiceschanged: null, addEventListener() {} };
   try { Object.defineProperty(window, 'speechSynthesis', { value: fake, configurable: true }); } catch (e) {}
+  // WebKit Playwright под Windows: голоса браузера нет совсем — заглушке нужен и конструктор фразы
+  if (!window.SpeechSynthesisUtterance) window.SpeechSynthesisUtterance = function (t) { this.text = t; };
+})();
+"""
+
+
+# Firefox/WebKit: звук страницы — в ноль до её скриптов. <audio> — muted при каждом play и любой попытке снять;
+# WebAudio (Godot: эффекты, фоновые петли) — всё, что подключается к выходу контекста, идёт через усиление 0.
+MUTE_JS = """
+(() => {
+  try {
+    const mp = HTMLMediaElement.prototype, md = Object.getOwnPropertyDescriptor(mp, 'muted'), play = mp.play;
+    mp.play = function () { try { md.set.call(this, true); } catch (e) {} return play.apply(this, arguments); };
+    Object.defineProperty(mp, 'muted', { configurable: true, get() { return md.get.call(this); },
+                                         set(v) { md.set.call(this, true); } });
+  } catch (e) {}
+  try {
+    const conn = AudioNode.prototype.connect, gains = new WeakMap();
+    AudioNode.prototype.connect = function (dst, ...rest) {
+      if (typeof AudioDestinationNode !== 'undefined' && dst instanceof AudioDestinationNode) {
+        let g = gains.get(dst);
+        if (!g) { g = dst.context.createGain(); g.gain.value = 0; conn.call(g, dst); gains.set(dst, g); }
+        window.__mutedNodes = (window.__mutedNodes || 0) + 1;
+        return conn.call(this, g, ...rest);
+      }
+      return conn.call(this, dst, ...rest);
+    };
+  } catch (e) {}
+  window.__muted = true;
+})();
+"""
+# Буфер обмена: что игра положила (writeText) и чем ответил браузер — Firefox/WebKit не дают тесту readText
+CLIP_JS = """
+(() => {
+  const c = navigator.clipboard;
+  if (!c || !c.writeText) return;
+  const w = c.writeText.bind(c);
+  c.writeText = function (t) {
+    window.__clip = t; window.__clipErr = null;
+    return w(t).then(r => { window.__clipOk = true; return r; }, e => { window.__clipErr = String(e); throw e; });
+  };
+})();
+"""
+# Firefox/WebKit: «экран телефона» (screen.width/height, screen.orientation.type) — без CDP, подменой (orient)
+SCREEN_JS = """
+(() => {
+  const S = (k, p) => { const d = Object.getOwnPropertyDescriptor(p, k); if (!d || !d.get) return;
+    Object.defineProperty(p, k, { configurable: true, get() { const v = window.__wnbS; return v && k in v ? v[k] : d.get.call(this); } }); };
+  ['width', 'height', 'availWidth', 'availHeight'].forEach(k => S(k, Screen.prototype));
+  if (window.ScreenOrientation) ['type', 'angle'].forEach(k => S(k, ScreenOrientation.prototype));
 })();
 """
 
@@ -72,6 +131,10 @@ class Page:
         self.ctx, self.pg, self.name, self.touch = ctx, pg, name, touch
         self.errors, self.console = [], []
         self.allow = []                                   # подстроки ожидаемых ошибок (404 в сценарии обрыва)
+        if BROWSER == "webkit":
+            # проверка WebGL в WebKit строже: Godot (Compatibility) копирует кадр glBlitFramebuffer-ом, WebKit ругается
+            # один раз, картинка при этом верная (снимки) — сообщение движка, не игры
+            self.allow.append("glBlitFramebuffer: Read and write color attachments cannot be the same image")
         pg.on("console", self._console)
         pg.on("pageerror", lambda e: self.errors.append(f"pageerror: {e}"[:300]))
 
@@ -169,11 +232,24 @@ async def new_page(b, name, touch=False, mobile=False, w=1280, h=720, dpr=1.0, l
     """hook(route, path) — свой ответ на запрос к игре (True — обработан): обрыв, 500, «висящий» ответ, мусор."""
     opts = dict(viewport={"width": w, "height": h}, device_scale_factor=dpr, reduced_motion=motion)
     if mobile:
-        opts.update(is_mobile=True, has_touch=True)
+        opts.update(has_touch=True)
+        if BROWSER != "firefox":                           # Firefox: isMobile не поддерживается (касания — есть)
+            opts.update(is_mobile=True)
     ctx = await b.new_context(**opts)
     u = urllib.parse.urlsplit(URL)
-    await ctx.grant_permissions(["clipboard-read", "clipboard-write"], origin=f"{u.scheme}://{u.netloc}")
+    perms = {"chromium": ["clipboard-read", "clipboard-write"], "webkit": ["clipboard-read"], "firefox": []}[BROWSER]
+    if perms:
+        await ctx.grant_permissions(perms, origin=f"{u.scheme}://{u.netloc}")
+    if not CHROMIUM:
+        await ctx.add_init_script(MUTE_JS)
+        await ctx.add_init_script(SCREEN_JS)
+        if mobile:
+            # Firefox/WebKit без окна: полный экран растягивает страницу на «экран» компьютера (альбомный 1366×768) —
+            # телефон в книжной «поворачивался» сам. На настоящем телефоне размер окна в полном экране — свой.
+            await ctx.add_init_script("for (const k of ['requestFullscreen', 'webkitRequestFullscreen']) if "
+                                      "(Element.prototype[k]) Element.prototype[k] = function () { return Promise.resolve(); };")
     await ctx.add_init_script(INIT_JS)
+    await ctx.add_init_script(CLIP_JS)
     if legacy or legacy_raw:                           # legacy — словари, legacy_raw — текст файла как есть
         raw = {k: json.dumps(v) for k, v in (legacy or {}).items()}
         raw.update(legacy_raw or {})
@@ -201,6 +277,18 @@ async def new_page(b, name, touch=False, mobile=False, w=1280, h=720, dpr=1.0, l
 
 
 # ---------------- прохождение ----------------
+
+async def clip_text(p):
+    """Что лежит в буфере обмена после «Скопировать». Chromium — readText; Firefox/WebKit тесту читать буфер не дают —
+    то, что игра отдала в navigator.clipboard.writeText (CLIP_JS), и ответ браузера (ошибка — в __clipErr)."""
+    if CHROMIUM:
+        return await p.pg.evaluate("navigator.clipboard.readText().catch(e => 'ERR ' + e)")
+    await p.pg.wait_for_timeout(300)
+    r = await p.pg.evaluate("[window.__clip || '', window.__clipErr || null, !!window.__clipOk]")
+    info(f"{p.name}: буфер обмена ({BROWSER}): writeText «{r[0][:24]}…», принят браузером={r[2]}, ошибка={r[1]}")
+    check(r[2] and not r[1], f"{p.name}: браузер принял запись в буфер обмена (writeText) — {r[1] or 'ok'}")
+    return r[0]
+
 
 async def follow_hints(p, until, timeout=240, on_state=None, max_steps=400):
     """Жать подсказку игры (state.hint), пока until(state) не станет истиной."""
@@ -297,6 +385,15 @@ async def play_job(p, jid, expect_loop, shots=True):
     return st
 
 
+skipped = []
+
+
+def skip_cdp(name):
+    """Сценарий на CDP (замедление процессора, Page.setWebLifecycleState) в Firefox/WebKit не прогнать."""
+    skipped.append(name)
+    print(f"  --   {name}: пропущено: только Chromium (нужен CDP)", flush=True)
+
+
 async def measure_fps(p, secs=5.0):
     vals = []
     t0 = time.time()
@@ -327,14 +424,22 @@ async def sc_boot(b):
     await p.pg.wait_for_timeout(1500)
     await p.shot("1_title")
     net = st.get("net", {})
-    check(net.get("mode") == "worker" and net.get("worker_decoded", 0) >= 72,
-          f"{p.name}: кадры распаковывает фоновый поток страницы ({net.get('mode')}, {net.get('worker_decoded')} кадров, "
-          f"{net.get('worker_ms')} мс/кадр в потоке; в игровом кадре — {st.get('frames', {}).get('decode_ms')} мс)")
+    fr = st.get("frames", {})
+    metrics["decode"] = [BROWSER, net.get("mode"), net.get("worker_ms"), fr.get("decode_ms")]
+    no_oc = await p.pg.evaluate("!window.OffscreenCanvas")
+    if no_oc:                       # WebKit (Safari до 16.4): нет OffscreenCanvas — запасной путь, распаковывает игра
+        check(net.get("mode") == "godot" and fr.get("decoded", 0) >= 72,
+              f"{p.name}: нет OffscreenCanvas — запасной путь, кадры распаковывает игра ({net.get('mode')}, "
+              f"{fr.get('decoded')} кадров, {fr.get('decode_ms')} мс/кадр в игровом кадре)")
+    else:
+        check(net.get("mode") == "worker" and net.get("worker_decoded", 0) >= 72,
+              f"{p.name}: кадры распаковывает фоновый поток страницы ({net.get('mode')}, {net.get('worker_decoded')} кадров, "
+              f"{net.get('worker_ms')} мс/кадр в потоке; в игровом кадре — {fr.get('decode_ms')} мс)")
     # пиксели фоновой распаковки = распаковка WebP как есть (PIL): цвет под прозрачными пикселями не потерян
     import base64
     import io
     from PIL import Image
-    for rel in ("turntable/chair_aeroz_00.webp", "anim/barty_wave/00.webp"):
+    for rel in ("turntable/chair_aeroz_00.webp", "anim/barty_wave/00.webp") if not no_oc else ():
         r = await p.pg.evaluate("(u) => wnbNet.probe(u)", "frames/" + rel)
         got = base64.b64decode(r["b64"])
         ref = Image.open(os.path.join(GODOT, "content", "frames", *rel.split("/"))).convert("RGBA")
@@ -427,7 +532,7 @@ async def sc_links(b):
     await p.shot("2_settings_game")
     await p.press("Share_code", wait=800)
     st = await p.state()
-    clip = await p.pg.evaluate("navigator.clipboard.readText().catch(e => 'ERR ' + e)")
+    clip = await clip_text(p)
     check(clip.startswith("P."), f"{p.name}: «Скопировать код» положил код в буфер обмена ({clip[:24]}…)")
     await p.key("Escape", 400)
     # вставка кода: поле страницы поверх рамки
@@ -682,6 +787,18 @@ async def orient(p, w, h, landscape, dpr=3):
     if fs:                                               # первое касание включило полный экран — окно не ресайзится
         await p.pg.wait_for_timeout(500)
     await p.pg.set_viewport_size({"width": w, "height": h})   # и Playwright помнит размер (снимок его восстановит)
+    if not CHROMIUM:                                     # без CDP: экран и ориентация — подменой (SCREEN_JS)
+        v = {"width": w, "height": h, "availWidth": w, "availHeight": h,
+             "type": "landscape-primary" if landscape else "portrait-primary", "angle": 90 if landscape else 0}
+        await p.ctx.add_init_script(f"window.__wnbS = {json.dumps(v)};")   # и для следующей загрузки страницы
+        try:
+            await p.pg.evaluate("""(v) => { window.__wnbS = v; window.dispatchEvent(new Event('orientationchange'));
+                try { screen.orientation.dispatchEvent(new Event('change')); } catch (e) {}
+                window.dispatchEvent(new Event('resize')); }""", v)
+        except Exception:
+            pass                                         # страница ещё не открыта (about:blank) — хватит init-скрипта
+        await p.pg.wait_for_timeout(900)
+        return
     cdp = await p.ctx.new_cdp_session(p.pg)
     await cdp.send("Emulation.setDeviceMetricsOverride", {
         "width": w, "height": h, "deviceScaleFactor": dpr, "mobile": True, "screenWidth": w, "screenHeight": h,
@@ -732,7 +849,11 @@ async def sc_rotate(b):
     r = await rot_state(p)
     st = await p.wait(lambda s: s.get("covered") is False and s.get("paused") is False, "игра снова идёт", 10)
     check(not r["shown"] and bool(st), f"{p.name}: в альбомной ориентации заслонки нет, игра идёт")
-    check(bool(r["full"]) and r["full"][0] != "none", f"{p.name}: кнопка полного экрана у левого края ({r['full']})")
+    can_fs = await p.pg.evaluate("!!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)")
+    if can_fs:
+        check(bool(r["full"]) and r["full"][0] != "none", f"{p.name}: кнопка полного экрана у левого края ({r['full']})")
+    else:                                                # Safari на iPhone (и WebKit с isMobile): Fullscreen API нет
+        check(r["full"] is None, f"{p.name}: нет Fullscreen API (как Safari на iPhone) — кнопки ⛶ нет ({r['full']})")
     await p.pg.wait_for_timeout(2500)
     await p.press("Start", None, 1200)
     st = await p.wait(lambda s: s.get("screen") == "hub", "касание «начать» после поворота → мастерская", 10)
@@ -878,7 +999,8 @@ async def sc_a11y(b):
     if fs:
         await p.pg.wait_for_timeout(800)
         await p.shot("2_fullscreen")
-        await check_fit(p, 1280, 720, "полный экран на компьютере")
+        iw, ih = await p.pg.evaluate("[innerWidth, innerHeight]")   # Firefox без окна: полный экран = его «экран» 1366×768
+        await check_fit(p, iw, ih, "полный экран на компьютере")
         await p.press("Fullscreen", wait=800)
     p.check_console()
     await p.ctx.close()
@@ -905,6 +1027,18 @@ async def kb_order_web(b):
     await p.key("Tab", 300)
     st = await p.state()
     check(st.get("kb") == "Card_flat", f"{p.name}: Tab с «Меню» — заворот на первую группу, «Клиенты» ({st.get('kb')})")
+    act = await p.pg.evaluate("document.activeElement && (document.activeElement.id || document.activeElement.tagName)")
+    check(act == "canvas", f"{p.name}: после Tab и стрелок фокус страницы — у холста ({act}), браузер его не увёл")
+    # F1 — справка игры (не справка браузера), Esc — закрыть; фокус остаётся у холста, вкладок не прибавилось
+    n_pages = len(p.ctx.pages)
+    await p.key("F1", 600)
+    st = await p.state()
+    h1 = st.get("help")
+    await p.key("Escape", 500)
+    st = await p.state()
+    act = await p.pg.evaluate("document.activeElement && (document.activeElement.id || document.activeElement.tagName)")
+    check(h1 is True and st.get("help") is False and act == "canvas" and len(p.ctx.pages) == n_pages,
+          f"{p.name}: F1 — справка игры ({h1}), Esc закрыл ({st.get('help')}), фокус у холста ({act}), новых вкладок нет")
     await p.key("Enter", 1200)
     st = await p.wait(lambda s: s.get("screen") == "job", "задание по Enter", 10)
     await p.key("ArrowDown", 300)
@@ -1040,6 +1174,8 @@ async def sc_perf(b):
     ремонт, проезд) — без замедления, с замедлением процессора ×4 и ×6 (CDP Emulation.setCPUThrottlingRate) и в
     мобильном окне (740×360, dpr 3, ×6 — по снимку владельца 19.11 это и есть его телефон: 27 к/с в мастерской).
     WNB_PERF_RES=720,1080 — добавить проходы телефона с ?res=…"""
+    if not CHROMIUM:
+        return skip_cdp("perf")
     rows = []
     runs = [("desktop x1", 1, False, ""), ("desktop x4", 4, False, ""), ("desktop x6", 6, False, ""),
             ("phone x6", 6, True, "")]
@@ -1054,6 +1190,8 @@ async def sc_perf(b):
 async def sc_prof(b):
     """?prof=1 — профилировка (ui/prof.gd): сводки в window.wnbState.prof по фазам на телефоне ×6 (что дороже всего
     в кадре) → godot/tests/web_shots/prof_phone_x6.json и строки в выводе; «[wnb] prof …» в консоли браузера."""
+    if not CHROMIUM:
+        return skip_cdp("prof")
     prof = {}
     r = await perf_run(b, "prof phone x6", 6, True, "&prof=1", prof)
     check(bool(prof.get("hub")) and bool(prof.get("repair")), f"prof: сводки профиля сняты по фазам ({sorted(prof)})")
@@ -1206,6 +1344,8 @@ async def sc_screens(b):
     без замедления, ×6 и «телефон ×6» (740×360, dpr 3); плюс проход телефона ×6 с ?prof=1 — что дороже всего в кадре.
     WNB_SCREENS=ключ,ключ — только эти; WNB_SCREENS_MODES=x1,x6,phone,prof — только эти проходы.
     Итог — godot/tests/web_shots/screens_perf.json и таблица в конце вывода."""
+    if not CHROMIUM:
+        return skip_cdp("screens")
     only = [x for x in os.environ.get("WNB_SCREENS", "").split(",") if x]
     modes = [x for x in os.environ.get("WNB_SCREENS_MODES", "x1,x6,phone,prof").split(",") if x]
     runs = {"x1": ("desktop x1", 1, False, ""), "x6": ("desktop x6", 6, False, ""), "phone": ("phone x6", 6, True, ""),
@@ -1239,7 +1379,7 @@ async def sc_fpshud(b):
     await p.press("Gear", wait=600)
     await p.press("Tab_game", wait=400)
     await p.press("Share_link", wait=800)
-    link = await p.pg.evaluate("navigator.clipboard.readText().catch(e => 'ERR ' + e)")
+    link = await clip_text(p)
     info_ = json.load(open(os.path.join(build_web.OUT, "build_info.json"), encoding="utf-8"))
     keys = set(urllib.parse.parse_qs(urllib.parse.urlsplit(link).query))
     check(link.startswith(info_["base_url"] + "?load=P.") and keys == {"load"},
@@ -1277,7 +1417,14 @@ async def feedback_page(b, name, lang, outbox=None):
 
 async def type_text(p, text):
     """Набор как с физической клавиатуры (русская раскладка — keydown с key «п» и кодом клавиши): keyboard.type
-    Playwright вставляет не-латиницу через insertText без нажатий — холст Godot их не видит."""
+    Playwright вставляет не-латиницу через insertText без нажатий — холст Godot их не видит. Firefox/WebKit: CDP нет,
+    а keyboard.press не знает «п» — события keydown/keyup страницы прямо на холст (Godot их принимает так же)."""
+    if not CHROMIUM:
+        await p.pg.evaluate("""(t) => { const c = document.getElementById('canvas');
+            for (const ch of t) { const code = ch === ' ' ? 'Space' : (/\p{L}/u.test(ch) ? 'KeyA' : 'Digit1');
+              for (const ty of ['keydown', 'keyup'])
+                c.dispatchEvent(new KeyboardEvent(ty, { key: ch, code: code, bubbles: true, cancelable: true })); } }""", text)
+        return
     cdp = await p.ctx.new_cdp_session(p.pg)
     for ch in text:
         ev = {"key": ch, "text": ch, "unmodifiedText": ch, "code": "KeyA" if ch.isalpha() else "Digit1"}
@@ -1679,7 +1826,8 @@ async def sc_netfail(b):
     await p.press("Card_flat", wait=1200)
     st = await p.wait(lambda s: (frames_of(s, "tt:chair_basic.png") or [0, 1])[0] == 36, "кадры коляски", 30)
     corrupt = [c for c in p.console if "ERR_FILE_CORRUPT" in c or "webp_load" in c]
-    check(st.get("net", {}).get("mode") == "worker" and not corrupt,
+    want_mode = "godot" if await p.pg.evaluate("!window.OffscreenCanvas") else "worker"   # WebKit: распаковывает игра
+    check(st.get("net", {}).get("mode") == want_mode and not corrupt,
           f"net: «200 + HTML» вместо кадра — сбой одного файла, фоновая распаковка осталась "
           f"(mode={st.get('net', {}).get('mode')}, битых {st.get('net', {}).get('bad')}, ERR_FILE_CORRUPT в консоли: {len(corrupt)})")
     await p.ctx.close()
@@ -1731,9 +1879,14 @@ async def sc_fsexit(b):
     1280×720, 1366×768, 1920×1080; после нажатия на неё клавиши снова у игры (фокус — холсту)."""
     for w, h in ((1280, 720), (1366, 768), (1920, 1080)):
         p = await new_page(b, f"fsexit_{w}", w=w, h=h, legacy=SKIP_SEED)
+        if not CHROMIUM:                                  # «окно = экран» (F11): Firefox/WebKit без окна экран не подгоняют
+            await p.ctx.add_init_script(f"window.__wnbS = {{width: {w}, height: {h}, availWidth: {w}, availHeight: {h}}};")
         await p.boot()
         r = await exitfs_rect(p)
-        check(bool(r) and r[0] == "block", f"fsexit {w}×{h}: при входе в полный экран надпись видна ({r})")
+        es = await p.pg.evaluate("window.wnbExitFs ? wnbExitFs.state() : null")
+        # 4 с отсчитываются с загрузки страницы: Firefox без окна грузит игру ~5 с — к титулу надпись уже погасла
+        check(bool(r) and (r[0] == "block" or (es or {}).get("until", 0) > 0),
+              f"fsexit {w}×{h}: при входе в полный экран надпись видна ({r}; показ до {es})")
         await p.pg.mouse.move(w / 2, h / 2)
         await p.pg.wait_for_timeout(4500)
         hits, shown = [], []
@@ -1793,23 +1946,351 @@ async def sc_resparam(b):
         await p.ctx.close()
 
 
+# ---------------- хвосты аудита 20.11 (блок 3, 21.11) ----------------
+
+async def sc_zoom(b):
+    """Масштаб страницы браузера 50–300 % × dpr экрана 1 / 1,5 / 2 × ?res= (по умолчанию, 720, 0). Масштаб z в
+    браузере = окно в CSS-пикселях / z и devicePixelRatio × z: окно 1280×720 физ. → CSS (1280/z)×(720/z), dpr d·z.
+    Холст — на всё окно, буфер = CSS × эффективный dpr (потолок ?res=), картинка 16:9 целиком, нажатие «начать»
+    попадает в кнопку (мастерская)."""
+    for z in (0.5, 1.0, 1.5, 2.0, 3.0):
+        for d in (1.0, 1.5, 2.0):
+            for q in ("", "720", "0"):
+                if z == 1.5 and q:                        # 1,5 — только по умолчанию
+                    continue
+                w, h = round(1280 / z), round(720 / z)
+                dpr = d * z
+                p = await new_page(b, f"zoom_{int(z * 100)}_{d}_{q or 'def'}", w=w, h=h, dpr=dpr, legacy=SKIP_SEED)
+                p.allow.append("ERR_NO_BUFFER_SPACE")         # Windows: буфер сокетов локального сервера (как в screens)
+                await p.boot("&res=" + q if q else "")
+                c = await p.canvas()
+                cap = {"": 1080, "720": 720, "0": 0}[q]
+                gh = min(h, w * 9 / 16)
+                eff = dpr if not cap or gh * dpr <= cap else max(1.0 if not q else 0.25, min(dpr, cap / gh))
+                okbuf = abs(c[4] - round(w * eff)) <= 1 and abs(c[5] - round(h * eff)) <= 1
+                full = abs(c[2] - w) < 2 and abs(c[3] - h) < 2
+                await title_ready(p)
+                await p.press("Start", wait=1200)
+                st = await p.wait(lambda s: s.get("screen") == "hub", "мастерская", 10, quiet=True)
+                check(okbuf and full and bool(st),
+                      f"{p.name}: масштаб {z * 100:.0f} %, dpr экрана {d}, res {q or 'по умолч.'}: CSS {c[2]:.0f}×{c[3]:.0f} "
+                      f"(окно {w}×{h}), буфер {c[4]}×{c[5]} (ждали {round(w * eff)}×{round(h * eff)}, dpr {dpr:g} → "
+                      f"{eff:.2f}), «начать» попало: {bool(st)}")
+                if (z, d) in ((0.5, 1.0), (3.0, 2.0), (2.0, 1.5)) and not q:
+                    await p.shot("hub")
+                p.check_console()
+                await p.ctx.close()
+
+
+def assign_seed():
+    """Сохранение game.py с активным незаконченным заданием (tests/saves/assign_active: caster, brake + seat_troll)."""
+    return {"save.json": open(os.path.join(GODOT, "tests", "saves", "assign_active.save.json"), encoding="utf-8").read()}
+
+
+async def sc_assign(b):
+    """Ссылка-задание при уже активном другом задании (game.py start_assignment: другой id — заново, тот же — с места):
+    1) без ссылки — при входе в мастерскую окно «продолжить задание или обычная игра» (отступление Godot, 12.11);
+    2) при открытом окне в ту же вкладку — ссылка с другим заданием: новое задание, окна нет, в мастерской его пункты;
+    3) пункт нового задания пройден; «Назад» браузера (адрес без ссылки) — то же задание, вопрос «продолжить» о нём;
+    4) «Вперёд» (та же ссылка) — задание с места, пройденный пункт на месте."""
+    p = await new_page(b, "assign", legacy_raw=assign_seed())
+    await p.boot()
+    await to_hub(p)
+    st = await p.wait(lambda s: s.get("share_dlg") == "resume", "окно «продолжить задание»", 10)
+    old = st.get("assign")
+    check(st.get("share_dlg") == "resume" and bool(old), f"{p.name}: без ссылки — окно «продолжить задание» ({old})")
+    await p.shot("1_resume")
+    link = "&jobs=flat,spokes&from=" + urllib.parse.quote("Боб")
+    await p.boot(link)
+    st = await p.wait(lambda s: s.get("assign") and s.get("assign") != old, "новое задание из ссылки", 15)
+    new = st.get("assign")
+    await title_ready(p)
+    await p.press("Start", wait=1200)
+    st = await p.wait(lambda s: s.get("screen") == "hub", "мастерская задания", 10)
+    await p.pg.wait_for_timeout(800)
+    st = await p.state()
+    names = [x[0] for x in st.get("buttons", [])]
+    check(bool(new) and new != old and st.get("share_dlg") == "" and "Card_flat" in names and "Card_spokes" in names
+          and "Card_caster" not in names,
+          f"{p.name}: ссылка при открытом окне и другом активном задании — новое задание {new} (было {old}), окна нет, "
+          f"пункты {[n for n in names if n.startswith('Card_')]}")
+    st = await job_to_hub(p, "flat")
+    check("flat" in st.get("assign_done", []), f"{p.name}: пункт flat задания пройден ({st.get('assign_done')})")
+    await p.pg.wait_for_timeout(800)
+    await p.pg.go_back()
+    st = await p.wait(lambda s: s.get("screen") in ("title", "hub"), "«Назад» браузера", 60)
+    if st.get("screen") == "title":
+        await to_hub(p)
+    st = await p.wait(lambda s: s.get("share_dlg") == "resume", "после «Назад» — окно «продолжить»", 10, quiet=True) \
+        or await p.state()
+    check(st.get("assign") == new and "flat" in st.get("assign_done", []),
+          f"{p.name}: «Назад» (адрес без ссылки) — задание {st.get('assign')} с пройденным {st.get('assign_done')}, "
+          f"окно «{st.get('share_dlg')}»")
+    await p.pg.go_forward()
+    st = await p.wait(lambda s: s.get("screen") in ("title", "hub"), "«Вперёд» браузера", 60)
+    await p.pg.wait_for_timeout(800)
+    st = await p.state()
+    check(st.get("assign") == new and "flat" in st.get("assign_done", []) and st.get("share_dlg") != "resume",
+          f"{p.name}: «Вперёд» (та же ссылка) — то же задание с места: {st.get('assign')}, пройдено {st.get('assign_done')}")
+    p.check_console()
+    await p.ctx.close()
+
+
+PAD_JS = """
+(() => {
+  // геймпад для проверки: navigator.getGamepads и события gamepadconnected/disconnected — как у настоящего
+  const pads = window.__pads = [null, null, null, null];
+  navigator.getGamepads = () => pads.slice();
+  const ev = (n, g) => { const e = new Event(n); Object.defineProperty(e, 'gamepad', { value: g }); window.dispatchEvent(e); };
+  window.__padConnect = (i) => {
+    const g = { id: 'Test pad (STANDARD GAMEPAD Vendor: 045e Product: 028e)', index: i, connected: true, mapping: 'standard',
+      timestamp: performance.now(), axes: [0, 0, 0, 0], vibrationActuator: null,
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })) };
+    pads[i] = g; ev('gamepadconnected', g);
+  };
+  window.__padBtn = (i, b, down) => { const g = pads[i]; if (!g) return;
+    g.buttons[b] = { pressed: down, touched: down, value: down ? 1 : 0 }; g.timestamp = performance.now(); };
+  window.__padDrop = (i) => { const g = pads[i]; if (!g) return; g.connected = false; pads[i] = null; ev('gamepaddisconnected', g); };
+})();
+"""
+
+
+async def sc_pad(b):
+    """Геймпад подключили после старта (подсказка, как game.py pad_action «added»), крестовина ходит по пунктам; держат
+    «вниз» и выдёргивают геймпад — повтор стрелки останавливается (JOYDEVICEREMOVED → PAD["dir"] = None); игра живёт,
+    клавиатура работает; подключили снова — снова работает."""
+    p = await new_page(b, "pad", legacy=SKIP_SEED)
+    await p.ctx.add_init_script(PAD_JS)
+    await p.boot()
+    await to_hub(p)
+    await p.pg.wait_for_timeout(600)
+    await p.pg.evaluate("__padConnect(0)")
+    await p.pg.wait_for_timeout(700)
+    st = await p.state()
+    check("Геймпад подключён" in st.get("toast", ""), f"{p.name}: подключили после старта — подсказка «{st.get('toast')}»")
+    await p.pg.evaluate("__padBtn(0, 13, true)")          # крестовина вниз — держим
+    await p.pg.wait_for_timeout(120)
+    await p.fresh((await p.state()).get("t", 0))         # состояние — после первого нажатия (раз в 0,25 с)
+    k1 = (await p.state()).get("kb")
+    await p.pg.wait_for_timeout(1500)
+    k2 = (await p.state()).get("kb")
+    check(bool(k1) and k2 != k1, f"{p.name}: крестовина вниз — пункт {k1}, держим — повтор ({k2})")
+    await p.pg.evaluate("__padDrop(0)")                   # выдернули, не отпустив
+    await p.pg.wait_for_timeout(500)
+    seq = []
+    for _ in range(8):
+        seq.append((await p.state()).get("kb"))
+        await p.pg.wait_for_timeout(300)
+    check(len(set(seq)) == 1, f"{p.name}: геймпад отключили с зажатой крестовиной — повтор остановился ({seq})")
+    await p.key("ArrowDown", 300)
+    k3 = (await p.state()).get("kb")
+    check(k3 != seq[-1], f"{p.name}: после отключения клавиатура работает ({seq[-1]} → {k3})")
+    await p.pg.evaluate("__padConnect(0)")
+    await p.pg.wait_for_timeout(500)
+    await p.pg.evaluate("__padBtn(0, 13, true)")
+    await p.pg.wait_for_timeout(200)
+    await p.pg.evaluate("__padBtn(0, 13, false)")
+    await p.pg.wait_for_timeout(400)
+    k4 = (await p.state()).get("kb")
+    check(k4 != k3, f"{p.name}: подключили снова — крестовина работает ({k3} → {k4})")
+    st = await p.state()
+    check(st.get("screen") == "hub", f"{p.name}: игра живёт ({st.get('screen')})")
+    p.check_console()
+    await p.ctx.close()
+
+
+HIDE_JS = """(h) => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => h });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => h ? 'hidden' : 'visible' });
+    document.dispatchEvent(new Event('visibilitychange')); }"""
+
+
+async def background(p, secs):
+    """Вкладка в фоне secs секунд: страница скрыта (visibilitychange) и заморожена (CDP Page.setWebLifecycleState —
+    как Chrome замораживает фоновые вкладки: ни таймеров, ни кадров), потом снова видна."""
+    await p.pg.evaluate(HIDE_JS, True)
+    cdp = await p.ctx.new_cdp_session(p.pg)
+    await cdp.send("Page.setWebLifecycleState", {"state": "frozen"})
+    await asyncio.sleep(secs)
+    await cdp.send("Page.setWebLifecycleState", {"state": "active"})
+    await cdp.detach()
+    await p.pg.evaluate(HIDE_JS, False)
+
+
+async def sc_bg(b):
+    """Вкладка в фоне посреди мини-игры (насос) и посреди проезда (WNB_BG_SECS, по умолчанию 70 с): после возврата —
+    та же мини-игра с тем же давлением и кнопки работают; проезд доезжает до конца, итог открывается; музыка на паузе,
+    пока вкладка скрыта, и снова играет; ошибок в консоли нет. Только Chromium (CDP)."""
+    if not CHROMIUM:
+        return skip_cdp("bg")
+    secs = float(os.environ.get("WNB_BG_SECS", "70"))
+    p = await new_page(b, "bg", legacy=SKIP_SEED)
+    await p.boot()
+    await to_hub(p)
+    await p.press("Card_flat", wait=1200)
+    await p.wait(lambda s: s.get("screen") == "job", "задание", 15)
+    st = await follow_hints(p, lambda s: bool(s.get("mini")), 180)
+    v0 = (st.get("mini") or {}).get("value")
+    await p.press("Pump", wait=600)
+    st = await p.state()
+    v1 = (st.get("mini") or {}).get("value")
+    mus0 = await p.pg.evaluate("wnbMusic.state()")
+    await p.pg.evaluate(HIDE_JS, True)
+    await p.pg.wait_for_timeout(300)
+    mus_h = await p.pg.evaluate("wnbMusic.state()")
+    await p.pg.evaluate(HIDE_JS, False)
+    t0 = time.time()
+    await background(p, secs)
+    await p.pg.wait_for_timeout(1500)
+    st = await p.state()
+    m = st.get("mini") or {}
+    mus1 = await p.pg.evaluate("wnbMusic.state()")
+    info(f"{p.name}: фон {time.time() - t0:.0f} с посреди насоса: худший кадр после возврата {st.get('worst_ms')} мс, "
+         f"музыка {mus0.split(' ')[0]} → скрыта {mus_h.split(' ')[0]} → {mus1.split(' ')[0]}")
+    check(m.get("kind") == "pump" and m.get("value") == v1,
+          f"{p.name}: после фона — та же мини-игра, давление {v1} → {m.get('value')} (до нажатия {v0})")
+    check(mus_h.startswith("paused") and mus1.startswith("playing"),
+          f"{p.name}: музыка в фоне на паузе и снова играет ({mus_h[:7]} → {mus1[:7]})")
+    await p.shot("1_after_bg_pump")
+    st = await follow_hints(p, lambda s: s.get("phase") == "test", 180)
+    await p.press("TestDrive")
+    await p.wait(lambda s: (s.get("ride") or {}).get("riding"), "проезд", 10)
+    await p.pg.wait_for_timeout(700)
+    await background(p, secs)
+    st = await p.wait(lambda s: s.get("ride_done"), "проезд закончился после фона", 20)
+    check(bool(st.get("ride_done")), f"{p.name}: проезд после фона доехал ({(st.get('ride') or {})})")
+    await p.press("TestDrive", wait=50)
+    st = await p.wait(lambda s: s.get("screen") == "result", "итог после фона", 15)
+    check(st.get("screen") == "result", f"{p.name}: итог задания открылся")
+    await p.shot("2_after_bg_ride")
+    p.check_console()
+    await p.ctx.close()
+
+
+# ---------------- телефонные пропорции при крупном тексте (блок 2, 21.11) ----------------
+
+def shot_stages():
+    """Все состояния снимков tests/shots.gd (ALL), кроме «одной кнопки» (scan_*: рамка скана — свой режим)."""
+    src = open(os.path.join(GODOT, "tests", "shots.gd"), encoding="utf-8").read()
+    body = src[src.index("const ALL := [") + 14:]
+    body = body[:body.index("]")]
+    return [x for x in re.findall(r'"([^"]+)"', body) if not x.startswith("scan_")]
+
+
+async def set_stage(p, name, timeout=40):
+    await p.pg.evaluate("(n) => { window.wnbStaged = ''; window.wnbStage(n); }", name)
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if await p.pg.evaluate("window.wnbStaged || ''") == name:
+            return True
+        await p.pg.wait_for_timeout(150)
+    return False
+
+
+async def sc_phonetext(b):
+    """Телефон 740×360 и 780×360 (dpr 3, холст 2220×1080 / 2340×1080, поля по бокам) и компьютер 1280×720 dpr 1,5
+    (картинка тех же 1920×1080): все состояния tests/shots.gd на русском и английском при тексте 100/125/150 % и с
+    «лёгким» шрифтом. Картинка игры — вырезка 1920×1080 из снимка страницы → tests/web_shots/phonetext/; сверка
+    телефон ↔ компьютер по каждому состоянию (средняя разница и доля пикселей с разницей > 48) — в phonetext.json.
+    WNB_PT_COMBOS=ru150,en150f… — часть сочетаний; WNB_PT_STAGES=hub,… — часть состояний."""
+    from PIL import Image, ImageChops
+    out = os.path.join(SHOTS, "phonetext")
+    os.makedirs(out, exist_ok=True)
+    combos = [("ru", t, 0) for t in (0, 2, 3)] + [("en", t, 0) for t in (0, 2, 3)] + [("en", t, 1) for t in (0, 2, 3)]
+    want = [x for x in os.environ.get("WNB_PT_COMBOS", "").split(",") if x]
+    only = [x for x in os.environ.get("WNB_PT_STAGES", "").split(",") if x]
+    skip = [x for x in os.environ.get("WNB_PT_SKIP", "").split(",") if x]
+    stages = [s for s in shot_stages() if (not only or s in only) and s not in skip]
+    views = [("p740", dict(touch=True, mobile=True, w=740, h=360, dpr=3)),
+             ("p780", dict(touch=True, mobile=True, w=780, h=360, dpr=3)),
+             ("desk", dict(w=1280, h=720, dpr=1.5))]
+    vsel = [x for x in os.environ.get("WNB_PT_VIEWS", "").split(",") if x]       # p740,p780,desk — часть окон
+    views = [v for v in views if not vsel or v[0] in vsel]
+    res = {}
+    for lang, text, font in combos:
+        tag = f"{lang}{[100, 112, 125, 150][text]}{'f' if font else ''}"
+        if want and tag not in want:
+            continue
+        st_list = [s for s in stages if not s.startswith("title")] + (["title_en"] if lang == "en" else ["title"])
+        for vname, kw in views:
+            p = await new_page(b, f"pt_{tag}_{vname}", legacy=SKIP_SEED, **kw)
+            p.allow.append("ERR_NO_BUFFER_SPACE")
+            if kw.get("mobile"):
+                await orient(p, kw["w"], kw["h"], True, kw["dpr"])
+            await p.boot()
+            await title_ready(p)
+            for s in (f"set:lang={lang}", f"set:text={text}", f"set:font={font}"):
+                await set_stage(p, s)
+            for s in st_list:
+                if not await set_stage(p, s):
+                    check(False, f"{p.name}: состояние {s} не встало")
+                    continue
+                await p.wait(lambda q: q["frames"]["queue"] == 0 and q["frames"]["inflight"] == 0, "кадры", 6, quiet=True)
+                await p.pg.wait_for_timeout(500)
+                g, c, _ = await game_rect(p)
+                path = os.path.join(out, f"{tag}_{vname}_{s}.png")
+                try:
+                    await p.pg.screenshot(path=path, timeout=20000)
+                except Exception as e:
+                    info(f"{p.name}: снимок {s} не снят ({type(e).__name__})")
+                    continue
+                k = kw["dpr"]
+                im = Image.open(path)
+                box = [round(v * k) for v in (g[0], g[1], g[0] + g[2], g[1] + g[3])]
+                im.crop(box).resize((1920, 1080)).save(path)
+                res.setdefault(tag, {}).setdefault(s, {})[vname] = box
+            p.check_console()
+            await p.ctx.close()
+        # сверка: телефон ↔ компьютер
+        for s in st_list:
+            try:
+                d = Image.open(os.path.join(out, f"{tag}_desk_{s}.png")).convert("RGB")
+            except Exception:
+                continue
+            for vname in ("p740", "p780"):
+                try:
+                    m = Image.open(os.path.join(out, f"{tag}_{vname}_{s}.png")).convert("RGB")
+                except Exception:
+                    continue
+                df = ImageChops.difference(d, m).convert("L")
+                hist = df.histogram()
+                mean = sum(i * n for i, n in enumerate(hist)) / (1920 * 1080)
+                big = sum(hist[49:]) / (1920 * 1080)
+                res[tag][s][vname + "_diff"] = [round(mean, 2), round(big, 4)]
+    with open(os.path.join(SHOTS, "phonetext.json"), "w", encoding="utf-8") as f:
+        json.dump(res, f, ensure_ascii=False, indent=1)
+    worst = sorted(((v.get(f"{vn}_diff", [0, 0])[1], t, s, vn) for t, d in res.items() for s, v in d.items()
+                    for vn in ("p740", "p780")), reverse=True)[:25]
+    for w in worst:
+        info(f"phonetext: {w[1]} {w[3]} {w[2]}: пикселей с разницей > 48 от компьютера — {w[0] * 100:.2f} %")
+    check(bool(res), f"phonetext: снято {sum(len(d) for d in res.values())} состояний × 3 окна")
+
+
 SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
              "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "feedback": sc_feedback, "perf": sc_perf,
              "prof": sc_prof, "screens": sc_screens, "tabs": sc_tabs, "store": sc_store, "loader": sc_loader,
-             "netfail": sc_netfail, "fsexit": sc_fsexit, "res": sc_resparam}
-TIMEOUT = {"screens": 5400}                               # все экраны × 4 прохода — долго
+             "netfail": sc_netfail, "fsexit": sc_fsexit, "res": sc_resparam, "zoom": sc_zoom, "assign": sc_assign,
+             "pad": sc_pad, "bg": sc_bg, "phonetext": sc_phonetext}
+TIMEOUT = {"screens": 5400, "phonetext": 7200,            # все экраны × 4 прохода — долго
+           "bg": 2 * float(os.environ.get("WNB_BG_SECS", "70")) + 480}   # два раза «в фоне» + задание
 
 
 async def main(only):
     os.makedirs(SHOTS, exist_ok=True)
     open(os.path.join(SHOTS, ".gdignore"), "w").close()     # снимки внутри проекта — редактору не импортировать
     for f in os.listdir(SHOTS):
-        if f != ".gdignore" and (not only or any(f.startswith(n) for n in only)):
+        if f != ".gdignore" and os.path.isfile(os.path.join(SHOTS, f)) and (not only or any(f.startswith(n) for n in only)):
             os.remove(os.path.join(SHOTS, f))
     async with async_playwright() as pw:
         # Playwright сам добавляет --autoplay-policy=no-user-gesture-required — убираем (страницу он всё равно помечает
         # «нажатой», так что запрет автозапуска звука в этой проверке не виден)
-        b = await pw.chromium.launch(args=GPU_ARGS, ignore_default_args=["--autoplay-policy=no-user-gesture-required"])
+        if BROWSER == "firefox":                           # звук — в ноль настройкой профиля (+ MUTE_JS в странице)
+            b = await pw.firefox.launch(firefox_user_prefs={"media.volume_scale": "0.0",
+                                                            "media.autoplay.default": 1})
+        elif BROWSER == "webkit":
+            b = await pw.webkit.launch()
+        else:
+            b = await pw.chromium.launch(args=GPU_ARGS, ignore_default_args=["--autoplay-policy=no-user-gesture-required"])
+        print(f"Браузер: {BROWSER} {b.version}", flush=True)
         try:
             for name, fn in SCENARIOS.items():
                 if only and name not in only:
@@ -1854,7 +2335,8 @@ if __name__ == "__main__":
         for k in [k for k, *_ in SCREENS if any(k in sc[c] for c in cols)]:
             print(f"  {k:<21}" + "".join(f"{sc[c][k][0]:>8.0f} ({sc[c][k][1]:>3.0f})" if k in sc[c] else f"{'—':>14}"
                                          for c in cols))
-    print(f"\nWEB SMOKE: {len(notes)} ok, {len(fails)} FAIL. Скриншоты: godot/tests/web_shots/ — открой и посмотри.")
+    tail = f" ({BROWSER}; пропущено, только Chromium: {', '.join(skipped)})" if skipped else f" ({BROWSER})"
+    print(f"\nWEB SMOKE: {len(notes)} ok, {len(fails)} FAIL{tail}. Скриншоты: {os.path.relpath(SHOTS, os.path.dirname(GODOT))}/ — открой и посмотри.")
     for f in fails:
         print("  ", f)
     sys.exit(1 if fails else 0)

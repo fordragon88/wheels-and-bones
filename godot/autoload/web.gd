@@ -100,6 +100,16 @@ func _on_cover(args: Array) -> void:
 func _on_stage(args: Array) -> void:
 	if args.is_empty():
 		return
+	var name := str(args[0])
+	if name.begins_with("set:"):              # web_smoke: «set:lang=en», «set:text=3», «set:font=1» — настройка как из меню
+		var kv := name.substr(4).split("=")
+		if kv.size() == 2:
+			if kv[0] == "lang":
+				Loc.set_lang(kv[1])
+			else:
+				Settings.set_a11y(kv[0], int(kv[1]) if kv[0] == "text" else kv[1] == "1")
+		JavaScriptBridge.eval("window.wnbStaged = %s" % JSON.stringify(name), true)
+		return
 	if _stager == null:
 		var gd := load("res://tests/shots.gd") as GDScript
 		if gd == null or not gd.can_instantiate():
@@ -276,7 +286,9 @@ func state() -> Dictionary:
 		"worst_ms": snappedf(_worst_ms, 0.1), "frames": Frames.stats(), "net": net_stats(),
 		"lang": Loc.code, "calm": Settings.calm(), "sound": Settings.vol.get("on", true),
 		"done": SaveGame.done.keys(), "assign": SaveGame.assign.get("id", "") if SaveGame.assign_on() else "",
+		"assign_done": (SaveGame.assign.get("done", {}) as Dictionary).keys() if SaveGame.assign_on() else [],
 		"toast": Nav.toast.text if Nav.toast.active() else "", "speech": Speech.last(),
+		"help": Nav.help != null,
 		"share_dlg": Share.dlg.ui.get("mode", "") if Share.dlg != null else "",
 		"settings": Nav.settings != null, "errors": Content.errors.size(), "migrated": SaveGame.migrated,
 		"fullscreen": DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN,
