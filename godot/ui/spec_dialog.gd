@@ -89,6 +89,7 @@ func refresh() -> void:
 		b.enabled = is_viewed()
 		b.accessibility_name = Loc.t(opts[i][0]) + ("" if is_viewed() else ", " + Loc.t("закрыто: сначала мануал"))
 		b.set_meta("a11y_group", "Варианты")
+		UI.touch_skip(b, not is_viewed())           # варианты — цели переноса тапа только после мануала (game.py)
 		b.queue_redraw()
 	queue_redraw()
 

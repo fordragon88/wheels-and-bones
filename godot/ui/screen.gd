@@ -74,6 +74,12 @@ func handle_key(_e: InputEventKey) -> bool:
 	return false
 
 
+## Сенсорный экран: где тап чуть мимо цели переносится в ближайшую (_touch_snap в game.py) — узел, чьи кнопки
+## считаются целями (Nav.touch_snap). null — не переносить (экраны и окна, где game.py этого не делает).
+func touch_scope() -> Control:
+	return null
+
+
 ## Для флажка ⚑: где игрок (как open_feedback в game.py).
 func feedback_context() -> Dictionary:
 	return {"kind": "general", "job": "", "title": "", "phase": screen_name, "step": "", "expected": "", "got": "",

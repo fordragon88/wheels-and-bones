@@ -218,6 +218,7 @@ func _run() -> void:
 		if w.is_empty() or absi(sp[1] - w[0]) > 1 or absi(sp[2] - w[1]) > 1 or sp[3] != w[2]:
 			err("кружок %s: %s, в pygame %s" % [sp[0], sp.slice(1, 4), w])
 	var fx_line: String = await _fixes()
+	fx_line += "; " + await _touch()
 	# --- сценарий мышью: титул → мастерская → flat → осмотр → неверный → верный диагноз ---
 	SaveGame.reset()
 	await _flow_mouse()
@@ -233,6 +234,15 @@ func _fixes() -> String:
 	add_child(fx)
 	var line: String = await fx.run(self)
 	fx.queue_free()
+	return line
+
+
+## Сенсорный экран: запас на промах пальцем как в game.py (tests/touch_check.gd).
+func _touch() -> String:
+	var tc: Node = (load("res://tests/touch_check.gd") as GDScript).new()
+	add_child(tc)
+	var line: String = await tc.run(self)
+	tc.queue_free()
 	return line
 
 
@@ -2503,6 +2513,8 @@ func _only(what: String) -> void:
 			line = await _flow_arrows()
 		"fixes":
 			line = await _fixes()
+		"touch":
+			line = await _touch()
 	Nav.shutdown()
 	await _frames(10)
 	for e in errors:

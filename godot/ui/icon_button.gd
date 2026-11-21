@@ -35,6 +35,9 @@ static func make_icon(k: Kind) -> IconButton:
 			b.size = Vector2(38, 38)
 			b.label = "НАСТРОЙКИ"
 			b.name = "Gear"
+	if k != Kind.LANG:                         # Game._tap: «назад», ⚑, ⚙ на сенсоре шире пальца (язык — точно)
+		b.touch_grow = UI.TOUCH_TAP_GROW
+	UI.touch_skip(b)                           # не цель переноса тапа, но зона, где тап не трогают (Nav.touch_snap)
 	b.update_a11y()
 	return b
 

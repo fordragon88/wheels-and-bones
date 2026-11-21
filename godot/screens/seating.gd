@@ -251,6 +251,7 @@ func _build_dyn() -> void:
 			s.position = tr.position - Vector2(15, 15)
 			s.size = tr.size + Vector2(30, 30)
 			s.set_meta("a11y_group", "Ползунки")
+			UI.touch_block(s)                      # click_seating: block — дорожка ползунка inflate(30, 30) = сам узел
 			_dyn.add_child(s)
 			sliders[keys[i]] = s
 		var go := GameButton.make(BTN, "СЛЕДУЮЩИЙ КЛИЕНТ ▶" if solved else "ГОТОВО — ПРОВЕРИТЬ ПОСАДКУ",
@@ -280,12 +281,18 @@ func _build_dyn() -> void:
 			b.redraw_sig = _btn_sig
 			b.accessibility_name = Loc.t(q["options"][i][0])
 			b.pressed.connect(quiz_pick.bind(i))
+			UI.touch_skip(b, picked >= 0)            # ответ уже выбран — варианты не цели (как в game.py)
 			_dyn.add_child(b)
 		if picked >= 0:
 			var nx := GameButton.make(BTN, "ДАЛЬШЕ ▶", UI.AMBER)
 			nx.name = "Next"
 			nx.pressed.connect(quiz_next)
 			_dyn.add_child(nx)
+
+
+## click_seating: цели — «назад», вкладки, список, переключатель, ответы, кнопка; ползунки — block.
+func touch_scope() -> Control:
+	return self
 
 
 func first_focus() -> Control:

@@ -225,6 +225,19 @@ func spots() -> Array:
 	return _spots
 
 
+## _hotspot_at из game.py: деталь под точкой p (координаты экрана задания): ближайший кружок, у которого
+## расстояние до центра ≤ r + pad (выбор — по наименьшему d − r). Нет — "".
+func hotspot_at(p: Vector2, pad: float) -> String:
+	var best := ""
+	var bd := INF
+	for s: Array in spots():
+		var d := p.distance_to(Vector2(s[1], s[2]))
+		if d <= s[3] + pad and d - s[3] < bd:
+			best = s[0]
+			bd = d - s[3]
+	return best
+
+
 func spot_of(pid: String) -> Array:
 	for s: Array in spots():
 		if s[0] == pid:

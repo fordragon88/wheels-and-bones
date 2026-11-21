@@ -65,6 +65,7 @@ func _ready() -> void:
 			_track.mini = self
 			_track.position = Vector2(P.position.x + 60, P.position.y + 170)
 			_track.size = Vector2(600, 30)
+			UI.touch_block(_track)                     # _click_mini: дорожка зазора — без переноса (block)
 			add_child(_track)
 			_btn("Check", Rect2(P.get_center().x - 130, P.end.y - 130, 260, 56), "ПРОВЕРИТЬ", UI.GOOD, gap_check)
 			_first = _track

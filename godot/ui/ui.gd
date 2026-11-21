@@ -84,6 +84,75 @@ static func touch() -> bool:
 	return _touch == 1
 
 
+# ---- запас на промах пальцем (game.py: TOUCH_PAD, _touch_pick, _touch_snap, Game._tap) ----
+# Только на сенсорном экране (touch()); с мышью попадания точные, как были. Числа — в единицах холста 1280×720.
+const TOUCH_PAD := 16                     # TOUCH_PAD: тап не дальше 16 px от края цели — в цель
+const TOUCH_TAP_GROW := 9                 # Game._tap: значки шапки rect.inflate(18, 18) — по 9 px с каждой стороны
+const TOUCH_SPOT_PAD := 16                # _hotspot_at: кружок детали r + 16 (мышь — r + 4)
+
+
+## Цель не участвует в переносе тапа (Nav.touch_snap): кнопки, которых нет в списках целей game.py.
+static func touch_skip(c: Control, on: bool = true) -> void:
+	c.set_meta("touch_skip", on)
+
+
+## Зона, где тап не переносится (block в _touch_snap): окно коляски, ползунки… grow — запас по каждой стороне.
+static func touch_block(c: Control, grow: Vector2 = Vector2.ZERO) -> void:
+	c.add_to_group("touch_block")
+	c.set_meta("touch_grow", grow)
+
+
+## _touch_pick из game.py: индекс прямоугольника под пальцем. Точное попадание — первое в списке; иначе (только на
+## сенсорном экране) — ближайший, до края которого не дальше pad (при равенстве — ближайший по центру). Нет — −1.
+## Край — как у pygame.Rect: последний пиксель right − 1 / bottom − 1.
+static func touch_pick(rects: Array, p: Vector2, pad: float = TOUCH_PAD, on: bool = touch()) -> int:
+	for i in rects.size():
+		if (rects[i] as Rect2).has_point(p):
+			return i
+	if not on:
+		return -1
+	var best := -1
+	var bd := INF
+	var bc := INF
+	for i in rects.size():
+		var r: Rect2 = rects[i]
+		if r.size.x <= 0 or r.size.y <= 0:
+			continue
+		var dx := maxf(maxf(r.position.x - p.x, 0.0), p.x - (r.end.x - 1))
+		var dy := maxf(maxf(r.position.y - p.y, 0.0), p.y - (r.end.y - 1))
+		var d := sqrt(dx * dx + dy * dy)
+		if d <= pad:
+			var dc := p.distance_to(r.get_center())
+			if d < bd or (d == bd and dc < bc):
+				best = i
+				bd = d
+				bc = dc
+	return best
+
+
+## _touch_snap из game.py: палец чуть мимо цели — точка переносится в центр ближайшей цели (не дальше TOUCH_PAD).
+## Точное попадание в цель или в зону block (Rect2 или Control — по его попаданию) — точку не трогаем.
+static func touch_snap(p: Vector2, targets: Array, block: Array = [], on: bool = touch()) -> Vector2:
+	if not on:
+		return p
+	for r: Rect2 in targets:
+		if r.has_point(p):
+			return p
+	for b: Variant in block:
+		if (b is Rect2 and (b as Rect2).has_point(p)) or (b is Control and hits(b as Control, p)):
+			return p
+	var i := touch_pick(targets, p, TOUCH_PAD, true)
+	return (targets[i] as Rect2).get_center() if i >= 0 else p
+
+
+## Попадает ли точка холста p в элемент так, как его выберет Godot (с _has_point кнопок игры).
+static func hits(c: Control, p: Vector2) -> bool:
+	var lp := c.get_global_transform().affine_inverse() * p
+	if c.get_script() != null and c.has_method("_has_point"):     # свои зоны: кружок детали, портрет, значки
+		return c.call("_has_point", lp)
+	return Rect2(Vector2.ZERO, c.size).has_point(lp)
+
+
 static func clear_font_cache() -> void:
 	_fonts.clear()
 	clear_text_cache()

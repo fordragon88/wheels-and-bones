@@ -101,5 +101,5 @@ func _draw() -> void:
 	var ax := fr.position.x + fr.size.x / 2.0
 	var ay := fr.position.y + fr.size.y * 0.54
 	draw_texture_rect(tex, Rect2(Vector2(ax + float(off[0]) * scale, ay + float(off[1]) * scale), tex.get_size() * scale / float(tt["ref"])), false)
-	if not drag and _inside:
+	if not drag and _inside and not UI.touch():  # _draw_tt_show: «наведения» на сенсоре нет — подсказки под пальцем нет
 		UI.draw_text(self, Loc.t("⟲ тяни — повернуть"), Vector2(6, size.y - 16), 12, Color8(200, 196, 180))

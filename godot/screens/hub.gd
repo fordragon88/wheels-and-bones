@@ -73,6 +73,9 @@ func build() -> void:
 	_note.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_note.draw.connect(_draw_note)
 	add_child(_note)
+	for c: Node in get_children():          # click_hub: цели — карточки и стрелки; кнопки справа — block, не цели
+		if c is GameButton and not c is ClientCard and not c.name in ["Prev", "Next"]:
+			UI.touch_skip(c)
 	Chrome.add(self, true, true, true)
 	if params.get("summary", false):
 		params.erase("summary")
@@ -160,6 +163,11 @@ func _build_normal() -> void:
 func _pages() -> int:
 	var per := COLS * ROWS
 	return maxi(1, (SaveGame.available_jobs().size() + per - 1) / per)
+
+
+## click_hub: цели — карточки клиентов и стрелки страниц; большие кнопки справа — зоны без переноса.
+func touch_scope() -> Control:
+	return self
 
 
 func first_focus() -> Control:

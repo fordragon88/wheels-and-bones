@@ -106,6 +106,7 @@ func _build() -> void:
 					Settings.save()
 					Audio.apply_volume()
 					queue_redraw())
+				UI.touch_block(s, Vector2(0, -1))     # handle_sound_event: block — дорожка 230×8 inflate(24, 30)
 				add_child(s)
 				_zones.append(["vol_" + key, Rect2(P.position.x + 24, P.position.y + 146 + i * 58 - 20, P.size.x - 48, 40), s])
 			var on: bool = Settings.vol.get("on", true)

@@ -252,6 +252,7 @@ func build() -> void:
 		_skip = GameButton.make(Rect2(UI.W - 390, 9, 210, 36), "ПРОПУСТИТЬ ОБУЧЕНИЕ ▸", UI.CYAN)
 		_skip.name = "SkipTutorial"
 		_skip.pressed.connect(skip_tutorial)
+		UI.touch_skip(_skip)
 		bar.brand = false
 		bar.right_edge = _skip.position.x - 12
 	add_child(bar)
@@ -302,6 +303,8 @@ func build() -> void:
 	chair.part_pressed.connect(part_clicked)
 	chair.visible = not ride_done
 	add_child(chair)
+	UI.touch_block(chair)                     # click_job: окно коляски — там палец вращает её, тап не переносим
+	UI.touch_block(portrait)                  # клик/тап по портрету — «волшебство» (в game.py — до переноса)
 	var cr := chair_rect()
 	if chair.has_frames() and phase in ["diagnose", "repair"]:
 		var zin := GameButton.make(Rect2(cr.end.x - 44, cr.position.y + 4, 40, 36), "+", UI.CYAN)
@@ -314,6 +317,13 @@ func build() -> void:
 		zout.accessibility_name = Loc.t("Мельче")
 		zout.pressed.connect(zoom.bind(-1))
 		add_child(zout)
+		for z: GameButton in [zin, zout]:          # _m3d_event: на сенсоре _touch_pick с запасом, кружок детали важнее
+			z.touch_pad = UI.TOUCH_PAD
+			z.touch_peers = [zin, zout]
+			z.touch_yield = func(gp: Vector2) -> bool:
+				return chair != null and chair.show_spots and chair.visible \
+					and chair.hotspot_at(get_global_transform().affine_inverse() * gp, UI.TOUCH_SPOT_PAD) != ""
+			UI.touch_skip(z)
 	match phase:
 		"diagnose":
 			_build_diagnose()
@@ -344,6 +354,8 @@ func build() -> void:
 	_dispute_btn.name = "Dispute"
 	_dispute_btn.visible = false
 	_dispute_btn.pressed.connect(open_dispute)
+	_dispute_btn.touch_grow = UI.TOUCH_TAP_GROW         # Game._tap: на сенсоре шире пальца
+	UI.touch_skip(_dispute_btn)
 	add_child(_dispute_btn)
 	Chrome.add(self, true, true, false)
 
@@ -775,6 +787,15 @@ func note_part_at() -> String:
 			if hb and hb.is_hovered():
 				return pid if _part_note(pid).size() > 0 else ""
 	return ""
+
+
+## click_job: мини-окно — его кнопки (_click_mini), окно сносок — без переноса, иначе — цели экрана (_job_touch_targets).
+func touch_scope() -> Control:
+	if mini:
+		return mini
+	if notes:
+		return null
+	return self
 
 
 func open_notes() -> void:

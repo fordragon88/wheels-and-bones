@@ -25,6 +25,31 @@ var _sig: Array = []
 var hover_k: float = 0.0
 var hover_sound: bool = true
 var _was_hover := false
+## Сенсорный экран (UI.touch()), запас на промах — с мышью зона кнопки точная, как была:
+## touch_grow — значки шапки (Game._tap: rect.inflate(18, 18) → по 9 px);
+## touch_pad — «+»/«−» коляски (_touch_pick с TOUCH_PAD среди touch_peers; кружок детали под пальцем важнее —
+## touch_yield(точка холста) → true: кнопка уступает).
+var touch_grow: float = 0.0
+var touch_pad: float = 0.0
+var touch_peers: Array = []
+var touch_yield: Callable
+
+
+func _has_point(p: Vector2) -> bool:
+	var r := Rect2(Vector2.ZERO, size)
+	if (touch_grow <= 0.0 and touch_pad <= 0.0) or not UI.touch():
+		return r.has_point(p)
+	if touch_grow > 0.0:
+		return r.grow(touch_grow).has_point(p)
+	var gp := get_global_transform() * p
+	if touch_yield.is_valid() and touch_yield.call(gp):
+		return false
+	var peers: Array = touch_peers if not touch_peers.is_empty() else [self]
+	var rects: Array = []
+	for b: Control in peers:
+		rects.append(b.get_global_rect())
+	var i := UI.touch_pick(rects, gp, touch_pad, true)
+	return i >= 0 and peers[i] == self
 
 
 static func make(rect: Rect2, lbl: String, col: Color = UI.AMBER, sub_text: String = "") -> GameButton:

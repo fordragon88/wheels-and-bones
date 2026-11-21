@@ -176,6 +176,7 @@ func build() -> void:
 	add_child(face)
 	chair = TurntableShow.make(job["chair_art"], tech_chair_rect(), 1.12 if phase == "test" else 1.0)
 	add_child(chair)
+	UI.touch_block(chair)                     # click_job_tech: окно коляски — палец вращает её, тап не переносим
 	_deco = Control.new()
 	_deco.name = "Deco"
 	_deco.size = size
@@ -231,6 +232,8 @@ func build() -> void:
 	_dispute_btn.name = "Dispute"
 	_dispute_btn.visible = false
 	_dispute_btn.pressed.connect(open_dispute)
+	_dispute_btn.touch_grow = UI.TOUCH_TAP_GROW         # Game._tap: на сенсоре шире пальца
+	UI.touch_skip(_dispute_btn)
 	add_child(_dispute_btn)
 	Chrome.add(self, true, true, false)
 	_update_a11y()
@@ -472,6 +475,18 @@ func _unmodal() -> void:
 		UI.focus_later(spec_dlg.first_focus())
 	else:
 		_focus_default()
+
+
+## click_job_tech: мини-окно, потом окно мануала (без переноса), спека, фаза ремонта (manual, skip, инструменты,
+## операции); в проверке — без переноса.
+func touch_scope() -> Control:
+	if mini:
+		return mini
+	if manual_dlg:
+		return null
+	if spec_dlg:
+		return spec_dlg
+	return self if phase == "repair" else null
 
 
 func open_manual(key: String = "") -> void:

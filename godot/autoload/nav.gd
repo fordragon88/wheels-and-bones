@@ -38,6 +38,7 @@ var feedback: FeedbackDialog
 var help: HelpOverlay
 var _fade: TextureRect
 var _fade_t: float = -1.0
+var _snapping := false                    # Nav._input: идёт повтор нажатия в перенесённой точке (запас пальца)
 var _esc_t: float = 0.0
 var _touch_as_mouse: bool = bool(ProjectSettings.get_setting("input_devices/pointing/emulate_mouse_from_touch", true))
 var support_opened: int = 0              # сколько раз нажали «Поддержать» (тесты)                   # «ещё раз Esc — выйти»
@@ -377,6 +378,26 @@ func _input(e: InputEvent) -> void:
 			toast.on_input()
 		get_viewport().set_input_as_handled()
 		return
+	if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT and not _snapping and UI.touch():
+		# палец чуть мимо цели — нажатие переносится в её центр (_touch_snap в game.py). Godot выбирает кнопку по
+		# «мыши над» (посчитано до _input по старой точке), поэтому не правим событие, а шлём заново: движение в
+		# новую точку и нажатие там; исходное нажатие гасим. Отпускание придёт к той же кнопке (фокус мыши).
+		# С мышью сюда не попадаем.
+		var mb := e as InputEventMouseButton
+		var q := touch_snap(mb.position)
+		if q != mb.position:
+			_snapping = true
+			var mm := InputEventMouseMotion.new()
+			mm.position = q
+			mm.global_position = q
+			get_viewport().push_input(mm, true)
+			var nb := mb.duplicate() as InputEventMouseButton
+			nb.position = q
+			nb.global_position = q
+			get_viewport().push_input(nb, true)
+			_snapping = false
+			get_viewport().set_input_as_handled()
+			return
 	if (e is InputEventJoypadButton or e is InputEventJoypadMotion) and _pad(e):
 		if not UI.kb_active:
 			UI.kb_active = true
@@ -400,6 +421,37 @@ func _input(e: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif k.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] and not k.echo:
 			A11y.kb_pressed(get_viewport().gui_get_focus_owner())
+
+
+## _touch_snap game.py для текущего окна/экрана: цели — видимые кнопки области Screen.touch_scope() (или окна
+## настроек), кроме помеченных UI.touch_skip; зоны без переноса — UI.touch_block (с запасом touch_grow), кнопки
+## не-цели (по их зоне попадания — кружки деталей, «+/−», значки шапки шире пальца) и значки шапки экрана поверх
+## окна задания (Game._tap идёт раньше click_job). Справка F1, замечание, окно кодов — без переноса.
+func touch_snap(p: Vector2, on: bool = UI.touch()) -> Vector2:
+	if not on or help != null or feedback != null or Share.dlg != null:
+		return p
+	var scope: Control = settings if settings != null else (current.touch_scope() if current != null else null)
+	if scope == null or not scope.is_visible_in_tree():
+		return p
+	var targets: Array = []
+	var block: Array = []
+	for n: Node in [scope] + scope.find_children("*", "Control", true, false):
+		var c := n as Control
+		if c == null or not c.is_visible_in_tree() or c.mouse_filter == Control.MOUSE_FILTER_IGNORE:
+			continue
+		if c.is_in_group("touch_block"):
+			var g: Vector2 = c.get_meta("touch_grow", Vector2.ZERO)
+			block.append(c if g == Vector2.ZERO else c.get_global_rect().grow_individual(g.x, g.y, g.x, g.y))
+		elif c is BaseButton:
+			if c.get_meta("touch_skip", false):
+				block.append(c)
+			else:
+				targets.append(c.get_global_rect())
+	if settings == null and scope != current:
+		for c: Node in current.get_children():
+			if c is BaseButton and (c as Control).is_visible_in_tree() and c.get_meta("touch_skip", false):
+				block.append(c)
+	return UI.touch_snap(p, targets, block, true)
 
 
 func _redraw_focus() -> void:

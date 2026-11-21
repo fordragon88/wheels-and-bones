@@ -758,8 +758,19 @@ async def sc_phone(b):
     await p.press("Start", wait=1200)
     st = await p.wait(lambda s: s.get("screen") == "hub", "касание «начать» → мастерская", 10)
     await p.shot("2_hub")
-    await p.press("Card_flat", wait=1500)
-    st = await p.wait(lambda s: s.get("screen") == "job", "касание карточки → задание", 10)
+    # запас на промах пальцем (_touch_snap game.py, TOUCH_PAD 16): левее карточки на 30 px — мимо, на 10 px — в неё
+    cf = next((x for x in (await p.state()).get("buttons", []) if x[0] == "Card_flat"), None)
+    check(cf is not None, f"{p.name}: карточка flat на экране")
+    if cf:
+        await p.tap_xy(cf[1] - 30, cf[2] + cf[4] / 2)
+        await p.pg.wait_for_timeout(900)
+        st = await p.state()
+        check(st.get("screen") == "hub", f"{p.name}: касание на 30 px левее карточки — мимо (экран {st.get('screen')})")
+        await p.tap_xy(cf[1] - 10, cf[2] + cf[4] / 2)
+    else:
+        await p.press("Card_flat", wait=0)
+    st = await p.wait(lambda s: s.get("screen") == "job", "касание на 10 px левее карточки → задание (запас пальца)", 10)
+    check(st.get("screen") == "job", f"{p.name}: касание на 10 px левее карточки — задание (запас пальца TOUCH_PAD 16)")
     await p.pg.wait_for_timeout(3000)
     await p.shot("3_job")
     # касание пункта списка деталей — осмотр
@@ -769,7 +780,15 @@ async def sc_phone(b):
     await p.key("Escape", 600)
     await p.key("Escape", 600)
     st = await p.wait(lambda s: s.get("screen") == "hub", "Esc → мастерская", 10)
-    await p.press("Gear", wait=600)
+    # Game._tap: значок ⚙ на сенсоре шире пальца на 9 px — касание на 6 px правее него открывает настройки
+    g = next((x for x in st.get("buttons", []) if x[0] == "Gear"), None)
+    if g:
+        await p.tap_xy(g[1] + g[3] + 6, g[2] + g[4] / 2)
+        st = await p.wait(lambda s: s.get("settings"), "касание на 6 px правее ⚙ → настройки (запас пальца)", 10)
+        check(bool(st.get("settings")), f"{p.name}: касание на 6 px правее ⚙ — настройки (Game._tap, +9 px)")
+    else:
+        check(False, f"{p.name}: нет значка Gear")
+        await p.press("Gear", wait=600)
     await p.press("Tab_game", wait=400)
     await p.press("Share_paste", wait=800)
     f = await p.pg.evaluate("(()=>{const f=document.getElementById('wnb-field');if(!f)return null;const r=f.getBoundingClientRect();"

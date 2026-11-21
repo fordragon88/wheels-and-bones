@@ -18,6 +18,7 @@ func _init() -> void:
 	text = ""
 	focus_mode = Control.FOCUS_ALL
 	set_meta("kb_skip", true)                 # кружки на коляске: в game.py с клавиатуры — строки списка деталей
+	UI.touch_skip(self)                       # не цель переноса тапа: у кружка свой запас (_hotspot_at), он — block
 	action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	var empty := StyleBoxEmpty.new()
@@ -43,6 +44,8 @@ func update_a11y() -> void:
 
 
 func _has_point(p: Vector2) -> bool:
+	if view != null and UI.touch():           # _hotspot_at: на сенсоре r + 16, из соседних — ближайший к пальцу
+		return view.hotspot_at(view.position + position + p, UI.TOUCH_SPOT_PAD) == pid
 	return p.distance_to(size / 2.0) <= r + 4
 
 
