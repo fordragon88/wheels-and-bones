@@ -2574,6 +2574,13 @@ func _only(what: String) -> void:
 			pc.write_out("seat_sizes_%d.json" % (1 if on else 0), JSON.stringify(d, " ", true) + "\n")
 			line = "SEAT SIZES (%s): %d" % ["телефон" if on else "выкл", d.size()]
 			pc.queue_free()
+		"tech-sizes":
+			var pc: Node = (load("res://tests/phone_check.gd") as GDScript).new()
+			add_child(pc)
+			var d: Dictionary = await pc.tech_sizes(self)
+			pc.write_out("tech_sizes_1.json", JSON.stringify(d, " ", true) + "\n")
+			line = "TECH SIZES (телефон): %d" % d.size()
+			pc.queue_free()
 	Nav.shutdown()
 	await _frames(10)
 	for e in errors:

@@ -837,9 +837,10 @@ async def sc_phone(b):
     check(bool(st) and st.get("screen") == "hub" and "flat" in st.get("done", []),
           f"{p.name}: задание Мартина пройдено касаниями от мастерской до итога ({(st or {}).get('screen')})")
     await seat_phone(p)
+    await tech16_phone(p)
     p.check_console()
     await p.ctx.close()
-    await sc_rotate(b)                                    # книжная ориентация: заслонка, планшет, ?res=
+    await sc_rotate(b)                                  # книжная ориентация: заслонка, планшет, ?res=
 
 
 async def seat_phone(p):
@@ -891,6 +892,36 @@ async def seat_phone(p):
     st = await p.state()
     check(st.get("seat", {}).get("solved") is True,
           f"{p.name}: примерка тролля пройдена касаниями («ГОТОВО» → посадка верна)")
+
+
+async def tech16_phone(p):
+    """Про-задание на 16 шагов на телефоне (21.11): карточки шагов в три столбца ≥ 56; 12 шагов — «ПРОПУСТИТЬ ▸»,
+    потом касание инструмента и карточки 13-го шага (третий столбец) выполняет шаг."""
+    if not await set_stage(p, "tech_ops_t_battery"):
+        check(False, f"{p.name}: про-задание t_battery не встало")
+        return
+    st = await p.wait(lambda s: s.get("screen") == "tech" and s.get("job") == "t_battery", "про-задание t_battery", 10)
+    ops = [b for b in st.get("buttons", []) if b[0].startswith("Op_")]
+    cols = sorted({round(b[1]) for b in ops})
+    check(len(ops) == 16 and len(cols) == 3 and all(min(b[3], b[4]) >= 56 for b in ops),
+          f"{p.name}: про-задание 16 шагов — карточки в {len(cols)} столбца, мельче 56: "
+          f"{[(b[0], b[3], b[4]) for b in ops if min(b[3], b[4]) < 56]}")
+    phone_small(p, st, "про-задание 16 шагов")
+    for _ in range(12):
+        await p.press("StepSkip", wait=350)
+    st = await p.state()
+    done = st.get("tech_done", [])
+    check(len(done) == 12, f"{p.name}: «ПРОПУСТИТЬ ▸» касаниями — сделано шагов {len(done)} из 12")
+    op = next((b for b in st.get("buttons", []) if b[0] == "Op_p_breaker_on"), None)
+    if not op or len(cols) < 3 or round(op[1]) != cols[2]:
+        check(False, f"{p.name}: карточка шага p_breaker_on не в третьем столбце ({op})")
+        return
+    await p.press("Tool_hands", wait=400)
+    await p.tap_xy(op[1] + op[3] / 2, op[2] + op[4] / 2)
+    st = await p.wait(lambda s: "p_breaker_on" in s.get("tech_done", []), "касание карточки третьего столбца — шаг", 6)
+    check(bool(st), f"{p.name}: инструмент «Руки» и касание карточки в третьем столбце — шаг выполнен "
+                    f"(сделано {len((st or {}).get('tech_done', []))})")
+    await p.shot("7_tech16")
 
 
 def phone_small(p, st, where):
@@ -2390,9 +2421,10 @@ async def sc_phonetext(b):
 
 
 PB_STAGES = ["hub", "job_flat_diagnose", "job_flat_repair", "mini_pump", "result_lift", "settings_sound", "settings_access",
-             "seat_lesson_slump", "seat_fit_troll", "seat_quiz_q1", "guild_open", "tech_ops", "garage", "share_paste", "title"]
+             "seat_lesson_slump", "seat_fit_troll", "seat_quiz_q1", "guild_open", "tech_ops", "garage", "share_paste", "title",
+             "tech_ops_t_battery", "tech_ops_t_q6brake"]
 PB_BIG = ["hub", "job_flat_diagnose", "job_flat_repair", "settings_access", "tech_ops", "seat_lesson_slump", "seat_fit_troll",
-          "seat_quiz_q1"]
+          "seat_quiz_q1", "tech_ops_t_battery"]
 
 
 async def sc_phonebig(b):

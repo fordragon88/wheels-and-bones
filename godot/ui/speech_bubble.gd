@@ -16,6 +16,11 @@ var bottom: float = 572.0                 # CLIENT: нижняя граница 
 var top_y: float = 584.0                  # MENTOR: верх пузыря
 var job: Dictionary = {}                  # MENTOR: чей портрет у реплики клиента
 var col: Rect2 = Rect2()                  # MENTOR: узкий пузырь в правой колонке (ремонт); пусто — внизу
+# MENTOR, телефон, про-задание 13–16 шагов: пузырь в левой колонке под большим портретом (x, y, ширина, наибольшая
+# высота), без своего портрета; высота — по реплике
+var side: Rect2 = Rect2()
+var _side_key: Array = []
+var _side_lay: Array = [0.0, 12, PackedStringArray()]   # [высота, кегль, строки]
 var _typing: Array = ["", 0.0]
 var _live: Label
 var _spk: Control                         # MENTOR: портрет говорящего — свой слой, рисуется каждый кадр (машет, парит)
@@ -144,7 +149,45 @@ func _draw_client() -> void:
 	draw_set_transform(Vector2.ZERO)
 
 
+## Пузырь в левой колонке (side): [высота, кегль, строки] реплики; кегль 15 → 12, пока не уместится в наибольшую
+## высоту (не уместилось и при 12 — строк сколько влезет). Пузыря нет — высота 0.
+func side_layout() -> Array:
+	var key := [line, shown(), side, Settings.a11y.get("text", 0), Settings.easy_font(), Loc.code]
+	if key == _side_key:
+		return _side_lay
+	_side_key = key
+	if not shown() or side.size == Vector2.ZERO:
+		_side_lay = [0.0, 12, PackedStringArray()]
+		return _side_lay
+	var text := Loc.t(line)
+	var tw := side.size.x - 24
+	var sz := 12
+	var lines: PackedStringArray = []
+	for s: int in [15, 14, 13, 12]:
+		sz = s
+		lines = UI.wrap_lines(text, tw, s)
+		if lines.size() * (UI.line_height(s) + 2) - 2 + 20 <= side.size.y:
+			break
+	var lh := UI.line_height(sz) + 2
+	var n := mini(lines.size(), maxi(1, int((side.size.y - 20 + 2) / lh)))
+	_side_lay = [n * lh - 2 + 20, sz, lines.slice(0, n)]
+	return _side_lay
+
+
+func side_height() -> float:
+	return float(side_layout()[0]) if side.size != Vector2.ZERO else 0.0
+
+
 func _draw_mentor() -> void:
+	if side.size != Vector2.ZERO:
+		var lay := side_layout()
+		var box := Rect2(side.position, Vector2(side.size.x, lay[0]))
+		draw_rect(box, Color8(24, 30, 36, 220))
+		UI.draw_round_rect(self, box, Color(0, 0, 0, 0), UI.CYAN, 2, 8)
+		var text := Loc.t(line)
+		UI.draw_wrapped(self, text, side.position + Vector2(12, 10), side.size.x - 24, lay[1], UI.GHOST, false, 2,
+			typed(text, 90), (lay[2] as PackedStringArray).size())
+		return
 	if col.size != Vector2.ZERO:
 		_draw_mentor_col()
 		return
@@ -186,7 +229,7 @@ func _draw_speaker(img: String, bx: Rect2) -> void:
 
 ## Слой портрета наставника (поверх пузыря: в узком пузыре портрет внутри рамки — как раньше, после фона).
 func _draw_spk() -> void:
-	if kind != Kind.MENTOR or not shown():
+	if kind != Kind.MENTOR or not shown() or side.size != Vector2.ZERO:   # side: без портрета (имя — в начале реплики)
 		return
 	if col.size != Vector2.ZERO:
 		_draw_speaker(speaker_img(line), Rect2(col.position + Vector2(6, 6), Vector2(46, 56)))

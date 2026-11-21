@@ -313,6 +313,8 @@ func state() -> Dictionary:
 				d[k] = scr.get(k)
 		if "job" in scr and scr.get("job") is Dictionary:
 			d["job"] = (scr.get("job") as Dictionary).get("id", "")
+		if Nav.current_name == "tech":        # про-задание (web_smoke phone): сделанные шаги
+			d["tech_done"] = (scr.get("done_steps") as Dictionary).keys()
 		var rv: Variant = scr.get("ride") if "ride" in scr else null
 		if rv is RideView:
 			var r: RideView = rv

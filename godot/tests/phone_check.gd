@@ -15,10 +15,6 @@ var _stager: Node
 const EXCEPT := {
 	"Slider_*": "Кабинет посадки, примерка с 4–5 ползунками: строки ползунков и «ГОТОВО» 52 через 60 (с 56 через 64 предупреждения при 100 % мельче на 3 ступени; разрешено владельцем 21.11)",
 	"Check": "Кабинет посадки, примерка с 4–5 ползунками: строки ползунков и «ГОТОВО» 52 через 60 (с 56 через 64 предупреждения при 100 % мельче на 3 ступени; разрешено владельцем 21.11)",
-	"tech_ops_t_battery:Op_*": "про-задание на 13–16 шагов: карточки 470×40–46 в 2 столбца по 7–8; 56 через 64 не помещаются над инструментами (PORT_PLAN, телефонный режим)",
-	"tech_ops_t_battery_q6:Op_*": "про-задание на 13–16 шагов: карточки 470×40–46 в 2 столбца по 7–8; 56 через 64 не помещаются над инструментами (PORT_PLAN, телефонный режим)",
-	"tech_ops_t_pulse6:Op_*": "про-задание на 13–16 шагов: карточки 470×40–46 в 2 столбца по 7–8; 56 через 64 не помещаются над инструментами (PORT_PLAN, телефонный режим)",
-	"tech_ops_t_q6brake:Op_*": "про-задание на 13–16 шагов: карточки 470×40–46 в 2 столбца по 7–8; 56 через 64 не помещаются над инструментами (PORT_PLAN, телефонный режим)",
 }
 
 ## Ключевые экраны самопроверки (телефон): то, что перестроено.
@@ -320,6 +316,50 @@ func seat_sizes(runner: Node, on: bool) -> Dictionary:
 					scr.refresh()
 					await R._frames(2)
 					out["%s quiz %d" % [pre, i + 1]] = scr.text_sizes.duplicate()
+	Settings.lang = keep[0]
+	Loc.code = keep[1]
+	Settings.a11y["text"] = keep[2]
+	Settings.a11y["font"] = keep[3]
+	Settings.a11y["instant"] = instant0
+	UI.clear_font_cache()
+	UI._touch = t0
+	UI._phone = p0
+	Settings.changed.emit("phone")
+	return out
+
+
+## Телефон, про-задания 13–16 шагов (3 столбца): кегли карточек шагов (наименьший/наибольший, строк до), пузырь и
+## коляска в левой колонке — при RU/EN, 100/112/125/150 %, обычный и «лёгкий» шрифт.
+##   … --only tech-sizes  → tests/out/tech_sizes_1.json; ключ «ru 150 easy t_battery» → {fs_min, fs_max, lines_max, …}
+func tech_sizes(runner: Node) -> Dictionary:
+	R = runner
+	var t0: int = UI._touch
+	var p0: int = UI._phone
+	UI._touch = 1
+	UI.set_phone(true)
+	var keep := [Settings.lang, Loc.code, Settings.a11y.get("text", 0), Settings.a11y.get("font", false)]
+	var instant0: bool = Settings.a11y.get("instant", false)
+	Settings.a11y["instant"] = true
+	var out := {}
+	for lang: String in ["ru", "en"]:
+		for t: int in [0, 1, 2, 3]:
+			for easy: bool in [false, true]:
+				Settings.lang = lang
+				Loc.code = lang
+				Settings.a11y["text"] = t
+				Settings.a11y["font"] = easy
+				UI.clear_font_cache()
+				for jid: String in ["t_battery", "t_battery_q6", "t_pulse6", "t_q6brake"]:
+					Nav.go("tech", {"job": jid})
+					await R._frames(3)
+					var scr: Node = Nav.current
+					var fss: Array = scr.op_fs.values().map(func(v: Array) -> int: return v[0])
+					var lns: Array = scr.op_fs.values().map(func(v: Array) -> int: return v[1])
+					var mb: SpeechBubble = scr.get_node("MentorBubble")
+					out["%s %d%s %s" % [lang, [100, 112, 125, 150][t], " easy" if easy else "", jid]] = {
+						"steps": scr.step_order.size(), "fs_min": fss.min(), "fs_max": fss.max(), "lines_max": lns.max(),
+						"op0": str(scr.op_rect(0)), "bubble": str(Rect2(mb.side.position, Vector2(mb.side.size.x,
+						mb.side_height()))), "bubble_fs": mb.side_layout()[1], "chair": str(scr.chair.get_rect())}
 	Settings.lang = keep[0]
 	Loc.code = keep[1]
 	Settings.a11y["text"] = keep[2]

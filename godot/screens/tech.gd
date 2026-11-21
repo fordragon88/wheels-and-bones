@@ -61,6 +61,7 @@ var _bar: TopBar
 var _dispute_btn: GameButton
 var _test_btn: GameButton
 var _manual_page: String = ""
+var op_fs: Dictionary = {}                   # кегль и число строк карточек шагов последнего кадра — для проверок
 
 
 func _ready() -> void:
@@ -152,11 +153,40 @@ func step_by_id(sid: String) -> Dictionary:
 func tech_chair_rect() -> Rect2:
 	if phase == "test":
 		return Rect2(UI.W / 2.0 - 215, 202, 430, 234)
+	if ops3():                                   # под пузырём реплики; не хватает места — коляска меньше (до инструментов, y 640)
+		var top := 286.0
+		if is_instance_valid(_mentor) and _mentor.side_height() > 0.0:
+			top = _mentor.side.position.y + _mentor.side_height() + 8
+		return Rect2(8, top, 284, maxf(80.0, 640.0 - top))
 	return Rect2(8, 308, 284, 226)
+
+
+## Телефон, 3 столбца: коляска встаёт под пузырь (высота пузыря — по реплике).
+func _place_chair() -> void:
+	if chair == null or not ops3():
+		return
+	var r := tech_chair_rect()
+	if chair.position != r.position or chair.size != r.size:
+		chair.position = r.position
+		chair.size = r.size
+
+
+## Телефон, про-задание больше 10 шагов (13–16): карточки в три столбца, пузырь Бренны — в левой колонке под
+## портретом (а не под шагами), коляска — под пузырём.
+func ops3() -> bool:
+	return UI.phone() and step_order.size() > 10 and phase == "repair"
+
+
+## Рядов в трёх столбцах (по столбцам сверху вниз — как в двух: порядок обхода тот же).
+func ops3_rows() -> int:
+	return ceili(step_order.size() / 3.0)
 
 
 @warning_ignore("integer_division")
 func op_rect(i: int) -> Rect2:
+	if ops3():                                   # ширина 310 через 323, с y 160: 6 рядов — 66 через 74 (до y 596),
+		var h := 66 if ops3_rows() >= 6 else 80  # 5 рядов — 80 через 88 (до y 592; 4 строки кеглем 13)
+		return Rect2(300 + (i / ops3_rows()) * 323, 160 + (i % ops3_rows()) * (h + 8), 310, h)
 	var x0 := 300
 	var y0 := 150
 	var w := 470
@@ -199,8 +229,13 @@ func build() -> void:
 	_mentor = SpeechBubble.make(SpeechBubble.Kind.MENTOR)
 	_mentor.job = job
 	_mentor.top_y = 540.0 if phase == "repair" else 440.0
+	if ops3():                                   # телефон, 13–16 шагов: пузырь под большим портретом, без второго портрета
+		var nl := mini(2, UI.wrap_lines(Loc.t(job["client"]), 168, 15).size())   # имя под портретом (_draw_deco)
+		var sy := maxf(286.0, 266.0 + nl * (UI.line_height(15) + 2) + 2)
+		_mentor.side = Rect2(24, sy, 266, 640 - sy - 120)
 	_mentor.say(ghost_text())
 	add_child(_mentor)
+	_place_chair()
 	if phase == "repair":
 		var mb := GameButton.make(manual_rect(), "МАНУАЛ", UI.PURPLE)
 		mb.name = "Manual"
@@ -768,6 +803,7 @@ func tick(dt: float) -> void:
 	_mentor.visible = not riding
 	if _mentor.say(ghost_text()) and _mentor.shown():
 		Audio.sfx("ghost")
+	_place_chair()
 	var dv := dispute_visible()
 	_dispute_btn.visible = dv
 	_bar.brand = not dv
@@ -796,8 +832,14 @@ func _draw_deco() -> void:
 		for i in step_order.size():
 			y_stat = maxf(y_stat, op_rect(i).end.y + 6)
 		var lim := (" (лимит %d)" % max_mistakes) if exam else ""
-		UI.draw_text(_deco, Loc.t("Выполнено: %d/%d   Ошибки: %d%s" % [done_steps.size(), job["steps"].size(), mistakes, lim]),
-			Vector2(300, y_stat), 14, UI.GHOST)
+		var stat := Loc.t("Выполнено: %d/%d   Ошибки: %d%s" % [done_steps.size(), job["steps"].size(), mistakes, lim])
+		var n := step_order.size()
+		if ops3() and n < ops3_rows() * 3:      # телефон, 3 столбца: строка — в первой свободной клетке третьего столбца
+			var cell := op_rect(n)
+			UI.draw_text_w(_deco, stat, Vector2(cell.position.x + 4, cell.position.y + floorf((cell.size.y
+				- UI.line_height(14)) / 2.0)), cell.size.x - 8, 14, UI.GHOST)
+		else:
+			UI.draw_text(_deco, stat, Vector2(300, y_stat), 14, UI.GHOST)
 	else:
 		UI.draw_text(_deco, Loc.t("ПРОВЕРКА ПОД НАГРУЗКОЙ"), Vector2(360, 70), 20, UI.GOOD, true)
 		UI.draw_wrapped(_deco, Loc.t(job.get("test", "")), Vector2(360, 100), 560, 19, UI.WHITE)
@@ -819,8 +861,9 @@ func _draw_op(b: GameButton, _r: Rect2) -> void:
 	var txt := ("✔ " if done else "• ") + Loc.t(st["instr"])
 	var pad := 4 if r.size.y >= 44 else 2
 	var fs := 10
-	for s: int in [13, 12, 11, 10]:
+	for s: int in ([13, 12, 11, 10, 9, 8] if ops3() else [13, 12, 11, 10]):   # 3 столбца: 2–3 строки, без обрезки
 		fs = s
 		if UI.wrap_lines(txt, r.size.x - 20, s).size() * (UI.line_height(s) + 2) <= r.size.y - 2 * pad:
 			break
+	op_fs[sid] = [fs, UI.wrap_lines(txt, r.size.x - 20, fs).size()]
 	UI.draw_wrapped(b, txt, Vector2(10, pad), r.size.x - 20, fs, UI.GREY if done else UI.WHITE)
