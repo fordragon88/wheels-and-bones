@@ -9,8 +9,8 @@ extends Screen
 
 ## Раскладка (_layout() в build()): вне телефонного режима — как было; в телефонном (UI.phone(), 21.11) — цели ≥ 56:
 ## вкладки и «В МАСТЕРСКУЮ» 56 в высоту, реплика и рамка ниже на 18; уроки — список в 2 столбца, клиенты — в 3, строки
-## 56 через 64, на кнопке мини-иконка (урок — пиктограмма ui/lesson_icons.gd, клиент — верх портрета) и название
-## целиком (до 2 строк); ползунки — строки-зоны 476×56 через 64 (5 ползунков — 52 через 60): подпись и значение сверху,
+## уроков 56 через 64, клиентов 48 через 56 (21.11, владелец), на кнопке мини-иконка (урок — пиктограмма
+## ui/lesson_icons.gd, клиент — верх портрета) и название целиком (до 2 строк); ползунки — строки-зоны 476×56 через 64 (5 ползунков — 52 через 60): подпись и значение сверху,
 ## дорожка снизу; «ПОЗА…/ВИД…» 228×56, нижняя кнопка 56 у низа экрана.
 var CV := Rect2(24, 176, 730, 488)
 var BTN := Rect2(780, 612, 476, 48)
@@ -20,8 +20,10 @@ var BUBBLE := Rect2(96, 110, 658, 60)
 var TAB_H := 38.0
 var Q_TOP := 0.0                          # сдвиг «Вопрос N из M», вопроса и ответов зачёта (телефон: ниже вкладок)
 const TAB_NAMES := {"lessons": "УРОКИ", "fit": "ПРИМЕРКА", "quiz": "ПРОВЕРЬ СЕБЯ"}
-const ROW_H := 56.0                       # телефон: строка списка уроков/клиентов и шаг 64
+const ROW_H := 56.0                       # телефон: строка списка уроков и шаг 64
 const ROW_STEP := 64.0
+const CASE_H := 48.0                      # телефон: кнопка клиента и шаг 56 (решение владельца 21.11: «можно ещё меньше»;
+const CASE_STEP := 56.0                   # освободившиеся 24 px — предупреждениям под ползунками)
 const LessonIcons := preload("res://ui/lesson_icons.gd")   # телефон: пиктограммы уроков 1…7 на кнопках списка
 
 var tab: String = "lessons"
@@ -164,10 +166,10 @@ func _list_bottom() -> float:
 
 @warning_ignore("integer_division")
 func list_rect(i: int) -> Rect2:
-	if UI.phone():                               # уроки — 2 столбца по 234, клиенты — 3 по 153 (зазор 8)
-		var cols := 2 if tab == "lessons" else 3
-		var w := 234.0 if cols == 2 else 153.0
-		return Rect2(780 + (i % cols) * (w + 8), 128 + (i / cols) * ROW_STEP, w, ROW_H)
+	if UI.phone():                               # уроки — 2 столбца по 234 (56 через 64), клиенты — 3 по 153 (48 через 56)
+		if tab == "lessons":
+			return Rect2(780 + (i % 2) * 242, 128 + (i / 2) * ROW_STEP, 234, ROW_H)
+		return Rect2(780 + (i % 3) * 161, 128 + (i / 3) * CASE_STEP, 153, CASE_H)
 	if tab == "lessons":
 		return Rect2(780 + (i % 2) * 238, 112 + (i / 2) * 44, 230, 38)
 	return Rect2(780 + (i % 2) * 238, 112 + (i / 2) * 40, 230, 35)
@@ -1061,7 +1063,7 @@ func _fix_caption(ci: CanvasItem, text: String, top: bool) -> void:
 
 ## Телефон: кнопка списка — мини-иконка слева (если icon задан) и название целиком (до 2 строк, по середине кнопки).
 func _draw_row(b: GameButton, r: Rect2, text: String, base: int, bold: bool, icon: Callable) -> void:
-	var lay := _row_fit(text, r.size.x, base, bold, icon.is_valid())
+	var lay := _row_fit(text, r.size.x, base, bold, icon.is_valid(), r.size.y)
 	var isz: float = lay[0]
 	var x := r.position.x + 8
 	if isz > 0.0:
@@ -1079,18 +1081,19 @@ func _draw_row(b: GameButton, r: Rect2, text: String, base: int, bold: bool, ico
 static var _row_cache := {}
 
 
-## Раскладка подписи кнопки: [иконка px, кегль, строки]. Уступки по порядку: иконка 44 при кегле base, base − 1
-## (в 1–2 строки), потом иконка 32, потом без иконки; не влезло и так — кегль ещё меньше (до 9), строк не больше 2.
-func _row_fit(text: String, w: float, base: int, bold: bool, with_icon := true) -> Array:
+## Раскладка подписи кнопки высотой h: [иконка px, кегль, строки]. Уступки по порядку: иконка 44 (кнопка 48 —
+## 40) при кегле base, base − 1 (в 1–2 строки), потом иконка 32, потом без иконки; не влезло и так — кегль ещё меньше
+## (до 9), строк не больше 2.
+func _row_fit(text: String, w: float, base: int, bold: bool, with_icon := true, h := ROW_H) -> Array:
 	# множитель текста, а не выбор игрока: на вкладке примерки потолок 125 % (text_cap) — при 150 % раскладка как при 125 %
-	var key := "%s|%d|%d|%s|%s|%s|%s" % [text, w, base, bold, Settings.text_k(), Settings.easy_font(), with_icon]
+	var key := "%s|%d|%d|%s|%s|%s|%s|%d" % [text, w, base, bold, Settings.text_k(), Settings.easy_font(), with_icon, h]
 	if _row_cache.has(key):
 		return _row_cache[key]
 	var out: Array = []
-	for isz: float in ([44.0, 32.0, 0.0] if with_icon else [0.0]):
+	for isz: float in ([minf(44.0, h - 8.0), 32.0, 0.0] if with_icon else [0.0]):
 		var tw := w - 16 - (isz + 6 if isz > 0.0 else 0.0)
 		for sz: int in ([base, base - 1] if isz > 0.0 else range(base, 8, -1)):
-			var lines := _row_lines(text, tw, sz, bold)
+			var lines := _row_lines(text, tw, sz, bold, h - 4.0)
 			if not lines.is_empty():
 				out = [isz, sz, lines]
 				break
@@ -1104,10 +1107,11 @@ func _row_fit(text: String, w: float, base: int, bold: bool, with_icon := true) 
 	return out
 
 
-## Строки подписи, если она помещается в ширину tw и в 2 строки высотой кнопки (52 px), иначе пусто.
-static func _row_lines(text: String, tw: float, sz: int, bold: bool) -> PackedStringArray:
+## Строки подписи, если она помещается в ширину tw и в 2 строки высотой th (кнопка − 4: 52 у уроков, 44 у клиентов),
+## иначе пусто.
+static func _row_lines(text: String, tw: float, sz: int, bold: bool, th := 52.0) -> PackedStringArray:
 	var lines := UI.wrap_lines(text, tw, sz, bold)
-	if lines.size() > 2 or lines.size() * (UI.line_height(sz, bold) + 2) - 2 > 52:
+	if lines.size() > 2 or lines.size() * (UI.line_height(sz, bold) + 2) - 2 > th:
 		return PackedStringArray()
 	for ln in lines:
 		if UI.text_width(ln, sz, bold) > tw:
@@ -1154,22 +1158,23 @@ func _case_label(i: int) -> String:
 	return ("✔ " if SaveGame.is_done(cases()[i]["id"]) else "") + Loc.t(cases()[i]["client"])
 
 
-## Телефон: портреты на кнопках клиентов — у всех или ни у кого. С портретом имя — портрет 44 или 32 и кегль 14 или
+## Телефон: портреты на кнопках клиентов — у всех или ни у кого. С портретом имя — портрет 40 или 32 и кегль 14 или
 ## 13 (_row_fit: не больше одной ступени мельче соседей); если хоть одно имя так не помещается — портретов нет у всех
 ## (единообразно), имена — без иконки, как раньше. Раскладка подписей — в text_sizes["cases"] (проверки).
 func case_icons() -> bool:
 	var w := list_rect(0).size.x
+	var h := list_rect(0).size.y
 	var all := true
 	var lay := PackedStringArray()
 	for i: int in SaveGame.seat_idx():
-		var f := _row_fit(_case_label(i), w, 14, false, true)
+		var f := _row_fit(_case_label(i), w, 14, false, true, h)
 		lay.append("%d/%d" % [int(f[0]), int(f[1])])
 		if float(f[0]) <= 0.0:
 			all = false
 	if not all:
 		lay.clear()
 		for i: int in SaveGame.seat_idx():
-			lay.append("0/%d" % int(_row_fit(_case_label(i), w, 14, false, false)[1]))
+			lay.append("0/%d" % int(_row_fit(_case_label(i), w, 14, false, false, h)[1]))
 	text_sizes["cases"] = " ".join(lay)
 	return all
 
