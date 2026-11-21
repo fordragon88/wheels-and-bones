@@ -51,8 +51,10 @@ func field_rect() -> Rect2:
 	var p := panel()
 	match mode():
 		"paste":
-			return Rect2(p.position.x + 28, p.position.y + 104, p.size.x - 56, 44)
+			return Rect2(p.position.x + 28, p.position.y + 104, p.size.x - 56, 56 if UI.phone() else 44)
 		"builder":
+			if UI.phone():                       # телефон: поле 56 над кнопками
+				return Rect2(p.position.x + 300, p.end.y - 136, 420, 56)
 			return Rect2(p.position.x + 300, p.end.y - 124, 420, 40)
 		"show":
 			if ui.get("kind") != "text":
@@ -73,6 +75,16 @@ func pick_rects() -> Array:
 	var cw := int((p.size.x - 56 - 24) / 3)
 	var out: Array = []
 	var jobs: Array = Share.job_ids()
+	if UI.phone():                               # телефон: 5 столбцов, строки 56 через 64
+		var cwp := int((p.size.x - 56 - 4 * 12) / 5)
+		for i in jobs.size():
+			out.append([jobs[i], Rect2(p.position.x + 28 + (i % 5) * (cwp + 12), p.position.y + 86 + (i / 5) * 64, cwp, 56)])
+		var rows := (jobs.size() + 4) / 5
+		var y1 := p.position.y + 86 + rows * 64 + 24
+		var seats_p: Array = Share.seat_ids()
+		for i in seats_p.size():
+			out.append([seats_p[i], Rect2(p.position.x + 28 + (i % 5) * (cwp + 12), y1 + (i / 5) * 64, cwp, 56)])
+		return out
 	for i in jobs.size():
 		out.append([jobs[i], Rect2(p.position.x + 28 + (i / 7) * (cw + 12), p.position.y + 86 + (i % 7) * 42, cw, 38)])
 	var y0 := p.position.y + 86 + 7 * 42 + 30
@@ -102,16 +114,17 @@ func btn_specs() -> Array:
 			specs = [["rcode", "СКОПИРОВАТЬ КОД РЕЗУЛЬТАТА", UI.CYAN], ["rtext", "СКОПИРОВАТЬ ТЕКСТОМ", UI.CYAN]]
 			if Share.can_send():
 				specs.append(["send", "УЖЕ ОТПРАВЛЕНО" if SaveGame.assign.get("sent", false) else "ОТПРАВИТЬ В ТАБЛИЦУ", UI.GOOD])
-			return _row(p, specs, p.end.y - 124) + _row(p, [["exit", "ВЫЙТИ ИЗ ЗАДАНИЯ", UI.PURPLE],
-				["close", "В МАСТЕРСКУЮ", UI.AMBER]], p.end.y - 66)
+			return _row(p, specs, p.end.y - (136 if UI.phone() else 124)) + _row(p, [["exit", "ВЫЙТИ ИЗ ЗАДАНИЯ", UI.PURPLE],
+				["close", "В МАСТЕРСКУЮ", UI.AMBER]], p.end.y - (72 if UI.phone() else 66))
 		"builder":
 			specs = [["clear", "СНЯТЬ ВСЁ", UI.GREY], ["cancel", "ОТМЕНА", UI.GREY],
 				["make", "СКОПИРОВАТЬ ССЫЛКУ" if OS.has_feature("web") else "ПОКАЗАТЬ КОД ЗАДАНИЯ", UI.GOOD]]
 		_:
 			specs = [["close", "ГОТОВО", UI.AMBER]]
-	return _row(p, specs, p.end.y - 66)
+	return _row(p, specs, p.end.y - (72 if UI.phone() else 66))
 
 
+## Ряд кнопок окна; телефон — высота 56.
 @warning_ignore("integer_division")
 static func _row(p: Rect2, specs: Array, y: float) -> Array:
 	var n := specs.size()
@@ -119,7 +132,7 @@ static func _row(p: Rect2, specs: Array, y: float) -> Array:
 	var x0 := p.end.x - 28 - n * w - 16 * (n - 1)
 	var out: Array = []
 	for i in n:
-		out.append([specs[i][0], Rect2(x0 + i * (w + 16), y, w, 46), specs[i][1], specs[i][2]])
+		out.append([specs[i][0], Rect2(x0 + i * (w + 16), y, w, 56 if UI.phone() else 46), specs[i][1], specs[i][2]])
 	return out
 
 
@@ -268,10 +281,11 @@ func _draw() -> void:
 			UI.draw_text(self, Loc.t("ВСТАВИТЬ КОД"), Vector2(x, p.position.y + 20), 22, UI.CYAN, true)
 			UI.draw_text(self, Loc.t("Код прогресса, задания или результата — или ссылка с ним:"), Vector2(x, p.position.y + 72), 15,
 				UI.WHITE)
+			var dy := 12 if UI.phone() else 0             # телефон: поле выше на 12
 			if ui.get("err", "") != "":
-				UI.draw_text(self, Loc.t(ui["err"]), Vector2(x, p.position.y + 162), 16, UI.BAD, true)
+				UI.draw_text(self, Loc.t(ui["err"]), Vector2(x, p.position.y + 162 + dy), 16, UI.BAD, true)
 			UI.draw_wrapped(self, Loc.t("Код прогресса заменит твой прогресс (после вопроса; прежний можно вернуть). Код задания откроет задание, код результата покажет итог ученика."),
-				Vector2(x, p.position.y + 196), w, 14, UI.GREY)
+				Vector2(x, p.position.y + 196 + dy), w, 14, UI.GREY)
 		"confirm", "resume":
 			UI.draw_text(self, Loc.t("ПОДТВЕРДИ" if mode() == "confirm" else "ЗАДАНИЕ НЕ ЗАКОНЧЕНО"), Vector2(x, p.position.y + 20), 22,
 				UI.CYAN, true)
@@ -283,7 +297,7 @@ func _draw() -> void:
 				UI.CYAN, true)
 			_fit(Share.assign_head(res.get("from", ""), res.get("title", "")), Vector2(x, p.position.y + 52), w, 16, UI.WHITE)
 			UI.draw_text(self, Share.result_summary(res["rows"]), Vector2(p.end.x - 28, p.position.y + 20), 20, UI.GOOD, true, 2)
-			var bottom := p.end.y - (138 if mode() == "summary" else 80)
+			var bottom := p.end.y - ((150 if mode() == "summary" else 86) if UI.phone() else (138 if mode() == "summary" else 80))
 			_result_rows(Rect2(x, p.position.y + 86, w, bottom - p.position.y - 86 - 26), res)
 			if mode() == "summary":
 				UI.draw_text(self, Loc.t("Код результата защищён: если поправить в нём цифры, игра его не примет."),

@@ -12,7 +12,13 @@ extends Control
 
 signal closed
 
-const P := Rect2(UI.W / 2.0 - 290, UI.H / 2.0 - 250, 580, 500)
+const P0 := Rect2(UI.W / 2.0 - 290, UI.H / 2.0 - 250, 580, 500)
+const PP := Rect2(40, 12, 880, 696)       # телефонный режим: окно крупнее (цели 56), карточка подсказки справа
+var P: Rect2:
+	get:
+		return PP if UI.phone() else P0
+const PH_VOL_W := 300                      # телефон: дорожка громкости длиннее
+const PH_VOL_Y := 186                      # центр первого ползунка от верха окна, шаг 72
 const TABS := ["sound", "graphics", "access", "game"]
 const TAB_NAMES := {"sound": "ЗВУК", "graphics": "ГРАФИКА", "access": "ДОСТУПНОСТЬ", "game": "ИГРА"}
 const ACCESS_ROWS := ["on", "voices", "rate", "contrast", "instant", "calm", "quiet", "barty", "text", "font"]
@@ -76,7 +82,9 @@ func _build() -> void:
 	_first = null
 	for i in TABS.size():
 		var tb: String = TABS[i]
-		var b := _btn("Tab_" + tb, Rect2(P.position.x + 32 + i * 130, P.position.y + 64, 122, 36), TAB_NAMES[tb], UI.CYAN,
+		var tr := Rect2(P.position.x + 32 + i * 206, P.position.y + 64, 198, 56) if UI.phone() \
+			else Rect2(P.position.x + 32 + i * 130, P.position.y + 64, 122, 36)
+		var b := _btn("Tab_" + tb, tr, TAB_NAMES[tb], UI.CYAN,
 			func() -> void:
 				Audio.sfx("tick")
 				tab = tb
@@ -96,6 +104,9 @@ func _build() -> void:
 				s.name = "Vol_" + key
 				s.position = Vector2(P.position.x + 225 - 12, P.position.y + 146 + i * 58 - 16)
 				s.size = Vector2(230 + 24, 40)
+				if UI.phone():
+					s.position = Vector2(P.position.x + 225 - 12, P.position.y + PH_VOL_Y + i * 72 - 28)
+					s.size = Vector2(PH_VOL_W + 24, 56)
 				s.value = float(Settings.vol[key])
 				s.muted = not Settings.vol.get("on", true)
 				s.set_meta("a11y_group", "Громкость")
@@ -108,27 +119,32 @@ func _build() -> void:
 					queue_redraw())
 				UI.touch_block(s, Vector2(0, -1))     # handle_sound_event: block — дорожка 230×8 inflate(24, 30)
 				add_child(s)
-				_zones.append(["vol_" + key, Rect2(P.position.x + 24, P.position.y + 146 + i * 58 - 20, P.size.x - 48, 40), s])
+				_zones.append(["vol_" + key, Rect2(P.position.x + 24, s.position.y, P.size.x - 48, s.size.y) if UI.phone()
+					else Rect2(P.position.x + 24, P.position.y + 146 + i * 58 - 20, P.size.x - 48, 40), s])
 			var on: bool = Settings.vol.get("on", true)
-			_btn("Mute", Rect2(P.position.x + 32, P.end.y - 70, 220, 44), "БЕЗ ЗВУКА" if on else "ВКЛЮЧИТЬ ЗВУК",
+			_btn("Mute", Rect2(P.position.x + 32, P.end.y - 72, 220, 56) if UI.phone() else Rect2(P.position.x + 32, P.end.y - 70, 220, 44),
+				"БЕЗ ЗВУКА" if on else "ВКЛЮЧИТЬ ЗВУК",
 				UI.GREY if on else UI.GOOD, func() -> void:
 					Audio.toggle_sound()
 					Audio.sfx("tick"), false, "mute")
 		"graphics":
 			var fs := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 			if OS.has_feature("web"):
-				_btn("Fullscreen", Rect2(P.position.x + 230, P.position.y + 196, 230, 38), "ВКЛ / ВЫКЛ  (F11)", UI.AMBER,
+				_btn("Fullscreen", Rect2(P.position.x + 230, P.position.y + 150, 230, 56) if UI.phone()
+					else Rect2(P.position.x + 230, P.position.y + 196, 230, 38), "ВКЛ / ВЫКЛ  (F11)", UI.AMBER,
 					func() -> void: Nav._toggle_fullscreen(), false, "web_fs")
 			else:
 				for i in 2:
 					var full := i == 1
-					_btn("Mode_%d" % i, Rect2(P.position.x + 230 + i * 160, P.position.y + 128, 150, 38),
+					_btn("Mode_%d" % i, Rect2(P.position.x + 230 + i * 164, P.position.y + 150, 156, 56) if UI.phone()
+						else Rect2(P.position.x + 230 + i * 160, P.position.y + 128, 150, 38),
 						"ВЕСЬ ЭКРАН" if full else "В ОКНЕ", UI.CYAN, func() -> void:
 							Audio.sfx("tick")
 							if full != (DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN):
 								Nav._toggle_fullscreen()
 							_rebuild(), full == fs, "mode")
-			_btn("Glow", Rect2(P.position.x + 310, P.position.y + 320, 216, 38), "ВКЛ" if Settings.glow else "ВЫКЛ",
+			_btn("Glow", Rect2(P.position.x + 310, P.position.y + 270, 216, 56) if UI.phone()
+				else Rect2(P.position.x + 310, P.position.y + 320, 216, 38), "ВКЛ" if Settings.glow else "ВЫКЛ",
 				UI.AMBER if Settings.glow else UI.GREY, func() -> void:
 					Audio.sfx("tick")
 					Settings.glow = not Settings.glow
@@ -137,7 +153,7 @@ func _build() -> void:
 		"access":
 			for i in ACCESS_ROWS.size():
 				var k: String = ACCESS_ROWS[i]
-				var r := Rect2(P.position.x + 330, P.position.y + 102 + i * 27, 216, 24)
+				var r := _acc_rect(i)
 				var label := _access_value(k)
 				var on := k in ["rate", "text"] or _access_on(k)
 				var b := _btn("Acc_" + k, r, label, UI.GOOD if on else UI.GREY, _access_toggle.bind(k),
@@ -145,38 +161,50 @@ func _build() -> void:
 				b.label_size = 14
 				b.accessibility_name = _access_label(k)
 				b.set_meta("a11y_group", "Доступность")
-				_zones.append(["acc_" + k, Rect2(P.position.x + 24, r.position.y - 1, r.end.x - P.position.x - 24, r.size.y + 2), b])
+				if UI.phone():                    # телефон: два столбца — зона подсказки только своего пункта
+					var lx := _acc_label_x(i)
+					_zones.append(["acc_" + k, Rect2(lx - 8, r.position.y - 4, r.end.x - lx + 8, r.size.y + 8), b])
+				else:
+					_zones.append(["acc_" + k, Rect2(P.position.x + 24, r.position.y - 1, r.end.x - P.position.x - 24, r.size.y + 2), b])
 		"game":
 			@warning_ignore("integer_division")
 			var sw := int((P.size.x - 64 - 12) / 2)
 			var col := func(i: int) -> float: return P.position.x + 32 + i * (sw + 12)
-			var specs: Array = [["share_code", Rect2(col.call(0), P.position.y + 212, sw, 40)],
-				["share_paste", Rect2(col.call(1), P.position.y + 212, sw, 40)],
-				["share_build", Rect2(col.call(0), P.position.y + 258, sw, 40)]]
+			var ph := UI.phone()                  # телефон: строки 56 через 64
+			var sy: Array = [P.position.y + 260, P.position.y + 324, P.position.y + 388] if ph \
+				else [P.position.y + 212, P.position.y + 258, P.position.y + 304]
+			var sh := 56 if ph else 40
+			var specs: Array = [["share_code", Rect2(col.call(0), sy[0], sw, sh)],
+				["share_paste", Rect2(col.call(1), sy[0], sw, sh)],
+				["share_build", Rect2(col.call(0), sy[1], sw, sh)]]
 			if OS.has_feature("web"):
-				specs.append(["share_link", Rect2(col.call(1), P.position.y + 258, sw, 40)])
+				specs.append(["share_link", Rect2(col.call(1), sy[1], sw, sh)])
 			if SaveGame.has_backup() and not reset_ask:
-				specs.append(["share_restore", Rect2(col.call(0), P.position.y + 304, P.size.x - 64, 40)])
+				specs.append(["share_restore", Rect2(col.call(0), sy[2], P.size.x - 64, sh)])
 			for sp: Array in specs:
 				var k: String = sp[0]
 				_btn("Share_" + k.trim_prefix("share_"), sp[1], SHARE_LABELS[k], UI.PURPLE if k == "share_restore" else UI.CYAN,
 					_share_action.bind(k))
 			if reset_ask:
 				var w := (P.size.x - 80) / 2
-				_btn("ResetYes", Rect2(P.position.x + 32, P.position.y + 352, w, 42), "ДА, СБРОСИТЬ", UI.BAD, reset_progress)
-				_btn("ResetNo", Rect2(P.end.x - 32 - w, P.position.y + 352, w, 42), "НЕТ", UI.GOOD, func() -> void:
+				var ry := P.position.y + (452 if ph else 352)
+				var rh := 56 if ph else 42
+				_btn("ResetYes", Rect2(P.position.x + 32, ry, w, rh), "ДА, СБРОСИТЬ", UI.BAD, reset_progress)
+				_btn("ResetNo", Rect2(P.end.x - 32 - w, ry, w, rh), "НЕТ", UI.GOOD, func() -> void:
 					reset_ask = false
 					Audio.sfx("tick")
 					Speech.say(Loc.t("Сброс отменён."), true)
 					_rebuild())
 			else:
-				_btn("Reset", Rect2(P.position.x + 32, P.position.y + 352, P.size.x - 64, 42), "СБРОСИТЬ ПРОГРЕСС", UI.BAD,
+				_btn("Reset", Rect2(P.position.x + 32, P.position.y + (452 if ph else 352), P.size.x - 64, 56 if ph else 42),
+					"СБРОСИТЬ ПРОГРЕСС", UI.BAD,
 					func() -> void:
 						reset_ask = true
 						Audio.sfx("bad")
 						Speech.say(Loc.t("Сбросить весь прогресс? Это нельзя отменить. Да или нет."), true)
 						_rebuild(), false, "reset")
-	var done := _btn("Done", Rect2(P.end.x - 192, P.end.y - 70, 160, 44), "ГОТОВО", UI.AMBER, close)
+	var done := _btn("Done", Rect2(P.end.x - 192, P.end.y - 72, 160, 56) if UI.phone() else Rect2(P.end.x - 192, P.end.y - 70, 160, 44),
+		"ГОТОВО", UI.AMBER, close)
 	if _first == null:
 		_first = done
 	_help = Control.new()
@@ -186,6 +214,19 @@ func _build() -> void:
 	_help.draw.connect(_draw_help)
 	add_child(_help)
 	queue_redraw()
+
+
+## Кнопка пункта доступности i: как было — столбец 216×24 через 27; телефон — два столбца по 5, 168×56 через 64.
+func _acc_rect(i: int) -> Rect2:
+	if UI.phone():
+		return Rect2(_acc_label_x(i) + 228, P.position.y + 148 + (i % 5) * 64, 168, 56)
+	return Rect2(P.position.x + 330, P.position.y + 102 + i * 27, 216, 24)
+
+
+## Телефон: левый край подписи пункта доступности i (столбец i / 5).
+@warning_ignore("integer_division")
+func _acc_label_x(i: int) -> float:
+	return P.position.x + 32 + (i / 5) * 424
 
 
 ## Кнопки кодов и ссылок вкладки «ИГРА» (_share_set_action).
@@ -341,28 +382,37 @@ func _draw() -> void:
 		"sound":
 			var muted: bool = not Settings.vol.get("on", true)
 			var keys := ["master", "music", "sfx", "amb"]
+			var ph := UI.phone()                  # телефон: строки через 72, дорожка 300
 			for i in 4:
-				var y := P.position.y + 146 + i * 58
+				var y := P.position.y + (PH_VOL_Y + i * 72 if ph else 146 + i * 58)
 				UI.draw_text_w(self, Loc.t(VOL_NAMES[keys[i]]), Vector2(x, y - 8), P.position.x + 225 - 14 - x, 17,
 					UI.GREY if muted else UI.WHITE)               # 150 %: подпись не касается ползунка
-				UI.draw_text(self, "%d%%" % int(float(Settings.vol[keys[i]]) * 100), Vector2(P.position.x + 225 + 230 + 56, y - 8), 16,
-					UI.GREY if muted else UI.WHITE, false, 2)
-			UI.draw_text(self, Loc.t("M — быстро выключить / включить звук"), Vector2(x, P.position.y + 374), 13, UI.GREY)
-			UI.draw_text(self, Loc.t("За работой мелодия через минуту стихает до фона"), Vector2(x, P.position.y + 392), 13, UI.GREY)
+				UI.draw_text(self, "%d%%" % int(float(Settings.vol[keys[i]]) * 100),
+					Vector2(P.position.x + 225 + (PH_VOL_W + 64 if ph else 230 + 56), y - 8), 16, UI.GREY if muted else UI.WHITE, false, 2)
+			var ny := P.position.y + (PH_VOL_Y + 3 * 72 + 48 if ph else 374)
+			UI.draw_text(self, Loc.t("M — быстро выключить / включить звук"), Vector2(x, ny), 13, UI.GREY)
+			UI.draw_text(self, Loc.t("За работой мелодия через минуту стихает до фона"), Vector2(x, ny + 18), 13, UI.GREY)
 		"graphics":
+			var ph := UI.phone()
 			if OS.has_feature("web"):
-				UI.draw_text(self, Loc.t("Полный экран"), Vector2(x, P.position.y + 205), 17, UI.WHITE)
+				UI.draw_text(self, Loc.t("Полный экран"), Vector2(x, P.position.y + (167 if ph else 205)), 17, UI.WHITE)
 			else:
-				UI.draw_text(self, Loc.t("Режим экрана"), Vector2(x, P.position.y + 137), 17, UI.WHITE)
-				UI.draw_text(self, Loc.t("F11 или Alt+Enter — переключить"), Vector2(P.position.x + 230, P.position.y + 172), 12, UI.GREY)
-			UI.draw_text(self, Loc.t("Свечение и частицы"), Vector2(x, P.position.y + 329), 17, UI.WHITE)
+				UI.draw_text(self, Loc.t("Режим экрана"), Vector2(x, P.position.y + (167 if ph else 137)), 17, UI.WHITE)
+				UI.draw_text(self, Loc.t("F11 или Alt+Enter — переключить"), Vector2(P.position.x + 230,
+					P.position.y + (214 if ph else 172)), 12, UI.GREY)
+			UI.draw_text(self, Loc.t("Свечение и частицы"), Vector2(x, P.position.y + (287 if ph else 329)), 17, UI.WHITE)
 		"access":
 			var last := 0.0
 			for i in ACCESS_ROWS.size():
-				var r := Rect2(P.position.x + 330, P.position.y + 102 + i * 27, 216, 24)
-				UI.draw_text(self, Loc.t(ACCESS_NAMES[ACCESS_ROWS[i]]), Vector2(x, r.get_center().y - floorf(UI.line_height(16) / 2)),
-					16, UI.WHITE)
-				last = r.end.y
+				var r := _acc_rect(i)
+				if UI.phone():                    # телефон: подпись — до кнопки своего столбца
+					var lx := _acc_label_x(i)
+					UI.draw_text_w(self, Loc.t(ACCESS_NAMES[ACCESS_ROWS[i]]), Vector2(lx,
+						r.get_center().y - floorf(UI.line_height(16) / 2)), r.position.x - 10 - lx, 16, UI.WHITE)
+				else:
+					UI.draw_text(self, Loc.t(ACCESS_NAMES[ACCESS_ROWS[i]]), Vector2(x, r.get_center().y - floorf(UI.line_height(16) / 2)),
+						16, UI.WHITE)
+				last = maxf(last, r.end.y)
 			var y0 := last + 6
 			var tw := (P.end.x - 192) - P.position.x - 48
 			var note := Loc.t("Вся игра проходится с клавиатуры: стрелки, Tab, Enter. F1 — все клавиши.")
@@ -376,15 +426,17 @@ func _draw() -> void:
 			UI.draw_wrapped(self, note, Vector2(x, y0 + UI.line_height(sz) + 2), tw, sz, UI.GREY, false, 2, -1,
 				maxi(1, int((P.end.y - 8 - y0) / (UI.line_height(sz) + 2)) - 1))
 		"game":
-			UI.draw_text(self, Loc.t("Прогресс"), Vector2(x, P.position.y + 114), 19, UI.WHITE, true)
-			var y := P.position.y + 142
+			UI.draw_text(self, Loc.t("Прогресс"), Vector2(x, P.position.y + (150 if UI.phone() else 114)), 19, UI.WHITE, true)
+			var y := P.position.y + (178 if UI.phone() else 142)
 			for line in progress_summary():
 				UI.draw_text(self, line, Vector2(x, y), 15, UI.GREY)
 				y += 22
+			var ph := UI.phone()
 			if reset_ask:
-				UI.draw_text(self, Loc.t("Сбросить весь прогресс? Это нельзя отменить."), Vector2(x, P.position.y + 318), 16, UI.BAD, true)
+				UI.draw_text(self, Loc.t("Сбросить весь прогресс? Это нельзя отменить."), Vector2(x, P.position.y + (418 if ph else 318)),
+					16, UI.BAD, true)
 			UI.draw_wrapped(self, Loc.t("Сотрёт починенные коляски, гараж, Гильдию и Кабинет посадки. Звук, графика, язык и доступность останутся."),
-				Vector2(x, P.position.y + 402), P.size.x - 64 - 210, 12, UI.GREY, false, 2, -1, 4)
+				Vector2(x, P.position.y + (520 if ph else 402)), P.size.x - 64 - 210, 12, UI.GREY, false, 2, -1, 4)
 
 
 ## Карточка «что делает настройка» справа от окна (_draw_setting_help): пункт в фокусе клавиатуры или под мышью.

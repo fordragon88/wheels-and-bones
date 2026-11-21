@@ -17,7 +17,8 @@ const EXCEPT := {
 
 ## Ключевые экраны самопроверки (телефон): то, что перестроено.
 const KEY_STATES := ["hub", "job_flat_diagnose", "job_flat_inspected", "job_joystick_inspected", "job_flat_repair",
-	"result_lift", "garage", "garage_open"]
+	"result_lift", "garage", "garage_open", "settings_sound", "settings_graphics", "settings_access", "settings_game",
+	"feedback_general", "feedback_dispute", "share_paste", "share_confirm", "hub_assign", "share_summary", "share_builder"]
 
 
 func _ensure_stager() -> void:

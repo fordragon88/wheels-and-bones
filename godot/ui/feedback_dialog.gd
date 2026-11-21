@@ -6,7 +6,11 @@ extends Control
 
 signal closed(sent: bool, online: bool)
 
-const P := Rect2(UI.W / 2.0 - 340, UI.H / 2.0 - 274, 680, 548)
+const P0 := Rect2(UI.W / 2.0 - 340, UI.H / 2.0 - 274, 680, 548)
+const PP := Rect2(UI.W / 2.0 - 520, 8, 1040, 704)   # телефонный режим: шире, причины в два столбца по 56
+var P: Rect2:
+	get:
+		return PP if UI.phone() else P0
 const WHERE := {"hub": "Мастерская", "garage": "Гараж", "guild": "Гильдия", "seating": "Кабинет посадки",
 	"title": "Титул", "intro": "Вступление"}
 
@@ -55,12 +59,18 @@ func _head() -> Array:
 func _reason_rect(i: int) -> Rect2:
 	var n := reasons().size()
 	var dy: float = _head()[1]
+	if UI.phone():
+		var cw := (P.size.x - 56 - 12) / 2.0
+		@warning_ignore("integer_division")
+		return Rect2(P.position.x + 28 + (i % 2) * (cw + 12), P.position.y + 182 + dy + (i / 2) * 64, cw, 56)
 	var step := (42 if n <= 3 else 34) - (6 if dy > 40 else 0)
 	return Rect2(P.position.x + 28, P.position.y + 182 + dy + i * step, P.size.x - 56, step - 6)
 
 
 func _text_rect() -> Rect2:
 	var dy: float = _head()[1]
+	if UI.phone():                               # телефон: окно выше — поле для текста крупнее
+		return Rect2(P.position.x + 28, P.position.y + 340 + dy, P.size.x - 56, 150 - dy)
 	return Rect2(P.position.x + 28, P.position.y + 340 + dy - (18 if dy > 40 else 0), P.size.x - 56, 78 - (12 if dy > 40 else 0))
 
 
@@ -111,11 +121,13 @@ func _ready() -> void:
 			text.accept_event()
 			send())
 	add_child(text)
-	var cancel := GameButton.make(Rect2(P.position.x + 28, P.end.y - 62, 160, 44), "ОТМЕНА", UI.GREY)
+	var bh := 56 if UI.phone() else 44
+	var by := P.end.y - (72 if UI.phone() else 62)
+	var cancel := GameButton.make(Rect2(P.position.x + 28, by, 160, bh), "ОТМЕНА", UI.GREY)
 	cancel.name = "Cancel"
 	cancel.pressed.connect(close)
 	add_child(cancel)
-	_send = GameButton.make(Rect2(P.end.x - 228, P.end.y - 62, 200, 44), "ОТПРАВИТЬ", UI.GOOD)
+	_send = GameButton.make(Rect2(P.end.x - 228, by, 200, bh), "ОТПРАВИТЬ", UI.GOOD)
 	_send.name = "Send"
 	_send.pressed.connect(send)
 	add_child(_send)
