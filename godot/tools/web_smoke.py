@@ -417,6 +417,7 @@ async def sc_boot(b):
     st, secs, times = await p.boot()
     check(st.get("screen") == "title", f"{p.name}: титул ({st.get('screen')})")
     check(st.get("touch") is False, f"{p.name}: мышь — не режим касаний ({st.get('touch')})")
+    check(st.get("phone") is False, f"{p.name}: компьютер — не телефонный режим ({st.get('phone')})")
     t_title = (times.get("title", 0) - times.get("start", 0)) / 1000
     metrics["boot_title_s"] = round(t_title, 2)
     info(f"{p.name}: титул через {t_title:.2f} с от начала страницы (движок запущен через "
@@ -755,6 +756,9 @@ async def sc_phone(b):
     st = await p.state()
     check(st.get("touch") is True, f"{p.name}: сенсорный экран (pointer: coarse) — режим касаний, как TOUCH в game.py "
                                    f"(«тап», без подсказок клавиш): {st.get('touch')}")
+    check(st.get("phone") is True, f"{p.name}: телефон (касания и экран < 600 CSS px) — телефонный режим, цели 56: "
+                                   f"{st.get('phone')}")
+    phone_small(p, st, "титул")
     await p.press("Start", wait=1200)
     st = await p.wait(lambda s: s.get("screen") == "hub", "касание «начать» → мастерская", 10)
     await p.shot("2_hub")
@@ -773,16 +777,31 @@ async def sc_phone(b):
     check(st.get("screen") == "job", f"{p.name}: касание на 10 px левее карточки — задание (запас пальца TOUCH_PAD 16)")
     await p.pg.wait_for_timeout(3000)
     await p.shot("3_job")
-    # касание пункта списка деталей — осмотр
-    await p.press((st.get("hint") or ["?"])[0], wait=600)
     st = await p.state()
-    check(st.get("phase") == "diagnose", f"{p.name}: касание детали в задании ({st.get('hint')})")
-    await p.key("Escape", 600)
-    await p.key("Escape", 600)
-    st = await p.wait(lambda s: s.get("screen") == "hub", "Esc → мастерская", 10)
+    phone_small(p, st, "задание")
+    # касание у нижнего края строки детали (56 px; прежняя строка 36 px сюда не доставала) — осмотр
+    row = next((b for b in st.get("buttons", []) if b[0].startswith("Part_")), None)
+    if row:
+        check(row[4] >= 56, f"{p.name}: строка детали {row[0]} высотой {row[4]} px холста (телефон: ≥ 56)")
+        await p.tap_xy(row[1] + row[3] / 2, row[2] + row[4] - 4)
+        st = await p.wait(lambda s: bool(s.get("toast")), "касание у нижнего края строки детали → улика сверху", 5)
+        check(bool(st), f"{p.name}: касание у нижнего края строки детали (4 px от края) — осмотр ({(st or {}).get('toast', '')[:40]})")
+    else:
+        check(False, f"{p.name}: нет строки детали в задании")
+    # «назад» 56×56: касание в (57, 53) — внутри нового значка, мимо прежнего (8..46 и запас 9 px)
+    await p.tap_xy(57, 53)                              # первый раз — «Ещё раз Esc — покинуть ремонт»
+    await p.pg.wait_for_timeout(500)
+    await p.tap_xy(57, 53)
+    st = await p.wait(lambda s: s.get("screen") == "hub", "касание края значка «назад» 56×56 → мастерская", 10)
+    check(bool(st), f"{p.name}: касание у края значка «назад» (57, 53) — мастерская")
+    phone_small(p, st or await p.state(), "мастерская")
     # Game._tap: значок ⚙ на сенсоре шире пальца на 9 px — касание на 6 px правее него открывает настройки
     g = next((x for x in st.get("buttons", []) if x[0] == "Gear"), None)
-    if g:
+    if g and g[1] + g[3] + 6 >= 1280:                   # телефонный режим: ⚙ 56×56 у самого края — запас снизу
+        await p.tap_xy(g[1] + g[3] / 2, g[2] + g[4] + 6)
+        st = await p.wait(lambda s: s.get("settings"), "касание на 6 px ниже ⚙ → настройки (запас пальца)", 10)
+        check(bool(st.get("settings")), f"{p.name}: касание на 6 px ниже ⚙ 56×56 — настройки (Game._tap, +9 px)")
+    elif g:
         await p.tap_xy(g[1] + g[3] + 6, g[2] + g[4] / 2)
         st = await p.wait(lambda s: s.get("settings"), "касание на 6 px правее ⚙ → настройки (запас пальца)", 10)
         check(bool(st.get("settings")), f"{p.name}: касание на 6 px правее ⚙ — настройки (Game._tap, +9 px)")
@@ -802,9 +821,30 @@ async def sc_phone(b):
     else:
         check(False, f"{p.name}: нет поля кода")
     await p.shot("4_paste")
+    # задание касаниями от мастерской до итога (телефонная раскладка: диагнозы рядом, Барти справа, плитки 56)
+    st = await p.state()
+    if st.get("share_dlg"):
+        await p.key("Escape", 500)
+    st = await p.state()
+    if st.get("settings"):
+        await p.press("Done", wait=600)
+    st = await p.wait(lambda s: s.get("screen") == "hub" and not s.get("settings") and not s.get("share_dlg"),
+                      "мастерская без окон", 10)
+    await p.press("Card_flat", wait=800)
+    st = await play_job(p, "flat", "ride_martin")
+    check(bool(st) and st.get("screen") == "hub" and "flat" in st.get("done", []),
+          f"{p.name}: задание Мартина пройдено касаниями от мастерской до итога ({(st or {}).get('screen')})")
     p.check_console()
     await p.ctx.close()
     await sc_rotate(b)                                    # книжная ориентация: заслонка, планшет, ?res=
+
+
+def phone_small(p, st, where):
+    """Телефонный режим: кнопки на экране (wnbState.buttons) не мельче 56 px холста; кружки деталей (Spot_*) —
+    их зона пальца r + 16 считается в игре (самопроверка phone_check), здесь не мерим."""
+    small = [b for b in st.get("buttons", []) if min(b[3], b[4]) < 56 and not b[0].startswith("Spot_")]
+    check(not small, f"{p.name}: {where} — целей мельче 56 px холста нет"
+          + (f" (есть: {[(b[0], b[3], b[4]) for b in small][:6]})" if small else ""))
 
 
 async def orient(p, w, h, landscape, dpr=3):
@@ -925,6 +965,8 @@ async def sc_rotate(b):
     r = await rot_state(t)
     st = await t.wait(lambda s: s.get("covered") is False, "игра идёт после «играть так»", 10)
     check(not r["shown"] and bool(st), f"{t.name}: «играть так» убрал заслонку, игра идёт")
+    check(st.get("touch") is True and st.get("phone") is False,
+          f"{t.name}: планшет — касания, но не телефонный режим (touch={st.get('touch')}, phone={st.get('phone')})")
     await t.pg.wait_for_timeout(1500)
     await t.press("Start", None, 1200)
     st = await t.wait(lambda s: s.get("screen") == "hub", "касание «начать» в книжной на планшете", 10)
@@ -1368,14 +1410,16 @@ async def screens_run(b, label, rate, mobile, query="", only=None):
 async def sc_screens(b):
     """Замер кадров/с по ВСЕМ экранам и состояниям (SCREENS; состояния ставит игра — window.wnbStage, ?test=1):
     без замедления, ×6 и «телефон ×6» (740×360, dpr 3); плюс проход телефона ×6 с ?prof=1 — что дороже всего в кадре.
-    WNB_SCREENS=ключ,ключ — только эти; WNB_SCREENS_MODES=x1,x6,phone,prof — только эти проходы.
+    WNB_SCREENS=ключ,ключ — только эти; WNB_SCREENS_MODES=x1,x6,phone,prof — только эти проходы (phone0 — телефон
+    с прежней раскладкой, ?phone=0: сверка скорости телефонного режима).
     Итог — godot/tests/web_shots/screens_perf.json и таблица в конце вывода."""
     if not CHROMIUM:
         return skip_cdp("screens")
     only = [x for x in os.environ.get("WNB_SCREENS", "").split(",") if x]
     modes = [x for x in os.environ.get("WNB_SCREENS_MODES", "x1,x6,phone,prof").split(",") if x]
     runs = {"x1": ("desktop x1", 1, False, ""), "x6": ("desktop x6", 6, False, ""), "phone": ("phone x6", 6, True, ""),
-            "prof": ("prof phone x6", 6, True, "&prof=1")}
+            "prof": ("prof phone x6", 6, True, "&prof=1"),
+            "phone0": ("phone x6, phone=0", 6, True, "&phone=0")}    # телефон с прежней раскладкой (сверка скорости)
     res = {}
     for m in modes:
         label, rate, mobile, q = runs[m]
@@ -2291,11 +2335,54 @@ async def sc_phonetext(b):
     check(bool(res), f"phonetext: снято {sum(len(d) for d in res.values())} состояний × 3 окна")
 
 
+PB_STAGES = ["hub", "job_flat_diagnose", "job_flat_repair", "mini_pump", "result_lift", "settings_sound", "settings_access",
+             "seat_lesson_slump", "seat_fit_troll", "seat_quiz_q1", "guild_open", "tech_ops", "garage", "share_paste", "title"]
+PB_BIG = ["hub", "job_flat_diagnose", "job_flat_repair", "settings_access", "tech_ops"]
+
+
+async def sc_phonebig(b):
+    """Телефонный режим (UI.phone(), 21.11) — снимки для владельца: телефон 780×360 dpr 3 (снимок страницы 2340×1080,
+    как экран телефона), EN и RU, каждое состояние — до (?phone=0, раскладка как была) и после (?phone=1) →
+    tests/web_shots/phonebig/<язык>_<состояние>_before|after.png; плюс RU при тексте 150 % — <ru150>_<состояние>_after.png.
+    WNB_PB_STAGES=hub,… — часть состояний."""
+    out = os.path.join(SHOTS, "phonebig")
+    os.makedirs(out, exist_ok=True)
+    only = [x for x in os.environ.get("WNB_PB_STAGES", "").split(",") if x]
+    runs = [(lang, ph, 0) for lang in ("en", "ru") for ph in (0, 1)] + [("ru", 1, 3)]
+    n = 0
+    for lang, ph, text in runs:
+        p = await new_page(b, f"pb_{lang}{ph}t{text}", legacy=SKIP_SEED, touch=True, mobile=True, w=780, h=360, dpr=3)
+        p.allow.append("ERR_NO_BUFFER_SPACE")
+        await orient(p, 780, 360, True, 3)
+        await p.boot(f"&phone={ph}")
+        await title_ready(p)
+        for x in (f"set:lang={lang}", f"set:text={text}"):
+            await set_stage(p, x)
+        st = await p.state()
+        check(st.get("phone") is bool(ph), f"{p.name}: ?phone={ph} — телефонный режим {st.get('phone')}")
+        for s in [x for x in (PB_STAGES if text == 0 else PB_BIG) if not only or x in only]:
+            s2 = "title_en" if s == "title" and lang == "en" else s
+            if not await set_stage(p, s2):
+                check(False, f"{p.name}: состояние {s2} не встало")
+                continue
+            await p.wait(lambda q: q["frames"]["queue"] == 0 and q["frames"]["inflight"] == 0, "кадры", 6, quiet=True)
+            await p.pg.wait_for_timeout(600)
+            name = f"{lang}_{s}_{'after' if ph else 'before'}.png" if text == 0 else f"{lang}150_{s}_after.png"
+            try:
+                await p.pg.screenshot(path=os.path.join(out, name), timeout=20000)
+                n += 1
+            except Exception as e:
+                info(f"{p.name}: снимок {s} не снят ({type(e).__name__})")
+        p.check_console()
+        await p.ctx.close()
+    check(n > 0, f"phonebig: снимков {n} → tests/web_shots/phonebig/")
+
+
 SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
              "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "feedback": sc_feedback, "perf": sc_perf,
              "prof": sc_prof, "screens": sc_screens, "tabs": sc_tabs, "store": sc_store, "loader": sc_loader,
              "netfail": sc_netfail, "fsexit": sc_fsexit, "res": sc_resparam, "zoom": sc_zoom, "assign": sc_assign,
-             "pad": sc_pad, "bg": sc_bg, "phonetext": sc_phonetext}
+             "pad": sc_pad, "bg": sc_bg, "phonetext": sc_phonetext, "phonebig": sc_phonebig}
 TIMEOUT = {"screens": 5400, "phonetext": 7200,            # все экраны × 4 прохода — долго
            "bg": 2 * float(os.environ.get("WNB_BG_SECS", "70")) + 480}   # два раза «в фоне» + задание
 

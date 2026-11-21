@@ -21,7 +21,7 @@ const TEST_BTN := Rect2(UI.W / 2.0 - 170, 560, 340, 64)
 const PH_PREV := Rect2(780, 64, 56, 56)
 const PH_SKIP := Rect2(844, 64, 120, 56)
 const PH_ROW := 64                        # шаг строк списка деталей (56 + 8)
-const PH_TOP := 92                        # первая строка списка деталей
+const PH_TOP := 92                        # первая строка списка деталей (крупный текст — ниже заголовка колонки)
 const PH_HDR := Rect2(0, 5, 0, 44)        # кнопки в шапке: рисунок 44 px в полосе 54, зона пальца — 56 от верха
 
 
@@ -31,6 +31,11 @@ func prev_rect() -> Rect2:
 
 func skip_rect() -> Rect2:
 	return PH_SKIP if UI.phone() else SKIP_RECT
+
+
+## Телефон: верх первой строки деталей — под заголовком колонки «ОСМОТРЕТЬ»/«ДЕТАЛЬ» (y 70) при любом размере текста.
+func ph_top() -> float:
+	return maxf(PH_TOP, 70 + UI.line_height(16, true) + 4)
 
 
 ## Телефон: правая колонка до низа экрана (над «СНОСКИ МАНУАЛА», если они есть).
@@ -243,13 +248,13 @@ func chair_rect() -> Rect2:
 
 func part_rect(i: int) -> Rect2:
 	if UI.phone():
-		return Rect2(980, PH_TOP + i * PH_ROW, 280, 56)
+		return Rect2(980, ph_top() + i * PH_ROW, 280, 56)
 	return Rect2(980, 96 + i * 42, 280, 36)
 
 
 func right_col_top() -> float:
 	if UI.phone():
-		return PH_TOP + job["parts"].size() * PH_ROW
+		return ph_top() + job["parts"].size() * PH_ROW
 	return 96 + job["parts"].size() * 42
 
 
@@ -258,8 +263,9 @@ func diag_rects() -> Array[Rect2]:
 	if UI.phone():                            # телефон: карточки диагнозов в ряд под коляской (место пузыря Барти;
 		var out_p: Array[Rect2] = []          # Барти — в правой колонке под списком деталей)
 		var cw := floorf((964.0 - 24.0 - (n - 1) * 8.0) / n)
+		var top_p := maxf(588.0, chair_rect().end.y + 8 + UI.line_height(16, true))   # под подписью «ДИАГНОЗ»
 		for i in n:
-			out_p.append(Rect2(24 + i * (cw + 8), 588, cw, 120))
+			out_p.append(Rect2(24 + i * (cw + 8), top_p, cw, 708.0 - top_p))
 		return out_p
 	var top := right_col_top() + 30
 	var bottom := 668.0 if not Content.job_notes(job).is_empty() else 712.0
