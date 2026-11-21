@@ -186,14 +186,18 @@ func _draw_card() -> void:
 		UI.draw_wrapped(_card, Loc.t(Content.tools[tid]["hint"]), Vector2(isz + 22, 27 if low else 36), info.size.x - isz - 34,
 			13 if low else 15, UI.GREY)
 	elif not want.is_empty():
-		UI.draw_wrapped(_card, Loc.t("Обучение: нужный инструмент обведён зелёным — возьми его, потом кликни деталь в зелёном кружке."),
+		UI.draw_wrapped(_card, Loc.t("Обучение: нужный инструмент обведён зелёным — возьми его, потом коснись детали в зелёном кружке."
+			if UI.touch() else "Обучение: нужный инструмент обведён зелёным — возьми его, потом кликни деталь в зелёном кружке."),
 			Vector2(16, 12), info.size.x - 32, 15, UI.GOOD)
 	else:
-		var y := UI.draw_wrapped(_card, Loc.t("Выбери инструмент, потом кликни шаг" if tech() else
-			"Выбери инструмент, потом кликни деталь на коляске или в списке"), Vector2(16, 12), info.size.x - 32, 15, UI.GREY)
+		var hint := ("Выбери инструмент, потом коснись шага" if tech() else
+			"Выбери инструмент, потом коснись детали на коляске или в списке") if UI.touch() else \
+			("Выбери инструмент, потом кликни шаг" if tech() else "Выбери инструмент, потом кликни деталь на коляске или в списке")
+		var y := UI.draw_wrapped(_card, Loc.t(hint), Vector2(16, 12), info.size.x - 32, 15, UI.GREY)
 		if not tech() and not Content.manual_notes.get(job_screen.job["id"], {}).is_empty():
 			BookIcon.draw_icon(_card, Vector2(26, y + 16), 10, UI.CYAN)
-			UI.draw_wrapped(_card, Loc.t("У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа."),
+			UI.draw_wrapped(_card, Loc.t("У деталей с книжкой есть сноска из мануала — коснись книжки; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа."
+				if UI.touch() else "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа."),
 				Vector2(44, y + 7), info.size.x - 60, 14, UI.CYAN)
 
 

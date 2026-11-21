@@ -67,6 +67,23 @@ static func font(bold: bool = false) -> Font:
 	return f
 
 
+static var _touch: int = -1
+
+
+## Сенсорный экран (TOUCH["on"] в game.py): в браузере — `(pointer: coarse)`, как web_setup_touch; тогда подписи
+## «тап/коснись» вместо «клик/кликни», без подсказок клавиш на титуле (21.11: раньше смотрели OS.has_feature("mobile"),
+## а в браузере на телефоне его нет — на телефоне было «[ клик — начать ]» и «F1 — управление с клавиатуры»).
+static func touch() -> bool:
+	if _touch < 0:
+		_touch = 0
+		if OS.has_feature("web"):
+			var r: Variant = JavaScriptBridge.eval("(window.matchMedia && matchMedia('(pointer: coarse)').matches) ? 'y' : 'n'", true)
+			_touch = 1 if str(r) == "y" else 0
+		elif OS.has_feature("mobile"):
+			_touch = 1
+	return _touch == 1
+
+
 static func clear_font_cache() -> void:
 	_fonts.clear()
 	clear_text_cache()

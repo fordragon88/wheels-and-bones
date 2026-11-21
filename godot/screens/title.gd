@@ -53,8 +53,7 @@ func build() -> void:
 
 func _update_start_label() -> void:
 	var cont := SaveGame.done.size() > 0
-	var touch := DisplayServer.is_touchscreen_available() and OS.has_feature("mobile")
-	if touch:
+	if UI.touch():
 		_start.label = "[ тап — продолжить ]" if cont else "[ тап — начать ]"
 	else:
 		_start.label = "[ клик — продолжить ]" if cont else "[ клик — начать ]"
@@ -116,11 +115,12 @@ func _draw_deco() -> void:
 	c2.a = UI.appear(st, 1.2, 0.6)
 	UI.draw_text(_deco, Loc.t("Обучающий симулятор ремонта инвалидных колясок в фэнтези-мире"),
 		Vector2(UI.W / 2.0, 360), 19, c2, false, 1)
-	var touch := OS.has_feature("mobile")
-	if touch:
+	if UI.touch():                           # телефон/планшет: клавиш нет (game.py TOUCH["on"])
 		UI.draw_text(_deco, Loc.t("прогресс сохраняется автоматически"), Vector2(UI.W / 2.0, UI.H - 36), 15, UI.GREY, false, 1)
 	else:
-		var h1 := "M — sound · progress saves automatically" if OS.has_feature("web") \
+		# браузер: в game.py строка только по-английски (кнопки RU/EN там нет); в Godot она есть, и строка — на языке игры
+		var h1 := ("M — sound · progress saves automatically" if Loc.code == "en" else
+			"M — звук · прогресс сохраняется автоматически") if OS.has_feature("web") \
 			else Loc.t("Esc — выход · M — звук · прогресс сохраняется автоматически")
 		UI.draw_text(_deco, h1, Vector2(UI.W / 2.0, UI.H - 36), 15, UI.GREY, false, 1)
 		UI.draw_text(_deco, Loc.t("F1 — управление с клавиатуры · F2 — озвучка для незрячих"),

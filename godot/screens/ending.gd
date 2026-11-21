@@ -181,7 +181,8 @@ func _draw_story() -> void:
 func _draw_garage_label(b: GameButton, r: Rect2) -> void:
 	var c := UI.AMBER
 	c.a = (150 + 105 * (0.5 + 0.5 * UI.wsin(t * 3.2))) / 255.0
-	UI.draw_text(b, Loc.t("[ клик — посмотреть гараж ]"), r.get_center(), 20, c, false, 1)
+	UI.draw_text(b, Loc.t("[ тап — посмотреть гараж ]" if UI.touch() else "[ клик — посмотреть гараж ]"), r.get_center(), 20,
+		c, false, 1)
 
 
 ## Конфетти (draw_confetti): 80 полосок падают и кружатся; «Без анимации» и «Свечение» — нет.

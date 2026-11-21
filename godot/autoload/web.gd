@@ -288,7 +288,7 @@ func state() -> Dictionary:
 		"done": SaveGame.done.keys(), "assign": SaveGame.assign.get("id", "") if SaveGame.assign_on() else "",
 		"assign_done": (SaveGame.assign.get("done", {}) as Dictionary).keys() if SaveGame.assign_on() else [],
 		"toast": Nav.toast.text if Nav.toast.active() else "", "speech": Speech.last(),
-		"help": Nav.help != null,
+		"help": Nav.help != null, "touch": UI.touch(),
 		"share_dlg": Share.dlg.ui.get("mode", "") if Share.dlg != null else "",
 		"settings": Nav.settings != null, "errors": Content.errors.size(), "migrated": SaveGame.migrated,
 		"fullscreen": DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN,

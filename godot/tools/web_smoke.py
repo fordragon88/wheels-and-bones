@@ -131,6 +131,9 @@ class Page:
         self.ctx, self.pg, self.name, self.touch = ctx, pg, name, touch
         self.errors, self.console = [], []
         self.allow = []                                   # подстроки ожидаемых ошибок (404 в сценарии обрыва)
+        # Windows: локальному http.server не хватает буфера сокетов, когда параллельно идут несколько прогонов —
+        # кадр не пришёл, игра повторяет его сама (Frames: retry); к игре не относится
+        self.allow.append("ERR_NO_BUFFER_SPACE")
         if BROWSER == "webkit":
             # проверка WebGL в WebKit строже: Godot (Compatibility) копирует кадр glBlitFramebuffer-ом, WebKit ругается
             # один раз, картинка при этом верная (снимки) — сообщение движка, не игры
@@ -413,6 +416,7 @@ async def sc_boot(b):
     p = await new_page(b, "boot")
     st, secs, times = await p.boot()
     check(st.get("screen") == "title", f"{p.name}: титул ({st.get('screen')})")
+    check(st.get("touch") is False, f"{p.name}: мышь — не режим касаний ({st.get('touch')})")
     t_title = (times.get("title", 0) - times.get("start", 0)) / 1000
     metrics["boot_title_s"] = round(t_title, 2)
     info(f"{p.name}: титул через {t_title:.2f} с от начала страницы (движок запущен через "
@@ -748,6 +752,9 @@ async def sc_phone(b):
     c = await p.canvas()
     check(abs(c[2] - 740) < 2 and abs(c[3] - 360) < 2 and c[4] >= 2000,
           f"{p.name}: холст {c[2]:.0f}×{c[3]:.0f} CSS = окно, {c[4]}×{c[5]} px (dpr {c[6]})")
+    st = await p.state()
+    check(st.get("touch") is True, f"{p.name}: сенсорный экран (pointer: coarse) — режим касаний, как TOUCH в game.py "
+                                   f"(«тап», без подсказок клавиш): {st.get('touch')}")
     await p.press("Start", wait=1200)
     st = await p.wait(lambda s: s.get("screen") == "hub", "касание «начать» → мастерская", 10)
     await p.shot("2_hub")

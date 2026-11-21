@@ -160,4 +160,5 @@ func _draw_shade(c: Control) -> void:
 		c.draw_rect(Rect2(0, AREA.position.y + k, UI.W, 1), Color(col, a))
 		c.draw_rect(Rect2(0, AREA.end.y - 1 - k, UI.W, 1), Color(col, a))
 	UI.wave_title(c, "ТИТРЫ", Vector2(UI.W / 2.0, 70), 44, UI.AMBER, st, t)
-	UI.draw_text(c, Loc.t("колесо мыши / ↑ ↓ — листать · Esc — назад"), Vector2(UI.W / 2.0, UI.H - 47), 15, UI.GREY, false, 1)
+	UI.draw_text(c, Loc.t("протяни пальцем — листать" if UI.touch() else "колесо мыши / ↑ ↓ — листать · Esc — назад"),
+		Vector2(UI.W / 2.0, UI.H - 47), 15, UI.GREY, false, 1)

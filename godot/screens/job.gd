@@ -1074,6 +1074,7 @@ func _draw_deco() -> void:
 			UI.draw_wrapped(_deco, Loc.t(job["symptom"]), Vector2(360, 100), 560, 17, UI.WHITE)
 			var unlocked := inspected.size() >= inspect_req
 			var tip := Loc.t("Улики собраны — выбери диагноз:") if unlocked else Loc.tf(
+				"Осмотри детали (тап по коляске или списку): {0}/{1}" if UI.touch() else
 				"Осмотри детали (клик по коляске или списку): {0}/{1}", [inspected.size(), inspect_req])
 			UI.draw_text(_deco, tip, Vector2(360, cr.end.y + 4), 15, UI.GREY if unlocked else UI.AMBER, not unlocked)
 			UI.draw_text(_deco, Loc.t("ДИАГНОЗ"), Vector2(980, right_col_top() + 6), 16, UI.CYAN if unlocked else UI.DIM, true)

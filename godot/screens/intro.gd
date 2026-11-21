@@ -176,5 +176,5 @@ func _draw_deco() -> void:
 	UI.draw_text(_deco, title, Vector2(p.get_center().x, p.position.y + 20 + floorf((26 - tsz) / 2.0)),
 		tsz, Color(UI.AMBER, sk), true, 1)
 	UI.draw_wrapped(_deco, text, Vector2(p.get_center().x, p.position.y + 70), p.size.x - 50, 19, UI.WHITE, true, 4, n)
-	UI.draw_text(_deco, Loc.t("%d/%d   [ клик — далее ]" % [idx + 1, slides().size()]),
+	UI.draw_text(_deco, Loc.t(("%d/%d   [ тап — далее ]" if UI.touch() else "%d/%d   [ клик — далее ]") % [idx + 1, slides().size()]),
 		Vector2(p.get_center().x, p.end.y - 34), 15, UI.GREY, false, 1)

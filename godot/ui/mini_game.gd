@@ -322,7 +322,8 @@ func _draw_gap() -> void:
 	while sz > 16 and UI.text_width(text, sz, true) > P.size.x - 48:
 		sz -= 1
 	UI.draw_text(self, text, Vector2(trk.get_center().x, trk.end.y + 46), sz, UI.WHITE, true, 1)
-	UI.draw_text(self, Loc.t("Кликни по шкале, чтобы выставить значение."), Vector2(trk.get_center().x, trk.end.y + 82),
+	UI.draw_text(self, Loc.t("Коснись шкалы, чтобы выставить значение." if UI.touch() else
+		"Кликни по шкале, чтобы выставить значение."), Vector2(trk.get_center().x, trk.end.y + 82),
 		14, UI.GREY, false, 1)
 	if _track.has_focus() and UI.kb_active:
 		UI.draw_round_rect(self, trk.grow(5), Color(0, 0, 0, 0), UI.WHITE, 2, 9)
@@ -334,7 +335,8 @@ func _draw_ping() -> void:
 	for k: int in dull:
 		if tested.has(k):
 			found += 1
-	UI.draw_text(self, Loc.tf("Кликай спицы, ищи глухие. Найдено: {0}/{1}", [found, dull.size()]),
+	UI.draw_text(self, Loc.tf("Касайся спиц, ищи глухие. Найдено: {0}/{1}" if UI.touch() else
+		"Кликай спицы, ищи глухие. Найдено: {0}/{1}", [found, dull.size()]),
 		Vector2(P.position.x + 24, P.end.y - 46), 15, UI.CYAN)
 	UI.draw_ring(self, c, 150, UI.DIM, 3)
 	var total := int(cfg["total"])
