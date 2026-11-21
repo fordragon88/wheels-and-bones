@@ -9,7 +9,7 @@ extends Screen
 
 ## Раскладка (_layout() в build()): вне телефонного режима — как было; в телефонном (UI.phone(), 21.11) — цели ≥ 56:
 ## вкладки и «В МАСТЕРСКУЮ» 56 в высоту, реплика и рамка ниже на 18; уроки — список в 2 столбца, клиенты — в 3, строки
-## 56 через 64, на кнопке мини-иконка (урок — скелет в позе урока из SeatFigure, клиент — верх портрета) и название
+## 56 через 64, на кнопке мини-иконка (урок — пиктограмма ui/lesson_icons.gd, клиент — верх портрета) и название
 ## целиком (до 2 строк); ползунки — строки-зоны 476×56 через 64 (5 ползунков — 52 через 60): подпись и значение сверху,
 ## дорожка снизу; «ПОЗА…/ВИД…» 228×56, нижняя кнопка 56 у низа экрана.
 var CV := Rect2(24, 176, 730, 488)
@@ -22,7 +22,7 @@ var Q_TOP := 0.0                          # сдвиг «Вопрос N из M»
 const TAB_NAMES := {"lessons": "УРОКИ", "fit": "ПРИМЕРКА", "quiz": "ПРОВЕРЬ СЕБЯ"}
 const ROW_H := 56.0                       # телефон: строка списка уроков/клиентов и шаг 64
 const ROW_STEP := 64.0
-static var _icon_ops := {}                # телефон: мини-иконки уроков — урок → [фигуры SeatFigure, рамка] (считаются раз)
+const LessonIcons := preload("res://ui/lesson_icons.gd")   # телефон: пиктограммы уроков 1…7 на кнопках списка
 
 var tab: String = "lessons"
 var lesson: int = 0
@@ -1026,9 +1026,9 @@ func _fix_caption(ci: CanvasItem, text: String, top: bool) -> void:
 	UI.draw_wrapped(ci, text, Vector2(box.get_center().x, box.position.y + 5), w, sz, UI.GOOD, true, 2, -1, nmax)
 
 
-## Телефон: кнопка списка — мини-иконка слева и название целиком (до 2 строк, по середине кнопки).
+## Телефон: кнопка списка — мини-иконка слева (если icon задан) и название целиком (до 2 строк, по середине кнопки).
 func _draw_row(b: GameButton, r: Rect2, text: String, base: int, bold: bool, icon: Callable) -> void:
-	var lay := _row_fit(text, r.size.x, base, bold)
+	var lay := _row_fit(text, r.size.x, base, bold, icon.is_valid())
 	var isz: float = lay[0]
 	var x := r.position.x + 8
 	if isz > 0.0:
@@ -1048,12 +1048,13 @@ static var _row_cache := {}
 
 ## Раскладка подписи кнопки: [иконка px, кегль, строки]. Уступки по порядку: иконка 44 при кегле base, base − 1
 ## (в 1–2 строки), потом иконка 32, потом без иконки; не влезло и так — кегль ещё меньше (до 9), строк не больше 2.
-func _row_fit(text: String, w: float, base: int, bold: bool) -> Array:
-	var key := "%s|%d|%d|%s|%s|%s" % [text, w, base, bold, Settings.a11y.get("text", 0), Settings.easy_font()]
+func _row_fit(text: String, w: float, base: int, bold: bool, with_icon := true) -> Array:
+	var key := "%s|%d|%d|%s|%s|%s|%s" % [text, w, base, bold, Settings.a11y.get("text", 0), Settings.easy_font(),
+		with_icon]
 	if _row_cache.has(key):
 		return _row_cache[key]
 	var out: Array = []
-	for isz: float in [44.0, 32.0, 0.0]:
+	for isz: float in ([44.0, 32.0, 0.0] if with_icon else [0.0]):
 		var tw := w - 16 - (isz + 6 if isz > 0.0 else 0.0)
 		for sz: int in ([base, base - 1] if isz > 0.0 else range(base, 8, -1)):
 			var lines := _row_lines(text, tw, sz, bold)
@@ -1081,83 +1082,11 @@ static func _row_lines(text: String, tw: float, sz: int, bold: bool) -> PackedSt
 	return lines
 
 
-## Мини-иконка урока: скелет в позе урока (SeatFigure без Мортимера, подписей и подсветки), фигуры посчитаны один
-## раз (_icon_ops) и рисуются с масштабом в рамку box.
+## Мини-иконка урока i (с 0): плитка и пиктограмма урока i + 1 (LessonIcons — пачка треугольников, посчитана раз на
+## размер и рисуется одним вызовом; перерисовка кнопки — только по её подписи _btn_sig).
 func _draw_lesson_icon(ci: CanvasItem, i: int, box: Rect2) -> void:
 	UI.draw_round_rect(ci, box.grow(2), Color8(14, 12, 20, 200), Color(), 0, 6)
-	var ic := _lesson_icon_ops(i)
-	if ic.is_empty() or (ic[1] as Rect2).size.x <= 0.0:
-		return
-	var bb: Rect2 = ic[1]
-	var k := minf(box.size.x / bb.size.x, box.size.y / bb.size.y)
-	ci.draw_set_transform(box.get_center() - bb.get_center() * k, 0.0, Vector2(k, k))
-	for o: Array in ic[0]:
-		SeatFigure._emit(ci, o)
-	ci.draw_set_transform(Vector2.ZERO)
-
-
-func _lesson_icon_ops(i: int) -> Array:
-	if _icon_ops.has(i):
-		return _icon_ops[i]
-	var lp := {}
-	var p: Variant = lessons()[i].get("pose")
-	if p is Dictionary:
-		lp = p
-	var f := SeatFigure.new()
-	f.show_necro = false
-	f.highlight = false
-	var sc := Rect2(0, 0, 120, 96)                # мелкая сцена: линии SeatFigure в px — относительно толще
-	if lp.get("front"):
-		f.mode = "front"
-		f.front_corrected = false
-		f.front_pads = true
-		f.front_obl = -1.0
-		f.front_wedge = 0.0
-	else:
-		var d := SeatLogic.demo_pose(lp, false)
-		f.case = d[0]
-		f.cfg = d[1]
-		f.pose = d[2]
-		f.mode = "scene"
-	f.place(sc, sc)
-	f._build()
-	# только треугольники фигур (без плашек и подписей), без длинных (пол и линейка во всю ширину сцены); рамка — по
-	# 2–98 % центров треугольников (мелкие отметки по краям сцены её не раздувают), всё вне рамки — не рисуем
-	var tris: Array = []                         # [центр, вершины 3, цвета 3]
-	var xs: Array = []
-	var ys: Array = []
-	for seg: Array in f._ops:
-		for o: Array in seg:
-			if int(o[0]) != 7:
-				continue
-			var vs: PackedVector2Array = o[1]
-			var cs: PackedColorArray = o[2]
-			for t3 in range(0, vs.size() - 2, 3):
-				var tri := Rect2(vs[t3], Vector2.ZERO).expand(vs[t3 + 1]).expand(vs[t3 + 2])
-				if tri.size.x > sc.size.x * 0.6:
-					continue
-				var c := tri.get_center()
-				tris.append([c, vs.slice(t3, t3 + 3), cs.slice(t3, t3 + 3)])
-				xs.append(c.x)
-				ys.append(c.y)
-	var ops: Array = []
-	var bb := Rect2()
-	if not tris.is_empty():
-		xs.sort()
-		ys.sort()
-		var lo := int(xs.size() * 0.02)
-		var hi := int(xs.size() * 0.98)
-		bb = Rect2(xs[lo], ys[lo], xs[hi] - xs[lo], ys[hi] - ys[lo]).grow(2)
-		var nv := PackedVector2Array()
-		var nc := PackedColorArray()
-		for tr: Array in tris:
-			if bb.has_point(tr[0]):
-				nv.append_array(tr[1])
-				nc.append_array(tr[2])
-		ops.append([7, nv, nc])
-	f.free()
-	_icon_ops[i] = [ops, bb]
-	return _icon_ops[i]
+	LessonIcons.draw(ci, i + 1, box)
 
 
 ## Мини-иконка клиента: верх портрета (квадратная вырезка по ширине картинки).
@@ -1174,7 +1103,8 @@ func _draw_lesson_btn(b: GameButton, r: Rect2) -> void:
 	var i := int(b.get_meta("i"))
 	if UI.phone():
 		_draw_row(b, r, "%d. %s" % [i + 1, Loc.t(lessons()[i]["title"])], 15, i == lesson,
-			func(ci: CanvasItem, box: Rect2) -> void: _draw_lesson_icon(ci, i, box))
+			(func(ci: CanvasItem, box: Rect2) -> void: _draw_lesson_icon(ci, i, box)) if LessonIcons.has(i + 1)
+			else Callable())
 		return
 	_fit(b, "%d. %s" % [i + 1, Loc.t(lessons()[i]["title"])], r.position + Vector2(10, 9), r.size.x - 20, 15, UI.WHITE,
 		i == lesson)
