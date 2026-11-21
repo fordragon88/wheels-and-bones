@@ -738,6 +738,17 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-21 — Claude (Fable 5.2), ветка `godot-port` — **проверка работы подагента, слияние `test-build`, выкладка
+  Godot на тестовый адрес** (владелец: «сделай всё, что можешь без меня»). Слияние 6c61c77 (b7ba675: `magic_martin`
+  865×562; в Godot `sync_content.py` ужимает петли до 400 px по высоте, как браузерная сборка pygame, — кадр 616×400
+  вместо 554×360, портрет ~312 px против прежних 281). Перепроверено мной: окончания строк 20 файлов байтами — без смен;
+  «GODOT SELFTEST OK» (в журнале только ожидаемые `incorrect header check`/`Decompression failed` из битых кодов);
+  `check_share` 28 из 28, расхождений 0; «SAVE COMPAT: 12 сохранений, полей сверено 156, расхождений 0»; «LOOP SHIFT
+  OK: петля↔волшебство ≤ 0.25»; «FEEDBACK COMPARE: 14 ok, 0 FAIL»; локально `web_smoke` — Chromium 249 ok (boot, play,
+  links, migrate, guild, phone, stale, a11y, tabs, store, loader, pad, assign, zoom), Firefox 74 ok и WebKit 72 ok
+  (boot, play, phone, a11y, pad), 0 FAIL. Пакет `wnb-4805151258.pck`, тестовый репозиторий 11f22cf, по живому адресу —
+  Chromium 54 ok (boot, play, phone, stale), Firefox 24 ok (boot, play), 0 FAIL. На основной сайт и в `main` ничего не выкладывалось. Не перенесённым оставался запас на
+  палец (`_tap`/`_touch_snap`/`_hotspot_at` в game.py) — отдан следующему подагенту.
 - 2026-11-21 — Claude (Opus 5.5), ветка `godot-port` — **Godot в браузере: Firefox и WebKit, телефон при крупном
   тексте, хвосты аудита 20.11, уроки посадки с «лёгким» шрифтом** (слияние main 51b44a1; коммиты 0bb6191, 2f33b28,
   39ccda9, 974cec3). (1) `web_smoke.py --browser firefox|webkit`: звук в ноль без `--mute-audio` (профиль Firefox
