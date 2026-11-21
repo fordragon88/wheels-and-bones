@@ -321,6 +321,14 @@ func state() -> Dictionary:
 		if mp is MagicPortrait:
 			d["magic"] = {"loop": mp.loop_name, "playing": mp.magic_t0 >= 0.0, "ready": mp.loop_name != "" and Frames.loop_ready(mp.loop_name)}
 			d["portrait"] = mp.live_loop() if mp._fig.live() else ""     # «живой» портрет (martin_idle) или картинка
+		if Nav.current_name == "seating":       # Кабинет посадки (web_smoke phone): вкладка, выбор, ползунки (дорожки)
+			var tr := {}
+			for k: String in scr.sliders:
+				var r: Rect2 = scr.slider_rect(scr.slider_keys().find(k))
+				var sl: Array = SeatLogic.sliders()[k]
+				tr[k] = [r.position.x, r.get_center().y, r.size.x, sl[2], sl[3]]
+			d["seat"] = {"tab": scr.tab, "lesson": scr.lesson, "case": scr.case_i, "solved": scr.solved, "cfg": scr.cfg,
+				"tracks": tr}
 		var mg: Variant = scr.get("mini") if "mini" in scr else null
 		if mg is MiniGame:
 			d["mini"] = {"kind": mg.kind, "value": mg.value, "cfg": mg.cfg}

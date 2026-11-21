@@ -13,6 +13,8 @@ var _stager: Node
 
 ## Осознанно мельче 56 / вплотную: «имя цели» (или «состояние:имя»; * в конце — начало имени) → причина.
 const EXCEPT := {
+	"Slider_*": "Кабинет посадки, примерка с 4–5 ползунками: строки ползунков и «ГОТОВО» 52 через 60 (с 56 через 64 предупреждения при 100 % мельче на 3 ступени; разрешено владельцем 21.11)",
+	"Check": "Кабинет посадки, примерка с 4–5 ползунками: строки ползунков и «ГОТОВО» 52 через 60 (с 56 через 64 предупреждения при 100 % мельче на 3 ступени; разрешено владельцем 21.11)",
 	"tech_ops_t_battery:Op_*": "про-задание на 13–16 шагов: карточки 470×40–46 в 2 столбца по 7–8; 56 через 64 не помещаются над инструментами (PORT_PLAN, телефонный режим)",
 	"tech_ops_t_battery_q6:Op_*": "про-задание на 13–16 шагов: карточки 470×40–46 в 2 столбца по 7–8; 56 через 64 не помещаются над инструментами (PORT_PLAN, телефонный режим)",
 	"tech_ops_t_pulse6:Op_*": "про-задание на 13–16 шагов: карточки 470×40–46 в 2 столбца по 7–8; 56 через 64 не помещаются над инструментами (PORT_PLAN, телефонный режим)",
@@ -22,7 +24,10 @@ const EXCEPT := {
 ## Ключевые экраны самопроверки (телефон): то, что перестроено.
 const KEY_STATES := ["title", "intro_1", "ending", "credits", "guild_open", "guild_diploma", "tech_ops", "tech_manual",
 	"tech_spec", "tech_failed", "tech_ops_t_battery", "tech_ops_t_battery_q6", "tech_ops_t_pulse6",
-	"tech_ops_t_q6brake", "exam_ticket", "hub", "job_flat_diagnose", "job_flat_inspected", "job_joystick_inspected", "job_flat_repair",
+	"tech_ops_t_q6brake",
+	"seat_lessons", "seat_lesson_slump", "seat_lesson_measure", "seat_lesson_front", "seat_fit_troll", "seat_fit_golem",
+	"seat_fit_dryad", "seat_fit_dryad_side", "seat_fit_owl", "seat_fit_orc", "seat_quiz_q1", "seat_quiz_wrong", "seat_quiz_pass", "scan_seat",
+	"exam_ticket", "hub", "job_flat_diagnose", "job_flat_inspected", "job_joystick_inspected", "job_flat_repair",
 	"result_lift", "garage", "garage_open", "mini_pump", "mini_gap", "mini_ping", "mini_meter", "settings_sound", "settings_graphics", "settings_access", "settings_game",
 	"feedback_general", "feedback_dispute", "share_paste", "share_confirm", "hub_assign", "share_summary", "share_builder"]
 
@@ -270,6 +275,61 @@ func run(runner: Node) -> String:
 				R.err("телефон выключен, %s: цели не как были\n  было  %s\n  стало %s" % [key, JSON.stringify(ref[key]),
 					JSON.stringify(off["rects"][key])])
 	return summary(true, on) + "; выключен: %d состояний как эталон (расхождений %d)" % [n_off, n_diff]
+
+
+## Кегли текста Кабинета посадки (seating.gd text_sizes): каждый урок, клиент, вопрос — при RU/EN, 100/125/150 %,
+## обычный и «лёгкий» шрифт (лёгкий — только EN). Ключ «ru 150 lesson 3» → {lesson|warn|q|say: кегль}.
+##   … --only seat-sizes [--phone 0|1]  → tests/out/seat_sizes_<0|1>.json
+func seat_sizes(runner: Node, on: bool) -> Dictionary:
+	R = runner
+	var t0: int = UI._touch
+	var p0: int = UI._phone
+	UI._touch = 1 if on else t0
+	UI.set_phone(on)
+	var keep := [Settings.lang, Loc.code, Settings.a11y.get("text", 0), Settings.a11y.get("font", false)]
+	var instant0: bool = Settings.a11y.get("instant", false)
+	Settings.a11y["instant"] = true
+	var out := {}
+	for lang: String in ["ru", "en"]:
+		for t: int in [0, 2, 3]:
+			for easy: bool in ([false, true] if lang == "en" else [false]):
+				Settings.lang = lang
+				Loc.code = lang
+				Settings.a11y["text"] = t
+				Settings.a11y["font"] = easy
+				UI.clear_font_cache()
+				SaveGame.reset()
+				SaveGame.done["flat"] = true
+				Nav.go("seating")
+				await R._frames(3)
+				var scr: Node = Nav.current
+				scr.quiz = Content.seating["quiz"].duplicate(true)
+				var pre := "%s %d%s" % [lang, [100, 112, 125, 150][t], " easy" if easy else ""]
+				for i in scr.lessons().size():
+					scr.pick_lesson(i)
+					await R._frames(2)
+					out["%s lesson %d" % [pre, i + 1]] = scr.text_sizes.duplicate()
+				scr.set_tab("fit")
+				for i in scr.cases().size():
+					scr.pick_case(i)
+					await R._frames(2)
+					out["%s fit %d" % [pre, i + 1]] = scr.text_sizes.duplicate()
+				scr.set_tab("quiz")
+				for i in scr.quiz.size():
+					scr.quiz_i = i
+					scr.refresh()
+					await R._frames(2)
+					out["%s quiz %d" % [pre, i + 1]] = scr.text_sizes.duplicate()
+	Settings.lang = keep[0]
+	Loc.code = keep[1]
+	Settings.a11y["text"] = keep[2]
+	Settings.a11y["font"] = keep[3]
+	Settings.a11y["instant"] = instant0
+	UI.clear_font_cache()
+	UI._touch = t0
+	UI._phone = p0
+	Settings.changed.emit("phone")
+	return out
 
 
 ## Строки целей с числами целыми (JSON читает их как float).

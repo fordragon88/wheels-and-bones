@@ -836,9 +836,61 @@ async def sc_phone(b):
     st = await play_job(p, "flat", "ride_martin")
     check(bool(st) and st.get("screen") == "hub" and "flat" in st.get("done", []),
           f"{p.name}: задание Мартина пройдено касаниями от мастерской до итога ({(st or {}).get('screen')})")
+    await seat_phone(p)
     p.check_console()
     await p.ctx.close()
     await sc_rotate(b)                                    # книжная ориентация: заслонка, планшет, ?res=
+
+
+async def seat_phone(p):
+    """Кабинет посадки на телефоне (21.11): цели ≥ 56 (кроме ползунков и «ГОТОВО» 52 при 4–5 ползунках), касание
+    кнопки урока и клиента выбирает его, ползунок встаёт касанием, примерка тролля проходится касаниями."""
+    st = await p.wait(lambda s: s.get("screen") == "hub", "мастерская", 10)
+    await p.press("Seating", wait=1200)
+    st = await p.wait(lambda s: s.get("screen") == "seating", "касание «Кабинет посадки» → кабинет", 10)
+    if not st:
+        check(False, f"{p.name}: Кабинет посадки не открылся")
+        return
+    phone_small(p, st, "уроки")
+    await p.press("Lesson_3", wait=600)
+    st = await p.state()
+    check(st.get("seat", {}).get("lesson") == 3,
+          f"{p.name}: касание кнопки урока 4 — урок выбран ({st.get('seat', {}).get('lesson')})")
+    await p.shot("5_seat_lesson")
+    await p.press("Tab_fit", wait=800)
+    await p.press("Case_1", wait=600)
+    st = await p.state()
+    check(st.get("seat", {}).get("case") == 1,
+          f"{p.name}: касание кнопки клиента 2 — клиент выбран ({st.get('seat', {}).get('case')})")
+    await p.press("Case_0", wait=800)
+    st = await p.state()
+    seat = st.get("seat", {})
+    tight = [b for b in st.get("buttons", []) if b[0].startswith("Slider_") or b[0] == "Check"]
+    small = [b for b in st.get("buttons", []) if min(b[3], b[4]) < 56 and not b[0].startswith("Spot_") and b not in tight]
+    small += [b for b in tight if min(b[3], b[4]) < 52]
+    check(seat.get("tab") == "fit" and seat.get("case") == 0 and not small,
+          f"{p.name}: примерка — цели ≥ 56, ползунки и «ГОТОВО» ≥ 52 (мельче: {[(b[0], b[3], b[4]) for b in small][:6]})")
+    with open(os.path.join(GODOT, "content", "data", "seating", "cases.json"), encoding="utf-8") as f:
+        c = json.load(f)[0]
+    want = {"depth": int(c["body"]["thigh"]) - 5, "leg": int(c["body"]["shank"]),
+            "back_h": (int(c["back"][0]) + int(c["back"][1])) // 2, "back_a": (int(c["angle"][0]) + int(c["angle"][1])) // 2}
+    for k, v in want.items():
+        tr = seat.get("tracks", {}).get(k)
+        if not tr:
+            check(False, f"{p.name}: нет ползунка {k}")
+            continue
+        x, y, w, lo, hi = tr
+        await p.tap_xy(x + w * (v - lo) / (hi - lo), y)
+        await p.pg.wait_for_timeout(250)
+    st = await p.state()
+    cfg = st.get("seat", {}).get("cfg", {})
+    got = {k: int(cfg.get(k, -1)) for k in want}
+    check(got == want, f"{p.name}: ползунки встали касанием на нужные значения ({got}, нужно {want})")
+    await p.shot("6_seat_fit")
+    await p.press("Check", wait=1000)
+    st = await p.state()
+    check(st.get("seat", {}).get("solved") is True,
+          f"{p.name}: примерка тролля пройдена касаниями («ГОТОВО» → посадка верна)")
 
 
 def phone_small(p, st, where):
@@ -2339,7 +2391,8 @@ async def sc_phonetext(b):
 
 PB_STAGES = ["hub", "job_flat_diagnose", "job_flat_repair", "mini_pump", "result_lift", "settings_sound", "settings_access",
              "seat_lesson_slump", "seat_fit_troll", "seat_quiz_q1", "guild_open", "tech_ops", "garage", "share_paste", "title"]
-PB_BIG = ["hub", "job_flat_diagnose", "job_flat_repair", "settings_access", "tech_ops"]
+PB_BIG = ["hub", "job_flat_diagnose", "job_flat_repair", "settings_access", "tech_ops", "seat_lesson_slump", "seat_fit_troll",
+          "seat_quiz_q1"]
 
 
 async def sc_phonebig(b):

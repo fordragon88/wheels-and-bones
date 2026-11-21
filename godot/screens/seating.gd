@@ -7,12 +7,22 @@ extends Screen
 ## Рисунок — SeatFigure: вид сбоку; спереди — примерка (_seat_front_fit) у клиентов с перекосом таза и схема урока 4 и
 ## вопросов 6–7 (_seat_front: дуга сколиоза, подкладка, три упора); сверху — поворот таза (_seat_top).
 
-const CV := Rect2(24, 176, 730, 488)
-const BTN := Rect2(780, 612, 476, 48)
-const BACK := Rect2(UI.W - 230, 64, 206, 38)
-const TOGGLE := Rect2(24 + 730 - 238, 176 + 8, 228, 32)
-const BUBBLE := Rect2(96, 110, 658, 60)
+## Раскладка (_layout() в build()): вне телефонного режима — как было; в телефонном (UI.phone(), 21.11) — цели ≥ 56:
+## вкладки и «В МАСТЕРСКУЮ» 56 в высоту, реплика и рамка ниже на 18; уроки — список в 2 столбца, клиенты — в 3, строки
+## 56 через 64, на кнопке мини-иконка (урок — скелет в позе урока из SeatFigure, клиент — верх портрета) и название
+## целиком (до 2 строк); ползунки — строки-зоны 476×56 через 64 (5 ползунков — 52 через 60): подпись и значение сверху,
+## дорожка снизу; «ПОЗА…/ВИД…» 228×56, нижняя кнопка 56 у низа экрана.
+var CV := Rect2(24, 176, 730, 488)
+var BTN := Rect2(780, 612, 476, 48)
+var BACK := Rect2(UI.W - 230, 64, 206, 38)
+var TOGGLE := Rect2(24 + 730 - 238, 176 + 8, 228, 32)
+var BUBBLE := Rect2(96, 110, 658, 60)
+var TAB_H := 38.0
+var Q_TOP := 0.0                          # сдвиг «Вопрос N из M», вопроса и ответов зачёта (телефон: ниже вкладок)
 const TAB_NAMES := {"lessons": "УРОКИ", "fit": "ПРИМЕРКА", "quiz": "ПРОВЕРЬ СЕБЯ"}
+const ROW_H := 56.0                       # телефон: строка списка уроков/клиентов и шаг 64
+const ROW_STEP := 64.0
+static var _icon_ops := {}                # телефон: мини-иконки уроков — урок → [фигуры SeatFigure, рамка] (считаются раз)
 
 var tab: String = "lessons"
 var lesson: int = 0
@@ -48,6 +58,7 @@ var _dyn: Control                         # кнопки, которые мен�
 var _typing: Array = ["", 0.0]
 var _said: String = ""
 var sliders: Dictionary = {}              # ключ → SeatSlider
+var text_sizes: Dictionary = {}           # кегли последнего кадра (реплика, урок, предупреждения, вопрос) — для проверок
 
 
 func music_theme() -> String:
@@ -100,26 +111,76 @@ func slider_keys() -> Array:
 	return ["depth", "leg", "back_h", "back_a"] + (["tilt"] if c.get("tilt") else [])
 
 
+func _layout() -> void:
+	var ph := UI.phone()
+	TAB_H = 56.0 if ph else 38.0
+	BACK = Rect2(UI.W - 230, 64, 206, TAB_H)
+	BUBBLE = Rect2(96, 128, 658, 60) if ph else Rect2(96, 110, 658, 60)
+	CV = Rect2(24, 194, 730, 470) if ph else Rect2(24, 176, 730, 488)
+	TOGGLE = Rect2(CV.end.x - 238, CV.position.y + 8, 228, 56.0 if ph else 32.0)
+	BTN = Rect2(780, UI.H - 60, 476, 56) if ph else Rect2(780, 612, 476, 48)
+	Q_TOP = 8.0 if ph else 0.0
+
+
+## Дорожка ползунка i (рисунок; set_from_x — по ней).
 @warning_ignore("integer_division")
 func slider_rect(i: int) -> Rect2:
+	if UI.phone():
+		var z := slider_zone(i)
+		return Rect2(z.position.x + 20, z.end.y - 22, z.size.x - 40, 8)
 	var row_h := ((cases().size() + 1) / 2) * 40
 	return Rect2(800, 112 + row_h + 26 + i * 44, 290, 8)
 
 
+## Зона попадания ползунка i (узел SeatSlider): как было — дорожка ± 15; телефон — строка 476×56 через 64 (при 5
+## ползунках — 52 через 60, иначе предупреждениям не остаётся места), подпись и значение — внутри строки.
+func slider_zone(i: int) -> Rect2:
+	if UI.phone():
+		var tight := _fit_tight()
+		return Rect2(780, _list_bottom() + 8 + i * (60.0 if tight else 64.0), 476, 52.0 if tight else 56.0)
+	return slider_rect(i).grow(15)
+
+
+## Телефон, примерка с 4–5 ползунками: строки ползунков и «ГОТОВО» — 52 через 60 (с 56 через 64 предупреждениям
+## при 100 % остаётся 80 px вместо прежних 112 — кегль 13 → 10).
+func _fit_tight() -> bool:
+	return UI.phone() and slider_keys().size() >= 4
+
+
+## Нижняя кнопка примерки («ГОТОВО — ПРОВЕРИТЬ ПОСАДКУ» / «СЛЕДУЮЩИЙ КЛИЕНТ»).
+func fit_btn() -> Rect2:
+	return Rect2(780, UI.H - 54, 476, 52) if _fit_tight() else BTN
+
+
+## Сколько пунктов в списке вкладки (уроки — все; примерка — назначенные).
+func _list_n() -> int:
+	return lessons().size() if tab == "lessons" else SaveGame.seat_idx().size()
+
+
+## Телефон: низ списка уроков/клиентов.
+func _list_bottom() -> float:
+	return list_rect(maxi(_list_n() - 1, 0)).end.y
+
+
 @warning_ignore("integer_division")
 func list_rect(i: int) -> Rect2:
+	if UI.phone():                               # уроки — 2 столбца по 234, клиенты — 3 по 153 (зазор 8)
+		var cols := 2 if tab == "lessons" else 3
+		var w := 234.0 if cols == 2 else 153.0
+		return Rect2(780 + (i % cols) * (w + 8), 128 + (i / cols) * ROW_STEP, w, ROW_H)
 	if tab == "lessons":
 		return Rect2(780 + (i % 2) * 238, 112 + (i / 2) * 44, 230, 38)
 	return Rect2(780 + (i % 2) * 238, 112 + (i / 2) * 40, 230, 35)
 
 
 func quiz_rect(i: int) -> Rect2:
-	return Rect2(780, 260 + i * 92, 476, 82)
+	return Rect2(780, 260 + Q_TOP + i * 92, 476, 82)
 
 
 # ---------------- сборка ----------------
 
 func build() -> void:
+	_layout()
 	add_child(BgLayer.make("bg_workshop.png"))
 	add_child(TopBar.make("Кабинет посадки некроманта Мортимера"))
 	_back = Control.new()
@@ -156,7 +217,7 @@ func build() -> void:
 	add_child(_fg)
 	for i in 3:
 		var tb: String = ["lessons", "fit", "quiz"][i]
-		var b := GameButton.make(Rect2(24 + i * 214, 64, 204, 38), TAB_NAMES[tb], UI.CYAN)
+		var b := GameButton.make(Rect2(24 + i * 214, 64, 204, TAB_H), TAB_NAMES[tb], UI.CYAN)
 		b.name = "Tab_" + tb
 		b.pressed.connect(set_tab.bind(tb))
 		add_child(b)
@@ -247,14 +308,14 @@ func _build_dyn() -> void:
 			s.scr = self
 			s.key = keys[i]
 			s.name = "Slider_" + keys[i]
-			var tr := slider_rect(i)
-			s.position = tr.position - Vector2(15, 15)
-			s.size = tr.size + Vector2(30, 30)
+			var tr := slider_zone(i)
+			s.position = tr.position
+			s.size = tr.size
 			s.set_meta("a11y_group", "Ползунки")
 			UI.touch_block(s)                      # click_seating: block — дорожка ползунка inflate(30, 30) = сам узел
 			_dyn.add_child(s)
 			sliders[keys[i]] = s
-		var go := GameButton.make(BTN, "СЛЕДУЮЩИЙ КЛИЕНТ ▶" if solved else "ГОТОВО — ПРОВЕРИТЬ ПОСАДКУ",
+		var go := GameButton.make(fit_btn(), "СЛЕДУЮЩИЙ КЛИЕНТ ▶" if solved else "ГОТОВО — ПРОВЕРИТЬ ПОСАДКУ",
 			UI.GOOD if solved else UI.AMBER)
 		go.name = "Check"
 		go.pressed.connect(check_fit)
@@ -637,7 +698,7 @@ func _place_figure() -> void:
 
 ## Шапка примерки: [строки истории, карта, строки карты, y карты, рамка сцены, рамка обрезки].
 func _fit_layout() -> Array:
-	var sig := [case_i, Loc.code, Settings.a11y.get("text", 0), Settings.easy_font()]
+	var sig := [case_i, Loc.code, Settings.a11y.get("text", 0), Settings.easy_font(), UI.phone()]
 	if sig != _lay_sig:
 		_lay_sig = sig
 		_lay = _fit_layout_calc()
@@ -652,6 +713,8 @@ func _fit_layout_calc() -> Array:
 	var lh14 := UI.line_height(14) + 2
 	var lh13 := UI.line_height(13) + 2
 	var ch_y := CV.position.y + 10 + maxf(st_lines.size() * lh14, 36)
+	if UI.phone() and c.get("view"):             # телефон: «ВИД ⇄» 56 в высоту — карта терапевта под ним
+		ch_y = maxf(ch_y, TOGGLE.end.y + 4)
 	var head_bottom := maxf(CV.position.y + 98, ch_y + ch_lines.size() * lh13 + 6)
 	var scene_r := Rect2(CV.position.x + 8, head_bottom, CV.size.x - 16, CV.end.y - 24 - head_bottom)
 	var clip_r := Rect2(CV.position.x + 4, scene_r.position.y - 4, CV.size.x - 8, CV.end.y - scene_r.position.y)
@@ -670,7 +733,7 @@ func typed(text: String, cps: float) -> int:
 func _draw_head() -> void:
 	var head := Content.texture("mentor_necro_head.png")
 	if head:
-		SeatFigure.breathe(_head, head, Rect2(24, 104, 68, 68), t, 0.0)
+		SeatFigure.breathe(_head, head, Rect2(24, BUBBLE.position.y - 6, 68, 68), t, 0.0)
 
 
 func _draw_face() -> void:
@@ -688,6 +751,7 @@ func _draw_back() -> void:
 	var sz := 14
 	while sz > 10 and UI.wrap_lines(line, BUBBLE.size.x - 24, sz).size() * (UI.line_height(sz) + 2) > BUBBLE.size.y - 10:
 		sz -= 1
+	text_sizes["say"] = sz
 	UI.draw_wrapped(ci, line, BUBBLE.position + Vector2(12, 5), BUBBLE.size.x - 24, sz, Color8(226, 214, 246), false, 2,
 		typed(line, 95), 3)
 	UI.draw_round_rect(ci, CV, Color8(18, 20, 28, 238), Color8(96, 78, 136), 2, 12)
@@ -727,6 +791,37 @@ func _fit(ci: CanvasItem, s: String, pos: Vector2, width: float, size_: int, col
 	UI.draw_text(ci, f[0], Vector2(pos.x, pos.y + (size_ - int(f[1])) / 2), f[1], col, bold)
 
 
+## Зазор между пунктами урока (телефон — 6: под списком в 4 ряда место дороже).
+func _pt_gap() -> float:
+	return 6.0 if UI.phone() else 8.0
+
+
+## Телефон: название урока. Уроков нечётно (7) — в пустую клетку последнего ряда списка (до 2 строк, кегль 20 → 12),
+## текст урока — сразу под списком; иначе — строкой под списком. Возврат — y начала текста урока.
+func _lesson_title_phone(ci: CanvasItem, title: String) -> float:
+	var n := lessons().size()
+	if n % 2 == 1:
+		var box := list_rect(n)                  # клетка рядом с последним уроком
+		var sz := 20
+		var lines := UI.wrap_lines(title, box.size.x, sz, true)
+		while sz > 12:
+			lines = UI.wrap_lines(title, box.size.x, sz, true)
+			var wide := false
+			for ln in lines:
+				wide = wide or UI.text_width(ln, sz, true) > box.size.x
+			if not wide and lines.size() <= 2 and lines.size() * (UI.line_height(sz, true) + 2) - 2 <= box.size.y:
+				break
+			sz -= 1
+		var lh := UI.line_height(sz, true) + 2
+		var ty := box.position.y + floorf((box.size.y - (mini(lines.size(), 2) * lh - 2)) / 2.0)
+		for k in mini(lines.size(), 2):
+			UI.draw_text(ci, lines[k], Vector2(box.position.x, ty + k * lh), sz, UI.AMBER, true)
+		return _list_bottom() + 6
+	var y := _list_bottom() + 8
+	UI.draw_text_w(ci, title, Vector2(780, y), 476, 20, UI.AMBER, true)
+	return y + UI.line_height(20, true) + 4
+
+
 ## Размер пунктов урока: урок целиком до низа окна (цикл psz 15 → 10, как game.py). С «лёгким» шрифтом SDL_ttf меряет
 ## строку Atkinson иначе, чем Godot (хинтованные целые advance + кернинг: на одних размерах шире, на других уже, общего
 ## коэффициента нет), и при 150 % Godot выбирал на размер крупнее. Поэтому — число, которое выбрала сама game.py
@@ -736,15 +831,16 @@ func _lesson_psz(les: Dictionary, y: float) -> int:
 	var need_at := func(sz: int) -> float:
 		var need := 0.0
 		for p: String in les["points"]:
-			need += UI.wrap_lines("• " + Loc.t(p), 476, sz).size() * (UI.line_height(sz) + 2) + 8
+			need += UI.wrap_lines("• " + Loc.t(p), 476, sz).size() * (UI.line_height(sz) + 2) + _pt_gap()
 		return need
-	var room := UI.H - 16 - y
+	var room := UI.H - (8 if UI.phone() else 16) - y     # телефон: до низа экрана − 8 (список уроков выше)
 	var fit: Dictionary = Content.seating.get("lesson_fit", {})
 	var i := lessons().find(les)
 	var key := "%s|%d|%d" % [Loc.code, clampi(int(Settings.a11y.get("text", 0)), 0, 3), int(Settings.easy_font())]
 	var sizes: Array = fit.get("sizes", {}).get(key, [])
 	var md5s: Array = fit.get("md5", {}).get(Loc.code, [])
-	if i >= 0 and i < sizes.size() and i < md5s.size() and Settings.text_cap <= 0.0:
+	# телефон: у game.py такой раскладки нет, а места под уроком больше (плитки вместо строк) — свой цикл, не мельче
+	if i >= 0 and i < sizes.size() and i < md5s.size() and Settings.text_cap <= 0.0 and not UI.phone():
 		var lines: PackedStringArray = []
 		for p: String in les["points"]:
 			lines.append("• " + Loc.t(p))
@@ -765,15 +861,24 @@ func _draw_fg() -> void:
 		if lp.get("measure"):
 			var cap := Loc.t("Жёсткая рулетка: глубина = бедро − 5 см (2″)")
 			var cw := UI.text_width(cap, 14, true) + 14
-			UI.draw_round_rect(ci, Rect2(CV.end.x - 14 - cw, CV.position.y + 46, cw, 22), Color8(16, 12, 24, 215), Color(), 0, 5)
-			UI.draw_text(ci, cap, Vector2(CV.end.x - 21, CV.position.y + 48), 14, UI.AMBER, true, 2)
-		@warning_ignore("integer_division")
-		var y := 112.0 + ((lessons().size() + 1) / 2) * 44 + 10
-		UI.draw_text(ci, Loc.t(les["title"]), Vector2(780, y), 20, UI.AMBER, true)
-		y += maxf(32, UI.line_height(20, true) + 4)   # 150 %: первая плашка (подложка −4 px) — под заголовком
+			var cy := CV.position.y + 46
+			if UI.phone() and _dyn.has_node("Toggle"):   # телефон: под «ПОКАЗАТЬ НОРМУ» 56
+				cy = TOGGLE.end.y + 6
+			UI.draw_round_rect(ci, Rect2(CV.end.x - 14 - cw, cy, cw, 22), Color8(16, 12, 24, 215), Color(), 0, 5)
+			UI.draw_text(ci, cap, Vector2(CV.end.x - 21, cy + 2), 14, UI.AMBER, true, 2)
+		var y := 0.0
+		if UI.phone():                               # заголовок — в пустой клетке списка (7 уроков) или под ним
+			y = _lesson_title_phone(ci, Loc.t(les["title"]))
+		else:
+			@warning_ignore("integer_division")
+			y = 112.0 + ((lessons().size() + 1) / 2) * 44 + 10
+			UI.draw_text(ci, Loc.t(les["title"]), Vector2(780, y), 20, UI.AMBER, true)
+			y += maxf(32, UI.line_height(20, true) + 4)   # 150 %: первая плашка (подложка −4 px) — под заголовком
 		var psz := _lesson_psz(les, y)
+		text_sizes["lesson"] = psz
 		for p: String in les["points"]:
-			y = _wrapped_plate(ci, "• " + Loc.t(p), Vector2(780, y), 476, psz, UI.WHITE) + 8
+			y = _wrapped_plate(ci, "• " + Loc.t(p), Vector2(780, y), 476, psz, UI.WHITE) + _pt_gap()
+		text_sizes["lesson_over"] = maxi(0, ceili(y - _pt_gap() - (UI.H - (8 if UI.phone() else 16))))   # проверки
 		UI.draw_text(ci, Loc.t("По руководству Permobil «Seating & Positioning Guide»"), Vector2(CV.end.x - 14, CV.end.y - 18),
 			11, UI.GREY, false, 2)
 	elif tab == "fit":
@@ -815,8 +920,16 @@ func _draw_fit(ci: CanvasItem) -> void:
 			if (ch[0] == key or (key == "leg" and ch[0] == "floor")) and not ch[1]:
 				ok = false
 		var col := UI.GOOD if ok else UI.AMBER
-		UI.draw_text_w(ci, Loc.t(sl[0]), Vector2(tr.position.x, tr.position.y - 20), tr.size.x + 2, 13, UI.WHITE)   # не на значение
-		_fit(ci, SeatLogic.val_text(key, cfg[key]), Vector2(tr.end.x + 8, tr.position.y - 9), 150, 14, col)
+		if UI.phone():                                # строка-зона: подпись слева и значение справа над дорожкой
+			var z := slider_zone(i)
+			UI.draw_round_rect(ci, z, Color8(24, 26, 38, 205), Color8(70, 80, 100), 2, 8)
+			var vt := SeatLogic.val_text(key, cfg[key])
+			var vw := minf(UI.text_width(vt, 14), 180.0)
+			_fit(ci, vt, Vector2(tr.end.x - vw, z.position.y + 5), vw, 14, col)
+			UI.draw_text_w(ci, Loc.t(sl[0]), Vector2(tr.position.x, z.position.y + 6), tr.size.x - vw - 12, 13, UI.WHITE)
+		else:
+			UI.draw_text_w(ci, Loc.t(sl[0]), Vector2(tr.position.x, tr.position.y - 20), tr.size.x + 2, 13, UI.WHITE)   # не на значение
+			_fit(ci, SeatLogic.val_text(key, cfg[key]), Vector2(tr.end.x + 8, tr.position.y - 9), 150, 14, col)
 		UI.draw_round_rect(ci, tr, Color8(44, 46, 60), Color(), 0, 4)
 		var fw := int(tr.size.x * (v - float(sl[2])) / (float(sl[3]) - float(sl[2])))
 		if fw > 0:
@@ -830,7 +943,9 @@ func _draw_fit(ci: CanvasItem) -> void:
 		if s != null and s.has_focus() and UI.kb_active:
 			UI.draw_round_rect(ci, Rect2(s.position, s.size), Color(0, 0, 0, 0), UI.WHITE, 2, 8)
 	var y := slider_rect(keys.size() - 1).position.y + 24
-	var room := BTN.position.y - 6 - y
+	if UI.phone():                                    # заголовок — имя клиента (как название урока); список — под ползунками
+		y = slider_zone(keys.size() - 1).end.y + 2
+	var room := fit_btn().position.y - (4 if UI.phone() else 6) - y
 	var order: Array = []
 	for ch: Array in checks:
 		if not ch[1]:
@@ -839,14 +954,17 @@ func _draw_fit(ci: CanvasItem) -> void:
 		if ch[1]:
 			order.append(ch)
 	var csz := 13
-	while csz > 10:
-		var need := 0.0
+	var need := 0.0
+	while true:
+		need = 0.0
 		for ch: Array in order:
 			need += UI.wrap_lines(("✔ " if ch[1] else "⚠ ") + Loc.t(ch[2]), 476, csz).size() * (UI.line_height(csz) + 2) + 2
-		if need <= room:
+		if need <= room or csz <= 10:
 			break
 		csz -= 1
-	var bottom := BTN.position.y - 6
+	text_sizes["warn"] = csz
+	text_sizes["warn_over"] = maxi(0, ceili(need - room))   # проверки: сколько px списка не поместилось
+	var bottom := fit_btn().position.y - (4 if UI.phone() else 6)
 	for ch: Array in order:
 		var left := int((bottom - y) / (UI.line_height(csz) + 2))
 		if left < 1:
@@ -872,10 +990,12 @@ func _draw_quiz(ci: CanvasItem) -> void:
 	if ft >= 0.0 and q.get("fix") and (kind == "" or ft >= 1.0):
 		var right: bool = q["options"][picked][1]
 		_fix_caption(ci, "%s: %s" % [Loc.t("Так правильно" if right else "Правильно так"), Loc.t(q["fix"])], front)
-	_text_plate(ci, Loc.t("Вопрос %d из %d" % [quiz_i + 1, quiz.size()]), Vector2(780, 120), 15, UI.GREY)
+	_text_plate(ci, Loc.t("Вопрос %d из %d" % [quiz_i + 1, quiz.size()]), Vector2(780, 120 + Q_TOP), 15, UI.GREY)
 	var qt := Loc.t(q["q"])                     # 150 %: вопрос (с подложкой) — над первым ответом
-	_wrapped_plate(ci, qt, Vector2(780, 146), 476, UI.fit_wrapped_size(qt, 476, 20, quiz_rect(0).position.y - 6 - 146, 14),
-		UI.WHITE)
+	var qy := 146 + Q_TOP
+	var qsz := UI.fit_wrapped_size(qt, 476, 20, quiz_rect(0).position.y - 6 - qy, 14)
+	text_sizes["q"] = qsz
+	_wrapped_plate(ci, qt, Vector2(780, qy), 476, qsz, UI.WHITE)
 
 
 ## Зелёная плашка «Так правильно: …» (_draw_seat_fix_caption): внизу рамки, top — справа вверху (вид спереди).
@@ -906,8 +1026,156 @@ func _fix_caption(ci: CanvasItem, text: String, top: bool) -> void:
 	UI.draw_wrapped(ci, text, Vector2(box.get_center().x, box.position.y + 5), w, sz, UI.GOOD, true, 2, -1, nmax)
 
 
+## Телефон: кнопка списка — мини-иконка слева и название целиком (до 2 строк, по середине кнопки).
+func _draw_row(b: GameButton, r: Rect2, text: String, base: int, bold: bool, icon: Callable) -> void:
+	var lay := _row_fit(text, r.size.x, base, bold)
+	var isz: float = lay[0]
+	var x := r.position.x + 8
+	if isz > 0.0:
+		icon.call(b, Rect2(x, r.position.y + floorf((r.size.y - isz) / 2.0), isz, isz))
+		x += isz + 6
+	var lines: PackedStringArray = lay[2]
+	var sz: int = lay[1]
+	var lh := UI.line_height(sz, bold) + 2
+	var y := r.position.y + floorf((r.size.y - (lines.size() * lh - 2)) / 2.0)
+	for ln in lines:
+		UI.draw_text(b, ln, Vector2(x, y), sz, UI.WHITE, bold)
+		y += lh
+
+
+static var _row_cache := {}
+
+
+## Раскладка подписи кнопки: [иконка px, кегль, строки]. Уступки по порядку: иконка 44 при кегле base, base − 1
+## (в 1–2 строки), потом иконка 32, потом без иконки; не влезло и так — кегль ещё меньше (до 9), строк не больше 2.
+func _row_fit(text: String, w: float, base: int, bold: bool) -> Array:
+	var key := "%s|%d|%d|%s|%s|%s" % [text, w, base, bold, Settings.a11y.get("text", 0), Settings.easy_font()]
+	if _row_cache.has(key):
+		return _row_cache[key]
+	var out: Array = []
+	for isz: float in [44.0, 32.0, 0.0]:
+		var tw := w - 16 - (isz + 6 if isz > 0.0 else 0.0)
+		for sz: int in ([base, base - 1] if isz > 0.0 else range(base, 8, -1)):
+			var lines := _row_lines(text, tw, sz, bold)
+			if not lines.is_empty():
+				out = [isz, sz, lines]
+				break
+		if not out.is_empty():
+			break
+	if out.is_empty():
+		out = [0.0, 9, UI.wrap_lines(text, w - 16, 9, bold).slice(0, 2)]
+	if _row_cache.size() > 400:
+		_row_cache.clear()
+	_row_cache[key] = out
+	return out
+
+
+## Строки подписи, если она помещается в ширину tw и в 2 строки высотой кнопки (52 px), иначе пусто.
+static func _row_lines(text: String, tw: float, sz: int, bold: bool) -> PackedStringArray:
+	var lines := UI.wrap_lines(text, tw, sz, bold)
+	if lines.size() > 2 or lines.size() * (UI.line_height(sz, bold) + 2) - 2 > 52:
+		return PackedStringArray()
+	for ln in lines:
+		if UI.text_width(ln, sz, bold) > tw:
+			return PackedStringArray()
+	return lines
+
+
+## Мини-иконка урока: скелет в позе урока (SeatFigure без Мортимера, подписей и подсветки), фигуры посчитаны один
+## раз (_icon_ops) и рисуются с масштабом в рамку box.
+func _draw_lesson_icon(ci: CanvasItem, i: int, box: Rect2) -> void:
+	UI.draw_round_rect(ci, box.grow(2), Color8(14, 12, 20, 200), Color(), 0, 6)
+	var ic := _lesson_icon_ops(i)
+	if ic.is_empty() or (ic[1] as Rect2).size.x <= 0.0:
+		return
+	var bb: Rect2 = ic[1]
+	var k := minf(box.size.x / bb.size.x, box.size.y / bb.size.y)
+	ci.draw_set_transform(box.get_center() - bb.get_center() * k, 0.0, Vector2(k, k))
+	for o: Array in ic[0]:
+		SeatFigure._emit(ci, o)
+	ci.draw_set_transform(Vector2.ZERO)
+
+
+func _lesson_icon_ops(i: int) -> Array:
+	if _icon_ops.has(i):
+		return _icon_ops[i]
+	var lp := {}
+	var p: Variant = lessons()[i].get("pose")
+	if p is Dictionary:
+		lp = p
+	var f := SeatFigure.new()
+	f.show_necro = false
+	f.highlight = false
+	var sc := Rect2(0, 0, 120, 96)                # мелкая сцена: линии SeatFigure в px — относительно толще
+	if lp.get("front"):
+		f.mode = "front"
+		f.front_corrected = false
+		f.front_pads = true
+		f.front_obl = -1.0
+		f.front_wedge = 0.0
+	else:
+		var d := SeatLogic.demo_pose(lp, false)
+		f.case = d[0]
+		f.cfg = d[1]
+		f.pose = d[2]
+		f.mode = "scene"
+	f.place(sc, sc)
+	f._build()
+	# только треугольники фигур (без плашек и подписей), без длинных (пол и линейка во всю ширину сцены); рамка — по
+	# 2–98 % центров треугольников (мелкие отметки по краям сцены её не раздувают), всё вне рамки — не рисуем
+	var tris: Array = []                         # [центр, вершины 3, цвета 3]
+	var xs: Array = []
+	var ys: Array = []
+	for seg: Array in f._ops:
+		for o: Array in seg:
+			if int(o[0]) != 7:
+				continue
+			var vs: PackedVector2Array = o[1]
+			var cs: PackedColorArray = o[2]
+			for t3 in range(0, vs.size() - 2, 3):
+				var tri := Rect2(vs[t3], Vector2.ZERO).expand(vs[t3 + 1]).expand(vs[t3 + 2])
+				if tri.size.x > sc.size.x * 0.6:
+					continue
+				var c := tri.get_center()
+				tris.append([c, vs.slice(t3, t3 + 3), cs.slice(t3, t3 + 3)])
+				xs.append(c.x)
+				ys.append(c.y)
+	var ops: Array = []
+	var bb := Rect2()
+	if not tris.is_empty():
+		xs.sort()
+		ys.sort()
+		var lo := int(xs.size() * 0.02)
+		var hi := int(xs.size() * 0.98)
+		bb = Rect2(xs[lo], ys[lo], xs[hi] - xs[lo], ys[hi] - ys[lo]).grow(2)
+		var nv := PackedVector2Array()
+		var nc := PackedColorArray()
+		for tr: Array in tris:
+			if bb.has_point(tr[0]):
+				nv.append_array(tr[1])
+				nc.append_array(tr[2])
+		ops.append([7, nv, nc])
+	f.free()
+	_icon_ops[i] = [ops, bb]
+	return _icon_ops[i]
+
+
+## Мини-иконка клиента: верх портрета (квадратная вырезка по ширине картинки).
+func _draw_case_icon(ci: CanvasItem, i: int, box: Rect2) -> void:
+	var tex := Content.texture(cases()[i]["client_art"])
+	if tex == null:
+		return
+	var ts := tex.get_size()
+	var s := minf(ts.x, ts.y) * 0.72
+	ci.draw_texture_rect_region(tex, box, Rect2((ts.x - s) / 2.0, 0, s, s))
+
+
 func _draw_lesson_btn(b: GameButton, r: Rect2) -> void:
 	var i := int(b.get_meta("i"))
+	if UI.phone():
+		_draw_row(b, r, "%d. %s" % [i + 1, Loc.t(lessons()[i]["title"])], 15, i == lesson,
+			func(ci: CanvasItem, box: Rect2) -> void: _draw_lesson_icon(ci, i, box))
+		return
 	_fit(b, "%d. %s" % [i + 1, Loc.t(lessons()[i]["title"])], r.position + Vector2(10, 9), r.size.x - 20, 15, UI.WHITE,
 		i == lesson)
 
@@ -915,6 +1183,10 @@ func _draw_lesson_btn(b: GameButton, r: Rect2) -> void:
 func _draw_case_btn(b: GameButton, r: Rect2) -> void:
 	var i := int(b.get_meta("i"))
 	var done := SaveGame.is_done(cases()[i]["id"])
+	if UI.phone():
+		_draw_row(b, r, ("✔ " if done else "") + Loc.t(cases()[i]["client"]), 14, false,
+			func(ci: CanvasItem, box: Rect2) -> void: _draw_case_icon(ci, i, box))
+		return
 	_fit(b, ("✔ " if done else "") + Loc.t(cases()[i]["client"]), r.position + Vector2(10, 8), r.size.x - 20, 14, UI.WHITE)
 
 
