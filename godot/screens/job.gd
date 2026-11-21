@@ -1097,7 +1097,8 @@ func _draw_deco() -> void:
 			var tip := Loc.t("Улики собраны — выбери диагноз:") if unlocked else Loc.tf(
 				"Осмотри детали (тап по коляске или списку): {0}/{1}" if UI.touch() else
 				"Осмотри детали (клик по коляске или списку): {0}/{1}", [inspected.size(), inspect_req])
-			UI.draw_text(_deco, tip, Vector2(360, cr.end.y + 4), 15, UI.GREY if unlocked else UI.AMBER, not unlocked)
+			UI.draw_text_w(_deco, tip, Vector2(360, cr.end.y + 4), 980 - 12 - 360, 15, UI.GREY if unlocked else UI.AMBER,
+				not unlocked)                                     # 150 %: не под столбцом диагнозов (x 980)
 			UI.draw_text(_deco, Loc.t("ДИАГНОЗ"), Vector2(980, right_col_top() + 6), 16, UI.CYAN if unlocked else UI.DIM, true)
 			UI.draw_text(_deco, Loc.t("ОСМОТРЕТЬ"), Vector2(980, 70), 16, UI.AMBER, true)
 		"repair":
@@ -1193,7 +1194,12 @@ func _draw_part_row(b: GameButton, _r: Rect2) -> void:
 	b.draw_circle(nc, 11, UI.INK, true, -1, true)
 	UI.draw_ring(b, nc, 11, UI.GOOD if (phase == "diagnose" and inspected.has(pid)) else UI.AMBER, 2)
 	UI.draw_text(b, str(i + 1), nc, 13, UI.WHITE, true, 1)
-	var f: Array = UI.fit_text(Loc.t(Content.part_name(pid)), r.size.x - 56, 16)
+	var pw := r.size.x - 56                                       # 150 %: название не заходит на ✔ / книжку
+	if phase == "diagnose" and inspected.has(pid):
+		pw = minf(pw, r.size.x - 10 - UI.text_width("✔", 15) - 6 - 34)
+	elif phase == "repair" and _part_note(pid).size() > 0:
+		pw = minf(pw, r.size.x - 16 - 9 - 6 - 34)
+	var f: Array = UI.fit_text(Loc.t(Content.part_name(pid)), pw, 16)
 	var fh := floorf(UI.line_height(16) / 2.0)
 	UI.draw_text(b, f[0], Vector2(r.position.x + 34, nc.y - fh + floorf((16 - int(f[1])) / 2.0)), f[1], UI.WHITE)
 	if phase == "diagnose" and inspected.has(pid):

@@ -556,6 +556,7 @@ func _place_figure() -> void:
 	fig.mode = "none"
 	fig.highlight = true
 	fig.show_necro = true
+	fig.status_avoid = Rect2() if tab == "quiz" else TOGGLE
 	var inner := Rect2(CV.position + Vector2(8, 12), CV.size - Vector2(16, 24))
 	if tab == "lessons":
 		var lp := _lpose()
@@ -769,7 +770,7 @@ func _draw_fg() -> void:
 		@warning_ignore("integer_division")
 		var y := 112.0 + ((lessons().size() + 1) / 2) * 44 + 10
 		UI.draw_text(ci, Loc.t(les["title"]), Vector2(780, y), 20, UI.AMBER, true)
-		y += 32
+		y += maxf(32, UI.line_height(20, true) + 4)   # 150 %: первая плашка (подложка −4 px) — под заголовком
 		var psz := _lesson_psz(les, y)
 		for p: String in les["points"]:
 			y = _wrapped_plate(ci, "• " + Loc.t(p), Vector2(780, y), 476, psz, UI.WHITE) + 8
@@ -814,7 +815,7 @@ func _draw_fit(ci: CanvasItem) -> void:
 			if (ch[0] == key or (key == "leg" and ch[0] == "floor")) and not ch[1]:
 				ok = false
 		var col := UI.GOOD if ok else UI.AMBER
-		UI.draw_text(ci, Loc.t(sl[0]), Vector2(tr.position.x, tr.position.y - 20), 13, UI.WHITE)
+		UI.draw_text_w(ci, Loc.t(sl[0]), Vector2(tr.position.x, tr.position.y - 20), tr.size.x + 2, 13, UI.WHITE)   # не на значение
 		_fit(ci, SeatLogic.val_text(key, cfg[key]), Vector2(tr.end.x + 8, tr.position.y - 9), 150, 14, col)
 		UI.draw_round_rect(ci, tr, Color8(44, 46, 60), Color(), 0, 4)
 		var fw := int(tr.size.x * (v - float(sl[2])) / (float(sl[3]) - float(sl[2])))
@@ -872,7 +873,9 @@ func _draw_quiz(ci: CanvasItem) -> void:
 		var right: bool = q["options"][picked][1]
 		_fix_caption(ci, "%s: %s" % [Loc.t("Так правильно" if right else "Правильно так"), Loc.t(q["fix"])], front)
 	_text_plate(ci, Loc.t("Вопрос %d из %d" % [quiz_i + 1, quiz.size()]), Vector2(780, 120), 15, UI.GREY)
-	_wrapped_plate(ci, Loc.t(q["q"]), Vector2(780, 146), 476, 20, UI.WHITE)
+	var qt := Loc.t(q["q"])                     # 150 %: вопрос (с подложкой) — над первым ответом
+	_wrapped_plate(ci, qt, Vector2(780, 146), 476, UI.fit_wrapped_size(qt, 476, 20, quiz_rect(0).position.y - 6 - 146, 14),
+		UI.WHITE)
 
 
 ## Зелёная плашка «Так правильно: …» (_draw_seat_fix_caption): внизу рамки, top — справа вверху (вид спереди).
@@ -919,7 +922,9 @@ func _draw_option(b: GameButton, _lifted: Rect2) -> void:
 	var r := Rect2(b.slide, b.size)            # текст стоит на месте, кнопка при наведении поднимается (как в pygame)
 	var i := int(b.get_meta("i"))
 	var o: Array = quiz[quiz_i]["options"][i]
-	var ty := UI.draw_wrapped(b, Loc.t(o[0]), r.position + Vector2(14, 8), r.size.x - 28, 15, UI.WHITE)
+	var ot := Loc.t(o[0])                      # 150 %: ответ в 3 строки — мельче, не за рамку
+	var ty := UI.draw_wrapped(b, ot, r.position + Vector2(14, 8), r.size.x - 28,
+		UI.fit_wrapped_size(ot, r.size.x - 28, 15, r.size.y - 12, 11), UI.WHITE)
 	if picked == i and str(o[2]) != "":
 		var fb := Loc.t(o[2])
 		var fsz := 11

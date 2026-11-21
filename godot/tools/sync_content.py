@@ -447,7 +447,8 @@ def seat_lesson_fit(game):
                     game._font_cache.clear()
                     sizes = []
                     for les in game.SEAT_LESSONS:
-                        y = 112 + ((len(game.SEAT_LESSONS) + 1) // 2) * 44 + 10 + 32
+                        y = (112 + ((len(game.SEAT_LESSONS) + 1) // 2) * 44 + 10    # отступ под заголовком — как
+                             + max(32, game.font(20, True).get_height() + 4))      # draw_seating (150 %, 21.11)
                         psz = 15
                         while psz > 10 and sum(len(game.wrap_lines("• " + pt_, 476, psz)) * (game.font(psz).get_height() + 2)
                                                + 8 for pt_ in les["points"]) > game.HEIGHT - 16 - y:

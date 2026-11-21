@@ -52,7 +52,8 @@ func _draw_content(b: GameButton, r: Rect2) -> void:
 		b.draw_texture_rect(face, UI.fit_rect(face.get_size(), Rect2(ring - Vector2(26, 26), Vector2(52, 52))), false)
 	var client := Loc.t(job["client"])
 	var title := Loc.t(job["title"])
-	var avail := 250 - 26 - 162
+	var ky_off := maxf(22, UI.line_height(12, true) + 3)   # 150 %: «РУЧНАЯ/ЭЛЕКТРО» не на рамке карточки (game.py)
+	var avail := 250 - ky_off - 4 - 162
 	var nsz := 11
 	var nl := 1
 	var tl := 1
@@ -66,7 +67,12 @@ func _draw_content(b: GameButton, r: Rect2) -> void:
 	UI.draw_wrapped(b, title, Vector2(r.position.x + 12, ny + 2), r.size.x - 24, 12, UI.GREY, false, 2, -1,
 		maxi(1, mini(4 - mini(nl, 2), tl)))
 	var power: bool = job.get("kind") == "power"
-	UI.draw_text(b, Loc.t("ЭЛЕКТРО" if power else "РУЧНАЯ"), Vector2(r.position.x + 12, r.end.y - 22), 12,
+	var ky := r.end.y - ky_off
+	var kr := UI.draw_text(b, Loc.t("ЭЛЕКТРО" if power else "РУЧНАЯ"), Vector2(r.position.x + 12, ky), 12,
 		UI.CYAN if power else UI.AMBER, true)
-	if done:
-		UI.draw_text(b, Loc.t("✔ готово"), Vector2(r.end.x - 12, r.end.y - 22), 13, UI.GOOD, false, 2)
+	if done:                                     # 150 %: «✔ готово» не заходит на «РУЧНАЯ/ЭЛЕКТРО»
+		var dt := Loc.t("✔ готово")
+		var dsz := 13
+		while dsz > 9 and UI.text_width(dt, dsz) > r.end.x - 12 - kr.end.x - 8:
+			dsz -= 1
+		UI.draw_text(b, dt, Vector2(r.end.x - 12, ky + floorf((13 - dsz) / 2.0)), dsz, UI.GOOD, false, 2)

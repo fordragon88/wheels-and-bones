@@ -343,7 +343,8 @@ func _draw() -> void:
 			var keys := ["master", "music", "sfx", "amb"]
 			for i in 4:
 				var y := P.position.y + 146 + i * 58
-				UI.draw_text(self, Loc.t(VOL_NAMES[keys[i]]), Vector2(x, y - 8), 17, UI.GREY if muted else UI.WHITE)
+				UI.draw_text_w(self, Loc.t(VOL_NAMES[keys[i]]), Vector2(x, y - 8), P.position.x + 225 - 14 - x, 17,
+					UI.GREY if muted else UI.WHITE)               # 150 %: подпись не касается ползунка
 				UI.draw_text(self, "%d%%" % int(float(Settings.vol[keys[i]]) * 100), Vector2(P.position.x + 225 + 230 + 56, y - 8), 16,
 					UI.GREY if muted else UI.WHITE, false, 2)
 			UI.draw_text(self, Loc.t("M — быстро выключить / включить звук"), Vector2(x, P.position.y + 374), 13, UI.GREY)

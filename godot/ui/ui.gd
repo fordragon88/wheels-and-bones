@@ -328,6 +328,25 @@ static func fit_text(text: String, width: float, size: int, bold: bool = false) 
 	return [s, sz]
 
 
+## Строка не шире width (draw_text_w game.py, крупный текст 150 %): помещается — ровно draw_text, нет — fit_text
+## (кегль меньше до 75 %, сдвиг вниз на (size − sz) // 2 — середина строки на месте; «…» — только если и так не влезла).
+static func draw_text_w(ci: CanvasItem, text: String, pos: Vector2, width: float, size: int, color: Color,
+		bold: bool = false) -> Rect2:
+	if text_width(text, size, bold) <= width:
+		return draw_text(ci, text, pos, size, color, bold)
+	var f: Array = fit_text(text, width, size, bold)
+	return draw_text(ci, f[0], pos + Vector2(0, floorf((size - int(f[1])) / 2.0)), f[1], color, bold)
+
+
+## Кегль блока с переносом, при котором строки занимают не больше room по высоте (fit_wrapped_size game.py).
+static func fit_wrapped_size(text: String, width: float, size: int, room: float, lo: int = 10,
+		line_gap: float = 2.0) -> int:
+	var sz := size
+	while sz > lo and wrap_lines(text, width, sz).size() * (line_height(sz) + line_gap) - line_gap > room:
+		sz -= 1
+	return sz
+
+
 # ---------------- рисование текста как в pygame ----------------
 
 ## Нарисовать строку (уже переведённую). align: 0 — pos левый верх, 1 — центр, 2 — правый верх (как draw_text).

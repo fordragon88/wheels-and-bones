@@ -42,6 +42,7 @@ var case: Dictionary = {}
 var cfg: Dictionary = {}
 var pose: Dictionary = {}
 var highlight: bool = true
+var status_avoid := Rect2()                # кнопка над рисунком («ПОКАЗАТЬ НОРМУ», «ТЕЛО…»): подпись позы — не под ней
 var show_necro: bool = true
 var t: float = 0.0
 var _glows: Array = []                    # [центр, радиус, цвет, уровень] — неподвижные свечения (аддитивный слой)
@@ -109,7 +110,7 @@ func place(clip: Rect2, scene: Rect2) -> void:
 func _process(dt: float) -> void:
 	t += dt
 	var sig := [mode, rect, position, size, case, cfg, pose, highlight, show_necro, front_corrected, front_pads, front_obl,
-		front_wedge, targets, puppet_bad, Loc.code, Settings.glow, Settings.calm(), Settings.a11y.get("text", 0),
+		front_wedge, targets, puppet_bad, status_avoid, Loc.code, Settings.glow, Settings.calm(), Settings.a11y.get("text", 0),
 		Settings.easy_font()]
 	var changed := sig != _sig
 	if changed:
@@ -1111,9 +1112,14 @@ func draw_scene(rect_: Rect2, case_: Dictionary, cfg_: Dictionary, pose_: Dictio
 			status = "Подножка низко: стопы не достают"
 			badge_col = UI.BAD
 		var st_t := Loc.t(status)
-		var sw := UI.text_width(st_t, 12, true)
-		_rrect(Rect2(rx + 134, ry + 10, sw + 12, UI.line_height(12, true) + 4), Color8(16, 12, 24, 225), Color(), 0, 4)
-		_text(st_t, Vector2(rx + 140, ry + 12), 12, badge_col, true)
+		var ssz := 12                              # 150 %: подпись не под кнопкой «ПОКАЗАТЬ НОРМУ»/«ТЕЛО…» (game.py)
+		var sw := UI.text_width(st_t, ssz, true)
+		if status_avoid.has_area() and status_avoid.intersects(Rect2(rx + 134, ry + 10, sw + 12, UI.line_height(ssz, true) + 4)):
+			while ssz > 8 and UI.text_width(st_t, ssz, true) + 12 > status_avoid.position.x - 6 - (rx + 134):
+				ssz -= 1
+			sw = UI.text_width(st_t, ssz, true)
+		_rrect(Rect2(rx + 134, ry + 10, sw + 12, UI.line_height(ssz, true) + 4), Color8(16, 12, 24, 225), Color(), 0, 4)
+		_text(st_t, Vector2(rx + 140, ry + 12), ssz, badge_col, true)
 
 	if pose_.get("measure", false):               # урок «Мерки»: где меряют
 		var MC := Color8(255, 200, 90)
@@ -1206,7 +1212,11 @@ func draw_myth(r: Rect2) -> void:
 		var sub := Rect2(r.position.x + 142 + i * w_sub, r.position.y + 42, w_sub - 6, r.size.y - 68)
 		_rrect(sub, Color8(24, 26, 36), Color8(58, 66, 86), 1, 8)
 		draw_scene(sub, presets[i][1], presets[i][2], {"p": 0, "slide": 0}, false, false)
-		_text(Loc.t(presets[i][0]), Vector2(sub.get_center().x, sub.position.y + 10), 12, UI.CYAN, true, 1)
+		var lbl := Loc.t(presets[i][0])           # 150 %: подписи трёх скелетов не сливаются — в ширину рамки
+		var lsz := 12
+		while lsz > 8 and UI.text_width(lbl, lsz, true) > sub.size.x - 8:
+			lsz -= 1
+		_text(lbl, Vector2(sub.get_center().x, sub.position.y + 10), lsz, UI.CYAN, true, 1)
 		targets.append([sub.get_center().x, sub.get_center().y - 20, UI.GHOST if i == 2 else UI.PURPLE, i == 1])
 	necro_puppeteer(r, targets, false)
 

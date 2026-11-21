@@ -765,9 +765,13 @@ func tick(dt: float) -> void:
 func _draw_deco() -> void:
 	UI.draw_wrapped(_deco, Loc.t(job["client"]), Vector2(24, 266), 168, 15, UI.WHITE, false, 2, -1, 2)
 	if phase == "repair":
-		UI.draw_text(_deco, Loc.t("ЭКЗАМЕН ГИЛЬДИИ — подсказок нет, мануал разрешён" if exam
-			else "ЗАДАНИЕ ТЕХНИКА — порядок шагов выбираешь сам"), Vector2(300, 62), 17, UI.CYAN, true)
-		UI.draw_wrapped(_deco, Loc.t(job["symptom"]), Vector2(300, 88), 770, 14, UI.WHITE)
+		# 150 %: заголовок — до кнопки «ПРОПУСТИТЬ» (на экзамене — до «МАНУАЛ»), описание — над карточками шагов
+		var hb_x := (UI.W - 204.0) if exam else (UI.W - 384.0)
+		UI.draw_text_w(_deco, Loc.t("ЭКЗАМЕН ГИЛЬДИИ — подсказок нет, мануал разрешён" if exam
+			else "ЗАДАНИЕ ТЕХНИКА — порядок шагов выбираешь сам"), Vector2(300, 62), hb_x - 10 - 300, 17, UI.CYAN, true)
+		var room := (op_rect(0).position.y if step_order.size() > 0 else 150.0) - 4 - 88
+		var sym := Loc.t(job["symptom"])
+		UI.draw_wrapped(_deco, sym, Vector2(300, 88), 770, UI.fit_wrapped_size(sym, 770, 14, room), UI.WHITE)
 		var y_stat := 466.0
 		for i in step_order.size():
 			y_stat = maxf(y_stat, op_rect(i).end.y + 6)

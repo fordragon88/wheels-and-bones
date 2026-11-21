@@ -257,11 +257,17 @@ func _draw_assign_plate() -> void:
 	var a := SaveGame.assign
 	var plate := Rect2(56, 62, 4 * 214 - 10, 54)
 	UI.draw_round_rect(_deco, plate, Color8(24, 20, 30, 235), UI.GOOD, 2, 10)
-	_fit(Loc.t(assign_label()), plate.position + Vector2(16, 6), plate.size.x - 32, 20, UI.GOOD, true)
+	# 150 %: заголовок и строка под ним — внутри плашки, друг на друга не заходят (как _draw_hub_assign game.py)
+	var lsz := 20
+	var ssz := 13
+	while lsz > 14 and maxf(32, 2 + UI.line_height(lsz, true)) + UI.line_height(ssz) > plate.size.y:
+		ssz = maxi(10, ssz - (lsz % 2))
+		lsz -= 1
+	_fit(Loc.t(assign_label()), plate.position + Vector2(16, 6), plate.size.x - 32, lsz, UI.GOOD, true)
 	var sub := "Только эти задания, по порядку. Обычный прогресс не меняется."
 	if a.get("title", "") != "":
 		sub = "«%s» · Только эти задания, по порядку. Обычный прогресс не меняется." % a["title"]
-	_fit(Loc.t(sub), plate.position + Vector2(16, 32), plate.size.x - 32, 13, UI.GREY)
+	_fit(Loc.t(sub), plate.position + Vector2(16, maxf(32, 2 + UI.line_height(lsz, true))), plate.size.x - 32, ssz, UI.GREY)
 	if (a["jobs"] as Array).is_empty():
 		UI.draw_wrapped(_deco, Loc.t("Поломок в задании нет — задание в Кабинете посадки (кнопка справа)."), Vector2(60, 160),
 			4 * 214 - 40, 18, UI.WHITE)
