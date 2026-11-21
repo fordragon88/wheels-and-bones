@@ -747,6 +747,8 @@ async def sc_phone(b):
     потом книжная ориентация и планшет (sc_rotate)."""
     p = await new_page(b, "phone", touch=True, mobile=True, w=740, h=360, dpr=3,
                        legacy={"save.json": {"done": [], "tutorial_skipped": True}})
+    if not CHROMIUM:                                     # экран телефона (screen.width/height) — подменой, до загрузки
+        await orient(p, 740, 360, True)
     st, secs, times = await p.boot()
     await p.pg.wait_for_timeout(1500)
     await p.shot("1_title")

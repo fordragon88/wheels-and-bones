@@ -739,6 +739,21 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-21 — Claude (Opus 5.5), ветка `godot-port` — **телефонный режим: крупные цели для пальца (только Godot).**
+  `UI.phone()` = касания и меньшая сторона экрана < 600 CSS px (`?phone=1|0`, `set:phone`, `-- --phone`,
+  `wnbState.phone`). В телефонном режиме цели ≥ 56 px холста (28 CSS px ≈ 7 мм), зазор ≥ 8: шапка (значки 56×56),
+  задание (детали 56 через 64, диагнозы рядом под коляской, Барти в правой колонке, «+/−», плитки, шаги, «Я НЕ
+  СОГЛАСЕН» в шапке), мастерская, гараж, настройки, замечание, коды и ссылки, мини-игры (спицы по кругу), Гильдия,
+  про-задание (до 10 шагов), мануал, спека, титул, вступление, вечеринка, титры. Вне телефона — без изменений (эталон
+  `godot/tests/phone_off_ref.json`, 86 состояний, расхождений 0). Замер `godot/tests/phone_check.gd`: целей < 56 —
+  819 → 316 (все — Кабинет посадки), пересечений 1 → 0. Не сделано (решение владельца): Кабинет посадки, про-задания
+  на 13–16 шагов — варианты в PORT_PLAN «Телефонный режим — крупные цели». web_smoke: `phone` (задание касаниями до
+  итога), `phonebig` (снимки до/после — `godot/tests/web_shots/phonebig/`), `screens` проход `phone0`.
+  (godot/ui/{ui,screen,icon_button,top_bar,game_button,tool_panel,settings_dialog,share_dialog,feedback_dialog,
+  mini_game,manual_dialog,spec_dialog}.gd, godot/autoload/{nav,web}.gd, godot/screens/{job,hub,garage,tech,guild,
+  title,intro,ending,credits}.gd, godot/tests/{phone_check.gd,phone_off_ref.json,selftest_runner.gd},
+  godot/tools/web_smoke.py, godot/PORT_PLAN.md, AGENTS.md)
+
 - 2026-11-21 — Claude (Opus 5.5), ветка `godot-port` — **ещё три наезда при 150 % — как в game.py** (слияние
   `test-build` 86f7cf4 → 9470a4f, Godot — 388fd5f). `exam_result.gd` — строка диплома мельче, в ширину плашки;
   `tool_panel.gd` — описание инструмента `UI.fit_wrapped_size` по высоте карточки (при 100 % меняется только EN «Hands
