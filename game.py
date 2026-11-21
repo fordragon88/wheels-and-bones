@@ -971,6 +971,22 @@ def fit_text(surf, text, pos, width, size=18, color=WHITE, bold=False):
         CAPTURE["mute"] -= 1
 
 
+def draw_text_w(surf, text, pos, width, size=18, color=WHITE, bold=False):
+    """Строка не шире width (крупный текст 150 %, 21.11): помещается — ровно draw_text (вид прежний пиксель в пиксель),
+    нет — fit_text (кегль меньше до 75 %, середина строки на месте; «…» — только если и так не влезла)."""
+    if font(size, bold).size(tr(str(text)))[0] <= width:
+        return draw_text(surf, text, pos, size, color, bold)
+    return fit_text(surf, text, pos, width, size, color, bold)
+
+
+def fit_wrapped_size(text, width, size, room, lo=10, line_gap=2):
+    """Кегль блока с переносом, при котором строки занимают не больше room по высоте (до lo); при обычном размере
+    текста блок и так помещается — размер прежний."""
+    while size > lo and len(wrap_lines(text, width, size)) * (font(size).get_height() + line_gap) - line_gap > room:
+        size -= 1
+    return size
+
+
 def wrap_lines(text, width, size=16, raw=False):
     """raw=True — текст игрока (комментарий): без перевода."""
     text = text if raw else tr(text)
@@ -10949,7 +10965,8 @@ class Game:
             names = {"master": "Общая громкость", "music": "Музыка", "sfx": "Эффекты", "amb": "Атмосфера сцен"}
             for key, track in self._vol_slider_rects():
                 muted = not VOL["on"]
-                draw_text(surf, names[key], (p.x + 32, track.y - 8), 17, GREY if muted else WHITE)
+                draw_text_w(surf, names[key], (p.x + 32, track.y - 8), track.x - 14 - (p.x + 32), 17,
+                            GREY if muted else WHITE)       # 150 %: подпись не касается ползунка
                 aa_rect(surf, (44, 46, 60), track, border_radius=4)
                 fill = track.copy()
                 fill.w = int(track.w * VOL[key])
@@ -11246,10 +11263,14 @@ class Game:
         plate = pygame.Rect(56, 62, 4 * 214 - 10, 54)
         aa_rect(surf, (24, 20, 30, 235), plate, border_radius=10)
         aa_rect(surf, GOOD, plate, 2, border_radius=10)
-        fit_text(surf, self._hub_assign_label(), (plate.x + 16, plate.y + 6), plate.w - 32, 20, GOOD, bold=True)
+        # 150 %: заголовок и строка под ним — внутри плашки, друг на друга не заходят (кегль меньше, пока не влезут)
+        lsz, ssz = 20, 13                                   # (нижние 4 px строки заголовка — пустой запас под буквами)
+        while lsz > 14 and max(32, 2 + font(lsz, True).get_height()) + font(ssz).get_height() > plate.h:
+            lsz, ssz = lsz - 1, max(10, ssz - (lsz % 2))
+        fit_text(surf, self._hub_assign_label(), (plate.x + 16, plate.y + 6), plate.w - 32, lsz, GOOD, bold=True)
         sub = (f"«{a['title']}» · Только эти задания, по порядку. Обычный прогресс не меняется." if a.get("title")
                else "Только эти задания, по порядку. Обычный прогресс не меняется.")
-        fit_text(surf, sub, (plate.x + 16, plate.y + 32), plate.w - 32, 13, GREY)
+        fit_text(surf, sub, (plate.x + 16, plate.y + max(32, 2 + font(lsz, True).get_height())), plate.w - 32, ssz, GREY)
         if not a["jobs"]:
             draw_wrapped(surf, "Поломок в задании нет — задание в Кабинете посадки (кнопка справа).", (60, 160),
                          4 * 214 - 40, 18, WHITE)
@@ -11283,7 +11304,8 @@ class Game:
             aa_circle(surf, GOOD if done else AMBER, ring.center, 31, 2)
             surf.blit(load_image(job["client_art"], (52, 52), GHOST), (ring.x + 3, ring.y + 3))
             # имя (до 2 строк) и поломка (хотя бы строка) — над подписью «РУЧНАЯ/ЭЛЕКТРО»; крупный шрифт — мельче
-            avail = r.bottom - 26 - (r.y + 162)
+            ky = r.bottom - max(22, font(12, True).get_height() + 3)   # 150 %: «РУЧНАЯ/ЭЛЕКТРО» не на рамке карточки
+            avail = ky - 4 - (r.y + 162)
             for nsz in (15, 14, 13, 12, 11):
                 nl = len(wrap_lines(job["client"], r.w - 24, nsz))
                 tl = (avail - nl * font(nsz).get_height() - 2) // font(12).get_height()
@@ -11292,10 +11314,13 @@ class Game:
             ny = draw_wrapped(surf, job["client"], (r.x + 12, r.y + 162), r.w - 24, nsz, WHITE, max_lines=2, line_gap=0)
             draw_wrapped(surf, job["title"], (r.x + 12, ny + 2), r.w - 24, 12, GREY, max_lines=max(1, min(4 - min(nl, 2), tl)))   # имя в 2 строки — поломке до 2 строк, если влезает (аудит 24.10)
             power = job.get("kind") == "power"
-            draw_text(surf, "ЭЛЕКТРО" if power else "РУЧНАЯ",
-                      (r.x + 12, r.bottom - 22), 12, CYAN if power else AMBER, bold=True)
-            if done:
-                draw_text(surf, "✔ готово", (r.right - 12, r.bottom - 22), 13, GOOD, right=True)
+            kind = "ЭЛЕКТРО" if power else "РУЧНАЯ"
+            kr = draw_text(surf, kind, (r.x + 12, ky), 12, CYAN if power else AMBER, bold=True)
+            if done:                                        # 150 %: «✔ готово» не заходит на «РУЧНАЯ/ЭЛЕКТРО»
+                dsz = 13
+                while dsz > 9 and font(dsz).size(tr("✔ готово"))[0] > r.right - 12 - kr.right - 8:
+                    dsz -= 1
+                draw_text(surf, "✔ готово", (r.right - 12, ky + (13 - dsz) // 2), dsz, GOOD, right=True)
             if hov:
                 note = (job, r, done)
         pages = self._hub_pages()
@@ -12649,9 +12674,15 @@ class Game:
                 status_txt, badge_col = "Подножка высоко: колени выше бёдер", BAD
             elif highlight and pose.get("dangle"):
                 status_txt, badge_col = "Подножка низко: стопы не достают", BAD
-            sw_, sh_ = font(12, True).size(tr(status_txt))          # подпись — на тёмной плашке, поверх рисунка
+            ssz = 12                                                  # подпись — на тёмной плашке, поверх рисунка
+            sw_, sh_ = font(ssz, True).size(tr(status_txt))
+            tb = self._seat_demo_toggle_rect()                        # 150 %: не под кнопкой «ПОКАЗАТЬ НОРМУ»/«ТЕЛО…»
+            if self.seatc.get("tab") != "quiz" and tb.colliderect((rect.x + 134, rect.y + 10, sw_ + 12, sh_ + 4)):
+                while ssz > 8 and font(ssz, True).size(tr(status_txt))[0] + 12 > tb.x - 6 - (rect.x + 134):
+                    ssz -= 1
+                sw_, sh_ = font(ssz, True).size(tr(status_txt))
             aa_rect(surf, (16, 12, 24, 225), (rect.x + 134, rect.y + 10, sw_ + 12, sh_ + 4), border_radius=4)
-            draw_text(surf, status_txt, (rect.x + 140, rect.y + 12), 12, badge_col, bold=True)
+            draw_text(surf, status_txt, (rect.x + 140, rect.y + 12), ssz, badge_col, bold=True)
 
         if pose.get("measure"):                  # урок «Мерки»: где меряют (отзыв «покажи, где мерки»), поверх нитей
             MC, MG = (255, 200, 90), (255, 120, 110)
@@ -12880,7 +12911,10 @@ class Game:
             aa_rect(surf, (24, 26, 36), sub_r, border_radius=8)
             aa_rect(surf, (58, 66, 86), sub_r, 1, border_radius=8)
             self._draw_seat_scene(surf, sub_r, c_sub, cfg_sub, dict(p=0, slide=0), highlight=False, show_necro=False)
-            draw_text(surf, label, (sub_r.centerx, sub_r.y + 10), 12, CYAN, bold=True, center=True)
+            lsz = 12                                    # 150 %: подписи трёх скелетов не сливаются — в ширину рамки
+            while lsz > 8 and font(lsz, True).size(tr(label))[0] > sub_r.w - 8:
+                lsz -= 1
+            draw_text(surf, label, (sub_r.centerx, sub_r.y + 10), lsz, CYAN, bold=True, center=True)
             targets.append((sub_r.centerx, sub_r.centery - 20, GHOST if idx == 2 else PURPLE, idx == 1))
         self._draw_necro_puppeteer(surf, rect, targets, bad_flag=False)
 
@@ -12947,7 +12981,7 @@ class Game:
                        GOOD if demo_good else PURPLE).draw(surf, mouse, active=demo_good)
             y = 112 + ((len(SEAT_LESSONS) + 1) // 2) * 44 + 10
             draw_text(surf, les["title"], (780, y), 20, AMBER, bold=True)
-            y += 32
+            y += max(32, font(20, True).get_height() + 4)   # 150 %: первая плашка (подложка −4 px) — под заголовком
             psz = 15                                       # крупный текст: урок целиком помещается до низа окна
             while psz > 10 and sum(len(wrap_lines("• " + pt_, 476, psz)) * (font(psz).get_height() + 2) + 8
                                    for pt_ in les["points"]) > HEIGHT - 16 - y:
@@ -13005,7 +13039,7 @@ class Game:
                 label, unit, lo, hi = SEAT_SLIDERS[key]
                 v = sc["cfg"][key]
                 ok = all(o for kk, o, _ in checks if kk == key or (key == "leg" and kk == "floor"))
-                draw_text(surf, label, (track.x, track.y - 20), 13, WHITE)
+                draw_text_w(surf, label, (track.x, track.y - 20), track.w + 2, 13, WHITE)   # не на значение справа
                 fit_text(surf, seat_val_text(key, v), (track.right + 8, track.y - 9), 150, 14, GOOD if ok else AMBER)
                 aa_rect(surf, (44, 46, 60), track, border_radius=4)
                 fill = track.copy()
@@ -13065,14 +13099,17 @@ class Game:
                 self._draw_seat_fix_caption(surf, cv, f"{tr('Так правильно' if right else 'Правильно так')}: {tr(q['fix'])}",
                                             top=bool(qpose and qpose.get("front")))
             draw_text(surf, f"Вопрос {sc['quiz'] + 1} из {len(SEAT_QUIZ)}", (780, 120), 15, GREY, plate=True)
-            draw_wrapped(surf, q["q"], (780, 146), 476, 20, WHITE, plate=True)
-            for i, r in self._seat_quiz_rects():
+            qrects = self._seat_quiz_rects()                # 150 %: вопрос (с подложкой) — над первым ответом
+            draw_wrapped(surf, q["q"], (780, 146), 476,
+                         fit_wrapped_size(q["q"], 476, 20, qrects[0][1].y - 6 - 146, lo=14), WHITE, plate=True)
+            for i, r in qrects:
                 text, ok, fb = q["options"][i]
                 col = CYAN
                 if sc["picked"] is not None:
                     col = GOOD if ok else (BAD if i == sc["picked"] else DIM)
                 Button(r, "", col).draw(surf, mouse, enabled=sc["picked"] is None or i == sc["picked"] or ok)
-                ty = draw_wrapped(surf, text, (r.x + 14, r.y + 8), r.w - 28, 15, WHITE)
+                ty = draw_wrapped(surf, text, (r.x + 14, r.y + 8), r.w - 28,   # 150 %: ответ в 3 строки — мельче,
+                                  fit_wrapped_size(text, r.w - 28, 15, r.h - 12, lo=11), WHITE)   # не за рамку
                 if sc["picked"] == i and fb:                 # крупный текст: вариант в 2 строки — пояснение ниже
                     for fsz in (13, 12, 11):
                         flh = font(fsz).get_height() + 2
@@ -14092,7 +14129,8 @@ class Game:
             tip = ("Улики собраны — выбери диагноз:" if unlocked else
                    (f"Осмотри детали (тап по коляске или списку): {len(self.inspected)}/{INSPECT_REQ}" if TOUCH["on"] else
                     f"Осмотри детали (клик по коляске или списку): {len(self.inspected)}/{INSPECT_REQ}"))
-            draw_text(surf, tip, (360, crect.bottom + 4), 15, GREY if unlocked else AMBER, bold=not unlocked)
+            draw_text_w(surf, tip, (360, crect.bottom + 4), 980 - 12 - 360, 15, GREY if unlocked else AMBER,
+                        bold=not unlocked)                 # 150 %: не заходит под столбец диагнозов (x 980)
             draw_text(surf, "ДИАГНОЗ", (980, self._right_col_top() + 6), 16, CYAN if unlocked else DIM, bold=True)
             drects = self._diag_rects()
             dsize = 11                                     # один размер на весь список: самый крупный, где влезают все
@@ -14205,7 +14243,12 @@ class Game:
             aa_circle(surf, (14, 12, 20), nc, 11)
             aa_circle(surf, GOOD if (self.phase == "diagnose" and pid in self.inspected) else AMBER, nc, 11, 2)
             draw_text(surf, str(i + 1), nc, 13, WHITE, bold=True, center=True)
-            fit_text(surf, PARTS[pid], (rect.x + 34, rect.centery - font(16).get_height() // 2), rect.w - 56, 16, WHITE)
+            pw = rect.w - 56                                          # 150 %: название не заходит на ✔ / книжку
+            if self.phase == "diagnose" and pid in self.inspected:
+                pw = min(pw, rect.w - 10 - font(15).size("✔")[0] - 6 - 34)
+            elif self.phase == "repair" and self._part_note(pid):
+                pw = min(pw, rect.w - 16 - 9 - 6 - 34)
+            fit_text(surf, PARTS[pid], (rect.x + 34, rect.centery - font(16).get_height() // 2), pw, 16, WHITE)
             if self.phase == "diagnose" and pid in self.inspected:
                 draw_text(surf, "✔", (rect.right - 10, rect.centery - 9), 15, GOOD, right=True)
             elif self.phase == "repair" and self._part_note(pid):
@@ -14471,8 +14514,12 @@ class Game:
         if self.phase == "repair":
             head = ("ЭКЗАМЕН ГИЛЬДИИ — подсказок нет, мануал разрешён" if self.exam_mode
                     else "ЗАДАНИЕ ТЕХНИКА — порядок шагов выбираешь сам")
-            draw_text(surf, head, (300, 62), 17, CYAN, bold=True)
-            draw_wrapped(surf, job["symptom"], (300, 88), 770, 14, WHITE)
+            # 150 %: заголовок — до кнопки «ПРОПУСТИТЬ» (на экзамене — до «МАНУАЛ»), описание — над карточками шагов
+            hb = self._manual_btn_rect() if self.exam_mode else self._tech_skip_rect()
+            draw_text_w(surf, head, (300, 62), hb.x - 10 - 300, 17, CYAN, bold=True)
+            ops = self._op_rects()
+            room = (min(r.y for _, r in ops) if ops else 150) - 4 - 88
+            draw_wrapped(surf, job["symptom"], (300, 88), 770, fit_wrapped_size(job["symptom"], 770, 14, room), WHITE)
             Button(self._manual_btn_rect(), "МАНУАЛ", PURPLE).draw(surf, mouse)
             if not self.exam_mode:
                 Button(self._tech_skip_rect(), "ПРОПУСТИТЬ ▸", AMBER).draw(surf, mouse)
