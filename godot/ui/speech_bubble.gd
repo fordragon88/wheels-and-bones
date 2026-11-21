@@ -196,8 +196,6 @@ func _draw_spk() -> void:
 
 ## Узкий пузырь наставника в правой колонке (ремонт): портрет 46×56 и текст рядом.
 func _draw_mentor_col() -> void:
-	draw_rect(col, Color8(24, 30, 36, 220))
-	UI.draw_round_rect(self, col, Color(0, 0, 0, 0), UI.CYAN, 2, 8)
 	var text := Loc.t(line)
 	var tw := col.size.x - 70
 	var sz := 12
@@ -205,4 +203,10 @@ func _draw_mentor_col() -> void:
 		sz = s
 		if UI.wrap_lines(text, tw, s).size() * (UI.line_height(s) + 2) <= col.size.y - 16:
 			break
+	var box := col
+	if UI.phone():                           # телефон (21.11): поле по высоте реплики (не меньше портрета), остаток пуст
+		var th := UI.wrap_lines(text, tw, sz).size() * (UI.line_height(sz) + 2) + 16
+		box.size.y = clampf(th, minf(72.0, col.size.y), col.size.y)
+	draw_rect(box, Color8(24, 30, 36, 220))
+	UI.draw_round_rect(self, box, Color(0, 0, 0, 0), UI.CYAN, 2, 8)
 	UI.draw_wrapped(self, text, col.position + Vector2(60, 8), tw, sz, UI.GHOST, false, 2, typed(text, 90))

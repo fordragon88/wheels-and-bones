@@ -2346,11 +2346,13 @@ async def sc_phonebig(b):
     """Телефонный режим (UI.phone(), 21.11) — снимки для владельца: телефон 780×360 dpr 3 (снимок страницы 2340×1080,
     как экран телефона), EN и RU, каждое состояние — до (?phone=0, раскладка как была) и после (?phone=1) →
     tests/web_shots/phonebig/<язык>_<состояние>_before|after.png; плюс RU при тексте 150 % — <ru150>_<состояние>_after.png.
-    WNB_PB_STAGES=hub,… — часть состояний."""
+    WNB_PB_STAGES=hub,… — часть состояний; WNB_PB_RUNS=en:1:2,… — свои проходы (язык:телефон:текст 0..3)."""
     out = os.path.join(SHOTS, "phonebig")
     os.makedirs(out, exist_ok=True)
     only = [x for x in os.environ.get("WNB_PB_STAGES", "").split(",") if x]
     runs = [(lang, ph, 0) for lang in ("en", "ru") for ph in (0, 1)] + [("ru", 1, 3)]
+    if os.environ.get("WNB_PB_RUNS"):          # «en:1:2,ru:1:3» — язык:телефон:размер текста (0..3), только эти проходы
+        runs = [(r.split(":")[0], int(r.split(":")[1]), int(r.split(":")[2])) for r in os.environ["WNB_PB_RUNS"].split(",")]
     n = 0
     for lang, ph, text in runs:
         p = await new_page(b, f"pb_{lang}{ph}t{text}", legacy=SKIP_SEED, touch=True, mobile=True, w=780, h=360, dpr=3)
@@ -2369,7 +2371,8 @@ async def sc_phonebig(b):
                 continue
             await p.wait(lambda q: q["frames"]["queue"] == 0 and q["frames"]["inflight"] == 0, "кадры", 6, quiet=True)
             await p.pg.wait_for_timeout(600)
-            name = f"{lang}_{s}_{'after' if ph else 'before'}.png" if text == 0 else f"{lang}150_{s}_after.png"
+            name = (f"{lang}_{s}_{'after' if ph else 'before'}.png" if text == 0 else
+                    f"{lang}{[100, 112, 125, 150][text]}_{s}_{'after' if ph else 'before'}.png")
             try:
                 await p.pg.screenshot(path=os.path.join(out, name), timeout=20000)
                 n += 1

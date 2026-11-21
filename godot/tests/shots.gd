@@ -97,6 +97,10 @@ func _tech_shot(name: String) -> void:
 			scr = await _tech_open("truing")
 			scr.select_tool(scr.job["steps"][0]["tool"])
 			await _wait(2.0)
+		"tech_ops_t_battery", "tech_ops_t_battery_q6", "tech_ops_t_pulse6", "tech_ops_t_q6brake":   # про-задания 13–16 шагов
+			scr = await _tech_open(name.trim_prefix("tech_ops_"))
+			scr.select_tool(scr.job["steps"][0]["tool"])
+			await _wait(2.0)
 		"tech_manual":
 			scr = await _tech_open("truing")
 			scr.open_manual()

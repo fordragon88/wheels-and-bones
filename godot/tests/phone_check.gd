@@ -13,11 +13,16 @@ var _stager: Node
 
 ## Осознанно мельче 56 / вплотную: «имя цели» (или «состояние:имя»; * в конце — начало имени) → причина.
 const EXCEPT := {
+	"tech_ops_t_battery:Op_*": "про-задание на 13–16 шагов: карточки 470×40–46 в 2 столбца по 7–8; 56 через 64 не помещаются над инструментами (PORT_PLAN, телефонный режим)",
+	"tech_ops_t_battery_q6:Op_*": "про-задание на 13–16 шагов: карточки 470×40–46 в 2 столбца по 7–8; 56 через 64 не помещаются над инструментами (PORT_PLAN, телефонный режим)",
+	"tech_ops_t_pulse6:Op_*": "про-задание на 13–16 шагов: карточки 470×40–46 в 2 столбца по 7–8; 56 через 64 не помещаются над инструментами (PORT_PLAN, телефонный режим)",
+	"tech_ops_t_q6brake:Op_*": "про-задание на 13–16 шагов: карточки 470×40–46 в 2 столбца по 7–8; 56 через 64 не помещаются над инструментами (PORT_PLAN, телефонный режим)",
 }
 
 ## Ключевые экраны самопроверки (телефон): то, что перестроено.
 const KEY_STATES := ["title", "intro_1", "ending", "credits", "guild_open", "guild_diploma", "tech_ops", "tech_manual",
-	"tech_spec", "tech_failed", "exam_ticket", "hub", "job_flat_diagnose", "job_flat_inspected", "job_joystick_inspected", "job_flat_repair",
+	"tech_spec", "tech_failed", "tech_ops_t_battery", "tech_ops_t_battery_q6", "tech_ops_t_pulse6",
+	"tech_ops_t_q6brake", "exam_ticket", "hub", "job_flat_diagnose", "job_flat_inspected", "job_joystick_inspected", "job_flat_repair",
 	"result_lift", "garage", "garage_open", "mini_pump", "mini_gap", "mini_ping", "mini_meter", "settings_sound", "settings_graphics", "settings_access", "settings_game",
 	"feedback_general", "feedback_dispute", "share_paste", "share_confirm", "hub_assign", "share_summary", "share_builder"]
 

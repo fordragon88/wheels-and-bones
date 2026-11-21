@@ -1197,6 +1197,8 @@ func _draw_step_dots(n: int, at: Vector2, right: float) -> void:
 	var step := 22.0
 	if at.x + (n - 1) * 22 > right:
 		step = maxf(6.0, (right - at.x - 8) / maxf(1, n - 1))
+		if UI.phone() and step < 14.0:       # телефон: точки комком не рисуем — номер шага уже в заголовке
+			return
 	var r := 7.0 if step >= 22 else maxf(3, int(step / 3))
 	UI.draw_round_rect(_deco, Rect2(at.x - r - 7, at.y - r - 6, roundf((n - 1) * step) + 2 * r + 14, 2 * r + 12),
 		Color8(14, 12, 20, 190), Color(), 0, int(r + 6))

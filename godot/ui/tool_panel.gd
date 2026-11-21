@@ -191,9 +191,12 @@ func _draw_card() -> void:
 		var low := info.size.y < 80                 # в Гильдии карточка в один ряд
 		var isz := 38.0 if low else 44.0
 		var tex := Content.texture("tool_%s.png" % tid)
+		var ttl := (Loc.t("В РУКЕ: ") if in_hand else "") + Loc.t(Content.tools[tid]["name"])
+		if UI.phone() and not low:              # телефон: карточка уже — название целиком (без «…»), описание под ним
+			_draw_card_phone(info, ttl, Loc.t(Content.tools[tid]["hint"]), tex, isz, UI.AMBER if in_hand else UI.WHITE)
+			return
 		if tex:
 			_card.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(10, floorf((info.size.y - isz) / 2.0), isz, isz)), false)
-		var ttl := (Loc.t("В РУКЕ: ") if in_hand else "") + Loc.t(Content.tools[tid]["name"])
 		if UI.phone():                          # телефон: карточка уже — название не шире неё
 			UI.draw_text_w(_card, ttl, Vector2(isz + 22, 5 if low else 10), info.size.x - isz - 30, 16 if low else 18,
 				UI.AMBER if in_hand else UI.WHITE, true)
@@ -229,6 +232,41 @@ func _draw_card() -> void:
 		if book:
 			BookIcon.draw_icon(_card, Vector2(26, y + 16), 10, UI.CYAN)
 			UI.draw_wrapped(_card, bt, Vector2(44, y + 7), info.size.x - 60, bs, UI.CYAN)
+
+
+## Телефон (21.11): название инструмента — справа от значка (18, при нехватке — мельче до 15); не влезает — во всю
+## ширину карточки над значком и описанием (18 → 13), в крайнем случае в две строки; без «…». Описание — под
+## названием, кегль по оставшейся высоте, строк не больше, чем помещается в карточку.
+func _draw_card_phone(info: Rect2, ttl: String, hint: String, tex: Texture2D, isz: float, col: Color) -> void:
+	var x := isz + 22
+	var tw := info.size.x - isz - 30
+	var hw := info.size.x - isz - 34
+	var hy := 36.0
+	var top := 0.0                           # верх полосы значка
+	var s1 := UI.fit_size(ttl, tw, 18, 15, true)
+	if UI.text_width(ttl, s1, true) <= tw:
+		UI.draw_text(_card, ttl, Vector2(x, 10 + floorf((18 - s1) / 2.0)), s1, col, true)
+	else:
+		var fw := info.size.x - 24
+		var s2 := UI.fit_size(ttl, fw, 18, 13, true)
+		if UI.text_width(ttl, s2, true) <= fw:
+			var ty := 8 + floorf((18 - s2) / 2.0)
+			UI.draw_text(_card, ttl, Vector2(12, ty), s2, col, true)
+			hy = ty + UI.line_height(s2, true) + 2
+		else:
+			var ts := 18
+			while ts > 12 and UI.wrap_lines(ttl, fw, ts, true).size() > 2:
+				ts -= 1
+			hy = UI.draw_wrapped(_card, ttl, Vector2(12, 6), fw, ts, col, false, 0, -1, 2, true) + 2
+		top = hy - 2
+	if tex:
+		var s := minf(isz, info.size.y - top - 8)
+		_card.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(10 + (isz - s) / 2.0,
+			top + floorf((info.size.y - top - s) / 2.0), s, s)), false)
+	var room := info.size.y - 4 - hy
+	var hs := UI.fit_wrapped_size(hint, hw, 15, room, 9)
+	var lh := UI.line_height(hs) + 2
+	UI.draw_wrapped(_card, hint, Vector2(x, hy), hw, hs, UI.GREY, false, 2, -1, maxi(1, int((room + 2) / lh)))
 
 
 ## Карточка: сноска из мануала к детали (_draw_manual_note).
