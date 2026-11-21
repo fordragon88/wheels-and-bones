@@ -743,6 +743,24 @@ python i18n_work/build_lang.py       # перевод полон
 ## Журнал изменений
 Формат: `ГГГГ-ММ-ДД — агент/модель — что сделано (файлы)`. Новые записи — **сверху**.
 
+- 2026-11-21 — Claude (Opus 5.5), ветка `godot-port` — **после проезда у коляски две фигуры клиента (нашёл владелец
+  на телефоне: у Моры второе лицо из-за плеча, у феи Тилли вторая голова и рука).** Причина: `RideView._process`
+  звал `queue_redraw()` только пока `active or stay`; `job.gd _ride_finished()` ставит `active = false`, `_draw` больше
+  не вызывался — холст хранил последний кадр петли `ride_*` поверх портрета клиента, который `_draw_deco` рисует после
+  проезда (game.py: `ride_t0 = None` — фигуры нет). Ошибка была с первого среза b0d2f25 (18.11), у всех героев с
+  петлёй проезда (и у Мартина). Починка: `ui/ride_view.gd _process` — завершающая перерисовка при переходе
+  «рисуем → не рисуем» (и слоя пыли `_add`); Гильдия (`stay`) не менялась. Похожие места проверены: `MagicPortrait`,
+  `Figure`, `TurntableShow`, `LegGag`, `Fx` экрана задания — перерисовка каждый кадр; `ToolAction` при выключении сам
+  перерисовывает; `MiniGame`, `SpeechBubble`, `Toast`, `ChairView`, `SeatFigure` — по подписи состояния, в которую
+  входит «включено» — риска нет. Проверки: `tests/fixes_check.gd _ride_clear` (Мора, Тилли: после проезда
+  `ride.shown`/`dust_shown` = false, после пересборки и «Без анимации» — тоже; Гильдия toe — стоит и нарисован);
+  `wnbState.ride_shown` и `ride.box`, `set:ride_vis=0|1` (`autoload/web.gd`); `web_smoke`: в `play_job` после проезда
+  `ride_shown` false, в `play` — `ride_layer_check` (состояния `tests/shots.gd ride_done_mora|tilly`: снимок области
+  коляски со слоем проезда и без него — до починки менялось 16 % и 14 %, шум 0,1 %). Снимки
+  `phonebig/ru_ride_done_{mora,tilly}_{before,after}.png` (`PB_STAGES` + 2). «GODOT SELFTEST OK»; PHONE TARGETS и
+  KB ORDER как были; check_share 0; SAVE COMPAT 0; web_smoke Chromium boot,play,guild,phone 82 ok, Firefox boot,play
+  30 ok, WebKit 28 ok, 0 FAIL. Ничего не выкладывалось. (godot/ui/ride_view.gd, godot/autoload/web.gd,
+  godot/tests/fixes_check.gd, godot/tests/shots.gd, godot/tools/web_smoke.py, godot/PORT_PLAN.md)
 - 2026-11-21 — Claude (Fable 5.2), ветка `godot-port` — **три правки телефонного режима проверены, Godot на тестовом
   адресе**. Владелец на «что остаётся открытым» спросил «как это можно поправить?», попросил «сначала эскизы»
   (`tools/seat_mock/6_…`, `7_…`, `8_…`; сняты настоящие снимки `tech_ops_t_battery` и `seat_fit_golem`), по эскизу 3

@@ -20,6 +20,9 @@ var t: float = 0.0
 var t0: float = -1.0
 var active: bool = false                  # проезд идёт (или только что закончился — экран заберёт итог)
 var drawn: int = 0
+var shown: bool = false                   # последний _draw оставил на холсте фигуру проезда (проверки)
+var dust_shown: bool = false              # то же для слоя пыли _add
+var _on: bool = false                     # в прошлом кадре слой рисовался (active или stay)
 var _add: Control
 var _r: Dictionary = {}
 
@@ -76,9 +79,14 @@ func riding() -> bool:
 
 func _process(dt: float) -> void:
 	t += dt
-	if active or stay:
+	# Холст узла хранит последний рисунок, пока не вызван queue_redraw: при переходе «рисуем → не рисуем» (конец
+	# проезда в обычном задании, stay снят) — ещё одна, завершающая перерисовка, иначе последний кадр петли ride_*
+	# остаётся у коляски навсегда, поверх портрета клиента (21.11: у Моры второе лицо, у Тилли вторая голова).
+	var on := active or stay
+	if on or _on:
 		queue_redraw()
 		_add.queue_redraw()
+	_on = on
 
 
 func anim_size(n: String) -> Vector2:
@@ -125,8 +133,10 @@ func stay_rect() -> Rect2:
 
 
 func _draw() -> void:
+	shown = false
 	if not active and not stay:
 		return
+	shown = true
 	if loop_name != "":
 		var s := _anim_state()
 		var sz := anim_size(loop_name)
@@ -191,8 +201,10 @@ func _draw() -> void:
 
 
 func _draw_add() -> void:
+	dust_shown = false
 	if not active or not Settings.glow:                # стоит после проезда — без пыли (как в game.py)
 		return
+	dust_shown = true
 	if loop_name != "":
 		var s := _anim_state()
 		var sz := anim_size(loop_name)

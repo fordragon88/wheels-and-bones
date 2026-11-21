@@ -610,6 +610,24 @@ func stage(name: String) -> void:
 			m.dull = {1: true, 5: true}
 			m.tested = {0: true, 1: true}
 		await _wait(0.6)
+	elif name in ["ride_done_mora", "ride_done_tilly"]:      # после проезда у коляски — только портрет клиента (21.11)
+		var scr: Node = await _to_repair("joystick" if name == "ride_done_mora" else "spokes")
+		while scr.phase == "repair":
+			scr.step_skip()
+		scr.mistakes = 0
+		Nav.toast.timer = 0.0
+		var hero := RideView.hero_loop(scr.job["client_art"])
+		Frames.want_loop(hero)
+		Frames.flush()
+		await _wait(1.0)
+		for _i in 40:                                             # браузер: петля качается с сайта — дождаться
+			if Frames.loop_ready(hero):
+				break
+			await _wait(0.25)
+		scr.start_ride()
+		await _wait(0.5)
+		scr.ride.t0 = scr.ride.t - scr.ride.secs() + 0.4         # доезжает последние 0,4 с — до самой остановки
+		await _wait(1.5)
 	elif name.begins_with("ride_"):
 		var jid := "flat" if name == "ride_martin" else "lift"
 		var scr: Node = await _to_repair(jid)

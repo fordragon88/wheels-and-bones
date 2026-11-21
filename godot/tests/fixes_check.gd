@@ -14,6 +14,8 @@ func run(runner: Node) -> String:
 	done.append("зазор 3,5–4,5")
 	await _ride_rebuild()
 	done.append("проезд переживает смену языка")
+	await _ride_clear()
+	done.append("после проезда слой проезда пуст (Мора, Тилли), в Гильдии герой стоит")
 	await _hub_page()
 	done.append("страница очереди и гаража")
 	await _meter_lang()
@@ -103,6 +105,72 @@ func _ride_rebuild() -> void:
 			% [j.ride.riding(), j.chair.visible, j._test_btn.visible])
 	Loc.toggle()
 	await R._frames(1)
+	Nav.go("hub")
+	await R._frames(1)
+
+
+# ---- 21.11: после проезда в обычном задании у коляски две фигуры (последний кадр петли ride_* + портрет) ----
+# Холст узла хранит последний рисунок, пока не вызван queue_redraw: RideView перерисовывался только «пока активен»,
+# и после _ride_finished на экране навсегда оставался последний кадр проезда (game.py: ride_t0 = None — фигуры нет).
+func _ride_clear() -> void:
+	SaveGame.reset()
+	SaveGame.tutorial_skipped = true
+	for jid: String in ["joystick", "spokes"]:              # Мора, фея Тилли
+		Nav.go("job", {"job": jid, "variant": 0})
+		await R._frames(2)
+		var j: Node = Nav.current
+		j.phase = "test"
+		j.rebuild()
+		var hero := RideView.hero_loop(j.job["client_art"])
+		if hero != "":
+			Frames.want_loop(hero)
+			Frames.flush()
+		await R._frames(2)
+		j._test_pressed()
+		await R._frames(3)
+		if not j.ride.riding() or (j.ride.drawn > 0 and not j.ride.shown):
+			_fail("%s: проезд не идёт или не рисуется (%s, нарисовано %d)" % [jid, j.ride.riding(), j.ride.drawn])
+		j.ride.t0 = j.ride.t - j.ride.secs() - 0.01
+		await R._frames(3)
+		if not j.ride_done or j.ride.shown or j.ride.dust_shown:
+			_fail("%s: после проезда на холсте осталась фигура проезда (готово %s, фигура %s, пыль %s) — у коляски две фигуры"
+				% [jid, j.ride_done, j.ride.shown, j.ride.dust_shown])
+		j.rebuild()                                           # пересборка экрана после проезда — слой пуст
+		await R._frames(2)
+		j = Nav.current
+		if j.ride.shown or not j.ride_done:
+			_fail("%s: после пересборки экрана фигура проезда видна" % jid)
+	# «Без анимации»: проезда нет — слой не рисуется вовсе
+	var calm0: bool = Settings.a11y.get("calm", false)
+	Settings.a11y["calm"] = true
+	Nav.go("job", {"job": "joystick", "variant": 0})
+	await R._frames(2)
+	var jc: Node = Nav.current
+	jc.phase = "test"
+	jc.rebuild()
+	await R._frames(1)
+	jc._test_pressed()
+	await R._frames(3)
+	if not jc.ride_done or jc.ride.shown:
+		_fail("«Без анимации»: после проверки слой проезда не пуст (готово %s, фигура %s)" % [jc.ride_done, jc.ride.shown])
+	Settings.a11y["calm"] = calm0
+	# Гильдия: после проезда герой стоит (stay) — слой нарисован, как и было
+	Nav.go("tech", {"job": "toe", "exam": false})
+	await R._frames(2)
+	var tc: Node = Nav.current
+	while tc.phase == "repair":
+		tc.step_skip()
+	await R._frames(1)
+	var tl := RideView.tech_loop("toe")
+	if tl != "":
+		Frames.want_loop(tl)
+		Frames.flush()
+	tc._test_pressed()
+	await R._frames(2)
+	tc.ride.t0 = tc.ride.t - tc.ride.secs() - 0.01
+	await R._frames(3)
+	if tl != "" and tc.ride.drawn > 0 and (not tc.ride.stay or not tc.ride.shown):
+		_fail("Гильдия toe: после проезда герой не стоит (stay %s, нарисован %s)" % [tc.ride.stay, tc.ride.shown])
 	Nav.go("hub")
 	await R._frames(1)
 

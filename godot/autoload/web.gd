@@ -108,6 +108,10 @@ func _on_stage(args: Array) -> void:
 				Loc.set_lang(kv[1])
 			elif kv[0] == "phone":            # телефонный режим (крупные цели) — вкл/выкл для проверок
 				UI.set_phone(kv[1] == "1")
+			elif kv[0] == "ride_vis":         # web_smoke ride_layer: спрятать слой проезда — снимок не должен измениться
+				var sc: Node = Nav.current
+				if sc != null and "ride" in sc and sc.get("ride") is RideView:
+					(sc.get("ride") as RideView).visible = kv[1] == "1"
 			else:
 				Settings.set_a11y(kv[0], int(kv[1]) if kv[0] == "text" else kv[1] == "1")
 		JavaScriptBridge.eval("window.wnbStaged = %s" % JSON.stringify(name), true)
@@ -319,6 +323,10 @@ func state() -> Dictionary:
 		if rv is RideView:
 			var r: RideView = rv
 			d["ride"] = {"active": r.active, "riding": r.riding(), "loop": r.loop_name, "drawn": r.drawn, "stay": r.stay}
+			d["ride_shown"] = r.shown or r.dust_shown   # на холсте слоя проезда что-то нарисовано (после проезда — пусто)
+			if scr.has_method("chair_rect"):
+				var cr: Rect2 = scr.call("chair_rect")
+				d["ride"]["box"] = [cr.position.x, cr.position.y, cr.size.x, cr.size.y]   # где коляска (1280×720)
 		var mp: Variant = scr.get("portrait") if "portrait" in scr else null
 		if mp is MagicPortrait:
 			d["magic"] = {"loop": mp.loop_name, "playing": mp.magic_t0 >= 0.0, "ready": mp.loop_name != "" and Frames.loop_ready(mp.loop_name)}

@@ -373,6 +373,11 @@ async def play_job(p, jid, expect_loop, shots=True):
     else:
         check(ride.get("loop") == "", f"{p.name}: проезд без петли (запасной вид: скользящий портрет) — {ride}")
     st = await p.wait(lambda s: s.get("ride_done"), "проезд закончился", 20)
+    await p.pg.wait_for_timeout(500)
+    st = await p.state()
+    # 21.11: после проезда слой проезда пуст — у коляски только портрет клиента (не последний кадр петли поверх него)
+    check(st.get("ride_shown") is False and not (st.get("ride") or {}).get("stay"),
+          f"{p.name}: {jid} после проезда слой проезда пуст (ride_shown {st.get('ride_shown')}, {st.get('ride')})")
     await p.press("TestDrive")
     st = await p.wait(lambda s: s.get("screen") == "result", "итог задания", 15)
     if st:
@@ -473,6 +478,49 @@ async def sc_boot(b):
     await p.ctx.close()
 
 
+def _changed(a, b):
+    """Доля пикселей, где снимки различаются заметно (больше 48 по любому каналу)."""
+    from PIL import ImageChops
+    df = ImageChops.difference(a.convert("RGB"), b.convert("RGB"))
+    m = df.split()
+    mx = ImageChops.lighter(ImageChops.lighter(m[0], m[1]), m[2])
+    return sum(mx.histogram()[49:]) / max(1, a.size[0] * a.size[1])
+
+
+async def ride_layer_check(p, stage, who):
+    """После проезда (состояние tests/shots.gd ride_done_*): слой проезда пуст — по wnbState и по пикселям. Снимок
+    области коляски со слоем проезда и без него (set:ride_vis=0) одинаков с точностью до шума кадра (пылинки фона:
+    два снимка подряд); «вторая фигура» — последний кадр петли поверх портрета — дала бы десятки процентов."""
+    import io
+    from PIL import Image
+    if not await set_stage(p, stage):
+        check(False, f"{p.name}: состояние {stage} не встало")
+        return
+    await p.wait(lambda q: q["frames"]["queue"] == 0 and q["frames"]["inflight"] == 0, "кадры", 6, quiet=True)
+    await p.pg.wait_for_timeout(600)
+    g, _, st = await game_rect(p)
+    ride = st.get("ride") or {}
+    check(bool(st.get("ride_done")) and st.get("ride_shown") is False and ride.get("drawn", 0) > 0,
+          f"{p.name}: {who} после проезда слой проезда пуст (готово {st.get('ride_done')}, ride_shown "
+          f"{st.get('ride_shown')}, кадров проезда {ride.get('drawn')})")
+    bx = ride.get("box") or [360, 150, 520, 380]
+    k = g[2] / 1280
+    clip = {"x": g[0] + bx[0] * k, "y": g[1] + bx[1] * k, "width": bx[2] * k, "height": bx[3] * k}
+
+    async def grab():
+        return Image.open(io.BytesIO(await p.pg.screenshot(clip=clip, timeout=20000)))
+    a = await grab()
+    await p.pg.wait_for_timeout(300)
+    b2 = await grab()
+    await set_stage(p, "set:ride_vis=0")
+    await p.pg.wait_for_timeout(300)
+    c = await grab()
+    await set_stage(p, "set:ride_vis=1")
+    noise, hid = _changed(a, b2), _changed(a, c)
+    check(hid <= noise + 0.01, f"{p.name}: {who} у коляски нет второй фигуры: без слоя проезда изменилось {hid:.1%} "
+          f"области коляски (шум двух снимков подряд {noise:.1%})")
+
+
 async def sc_play(b):
     """Новая игра: титул → вступление → задание Мартина целиком (проезд петлёй, итог); музыка; перезагрузка —
     прогресс и настройки на месте (IndexedDB); F2 — голос браузера и aria-live."""
@@ -513,6 +561,8 @@ async def sc_play(b):
     check("flat" in st.get("done", []), f"{p.name}: после перезагрузки прогресс на месте ({st.get('done')})")
     check(st.get("sound") is False, f"{p.name}: после перезагрузки настройка «звук выкл» на месте")
     await p.key("m", 400)
+    await ride_layer_check(p, "ride_done_mora", "Мора")       # 21.11: две фигуры у коляски после проезда
+    await ride_layer_check(p, "ride_done_tilly", "Тилли")
     p.check_console()
     await p.ctx.close()
 
@@ -2424,7 +2474,7 @@ async def sc_phonetext(b):
 
 PB_STAGES = ["hub", "job_flat_diagnose", "job_flat_repair", "mini_pump", "result_lift", "settings_sound", "settings_access",
              "seat_lesson_slump", "seat_fit_troll", "seat_quiz_q1", "guild_open", "tech_ops", "garage", "share_paste", "title",
-             "tech_ops_t_battery", "tech_ops_t_q6brake", "seat_fit_golem"]
+             "tech_ops_t_battery", "tech_ops_t_q6brake", "seat_fit_golem", "ride_done_mora", "ride_done_tilly"]
 PB_BIG = ["hub", "job_flat_diagnose", "job_flat_repair", "settings_access", "tech_ops", "seat_lesson_slump", "seat_fit_troll",
           "seat_quiz_q1", "tech_ops_t_battery", "seat_fit_golem"]
 
