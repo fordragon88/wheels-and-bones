@@ -282,7 +282,8 @@ func seat_sizes(runner: Node, on: bool) -> Dictionary:
 	var t0: int = UI._touch
 	var p0: int = UI._phone
 	UI._touch = 1 if on else t0
-	UI.set_phone(on)
+	UI._phone = 1 if on else 0                    # не set_phone: при _phone = −1 (не определён) set_phone(false) ничего
+	Settings.changed.emit("phone")                # не ставил, и без окна телефон определялся сам (21.11)
 	var keep := [Settings.lang, Loc.code, Settings.a11y.get("text", 0), Settings.a11y.get("font", false)]
 	var instant0: bool = Settings.a11y.get("instant", false)
 	Settings.a11y["instant"] = true
@@ -305,16 +306,22 @@ func seat_sizes(runner: Node, on: bool) -> Dictionary:
 				for i in scr.lessons().size():
 					scr.pick_lesson(i)
 					await R._frames(2)
+					if not on:                                # компьютер: значки в списке (без окна _draw кнопок нет)
+						scr.desk_icon("lessons")
 					out["%s lesson %d" % [pre, i + 1]] = scr.text_sizes.duplicate()
 				scr.set_tab("fit")
 				for i in scr.cases().size():
 					scr.pick_case(i)
 					await R._frames(2)
+					if not on:
+						scr.desk_icon("fit")
 					out["%s fit %d" % [pre, i + 1]] = scr.text_sizes.duplicate()
 				for c: Dictionary in scr.cases():             # все клиенты пройдены — подписи «✔ Имя» (длиннее)
 					SaveGame.seat_done[c["id"]] = true
 				scr.refresh()
 				await R._frames(2)
+				if not on:
+					scr.desk_icon("fit")
 				out["%s fit done" % pre] = scr.text_sizes.duplicate()
 				SaveGame.seat_done.clear()
 				scr.set_tab("quiz")

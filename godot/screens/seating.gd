@@ -1139,8 +1139,15 @@ func _draw_lesson_btn(b: GameButton, r: Rect2) -> void:
 			(func(ci: CanvasItem, box: Rect2) -> void: _draw_lesson_icon(ci, i, box)) if LessonIcons.has(i + 1)
 			else Callable())
 		return
-	_fit(b, "%d. %s" % [i + 1, Loc.t(lessons()[i]["title"])], r.position + Vector2(10, 9), r.size.x - 20, 15, UI.WHITE,
-		i == lesson)
+	var isz := desk_icon("lessons") if LessonIcons.has(i + 1) else 0.0
+	var tx := _desk_text_x(isz)
+	var title := "%d. %s" % [i + 1, Loc.t(lessons()[i]["title"])]
+	var bold := i == lesson
+	if isz > 0.0:
+		_draw_lesson_icon(b, i, Rect2(r.position.x + DESK_ICON_X, r.position.y + floorf((r.size.y - isz) / 2.0), isz, isz))
+		if bold and not _fits_line(title, r.size.x - tx - 10, 15, true):
+			bold = false                          # со значком: жирным не помещается — обычным (выбран — видно по кнопке)
+	_fit(b, title, r.position + Vector2(tx, 9), r.size.x - tx - 10, 15, UI.WHITE, bold)
 
 
 func _case_label(i: int) -> String:
@@ -1174,7 +1181,70 @@ func _draw_case_btn(b: GameButton, r: Rect2) -> void:
 		_draw_row(b, r, _case_label(i), 14, false,
 			(func(ci: CanvasItem, box: Rect2) -> void: _draw_case_icon(ci, i, box)) if case_icons() else Callable())
 		return
-	_fit(b, ("✔ " if done else "") + Loc.t(cases()[i]["client"]), r.position + Vector2(10, 8), r.size.x - 20, 14, UI.WHITE)
+	var isz := desk_icon("fit")
+	var tx := _desk_text_x(isz)
+	if isz > 0.0:
+		_draw_case_icon(b, i, Rect2(r.position.x + DESK_ICON_X, r.position.y + floorf((r.size.y - isz) / 2.0), isz, isz))
+	_fit(b, ("✔ " if done else "") + Loc.t(cases()[i]["client"]), r.position + Vector2(tx, 8), r.size.x - tx - 10, 14,
+		UI.WHITE)
+
+
+## Компьютер (не телефонный режим; решение владельца 21.11 — намеренное отличие от game.py): значок слева на кнопке
+## списка — у уроков пиктограмма LessonIcons, у клиентов верх портрета; кнопки те же (230×38 / 230×35), название в одну
+## строку по прежнему правилу (кегль до 75 % → «…»), место под него уже на значок. Размер — наибольший из
+## DESK_ICONS[kind], при котором ни одно название, помещавшееся без значка (без «…», обычным и жирным — выбранный урок),
+## не начинает обрезаться; не годится и 22 — значков нет у всего списка. 0.0 — без значков. Считается по подписи
+## (язык, множитель текста, шрифт, подписи с «✔»), не каждый кадр; итог — в text_sizes["desk_icons_<kind>"] (проверки).
+const DESK_ICONS := {"lessons": [30.0, 26.0, 22.0], "fit": [28.0, 25.0, 22.0]}
+const DESK_ICON_X := 6.0                  # отступ значка от края кнопки; текст — через 6 после значка
+static var _desk_cache := {}
+
+
+func _desk_text_x(isz: float) -> float:
+	return DESK_ICON_X + isz + 6.0 if isz > 0.0 else 10.0
+
+
+func _desk_labels(kind: String) -> Array:
+	var out: Array = []
+	if kind == "lessons":
+		for i in lessons().size():
+			if LessonIcons.has(i + 1):
+				out.append("%d. %s" % [i + 1, Loc.t(lessons()[i]["title"])])
+	else:
+		for i: int in SaveGame.seat_idx():
+			out.append(_case_label(i))
+	return out
+
+
+func desk_icon(kind: String) -> float:
+	var labels := _desk_labels(kind)
+	var key := "%s|%s|%s|%s|%s" % [kind, Loc.code, Settings.text_k(), Settings.easy_font(), "\n".join(labels)]
+	if not _desk_cache.has(key):
+		var w := list_rect(0).size.x
+		var base := 15 if kind == "lessons" else 14
+		var res := [0.0, ""]                     # [размер, что мешает при 22 — для проверок]
+		for isz: float in DESK_ICONS[kind]:
+			var ok := true
+			for s: String in labels:
+				for bold: bool in [false]:     # выбранный урок — жирным, только если так помещается (_draw_lesson_btn)
+					if _fits_line(s, w - 20, base, bold) and not _fits_line(s, w - _desk_text_x(isz) - 10, base, bold):
+						ok = false
+						res[1] = s
+			if ok:
+				res = [isz, ""]
+				break
+		if _desk_cache.size() > 64:
+			_desk_cache.clear()
+		_desk_cache[key] = res
+	var v: Array = _desk_cache[key]
+	text_sizes["desk_icons_" + kind] = int(v[0])
+	text_sizes["desk_icons_%s_why" % kind] = v[1]
+	return v[0]
+
+
+## Название помещается в ширину без «…» (fit_text: кегль до 75 %, потом многоточие).
+static func _fits_line(s: String, w: float, size_: int, bold: bool) -> bool:
+	return str(UI.fit_text(s, w, size_, bold)[0]) == s
 
 
 func _draw_option(b: GameButton, _lifted: Rect2) -> void:

@@ -3,12 +3,29 @@ import sys, os
 from PIL import Image, ImageChops, ImageStat
 a, b = sys.argv[1], sys.argv[2]
 names = sys.argv[3:] or sorted(n for n in os.listdir(a) if n.endswith('.png'))
+# Известные отличия от game.py — области, которые не сравниваются (в обоих снимках закрашены одинаково):
+# Кабинет посадки на компьютере — значки в списках уроков и клиентов (решение владельца 21.11; seating.gd desk_icon):
+# весь список (уроки 4 ряда по 44 с y 112, клиенты 5 рядов по 40 — до y 307) на вкладках уроков и примерки.
+SEAT_LIST = (776, 108, 1260, 310)
+KNOWN = [(lambda n: n.removeprefix('big_').removeprefix('calm_').startswith(('seat_lesson', 'seat_fit', 'scan_seat',
+                                                                             'x_lesson_')), SEAT_LIST)]
+
+
+def masked(n, A, B):
+    for test, box in KNOWN:
+        if test(n):
+            for im in (A, B):
+                im.paste((0, 0, 0), box)
+    return A, B
+
+
 rows = []
 for n in names:
     pa, pb = os.path.join(a, n), os.path.join(b, n)
     if not os.path.exists(pb): continue
     A = Image.open(pa).convert('RGB'); B = Image.open(pb).convert('RGB')
     if A.size != B.size: B = B.resize(A.size)
+    A, B = masked(n, A, B)
     d = ImageChops.difference(A, B).convert('L')
     m = ImageStat.Stat(d).mean[0]
     W, H = A.size; cells = []
