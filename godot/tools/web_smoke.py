@@ -919,8 +919,11 @@ async def seat_phone(p):
     tight = [b for b in st.get("buttons", []) if b[0].startswith("Slider_") or b[0] == "Check"]
     small = [b for b in st.get("buttons", []) if min(b[3], b[4]) < 56 and not b[0].startswith("Spot_") and b not in tight]
     small += [b for b in tight if min(b[3], b[4]) < 52]
+    cases = [b for b in small if b[0].startswith("Case_")]   # кнопки клиентов 48 через 56 — решение владельца 21.11
+    small = [b for b in small if b not in cases] + [b for b in cases if min(b[3], b[4]) < 48]
     check(seat.get("tab") == "fit" and seat.get("case") == 0 and not small,
-          f"{p.name}: примерка — цели ≥ 56, ползунки и «ГОТОВО» ≥ 52 (мельче: {[(b[0], b[3], b[4]) for b in small][:6]})")
+          f"{p.name}: примерка — цели ≥ 56, ползунки и «ГОТОВО» ≥ 52, клиенты ≥ 48 (мельче: "
+          f"{[(b[0], b[3], b[4]) for b in small][:6]})")
     with open(os.path.join(GODOT, "content", "data", "seating", "cases.json"), encoding="utf-8") as f:
         c = json.load(f)[0]
     want = {"depth": int(c["body"]["thigh"]) - 5, "leg": int(c["body"]["shank"]),
@@ -2483,8 +2486,9 @@ async def sc_phonebig(b):
     """Телефонный режим (UI.phone(), 21.11) — снимки для владельца: телефон 780×360 dpr 3 (снимок страницы 2340×1080,
     как экран телефона), EN и RU, каждое состояние — до (?phone=0, раскладка как была) и после (?phone=1) →
     tests/web_shots/phonebig/<язык>_<состояние>_before|after.png; плюс RU при тексте 150 % — <ru150>_<состояние>_after.png.
-    WNB_PB_STAGES=hub,… — часть состояний; WNB_PB_RUNS=en:1:2,… — свои проходы (язык:телефон:текст 0..3)."""
-    out = os.path.join(SHOTS, "phonebig")
+    WNB_PB_STAGES=hub,… — часть состояний; WNB_PB_RUNS=en:1:2,… — свои проходы (язык:телефон:текст 0..3);
+    WNB_PB_OUT=папка — снимки в tests/web_shots/<папка>/ вместо phonebig (не перезаписывать снимки в git)."""
+    out = os.path.join(SHOTS, os.environ.get("WNB_PB_OUT") or "phonebig")
     os.makedirs(out, exist_ok=True)
     only = [x for x in os.environ.get("WNB_PB_STAGES", "").split(",") if x]
     runs = [(lang, ph, 0) for lang in ("en", "ru") for ph in (0, 1)] + [("ru", 1, 3)]
@@ -2517,7 +2521,7 @@ async def sc_phonebig(b):
                 info(f"{p.name}: снимок {s} не снят ({type(e).__name__})")
         p.check_console()
         await p.ctx.close()
-    check(n > 0, f"phonebig: снимков {n} → tests/web_shots/phonebig/")
+    check(n > 0, f"phonebig: снимков {n} → {os.path.relpath(out, SHOTS)}/")
 
 
 SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
