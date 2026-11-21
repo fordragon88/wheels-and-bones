@@ -11312,7 +11312,13 @@ class Game:
                 if nl <= 2 and tl >= 1:
                     break
             ny = draw_wrapped(surf, job["client"], (r.x + 12, r.y + 162), r.w - 24, nsz, WHITE, max_lines=2, line_gap=0)
-            draw_wrapped(surf, job["title"], (r.x + 12, ny + 2), r.w - 24, 12, GREY, max_lines=max(1, min(4 - min(nl, 2), tl)))   # имя в 2 строки — поломке до 2 строк, если влезает (аудит 24.10)
+            tsz, tmax = 12, max(1, min(4 - min(nl, 2), tl))   # имя в 2 строки — поломке до 2 строк, если влезает (аудит 24.10)
+            if tl < 1:                                  # 150 %: места нет — поломка мельче (до 9); не влезла и так —
+                room = ky - 4 - (ny + 2)                # не рисуем: имя и тип важнее (не на «РУЧНАЯ/ЭЛЕКТРО»)
+                tsz = next((s for s in (11, 10, 9) if font(s).get_height() <= room), None)
+                tmax = 1
+            if tsz:
+                draw_wrapped(surf, job["title"], (r.x + 12, ny + 2), r.w - 24, tsz, GREY, max_lines=tmax)
             power = job.get("kind") == "power"
             kind = "ЭЛЕКТРО" if power else "РУЧНАЯ"
             kr = draw_text(surf, kind, (r.x + 12, ky), 12, CYAN if power else AMBER, bold=True)
@@ -14392,8 +14398,10 @@ class Game:
             draw_text(surf, ("В РУКЕ: " if in_hand else "") + TOOLS[tid][0],
                       (info.x + isz + 22, info.y + (5 if low else 10)), 16 if low else 18,
                       AMBER if in_hand else WHITE, bold=True)
-            draw_wrapped(surf, TOOLS[tid][1], (info.x + isz + 22, info.y + (27 if low else 36)),
-                         info.w - isz - 34, 13 if low else 15, GREY)
+            dy_ = 27 if low else 36                    # 150 %: описание — мельче, пока не поместится в карточку
+            draw_wrapped(surf, TOOLS[tid][1], (info.x + isz + 22, info.y + dy_), info.w - isz - 34,
+                         fit_wrapped_size(TOOLS[tid][1], info.w - isz - 34, 13 if low else 15, info.h - 4 - dy_, lo=9),
+                         GREY)
         elif want:                                    # обучение: куда смотреть
             draw_wrapped(surf, "Обучение: нужный инструмент обведён зелёным — возьми его, потом коснись детали в "
                          "зелёном кружке." if TOUCH["on"] else
@@ -15004,8 +15012,11 @@ class Game:
         add_glow(surf, dip.center, 260, (60, 45, 10), 0.4 + 0.3 * wsin(self.t * 2))
         draw_text(surf, "— ДИПЛОМ ГИЛЬДИИ КОЛЁСНИКОВ —", (dip.centerx, dip.y + 16), 20,
                   AMBER, bold=True, center=True)
-        draw_text(surf, "Мартин, зомби — сертифицированный техник по ремонту кресел-колясок",
-                  (dip.centerx, dip.y + 52), 17, WHITE, center=True)
+        dline = "Мартин, зомби — сертифицированный техник по ремонту кресел-колясок"
+        dsz = 17                                       # 150 %: строка диплома — в ширину плашки (мельче, по центру)
+        while dsz > 11 and font(dsz).size(tr(dline))[0] > dip.w - 32:
+            dsz -= 1
+        draw_text(surf, dline, (dip.centerx, dip.y + 52), dsz, WHITE, center=True)
         draw_text(surf, "принято под надзором Мастерицы Бренны (посмертно)",
                   (dip.centerx, dip.y + 84), 13, GREY, center=True)
         yb = draw_wrapped(surf, "Бренна: «Сдано. И вот ещё что, Бартоломью... я помню тебя. "
