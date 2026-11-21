@@ -17,6 +17,25 @@ var TALK_GAP: float = float(Content.consts.get("talk_pace", {}).get("gap", 5.0))
 const PREV_RECT := Rect2(836, 58, 40, 30)
 const SKIP_RECT := Rect2(882, 58, 88, 30)
 const TEST_BTN := Rect2(UI.W / 2.0 - 170, 560, 340, 64)
+# телефонный режим (UI.phone()): цели не мельче 56, зазор 8
+const PH_PREV := Rect2(780, 64, 56, 56)
+const PH_SKIP := Rect2(844, 64, 120, 56)
+const PH_ROW := 64                        # шаг строк списка деталей (56 + 8)
+const PH_TOP := 92                        # первая строка списка деталей
+const PH_HDR := Rect2(0, 5, 0, 44)        # кнопки в шапке: рисунок 44 px в полосе 54, зона пальца — 56 от верха
+
+
+func prev_rect() -> Rect2:
+	return PH_PREV if UI.phone() else PREV_RECT
+
+
+func skip_rect() -> Rect2:
+	return PH_SKIP if UI.phone() else SKIP_RECT
+
+
+## Телефон: правая колонка до низа экрана (над «СНОСКИ МАНУАЛА», если они есть).
+func ph_col_bottom() -> float:
+	return 640.0 if not Content.job_notes(job).is_empty() else 712.0
 
 var job: Dictionary = {}
 var phase: String = "diagnose"
@@ -165,6 +184,12 @@ func client_now() -> String:
 
 
 func toast_bounds() -> Vector2:
+	if UI.phone():                           # Nav.touch_bounds не трогает: здесь уже с учётом значков 56×56
+		if dispute_visible():
+			return Vector2(54, UI.W - _dispute_btn.position.x + 6)
+		if _skip != null and _skip.visible:
+			return Vector2(54, UI.W - _skip.position.x + 6)
+		return Vector2(54, 164)
 	if dispute_visible():
 		return Vector2(54, UI.W - (UI.W - 340) + 6)
 	if _skip != null and _skip.visible:
@@ -217,15 +242,25 @@ func chair_rect() -> Rect2:
 
 
 func part_rect(i: int) -> Rect2:
+	if UI.phone():
+		return Rect2(980, PH_TOP + i * PH_ROW, 280, 56)
 	return Rect2(980, 96 + i * 42, 280, 36)
 
 
 func right_col_top() -> float:
+	if UI.phone():
+		return PH_TOP + job["parts"].size() * PH_ROW
 	return 96 + job["parts"].size() * 42
 
 
 func diag_rects() -> Array[Rect2]:
 	var n: int = job["diagnosis"].size()
+	if UI.phone():                            # телефон: карточки диагнозов в ряд под коляской (место пузыря Барти;
+		var out_p: Array[Rect2] = []          # Барти — в правой колонке под списком деталей)
+		var cw := floorf((964.0 - 24.0 - (n - 1) * 8.0) / n)
+		for i in n:
+			out_p.append(Rect2(24 + i * (cw + 8), 588, cw, 120))
+		return out_p
 	var top := right_col_top() + 30
 	var bottom := 668.0 if not Content.job_notes(job).is_empty() else 712.0
 	var h := minf(68, floorf((bottom - top) / n) - 8)
@@ -249,7 +284,10 @@ func build() -> void:
 	add_child(BgLayer.make("bg_workshop.png"))
 	var bar := TopBar.make(job["title"], job.get("chair_name", ""))
 	if tutorial_skip_shown():
-		_skip = GameButton.make(Rect2(UI.W - 390, 9, 210, 36), "ПРОПУСТИТЬ ОБУЧЕНИЕ ▸", UI.CYAN)
+		_skip = GameButton.make(Rect2(UI.W - 192 - 8 - 210, 0, 210, 56) if UI.phone() else Rect2(UI.W - 390, 9, 210, 36),
+			"ПРОПУСТИТЬ ОБУЧЕНИЕ ▸", UI.CYAN)
+		if UI.phone():
+			_skip.draw_box = Rect2(0, PH_HDR.position.y, 210, PH_HDR.size.y)
 		_skip.name = "SkipTutorial"
 		_skip.pressed.connect(skip_tutorial)
 		UI.touch_skip(_skip)
@@ -281,13 +319,16 @@ func build() -> void:
 		_after.visible = ride_done
 		add_child(_after)
 	_client_bubble = SpeechBubble.make(SpeechBubble.Kind.CLIENT)
-	_client_bubble.bottom = 572.0 if phase == "diagnose" else 548.0
+	_client_bubble.bottom = (548.0 if UI.phone() else 572.0) if phase == "diagnose" else 548.0
 	_client_bubble.say(client_line)
 	_client_bubble.t0 = client_t - t + _client_bubble.t      # пересборка экрана — пузырь не выпрыгивает заново
 	add_child(_client_bubble)
 	_mentor = SpeechBubble.make(SpeechBubble.Kind.MENTOR)
 	_mentor.job = job
-	if phase != "diagnose":                                  # в ремонте — узкий пузырь в правой колонке
+	if UI.phone():                                           # телефон: Барти всегда в правой колонке под деталями
+		var top := right_col_top()
+		_mentor.col = Rect2(980, top, 280, maxf(0.0, ph_col_bottom() - top))
+	elif phase != "diagnose":                                # в ремонте — узкий пузырь в правой колонке
 		var top := right_col_top() + 10
 		_mentor.col = Rect2(980, top, 280, 552 - top)
 	_mentor.say(ghost_text())
@@ -307,12 +348,14 @@ func build() -> void:
 	UI.touch_block(portrait)                  # клик/тап по портрету — «волшебство» (в game.py — до переноса)
 	var cr := chair_rect()
 	if chair.has_frames() and phase in ["diagnose", "repair"]:
-		var zin := GameButton.make(Rect2(cr.end.x - 44, cr.position.y + 4, 40, 36), "+", UI.CYAN)
+		var zin := GameButton.make(Rect2(cr.end.x - 60, cr.position.y + 4, 56, 56) if UI.phone()
+			else Rect2(cr.end.x - 44, cr.position.y + 4, 40, 36), "+", UI.CYAN)
 		zin.name = "ZoomIn"
 		zin.accessibility_name = Loc.t("Крупнее")
 		zin.pressed.connect(zoom.bind(1))
 		add_child(zin)
-		var zout := GameButton.make(Rect2(cr.end.x - 44, cr.position.y + 44, 40, 36), "−", UI.CYAN)
+		var zout := GameButton.make(Rect2(cr.end.x - 60, cr.position.y + 68, 56, 56) if UI.phone()
+			else Rect2(cr.end.x - 44, cr.position.y + 44, 40, 36), "−", UI.CYAN)
 		zout.name = "ZoomOut"
 		zout.accessibility_name = Loc.t("Мельче")
 		zout.pressed.connect(zoom.bind(-1))
@@ -332,7 +375,8 @@ func build() -> void:
 		_:
 			_build_test()
 	if not Content.job_notes(job).is_empty() and phase in ["diagnose", "repair"]:
-		var nb := GameButton.make(Rect2(UI.W - 24 - 180, UI.H - 44, 180, 34), "СНОСКИ МАНУАЛА", UI.PURPLE)
+		var nb := GameButton.make(Rect2(980, 648, 280, 56) if UI.phone() else Rect2(UI.W - 24 - 180, UI.H - 44, 180, 34),
+			"СНОСКИ МАНУАЛА", UI.PURPLE)
 		nb.name = "Notes"
 		nb.pressed.connect(open_notes)
 		add_child(nb)
@@ -350,7 +394,10 @@ func build() -> void:
 	add_child(_fx)
 	if _skip:
 		add_child(_skip)
-	_dispute_btn = GameButton.make(Rect2(UI.W - 340, 10, 176, 34), "Я НЕ СОГЛАСЕН", UI.PURPLE)
+	_dispute_btn = GameButton.make(Rect2(UI.W - 192 - 8 - 176, 0, 176, 56) if UI.phone() else Rect2(UI.W - 340, 10, 176, 34),
+		"Я НЕ СОГЛАСЕН", UI.PURPLE)
+	if UI.phone():
+		_dispute_btn.draw_box = Rect2(0, PH_HDR.position.y, 176, PH_HDR.size.y)
 	_dispute_btn.name = "Dispute"
 	_dispute_btn.visible = false
 	_dispute_btn.pressed.connect(open_dispute)
@@ -410,12 +457,12 @@ func _build_repair() -> void:
 	var parts: Array = job["parts"]
 	for i in parts.size():
 		_part_row(i, parts[i])
-	_prev_btn = GameButton.make(PREV_RECT, "◂", UI.CYAN)
+	_prev_btn = GameButton.make(prev_rect(), "◂", UI.CYAN)
 	_prev_btn.name = "StepBack"
 	_prev_btn.label_size = 17
 	_prev_btn.pressed.connect(step_back)
 	add_child(_prev_btn)
-	var sk := GameButton.make(SKIP_RECT, "ШАГ ▸", UI.AMBER)
+	var sk := GameButton.make(skip_rect(), "ШАГ ▸", UI.AMBER)
 	sk.name = "StepSkip"
 	sk.pressed.connect(step_skip)
 	add_child(sk)
@@ -1061,7 +1108,10 @@ func tick(dt: float) -> void:
 	if _skip:
 		_skip.visible = not dv
 	_bar.brand = not dv and _skip == null
-	_bar.right_edge = (UI.W - 340 - 12.0) if dv else (_skip.position.x - 12 if _skip else UI.W - 170.0)
+	if UI.phone():
+		_bar.right_edge = (_dispute_btn.position.x - 12) if dv else (_skip.position.x - 12 if _skip else UI.W - 204.0)
+	else:
+		_bar.right_edge = (UI.W - 340 - 12.0) if dv else (_skip.position.x - 12 if _skip else UI.W - 170.0)
 	var bs := [_bar.brand, _bar.right_edge]
 	if bs != _bar_sig:
 		_bar_sig = bs
@@ -1099,14 +1149,18 @@ func _draw_deco() -> void:
 				"Осмотри детали (клик по коляске или списку): {0}/{1}", [inspected.size(), inspect_req])
 			UI.draw_text_w(_deco, tip, Vector2(360, cr.end.y + 4), 980 - 12 - 360, 15, UI.GREY if unlocked else UI.AMBER,
 				not unlocked)                                     # 150 %: не под столбцом диагнозов (x 980)
-			UI.draw_text(_deco, Loc.t("ДИАГНОЗ"), Vector2(980, right_col_top() + 6), 16, UI.CYAN if unlocked else UI.DIM, true)
+			if UI.phone():                  # телефон: диагнозы — рядом под коляской, подпись — у их левого края
+				UI.draw_text(_deco, Loc.t("ДИАГНОЗ"), Vector2(24, cr.end.y + 4), 16, UI.CYAN if unlocked else UI.DIM, true)
+			else:
+				UI.draw_text(_deco, Loc.t("ДИАГНОЗ"), Vector2(980, right_col_top() + 6), 16, UI.CYAN if unlocked else UI.DIM, true)
 			UI.draw_text(_deco, Loc.t("ОСМОТРЕТЬ"), Vector2(980, 70), 16, UI.AMBER, true)
 		"repair":
 			var n := steps().size()
 			var hdr := UI.draw_text(_deco, Loc.tf("РЕМОНТ — шаг {0}/{1}", [mini_safe_idx() + 1, n]), Vector2(360, 70), 20,
 				UI.AMBER, true)
-			_draw_step_dots(n, Vector2(hdr.end.x + 22, hdr.get_center().y), PREV_RECT.position.x - 18)
-			UI.draw_wrapped(_deco, Loc.t(cur_step().get("instr", "")), Vector2(360, 100), 560, 19, UI.WHITE)
+			_draw_step_dots(n, Vector2(hdr.end.x + 22, hdr.get_center().y), prev_rect().position.x - 18)
+			UI.draw_wrapped(_deco, Loc.t(cur_step().get("instr", "")), Vector2(360, 100),
+				prev_rect().position.x - 12 - 360 if UI.phone() else 560, 19, UI.WHITE)
 			UI.draw_text(_deco, Loc.t("ДЕТАЛЬ"), Vector2(980, 70), 16, UI.AMBER, true)
 		"test":
 			UI.draw_text(_deco, Loc.t("ТЕСТ-ДРАЙВ"), Vector2(360, 70), 20, UI.GOOD, true)

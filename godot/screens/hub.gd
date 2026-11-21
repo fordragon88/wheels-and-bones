@@ -53,6 +53,8 @@ func build() -> void:
 	if pages > 1:
 		for d: int in [-1, 1]:
 			var ar := Rect2(60, 642, 54, 30) if d < 0 else Rect2(60 + 4 * 214 - 14 - 54, 642, 54, 30)
+			if UI.phone():                       # телефон: стрелки 64×56 под карточками
+				ar = Rect2(60, 644, 64, 56) if d < 0 else Rect2(60 + 4 * 214 - 14 - 64, 644, 64, 56)
 			var a := GameButton.make(ar, "◀" if d < 0 else "▶", UI.AMBER)
 			a.name = "Prev" if d < 0 else "Next"
 			a.accessibility_name = Loc.t("Предыдущая страница очереди" if d < 0 else "Следующая страница очереди")
@@ -92,17 +94,17 @@ func _build_assign() -> void:
 		for c: String in a["seat"]:
 			if (a["done"] as Dictionary).has(c):
 				k += 1
-		var seat := GameButton.make(Rect2(UI.W - 360, UI.H - 290, 300, 54), "КАБИНЕТ ПОСАДКИ", UI.GOOD,
+		var seat := GameButton.make(_rb(0), "КАБИНЕТ ПОСАДКИ", UI.GOOD,
 			Loc.fmt("примерки {0}/{1}", [k, (a["seat"] as Array).size()]))
 		seat.name = "Seating"
 		seat.pressed.connect(func() -> void: Nav.go("seating"))
 		add_child(seat)
-	var res := GameButton.make(Rect2(UI.W - 360, UI.H - 220, 300, 54), "ИТОГ ЗАДАНИЯ", UI.CYAN,
+	var res := GameButton.make(_rb(1), "ИТОГ ЗАДАНИЯ", UI.CYAN,
 		"всё выполнено ✔" if SaveGame.assign_complete() else "что уже сделано")
 	res.name = "Summary"
 	res.pressed.connect(func() -> void: Share.open({"mode": "summary"}))
 	add_child(res)
-	var ex := GameButton.make(Rect2(UI.W - 360, UI.H - 150, 300, 54), "ВЫЙТИ ИЗ ЗАДАНИЯ", UI.PURPLE, "в обычную игру")
+	var ex := GameButton.make(_rb(2), "ВЫЙТИ ИЗ ЗАДАНИЯ", UI.PURPLE, "в обычную игру")
 	ex.name = "ExitAssign"
 	ex.pressed.connect(Share.exit_assignment)
 	add_child(ex)
@@ -118,7 +120,7 @@ static func assign_label() -> String:
 
 func _build_normal() -> void:
 	var seat_ok := SaveGame.tutorial_ok()
-	var seat := GameButton.make(Rect2(UI.W - 360, UI.H - 290, 300, 54), "КАБИНЕТ ПОСАДКИ", UI.GOOD,
+	var seat := GameButton.make(_rb(0), "КАБИНЕТ ПОСАДКИ", UI.GOOD,
 		Loc.fmt("примерки {0}/{1}", [SaveGame.seat_done.size(), SeatLogic.cases().size()]) + (" · зачёт ✔" if SaveGame.seat_quiz_ok else "")
 		if seat_ok else "откроется после первого ремонта")
 	seat.name = "Seating"
@@ -132,7 +134,7 @@ func _build_normal() -> void:
 	add_child(seat)
 	var guild_ok := SaveGame.guild_unlocked()
 	var req := int(Content.consts.get("guild_req", 5))
-	var guild := GameButton.make(Rect2(UI.W - 360, UI.H - 220, 300, 54), "ГИЛЬДИЯ КОЛЁСНИКОВ", UI.CYAN,
+	var guild := GameButton.make(_rb(1), "ГИЛЬДИЯ КОЛЁСНИКОВ", UI.CYAN,
 		"про-ремонт: уровень техника" if guild_ok else Loc.fmt("откроется после {0} ремонтов", [req]))
 	guild.name = "Guild"
 	guild.enabled = guild_ok
@@ -144,19 +146,34 @@ func _build_normal() -> void:
 		else:
 			Nav.flash(Loc.fmt("Гильдия Колёсников примет тебя после {0} починенных колясок.", [req]), UI.CYAN, 3.5))
 	add_child(guild)
-	var garage := GameButton.make(Rect2(UI.W - 360, UI.H - 150, 300, 54), "ГАРАЖ-КОЛЛЕКЦИЯ", UI.PURPLE)
+	var garage := GameButton.make(_rb(2), "ГАРАЖ-КОЛЛЕКЦИЯ", UI.PURPLE)
 	garage.name = "Garage"
 	garage.pressed.connect(func() -> void:
 		Audio.sfx("tick")
 		Nav.go("garage"))
 	add_child(garage)
 	if SaveGame.user_done_count() >= Content.jobs.size():
-		var party := GameButton.make(Rect2(UI.W - 360, UI.H - 80, 300, 54), "НА ВЕЧЕРИНКУ! ", UI.GOOD)
+		var party := GameButton.make(_rb(3), "НА ВЕЧЕРИНКУ! ", UI.GOOD)
 		party.name = "Party"
 		party.pressed.connect(func() -> void:
 			Audio.sfx("tick")
 			Nav.go("ending"))
 		add_child(party)
+
+
+## Большие кнопки справа (сверху вниз): как было — 300×54 через 70; телефон — 300×60 через 68.
+func _rb(k: int) -> Rect2:
+	if UI.phone():
+		return Rect2(UI.W - 360, UI.H - 296 + k * 68, 300, 60)
+	return Rect2(UI.W - 360, UI.H - 290 + k * 70, 300, 54)
+
+
+## Строка внизу (счётчик · Esc): на телефоне — правее стрелки «◀» и до «▶».
+func _bottom_line(text: String) -> void:
+	if UI.phone() and _pages() > 1:
+		UI.draw_text_w(_deco, text, Vector2(140, UI.H - 40), 838 - 8 - 140, 16, UI.GHOST)
+	else:
+		UI.draw_text(_deco, text, Vector2(60, UI.H - 40), 16, UI.GHOST)
 
 
 @warning_ignore("integer_division")
@@ -237,13 +254,13 @@ func _draw_deco() -> void:
 				true, -1, true)
 	if asg:
 		_draw_assign_plate()
-		UI.draw_text(_deco, Loc.t(assign_label() + "   ·   Esc — на титул/выход"), Vector2(60, UI.H - 40), 16, UI.GHOST)
+		_bottom_line(Loc.t(assign_label() + "   ·   Esc — на титул/выход"))
 		return
 	var counter := Loc.fmt("Починено: {0}/{1}", [SaveGame.user_done_count(), Content.jobs.size()])
 	if SaveGame.guild_unlocked():
 		counter += Loc.fmt("   ·   Гильдия: {0}/{1}", [SaveGame.tech_done_count(), Content.tech_jobs.size()])
 	counter += "   ·   Esc — на титул/выход"
-	UI.draw_text(_deco, Loc.t(counter), Vector2(60, UI.H - 40), 16, UI.GHOST)
+	_bottom_line(Loc.t(counter))
 
 
 func _fit(s: String, pos: Vector2, width: float, size_: int, col: Color, bold: bool = false) -> void:

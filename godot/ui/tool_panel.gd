@@ -34,6 +34,16 @@ func tech() -> bool:
 @warning_ignore("integer_division")
 func tile_rects() -> Dictionary:
 	var out: Dictionary = {}
+	if UI.phone():                             # телефон: плитки 56, шаг 64 (зазор 8), внизу экрана
+		if tech():
+			for i in ids.size():
+				out[ids[i]] = Rect2(130 + i * 64, 648, 56, 56)
+			return out
+		var alp: Array = Content.tools.keys()
+		var perp := (alp.size() + 1) / 2
+		for i in alp.size():
+			out[alp[i]] = Rect2(24 + (i % perp) * 64, 584 + (i / perp) * 64, 56, 56)
+		return out
 	if tech():                                 # Гильдия: один ряд из палитры задания
 		for i in ids.size():
 			out[ids[i]] = Rect2(130 + i * (TILE + GAP), 638, TILE, TILE)
@@ -54,6 +64,8 @@ func info_rect() -> Rect2:
 		top = minf(top, r.position.y)
 		bottom = maxf(bottom, r.end.y)
 	right += 18
+	if UI.phone() and not tech():              # телефон: справа от карточки — колонка деталей задания (x 980)
+		return Rect2(right - 2, top, 964 - right + 2, bottom - top)
 	return Rect2(right, top, UI.W - 24 - right, bottom - top)
 
 
@@ -181,26 +193,42 @@ func _draw_card() -> void:
 		var tex := Content.texture("tool_%s.png" % tid)
 		if tex:
 			_card.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(10, floorf((info.size.y - isz) / 2.0), isz, isz)), false)
-		UI.draw_text(_card, (Loc.t("В РУКЕ: ") if in_hand else "") + Loc.t(Content.tools[tid]["name"]),
-			Vector2(isz + 22, 5 if low else 10), 16 if low else 18, UI.AMBER if in_hand else UI.WHITE, true)
+		var ttl := (Loc.t("В РУКЕ: ") if in_hand else "") + Loc.t(Content.tools[tid]["name"])
+		if UI.phone():                          # телефон: карточка уже — название не шире неё
+			UI.draw_text_w(_card, ttl, Vector2(isz + 22, 5 if low else 10), info.size.x - isz - 30, 16 if low else 18,
+				UI.AMBER if in_hand else UI.WHITE, true)
+		else:
+			UI.draw_text(_card, ttl, Vector2(isz + 22, 5 if low else 10), 16 if low else 18, UI.AMBER if in_hand else UI.WHITE, true)
 		var hint := Loc.t(Content.tools[tid]["hint"])   # 150 %: описание — мельче, пока не поместится в карточку
 		var hy := 27.0 if low else 36.0
 		UI.draw_wrapped(_card, hint, Vector2(isz + 22, hy), info.size.x - isz - 34,
 			UI.fit_wrapped_size(hint, info.size.x - isz - 34, 13 if low else 15, info.size.y - 4 - hy, 9), UI.GREY)
 	elif not want.is_empty():
-		UI.draw_wrapped(_card, Loc.t("Обучение: нужный инструмент обведён зелёным — возьми его, потом коснись детали в зелёном кружке."
-			if UI.touch() else "Обучение: нужный инструмент обведён зелёным — возьми его, потом кликни деталь в зелёном кружке."),
-			Vector2(16, 12), info.size.x - 32, 15, UI.GOOD)
+		var tt := Loc.t("Обучение: нужный инструмент обведён зелёным — возьми его, потом коснись детали в зелёном кружке."
+			if UI.touch() else "Обучение: нужный инструмент обведён зелёным — возьми его, потом кликни деталь в зелёном кружке.")
+		UI.draw_wrapped(_card, tt, Vector2(16, 12), info.size.x - 32,     # телефон: карточка уже — в её высоту
+			UI.fit_wrapped_size(tt, info.size.x - 32, 15, info.size.y - 16, 10) if UI.phone() else 15, UI.GOOD)
 	else:
 		var hint := ("Выбери инструмент, потом коснись шага" if tech() else
 			"Выбери инструмент, потом коснись детали на коляске или в списке") if UI.touch() else \
 			("Выбери инструмент, потом кликни шаг" if tech() else "Выбери инструмент, потом кликни деталь на коляске или в списке")
-		var y := UI.draw_wrapped(_card, Loc.t(hint), Vector2(16, 12), info.size.x - 32, 15, UI.GREY)
-		if not tech() and not Content.manual_notes.get(job_screen.job["id"], {}).is_empty():
+		var book: bool = not tech() and not Content.manual_notes.get(job_screen.job["id"], {}).is_empty()
+		var bt := Loc.t("У деталей с книжкой есть сноска из мануала — коснись книжки; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа."
+			if UI.touch() else "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа.")
+		var hs := 15
+		var bs := 14
+		if UI.phone():                         # телефон: карточка уже — обе надписи мельче, пока не поместятся
+			while hs > 10:
+				var hh: float = UI.wrap_lines(Loc.t(hint), info.size.x - 32, hs).size() * (UI.line_height(hs) + 2)
+				var bh: float = UI.wrap_lines(bt, info.size.x - 60, bs).size() * (UI.line_height(bs) + 2) if book else 0
+				if 12 + hh + 7 + bh <= info.size.y - 4:
+					break
+				hs -= 1
+				bs = hs - 1
+		var y := UI.draw_wrapped(_card, Loc.t(hint), Vector2(16, 12), info.size.x - 32, hs, UI.GREY)
+		if book:
 			BookIcon.draw_icon(_card, Vector2(26, y + 16), 10, UI.CYAN)
-			UI.draw_wrapped(_card, Loc.t("У деталей с книжкой есть сноска из мануала — коснись книжки; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа."
-				if UI.touch() else "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа."),
-				Vector2(44, y + 7), info.size.x - 60, 14, UI.CYAN)
+			UI.draw_wrapped(_card, bt, Vector2(44, y + 7), info.size.x - 60, bs, UI.CYAN)
 
 
 ## Карточка: сноска из мануала к детали (_draw_manual_note).

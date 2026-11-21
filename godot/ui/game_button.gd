@@ -33,6 +33,9 @@ var touch_grow: float = 0.0
 var touch_pad: float = 0.0
 var touch_peers: Array = []
 var touch_yield: Callable
+## Телефонный режим: рисунок кнопки меньше зоны пальца (кнопки в шапке: рисунок в полосе 54 px, зона — 56 от верха).
+## Пусто — рисунок во весь размер кнопки, как было.
+var draw_box: Rect2 = Rect2()
 
 
 func _has_point(p: Vector2) -> bool:
@@ -121,6 +124,8 @@ func _draw() -> void:
 	var col := color if enabled else UI.DIM
 	var h := hover_k
 	var r := Rect2(slide + Vector2(0, -roundf(3 * h)), size)
+	if draw_box.has_area():
+		r = Rect2(r.position + draw_box.position, draw_box.size)
 	var hov := is_hovered() and enabled
 	if not plain:
 		var bg := Color8(col.r8 / 6 + 16, col.g8 / 6 + 14, col.b8 / 6 + 18)

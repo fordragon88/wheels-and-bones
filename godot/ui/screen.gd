@@ -141,7 +141,7 @@ func _on_lang() -> void:
 
 
 func _on_settings(key: String) -> void:
-	if key in ["text", "font", "contrast", "calm", "barty"]:
+	if key in ["text", "font", "contrast", "calm", "barty", "phone"]:
 		UI.clear_font_cache()
 		rebuild()
 

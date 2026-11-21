@@ -148,7 +148,7 @@ func _snapshot() -> void:
 
 
 func flash(text: String, color: Color = UI.WHITE, secs: float = 3.0, sticky: bool = false) -> void:
-	toast.bounds = current.toast_bounds() if current != null else Vector2(8, 56)
+	toast.bounds = UI.phone_bounds(current.toast_bounds() if current != null else Vector2(8, 56))
 	toast.show_msg(text, color, secs, sticky)
 	Speech.say(Loc.t(text), true)
 
@@ -268,7 +268,7 @@ func _process(dt: float) -> void:
 	if _esc_t > 0.0:
 		_esc_t -= dt
 	if current != null:
-		toast.bounds = current.toast_bounds()
+		toast.bounds = UI.phone_bounds(current.toast_bounds())
 	# потолок крупного текста 125 % (text_cap в game.py): плотные экраны, окно настроек, окно мини-игры
 	var cap: float = current.text_cap() if current != null else 0.0
 	if settings != null or Share.dlg != null or (current != null and current.get("mini") != null):

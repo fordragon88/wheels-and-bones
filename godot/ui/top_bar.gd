@@ -15,6 +15,9 @@ static func make(title_ru: String, sub_ru: String = "", back: bool = true) -> To
 	b.title = title_ru
 	b.sub = sub_ru
 	b.left = 56 if back else 24
+	if UI.phone():                         # телефон: значки шапки 56×56 (IconButton) — заголовок между ними
+		b.left = 68 if back else 24
+		b.right_edge = UI.W - 204
 	b.name = "TopBar"
 	return b
 

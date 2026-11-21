@@ -84,6 +84,55 @@ static func touch() -> bool:
 	return _touch == 1
 
 
+static var _phone: int = -1
+const PHONE_MIN := 56                     # телефонный режим: цель для пальца не меньше 56 px холста (28 CSS px ≈ 7 мм)
+const PHONE_GAP := 8                      # и зазор между соседними целями
+
+
+## Телефонный режим (21.11, владелец: «цели для пальца крупнее»): сенсорный экран (touch()) И маленький экран —
+## в браузере `(pointer: coarse)` и меньшая сторона экрана < 600 CSS px (телефон; планшет — нет). Считается один раз
+## при старте. Принудительно: адрес `?phone=1|0`, web_smoke `set:phone=1|0`, самопроверка — set_phone(). Вне
+## телефонного режима раскладка и поведение прежние, байт в байт.
+static func phone() -> bool:
+	if _phone < 0:
+		_phone = 0
+		if "--phone" in OS.get_cmdline_user_args():      # компьютер, снимки: «-- --phone»
+			_phone = 1
+		elif OS.has_feature("web"):
+			var r: Variant = JavaScriptBridge.eval("(function(){try{var q=new URLSearchParams(location.search).get('phone');" \
+				+ "if(q==='1')return 'y';if(q==='0')return 'n';}catch(e){}" \
+				+ "var c=!!(window.matchMedia&&matchMedia('(pointer: coarse)').matches);" \
+				+ "return (c&&Math.min(screen.width,screen.height)<600)?'y':'n';})()", true)
+			_phone = 1 if str(r) == "y" else 0
+		elif OS.has_feature("mobile") and touch():
+			var s := DisplayServer.screen_get_size()
+			var sc := maxf(DisplayServer.screen_get_scale(), 1.0)
+			_phone = 1 if minf(s.x, s.y) / sc < 600 else 0
+	return _phone == 1
+
+
+## Включить/выключить телефонный режим (проверки): экраны и окна пересобираются, как при смене размера текста.
+static func set_phone(on: bool) -> void:
+	if (_phone == 1) == on:
+		return
+	_phone = 1 if on else 0
+	Settings.changed.emit("phone")
+
+
+## Сообщение сверху (Screen.toast_bounds: [левый край, запас справа]) — в телефонном режиме мимо значков 56×56:
+## «назад» до x 60, ⚑ с W−192, RU/EN с W−128, ⚙ с W−60.
+static func phone_bounds(b: Vector2) -> Vector2:
+	if not phone():
+		return b
+	var y: float = {164.0: 202.0, 112.0: 136.0, 56.0: 66.0}.get(b.y, b.y)
+	return Vector2(b.x + 14 if b.x >= 54 else b.x, y)
+
+
+## Размер в телефонном режиме: v (телефон) или d (как было).
+static func ph(d: float, v: float) -> float:
+	return v if phone() else d
+
+
 # ---- запас на промах пальцем (game.py: TOUCH_PAD, _touch_pick, _touch_snap, Game._tap) ----
 # Только на сенсорном экране (touch()); с мышью попадания точные, как были. Числа — в единицах холста 1280×720.
 const TOUCH_PAD := 16                     # TOUCH_PAD: тап не дальше 16 px от края цели — в цель

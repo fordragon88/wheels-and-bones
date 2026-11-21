@@ -219,6 +219,7 @@ func _run() -> void:
 			err("кружок %s: %s, в pygame %s" % [sp[0], sp.slice(1, 4), w])
 	var fx_line: String = await _fixes()
 	fx_line += "; " + await _touch()
+	fx_line += "; " + await _phone_check()
 	# --- сценарий мышью: титул → мастерская → flat → осмотр → неверный → верный диагноз ---
 	SaveGame.reset()
 	await _flow_mouse()
@@ -234,6 +235,49 @@ func _fixes() -> String:
 	add_child(fx)
 	var line: String = await fx.run(self)
 	fx.queue_free()
+	return line
+
+
+## Телефонный режим: цели для пальца не мельче 56, без пересечений; выключен — как было (tests/phone_check.gd).
+func _phone_check() -> String:
+	var pc: Node = (load("res://tests/phone_check.gd") as GDScript).new()
+	add_child(pc)
+	var line: String = await pc.run(self)
+	pc.queue_free()
+	return line
+
+
+## Замер целей по всем состояниям kb_order_ref (--phone 0|1, --langs ru,en) → tests/out/phone_targets_<0|1>.txt;
+## ref — эталон «выключен» tests/phone_off_ref.json.
+func _phone_measure(ref: bool) -> String:
+	var args := OS.get_cmdline_user_args()
+	var on := not ref
+	var pi := args.find("--phone")
+	if pi >= 0 and not ref:
+		on = args[pi + 1] == "1"
+	var langs: Array = ["ru"]
+	var li := args.find("--langs")
+	if li >= 0:
+		langs = Array(args[li + 1].split(","))
+	var refd: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://content/kb_order_ref.json"))
+	var states: Array = refd["ru"].keys()
+	var si := args.find("--states")
+	if si >= 0:
+		states = Array(args[si + 1].split(","))
+	var pc: Node = (load("res://tests/phone_check.gd") as GDScript).new()
+	add_child(pc)
+	var d: Dictionary = await pc.measure(self, states, langs, on)
+	var line: String = pc.summary(on, d)
+	pc.write_out("phone_targets_%d.txt" % (1 if on else 0), line + "
+" + "
+".join(d["lines"]) + "
+")
+	if ref:
+		var f := FileAccess.open("res://tests/phone_off_ref.json", FileAccess.WRITE)
+		f.store_string(JSON.stringify(d["rects"], " ", false) + "
+")
+		f.close()
+	pc.queue_free()
 	return line
 
 
@@ -2515,6 +2559,12 @@ func _only(what: String) -> void:
 			line = await _fixes()
 		"touch":
 			line = await _touch()
+		"phone":
+			line = await _phone_check()
+		"phone-measure":
+			line = await _phone_measure(false)
+		"phone-ref":
+			line = await _phone_measure(true)
 	Nav.shutdown()
 	await _frames(10)
 	for e in errors:

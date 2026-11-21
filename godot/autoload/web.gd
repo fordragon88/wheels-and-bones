@@ -106,6 +106,8 @@ func _on_stage(args: Array) -> void:
 		if kv.size() == 2:
 			if kv[0] == "lang":
 				Loc.set_lang(kv[1])
+			elif kv[0] == "phone":            # телефонный режим (крупные цели) — вкл/выкл для проверок
+				UI.set_phone(kv[1] == "1")
 			else:
 				Settings.set_a11y(kv[0], int(kv[1]) if kv[0] == "text" else kv[1] == "1")
 		JavaScriptBridge.eval("window.wnbStaged = %s" % JSON.stringify(name), true)
@@ -288,7 +290,7 @@ func state() -> Dictionary:
 		"done": SaveGame.done.keys(), "assign": SaveGame.assign.get("id", "") if SaveGame.assign_on() else "",
 		"assign_done": (SaveGame.assign.get("done", {}) as Dictionary).keys() if SaveGame.assign_on() else [],
 		"toast": Nav.toast.text if Nav.toast.active() else "", "speech": Speech.last(),
-		"help": Nav.help != null, "touch": UI.touch(),
+		"help": Nav.help != null, "touch": UI.touch(), "phone": UI.phone(),
 		"share_dlg": Share.dlg.ui.get("mode", "") if Share.dlg != null else "",
 		"settings": Nav.settings != null, "errors": Content.errors.size(), "migrated": SaveGame.migrated,
 		"fullscreen": DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN,

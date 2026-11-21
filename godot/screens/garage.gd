@@ -70,6 +70,8 @@ func build() -> void:
 	if pages() > 1:
 		for d: int in [-1, 1]:
 			var r := Rect2(UI.W / 2.0 - 120, UI.H - 66, 54, 40) if d < 0 else Rect2(UI.W / 2.0 + 66, UI.H - 66, 54, 40)
+			if UI.phone():                       # телефон: стрелки 64×56 у нижнего края
+				r = Rect2(UI.W / 2.0 - 120, UI.H - 64, 64, 56) if d < 0 else Rect2(UI.W / 2.0 + 56, UI.H - 64, 64, 56)
 			var a := GameButton.make(r, "◀" if d < 0 else "▶", UI.AMBER)
 			a.name = "Prev" if d < 0 else "Next"
 			a.accessibility_name = Loc.t("Назад") if d < 0 else Loc.t("Дальше")
@@ -78,7 +80,7 @@ func build() -> void:
 				Audio.sfx("tick")
 				rebuild())
 			add_child(a)
-	var back := GameButton.make(Rect2(40, UI.H - 70, 160, 48), "НАЗАД", UI.AMBER)
+	var back := GameButton.make(Rect2(40, UI.H - 64, 160, 56) if UI.phone() else Rect2(40, UI.H - 70, 160, 48), "НАЗАД", UI.AMBER)
 	back.name = "BackBtn"
 	back.pressed.connect(go_back)
 	add_child(back)
@@ -94,7 +96,8 @@ func build() -> void:
 			close_card()                     # окно урока: любой клик закрывает
 			_popup.accept_event())
 	add_child(_popup)
-	_close = GameButton.make(Rect2(UI.W / 2.0 - 90, 110 + 470 - 64, 180, 46), "ЗАКРЫТЬ", UI.AMBER)
+	_close = GameButton.make(Rect2(UI.W / 2.0 - 90, 110 + 470 - 72, 180, 56) if UI.phone()
+		else Rect2(UI.W / 2.0 - 90, 110 + 470 - 64, 180, 46), "ЗАКРЫТЬ", UI.AMBER)
 	_close.name = "Close"
 	_close.pressed.connect(close_card)
 	_popup.add_child(_close)

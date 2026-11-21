@@ -44,7 +44,7 @@ func _ready() -> void:
 
 
 func _on_settings(key: String) -> void:
-	if key in ["text", "font", "lang", "calm", "contrast", "vol", "glow"]:
+	if key in ["text", "font", "lang", "calm", "contrast", "vol", "glow", "phone"]:
 		_rebuild()
 
 
