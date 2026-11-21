@@ -35,10 +35,14 @@ for dp, _, files in os.walk(SRC):
 # (build_web.shrink_anim: кадр не выше 400 px, JPEG 80, маска вдвое меньше — игра растягивает её сама): exe ~170 МБ
 # вместо ~200, а картинка та же, что на сайте.
 import build_web
+EXE_FULL_LOOPS = {"magic_martin"}
 before = after = n_anim = 0
 for dp, _, files in os.walk(os.path.join(DST, "anim")):
     for fn in files:
-        if fn.endswith((".jpg", ".png")) and os.path.basename(dp).startswith(("ride_", "magic_")):   # машущие — как были
+        # magic_martin не ужимаем: рядом с ним на портрете живая петля martin_idle в полном разрешении, и ужатое
+        # «волшебство» выглядело мягче неё (замечание владельца 20.11 про стык; кадры перенарезаны 21.11 — 562 px)
+        if (fn.endswith((".jpg", ".png")) and os.path.basename(dp).startswith(("ride_", "magic_"))
+                and os.path.basename(dp) not in EXE_FULL_LOOPS):                                  # машущие — как были
             fp = os.path.join(dp, fn)
             before += os.path.getsize(fp)
             build_web.shrink_anim(fp)
