@@ -41,6 +41,7 @@ var _fade_t: float = -1.0
 var _snapping := false                    # Nav._input: идёт повтор нажатия в перенесённой точке (запас пальца)
 var _esc_t: float = 0.0
 var _touch_as_mouse: bool = bool(ProjectSettings.get_setting("input_devices/pointing/emulate_mouse_from_touch", true))
+var _emu_press := false                   # Nav._input: было нажатие эмулированной мыши, его касание ещё не пришло
 var support_opened: int = 0              # сколько раз нажали «Поддержать» (тесты)                   # «ещё раз Esc — выйти»
 
 
@@ -365,6 +366,12 @@ func _pad(e: InputEvent) -> bool:
 
 
 func _input(e: InputEvent) -> void:
+	if e is InputEventMouseButton and e.pressed and e.device == InputEvent.DEVICE_ID_EMULATION:
+		_emu_press = true                      # нажатие пальца пришло мышью — само касание придёт следом
+	var as_mouse := false                      # это касание уже пришло нажатием мыши (и уже погасило итог хода)
+	if e is InputEventScreenTouch and e.is_pressed():
+		as_mouse = _emu_press
+		_emu_press = false
 	if A11y.scan_input(e):                     # одна кнопка: нажатие — выбрать, держать — назад
 		if not UI.kb_active:
 			UI.kb_active = true
@@ -374,7 +381,11 @@ func _input(e: InputEvent) -> void:
 		# касание уже пришло событием мыши (emulate_mouse_from_touch) — само касание интерфейсу не отдаём: кнопки
 		# Godot 4.7 нажимаются и им, одно касание давало ДВА нажатия (браузер на телефоне: «начать» → мастерская →
 		# сразу карточка под пальцем)
-		if e is InputEventScreenTouch and e.is_pressed():
+		# Итог хода гасит нажатие мыши (ниже, ДО действия кнопки, как _toast_input в game.py). Godot шлёт
+		# эмулированную мышь РАНЬШЕ самого касания (Input::_parse_input_event_impl): гасить ещё и здесь — значит
+		# погасить итог, который кнопка только что показала (на телефоне он исчезал через 0,3 с). Гасим касанием
+		# только второй и следующие пальцы — для них мышь не эмулируется.
+		if e is InputEventScreenTouch and e.is_pressed() and not as_mouse:
 			toast.on_input()
 		get_viewport().set_input_as_handled()
 		return

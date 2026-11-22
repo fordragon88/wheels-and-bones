@@ -15,13 +15,14 @@ func run(runner: Node) -> String:
 	await _hub()
 	await _job()
 	await _settings()
+	var order: String = await _toast_touch()
 	UI._touch = t0
 	Nav.go("hub")
 	await R._frames(1)
 	SaveGame.reset()
 	return "запас пальца (как game.py): %d проверок — _touch_pick (pad 16, точное попадание первым, ключ 0), карточка " \
 		% _n + "мастерской ±16/17 px, плитка инструмента −6 px, коляска — без переноса, кружок детали r+16, «+»/«−», ⚙ +9 px, " \
-		+ "ползунок громкости — block; с мышью всё точно"
+		+ "ползунок громкости — block; с мышью всё точно; итог хода после касания держится (" + order + ")"
 
 
 func _ok(cond: bool, msg: String) -> void:
@@ -196,7 +197,104 @@ func _settings() -> void:
 	await R._frames(1)
 
 
-## Точка занята другой кнопкой окна (тогда переноса и не должно быть).
+## Касание пальцем при emulate_mouse_from_touch: Godot шлёт эмулированное нажатие мыши (device −1) РАНЬШЕ самого
+## InputEventScreenTouch. Итог хода (sticky), показанный кнопкой по нажатию мыши, касание гасить не должно (ошибка
+## 22.11: на телефоне сообщение исчезало через 0,3 с). Пара событий — в порядке движка; второй палец (мыши нет) —
+## гасит; перенос тапа (запас пальца) — тоже ровно одно гашение до действия.
+func _emu_pair(pos: Vector2, index: int = 0, mouse: bool = true) -> void:
+	if mouse:
+		var m := InputEventMouseMotion.new()
+		m.device = InputEvent.DEVICE_ID_EMULATION
+		m.position = pos
+		m.global_position = pos
+		get_viewport().push_input(m, true)
+	for pressed: bool in [true, false]:
+		if mouse:
+			var e := InputEventMouseButton.new()
+			e.device = InputEvent.DEVICE_ID_EMULATION
+			e.button_index = MOUSE_BUTTON_LEFT
+			e.pressed = pressed
+			e.position = pos
+			e.global_position = pos
+			get_viewport().push_input(e, true)
+		var st := InputEventScreenTouch.new()
+		st.index = index
+		st.pressed = pressed
+		st.position = pos
+		get_viewport().push_input(st, true)
+	await R._frames(2)
+
+
+func _toast_touch() -> String:
+	SaveGame.reset()
+	Nav.go("job", {"job": "flat", "variant": 0})
+	await R._frames(2)
+	var j: Node = Nav.current
+	var rows: Array = []
+	for n: Node in j.find_children("Part_*", "BaseButton", true, false):
+		if (n as Control).is_visible_in_tree():
+			rows.append(n)
+	if rows.is_empty() or j.phase != "diagnose":
+		R.err("сенсор: нет строк деталей в осмотре flat (фаза %s)" % j.phase)
+		return "нет строк деталей"
+	var row: Control = rows[0]
+	var pid: String = String(row.name).trim_prefix("Part_")
+	var want: String = j.job["inspect"].get(pid, "Тут вроде всё в порядке.")
+	var empty := Vector2(640, 30)                       # пустое место: не кнопка
+	for c: Vector2 in [Vector2(640, 30), Vector2(640, 700), Vector2(400, 300), Vector2(900, 400)]:
+		if not _covered(j, c):
+			empty = c
+			break
+	UI._touch = 0
+	# 1) пара «эмулированная мышь → касание» по строке детали: улика показана и держится
+	Nav.flash("прошлый итог", UI.WHITE, 4.0, true)
+	await _emu_pair(row.get_global_rect().get_center())
+	_ok(Nav.toast.active() and Nav.toast.sticky and Nav.toast.text == want,
+		"касание строки детали: улика погасла сразу (sticky %s, «%s»)" % [Nav.toast.sticky, Nav.toast.text.left(30)])
+	# 2) второй палец (мышь не эмулируется) — «игрок что-то нажал»: итог уходит
+	await _emu_pair(empty, 1, false)
+	_ok(not Nav.toast.sticky, "второй палец не погасил итог хода")
+	# 3) перенос тапа: палец чуть ниже строки — нажатие переносится в её центр, улика держится
+	UI._touch = 1
+	var snapped := false
+	for r: Control in rows:
+		var q := Vector2(r.get_global_rect().get_center().x, r.get_global_rect().end.y + 5)
+		if Nav.touch_snap(q) == r.get_global_rect().get_center():
+			snapped = true
+			want = j.job["inspect"].get(String(r.name).trim_prefix("Part_"), "Тут вроде всё в порядке.")
+			Nav.flash("прошлый итог", UI.WHITE, 4.0, true)
+			await _emu_pair(q)
+			_ok(Nav.toast.active() and Nav.toast.sticky and Nav.toast.text == want,
+				"касание рядом со строкой (перенос): улика погасла сразу (sticky %s, «%s»)" % [Nav.toast.sticky, Nav.toast.text.left(30)])
+			break
+	_ok(snapped, "нет строки детали, к которой переносится тап на 5 px ниже")
+	UI._touch = 0
+	# 4) порядок событий в самом движке: Input.parse_input_event(касание) → мышь раньше касания?
+	var probe := Node.new()
+	var gs := GDScript.new()
+	gs.source_code = "extends Node\nvar seen: Array = []\nfunc _input(e: InputEvent) -> void:\n" \
+		+ "\tif e is InputEventMouseButton or e is InputEventScreenTouch:\n\t\tseen.append(e.get_class())\n"
+	gs.reload()
+	probe.set_script(gs)
+	get_tree().root.add_child(probe)
+	var t := InputEventScreenTouch.new()
+	t.index = 0
+	t.pressed = true
+	t.position = empty
+	Input.parse_input_event(t)
+	Input.flush_buffered_events()
+	var t2 := t.duplicate() as InputEventScreenTouch
+	t2.pressed = false
+	Input.parse_input_event(t2)
+	Input.flush_buffered_events()
+	await R._frames(2)
+	var got: Array = probe.get("seen")
+	probe.queue_free()
+	if got.is_empty():
+		return "движок без окна касаний не разбирает — пара событий подана в его порядке"
+	_ok(got[0] == "InputEventMouseButton", "движок: первым пришло не нажатие мыши (%s)" % [got])
+	return "движок: " + " → ".join(got.slice(0, 2))
+
 func _covered(root: Control, p: Vector2) -> bool:
 	for n: Node in root.find_children("*", "BaseButton", true, false):
 		if (n as Control).is_visible_in_tree() and (n as Control).get_global_rect().has_point(p):

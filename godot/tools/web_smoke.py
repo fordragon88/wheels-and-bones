@@ -327,11 +327,34 @@ async def follow_hints(p, until, timeout=240, on_state=None, max_steps=400):
     return st
 
 
+async def sticky_hold(p, where):
+    """Итог хода (Nav.flash sticky) после касания держится, пока игрок что-нибудь не нажмёт: виден через 1,5 и 3 с,
+    касание по пустому месту гасит его за ≤ 0,6 с. Ошибка 22.11: при emulate_mouse_from_touch эмулированная мышь
+    приходит раньше касания, и касание гасило только что показанный итог (≤ 0,3 с)."""
+    t0 = time.time()
+    for at in (1.5, 3.0):
+        await p.pg.wait_for_timeout(max(0, int((at - (time.time() - t0)) * 1000)))
+        s = await p.state()
+        check(bool(s.get("toast")), f"{p.name}: {where} — итог хода виден и через {at} с («{s.get('toast', '')[:40]}»)")
+    s = await p.state()
+    had = s.get("toast", "")
+    btn = s.get("buttons", [])
+    xy = next(((x, y) for x, y in ((640, 30), (400, 30), (900, 30), (640, 700))
+               if not any(b[1] - 20 <= x <= b[1] + b[3] + 20 and b[2] - 20 <= y <= b[2] + b[4] + 20 for b in btn)), (640, 30))
+    await p.tap_xy(*xy)
+    t1 = time.time()
+    s = await p.wait(lambda s: not s.get("toast"), "", 3, quiet=True)
+    dt = time.time() - t1
+    check(bool(had) and bool(s) and dt <= 0.6,
+          f"{p.name}: {where} — касание по пустому месту {xy} погасило итог «{had[:30]}» за {dt:.2f} с (≤ 0,6)")
+
+
 PORTRAIT_SEEN = {}   # задание -> какими петлями рисовался портрет героя ("" — картинкой); debug state «portrait»
 
 
-async def play_job(p, jid, expect_loop, shots=True):
-    """Задание jid до итога по подсказкам: осмотр, диагноз, шаги инструментами, мини-игры, проезд, итог."""
+async def play_job(p, jid, expect_loop, shots=True, sticky=False):
+    """Задание jid до итога по подсказкам: осмотр, диагноз, шаги инструментами, мини-игры, проезд, итог.
+    sticky — после первого «Шаг выполнен» проверить, что итог хода держится (sticky_hold)."""
     st = await p.wait(lambda s: s.get("screen") == "job" and s.get("job") == jid, f"открыто задание {jid}", 30)
     if not st:
         return {}
@@ -340,8 +363,13 @@ async def play_job(p, jid, expect_loop, shots=True):
         await p.shot(f"{jid}_1_diagnose")
     seen_magic = {"ready": False, "playing": False}
     PORTRAIT_SEEN[jid] = set()
+    held = {"step": False}
 
     async def watch(s):
+        if sticky and not held["step"] and s.get("phase") == "repair" and s.get("toast", "").startswith("Шаг выполнен"):
+            held["step"] = True
+            await sticky_hold(p, f"{jid}: шаг ремонта касанием")
+            return "skip"
         m = s.get("magic") or {}
         PORTRAIT_SEEN[jid].add(s.get("portrait", ""))
         seen_magic["ready"] |= bool(m.get("ready"))
@@ -352,6 +380,9 @@ async def play_job(p, jid, expect_loop, shots=True):
         return None
 
     st = await follow_hints(p, lambda s: s.get("phase") == "test", 240, watch)
+    if sticky:
+        check(held["step"], f"{p.name}: {jid}: после шага ремонта касанием виден итог «Шаг выполнен…» "
+                            f"(не виден — гаснет сразу)")
     if st.get("phase") != "test":
         return st
     check(st.get("mistakes", 0) == 0, f"{p.name}: {jid} пройдено без ошибок по подсказкам ({st.get('mistakes')})")
@@ -838,6 +869,7 @@ async def sc_phone(b):
         await p.tap_xy(row[1] + row[3] / 2, row[2] + row[4] - 4)
         st = await p.wait(lambda s: bool(s.get("toast")), "касание у нижнего края строки детали → улика сверху", 5)
         check(bool(st), f"{p.name}: касание у нижнего края строки детали (4 px от края) — осмотр ({(st or {}).get('toast', '')[:40]})")
+        await sticky_hold(p, "улика после касания строки детали")
     else:
         check(False, f"{p.name}: нет строки детали в задании")
     # «назад» 56×56: касание в (57, 53) — внутри нового значка, мимо прежнего (8..46 и запас 9 px)
@@ -883,7 +915,7 @@ async def sc_phone(b):
     st = await p.wait(lambda s: s.get("screen") == "hub" and not s.get("settings") and not s.get("share_dlg"),
                       "мастерская без окон", 10)
     await p.press("Card_flat", wait=800)
-    st = await play_job(p, "flat", "ride_martin")
+    st = await play_job(p, "flat", "ride_martin", sticky=True)
     check(bool(st) and st.get("screen") == "hub" and "flat" in st.get("done", []),
           f"{p.name}: задание Мартина пройдено касаниями от мастерской до итога ({(st or {}).get('screen')})")
     await seat_phone(p)
