@@ -977,6 +977,47 @@ async def seat_phone(p):
     st = await p.state()
     check(st.get("seat", {}).get("solved") is True,
           f"{p.name}: примерка тролля пройдена касаниями («ГОТОВО» → посадка верна)")
+    await p.press("Case_5", wait=800)                     # Искра в начале примерки: 5 «⚠» из 5 (25.11)
+    st = await p.state()
+    check(st.get("seat", {}).get("case") == 5, f"{p.name}: касание кнопки Искры — клиент выбран")
+    await warn_reach(p, "Искра в начале примерки")
+
+
+def warn_seen(s):
+    """Сколько «⚠» видно сразу (wnbState.seat.warn_n — «N⚠ M✔ из K» видимых строк)."""
+    try:
+        return int(str(s.get("warn_n", "0")).split("⚠")[0])
+    except ValueError:
+        return -1
+
+
+async def warn_reach(p, where, shot=None):
+    """Список «⚠» под ползунками (25.11): все «⚠» видны сразу или листанием — касание/щелчок по блоку (warn_block)
+    показывает следующую страницу по кругу. shot — снять каждую страницу (путь без .png; вторая — «…_page2»)."""
+    st0 = await p.state()
+    s = st0.get("seat", {})
+    total, pages = int(s.get("warn_total", 0)), int(s.get("warn_pages", 1))
+    seen = warn_seen(s)
+    if shot:
+        await p.pg.screenshot(path=shot + ".png", timeout=20000)
+    if pages > 1:
+        bx = s.get("warn_block") or [0, 0, 0, 0]
+        check(bx[3] >= (56 if st0.get("phone") else 1),
+              f"{p.name}: {where} — блок «⚠» листается, высота {bx[3]:.0f} px холста")
+        for k in range(1, pages + 1):
+            await p.tap_xy(bx[0] + bx[2] / 2, bx[1] + bx[3] / 2)
+            await p.pg.wait_for_timeout(400)
+            s2 = (await p.state()).get("seat", {})
+            check(int(s2.get("warn_page", -1)) == k % pages,
+                  f"{p.name}: {where} — касание блока «⚠» → страница {s2.get('warn_page')} (нужно {k % pages})")
+            if k < pages:
+                seen += warn_seen(s2)
+                if shot:
+                    await p.pg.screenshot(path=f"{shot}_page{k + 1}.png", timeout=20000)
+    check(total > 0 and seen == total,
+          f"{p.name}: {where} — все «⚠» достижимы: всего {total}, видно сразу {warn_seen(s)}, страниц {pages}, "
+          f"за все страницы {seen} (кегль {s.get('warn_size')})")
+    return total, warn_seen(s), pages, s.get("warn_size")
 
 
 async def tech16_phone(p):

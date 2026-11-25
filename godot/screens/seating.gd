@@ -10,8 +10,9 @@ extends Screen
 ## Раскладка (_layout() в build()): вне телефонного режима — как было; в телефонном (UI.phone(), 21.11) — цели ≥ 56:
 ## вкладки и «В МАСТЕРСКУЮ» 56 в высоту, реплика и рамка ниже на 18; уроки — список в 2 столбца, клиенты — в 3, строки
 ## уроков 56 через 64, клиентов 48 через 56 (21.11, владелец), на кнопке мини-иконка (урок — пиктограмма
-## ui/lesson_icons.gd, клиент — верх портрета) и название целиком (до 2 строк); ползунки — строки-зоны 476×56 через 64 (5 ползунков — 52 через 60): подпись и значение сверху,
-## дорожка снизу; «ПОЗА…/ВИД…» 228×56, нижняя кнопка 56 у низа экрана.
+## ui/lesson_icons.gd, клиент — верх портрета) и название целиком (до 2 строк); ползунки — строки-зоны 476×56 через 64 (4 ползунка — 52 через 60, 5 — 48 через 56): подпись и значение сверху,
+## дорожка снизу; «ПОЗА…/ВИД…» 228×56, нижняя кнопка 56 у низа экрана. Список «⚠/✔» под ползунками — _warn_plan
+## (и на компьютере): не помещается — только «⚠», не помещаются и они — страницы со счётчиком «⚠ +N» (касание — дальше).
 var CV := Rect2(24, 176, 730, 488)
 var BTN := Rect2(780, 612, 476, 48)
 var BACK := Rect2(UI.W - 230, 64, 206, 38)
@@ -61,6 +62,9 @@ var _typing: Array = ["", 0.0]
 var _said: String = ""
 var sliders: Dictionary = {}              # ключ → SeatSlider
 var text_sizes: Dictionary = {}           # кегли последнего кадра (реплика, урок, предупреждения, вопрос) — для проверок
+var warn_page: int = 0                    # примерка: страница списка «⚠», если он не помещается (_warn_plan)
+var _warn_rect := Rect2()                 # …и место блока (касание/клик — следующая страница); пусто — страниц нет
+var _gap := 2.0                           # …и зазор между его строками (_warn_plan: 2, тесно — 0)
 
 
 func music_theme() -> String:
@@ -129,7 +133,7 @@ func _layout() -> void:
 func slider_rect(i: int) -> Rect2:
 	if UI.phone():
 		var z := slider_zone(i)
-		return Rect2(z.position.x + 20, z.end.y - 22, z.size.x - 40, 8)
+		return Rect2(z.position.x + 20, z.end.y - (18 if z.size.y < 52.0 else 22), z.size.x - 40, 8)
 	var row_h := ((cases().size() + 1) / 2) * 40
 	return Rect2(800, 112 + row_h + 26 + i * 44, 290, 8)
 
@@ -138,9 +142,17 @@ func slider_rect(i: int) -> Rect2:
 ## ползунках — 52 через 60, иначе предупреждениям не остаётся места), подпись и значение — внутри строки.
 func slider_zone(i: int) -> Rect2:
 	if UI.phone():
-		var tight := _fit_tight()
-		return Rect2(780, _list_bottom() + 8 + i * (60.0 if tight else 64.0), 476, 52.0 if tight else 56.0)
+		var hs := _slider_hs()
+		return Rect2(780, _list_bottom() + 8 + i * hs[1], 476, hs[0])
 	return slider_rect(i).grow(15)
+
+
+## Телефон: [высота строки ползунка, шаг] — 56 через 64; 4 ползунка — 52 через 60; 5 ползунков (Голем, Искра) —
+## 48 через 56 (25.11: иначе у Искры «⚠» не помещаются; исключение в phone_check с причиной).
+func _slider_hs() -> Array:
+	if not _fit_tight():
+		return [56.0, 64.0]
+	return [48.0, 56.0] if slider_keys().size() >= 5 else [52.0, 60.0]
 
 
 ## Телефон, примерка с 4–5 ползунками: строки ползунков и «ГОТОВО» — 52 через 60 (с 56 через 64 предупреждениям
@@ -317,6 +329,11 @@ func _build_dyn() -> void:
 			UI.touch_block(s)                      # click_seating: block — дорожка ползунка inflate(30, 30) = сам узел
 			_dyn.add_child(s)
 			sliders[keys[i]] = s
+		var wb := WarnBlock.new()                     # список «⚠» по страницам (только когда не помещается)
+		wb.name = "WarnPage"
+		wb.scr = self
+		UI.touch_block(wb)                           # касание по блоку не переносится на «ГОТОВО»
+		_dyn.add_child(wb)
 		var go := GameButton.make(fit_btn(), "СЛЕДУЮЩИЙ КЛИЕНТ ▶" if solved else "ГОТОВО — ПРОВЕРИТЬ ПОСАДКУ",
 			UI.GOOD if solved else UI.AMBER)
 		go.name = "Check"
@@ -417,6 +434,7 @@ func pick_lesson(i: int) -> void:
 
 func pick_case(i: int) -> void:
 	load_case(i)
+	warn_page = 0
 	Audio.sfx("tick")
 	refresh()
 
@@ -585,7 +603,7 @@ func tick(_dt: float) -> void:
 		_back_sig = bs
 		_back.queue_redraw()
 	var fs := [tab, lesson, case_i, cfg.duplicate(), view, drag, solved, demo_good, quiz_i, picked, quiz_done, score,
-		fix_t(), UI.kb_active, look]
+		fix_t(), UI.kb_active, look, warn_page]
 	for k: String in sliders:
 		var sl: SeatSlider = sliders[k]
 		fs.append([sl.hover, sl.has_focus()])
@@ -924,11 +942,12 @@ func _draw_fit(ci: CanvasItem) -> void:
 		var col := UI.GOOD if ok else UI.AMBER
 		if UI.phone():                                # строка-зона: подпись слева и значение справа над дорожкой
 			var z := slider_zone(i)
+			var dy := 3.0 if z.size.y < 52.0 else 0.0   # строка 48 (5 ползунков): подпись и значение выше на 3
 			UI.draw_round_rect(ci, z, Color8(24, 26, 38, 205), Color8(70, 80, 100), 2, 8)
 			var vt := SeatLogic.val_text(key, cfg[key])
 			var vw := minf(UI.text_width(vt, 14), 180.0)
-			_fit(ci, vt, Vector2(tr.end.x - vw, z.position.y + 5), vw, 14, col)
-			UI.draw_text_w(ci, Loc.t(sl[0]), Vector2(tr.position.x, z.position.y + 6), tr.size.x - vw - 12, 13, UI.WHITE)
+			_fit(ci, vt, Vector2(tr.end.x - vw, z.position.y + 5 - dy), vw, 14, col)
+			UI.draw_text_w(ci, Loc.t(sl[0]), Vector2(tr.position.x, z.position.y + 6 - dy), tr.size.x - vw - 12, 13, UI.WHITE)
 		else:
 			UI.draw_text_w(ci, Loc.t(sl[0]), Vector2(tr.position.x, tr.position.y - 20), tr.size.x + 2, 13, UI.WHITE)   # не на значение
 			_fit(ci, SeatLogic.val_text(key, cfg[key]), Vector2(tr.end.x + 8, tr.position.y - 9), 150, 14, col)
@@ -946,12 +965,71 @@ func _draw_fit(ci: CanvasItem) -> void:
 			UI.draw_round_rect(ci, Rect2(s.position, s.size), Color(0, 0, 0, 0), UI.WHITE, 2, 8)
 	var y := slider_rect(keys.size() - 1).position.y + 24
 	if UI.phone():                                    # заголовок — имя клиента (как название урока); список — под ползунками
-		y = slider_zone(keys.size() - 1).end.y + 2
-	var room := fit_btn().position.y - (4 if UI.phone() else 6) - y
+		y = slider_zone(keys.size() - 1).end.y + (0 if _item_gap() <= 0.0 else 2)   # 5 ползунков: вплотную
+	var bottom := fit_btn().position.y - ((2 if _item_gap() <= 0.0 else 4) if UI.phone() else 6)
+	var wp := _warn_plan(checks, y, bottom)
+	bottom = wp["bottom"]
+	var csz: int = wp["csz"]
+	var items: Array = wp["pages"][warn_page] if wp["paged"] else wp["order"]
+	var wb := _dyn.get_node_or_null("WarnPage") as WarnBlock
+	if wb != null:
+		wb.place(_warn_rect)
+	for ch: Array in items:
+		var left := int((bottom - y) / (UI.line_height(csz) + 2))
+		if left < 1:
+			break
+		y = UI.draw_wrapped(ci, _check_text(ch), Vector2(780, y), 476, csz, UI.GOOD if ch[1] else UI.AMBER, false, 2, -1,
+			left) + _gap
+	if wp["paged"]:                                  # счётчик скрытых «⚠» того же цвета (без слов): касание — дальше
+		UI.draw_text(ci, "⚠ +%d" % (int(wp["total"]) - items.size()), Vector2(780, y), csz, UI.AMBER, true)
+		if wp["pages"].size() > 1:                   # точки страниц справа: какая видна
+			var n: int = wp["pages"].size()
+			var cy := y + UI.line_height(csz, true) / 2.0
+			for k in n:
+				var dc := Vector2(1256 - 6 - (n - 1 - k) * 16, cy)
+				if k == warn_page:
+					ci.draw_circle(dc, 4.5, UI.AMBER, true, -1, true)
+				else:
+					UI.draw_ring(ci, dc, 4.0, UI.AMBER, 1.5)
+	text_sizes["warn"] = csz
+	text_sizes["warn_over"] = int(wp["over"])
+	text_sizes["warn_n"] = "%d⚠ %d✔ из %d" % [items.filter(func(ch: Array) -> bool: return not ch[1]).size(),
+		items.filter(func(ch: Array) -> bool: return ch[1]).size(), checks.size()]
+	text_sizes["warn_shown"] = items.size()        # проверки: сколько строк видно сразу (на этой странице)
+	text_sizes["warn_total"] = int(wp["total"])
+	text_sizes["warn_pages"] = (wp["pages"] as Array).size() if wp["paged"] else 1
+	text_sizes["warn_page"] = warn_page
+
+
+## Следующая страница списка «⚠» (WarnBlock).
+func next_warn_page() -> void:
+	var n := int(text_sizes.get("warn_pages", 1))
+	if n <= 1:
+		return
+	warn_page = (warn_page + 1) % n
+	Audio.sfx("tick")
+
+
+## Строка списка примерки: «✔ …» / «⚠ …».
+static func _check_text(ch: Array) -> String:
+	return ("✔ " if ch[1] else "⚠ ") + Loc.t(ch[2])
+
+
+## Раскладка списка под ползунками в место y…bottom (25.11, «все ⚠ доступны, ничего не обрезается молча»):
+## 1) весь список (⚠, потом ✔) кеглем 13 → 10; 2) не поместился (или телефон и 5 ползунков) — только «⚠» кеглем
+## 13 → 10, «✔» за ними тем же кеглем целыми строками, пока помещаются; 3) «⚠» не помещаются и при 10 — страницы:
+## на каждой столько «⚠», сколько входит целиком, последней строкой — счётчик «⚠ +N» (скрытые на этой странице),
+## касание/клик по блоку (WarnPage) — следующая страница по кругу. Озвучка не зависит от раскладки: состояние
+## каждого ползунка — в его имени (_update_slider_a11y). Возврат: {csz, order, paged, pages, total, over, room}.
+func _warn_plan(checks: Array, y: float, bottom: float) -> Dictionary:
+	var room := bottom - y
+	_warn_rect = Rect2()
+	_gap = _item_gap()
 	var order: Array = []
 	for ch: Array in checks:
 		if not ch[1]:
 			order.append(ch)
+	var warns := order.duplicate()
 	for ch: Array in checks:
 		if ch[1]:
 			order.append(ch)
@@ -960,14 +1038,22 @@ func _draw_fit(ci: CanvasItem) -> void:
 	while true:
 		need = 0.0
 		for ch: Array in order:
-			need += UI.wrap_lines(("✔ " if ch[1] else "⚠ ") + Loc.t(ch[2]), 476, csz).size() * (UI.line_height(csz) + 2) + 2
+			need += _check_h(ch, csz)
 		if need <= room or csz <= 10:
 			break
 		csz -= 1
-	# телефон: весь список не помещается и при 10 (или 5 ползунков — Голем, Искра) — только «⚠» кеглем от 13 до 10
-	# (пока не поместятся), «✔» — за ними тем же кеглем, целыми строками, пока помещаются (не мельчим ради «✔»)
-	if UI.phone() and (need > room or keys.size() >= 5):
-		var warns: Array = order.filter(func(ch: Array) -> bool: return not ch[1])
+	var out := {"csz": csz, "order": order, "paged": false, "pages": [], "total": warns.size(), "over": 0, "room": room,
+		"bottom": bottom}
+	if need <= room and not (UI.phone() and slider_keys().size() >= 5):
+		return out
+	for tight: bool in [false, true]:
+		if tight:                                  # «⚠» не помещаются и при 10 — зазоры блока меньше: между строками
+			if need <= room:                       # 0 (было 2), до кнопки 2 (было 4/6)
+				break
+			_gap = 0.0
+			out["bottom"] = fit_btn().position.y - 2
+			room = float(out["bottom"]) - y
+			out["room"] = room
 		csz = 13
 		while true:
 			need = 0.0
@@ -976,36 +1062,50 @@ func _draw_fit(ci: CanvasItem) -> void:
 			if need <= room or csz <= 10:
 				break
 			csz -= 1
+	out["csz"] = csz
+	if need <= room:
+		var shown := warns.duplicate()
 		for ch: Array in order:
 			if ch[1]:
 				if need + _check_h(ch, csz) > room:
 					break
 				need += _check_h(ch, csz)
-				warns.append(ch)
-		order = warns
-	text_sizes["warn"] = csz
-	text_sizes["warn_over"] = maxi(0, ceili(need - room))   # проверки: сколько px списка не поместилось
-	text_sizes["warn_n"] = "%d⚠ %d✔ из %d" % [order.filter(func(ch: Array) -> bool: return not ch[1]).size(),
-		order.filter(func(ch: Array) -> bool: return ch[1]).size(), checks.size()]
-	var bottom := fit_btn().position.y - (4 if UI.phone() else 6)
-	var first := true
-	text_sizes["warn_shown"] = 0
-	for ch: Array in order:
-		var left := int((bottom - y) / (UI.line_height(csz) + 2))
-		if left < 1:
-			break
-		# телефон: строка списка — целиком или никак (кроме первой: её начало лучше, чем пусто)
-		if UI.phone() and not first and UI.wrap_lines(("✔ " if ch[1] else "⚠ ") + Loc.t(ch[2]), 476, csz).size() > left:
-			break
-		first = false
-		text_sizes["warn_shown"] = int(text_sizes.get("warn_shown", 0)) + 1   # проверки: сколько строк видно
-		y = UI.draw_wrapped(ci, ("✔ " if ch[1] else "⚠ ") + Loc.t(ch[2]), Vector2(780, y), 476, csz,
-			UI.GOOD if ch[1] else UI.AMBER, false, 2, -1, left) + 2
+				shown.append(ch)
+		out["order"] = shown
+		return out
+	out["over"] = ceili(need - room)               # проверки: сколько px «⚠» не помещается сразу
+	var cap := room - (UI.line_height(csz, true) + 2)   # строка счётчика
+	var pages: Array = []
+	var cur: Array = []
+	var h := 0.0
+	for ch: Array in warns:
+		var hc := _check_h(ch, csz)
+		if not cur.is_empty() and h + hc > cap:
+			pages.append(cur)
+			cur = []
+			h = 0.0
+		cur.append(ch)
+		h += hc
+	if not cur.is_empty():
+		pages.append(cur)
+	out["paged"] = pages.size() > 1
+	out["pages"] = pages
+	out["order"] = warns
+	if warn_page >= pages.size():
+		warn_page = 0
+	if out["paged"]:
+		_warn_rect = Rect2(780, y, 476, room)
+	return out
 
 
 ## Высота строки списка примерки (с переносом) кеглем sz.
 func _check_h(ch: Array, sz: int) -> float:
-	return UI.wrap_lines(("✔ " if ch[1] else "⚠ ") + Loc.t(ch[2]), 476, sz).size() * (UI.line_height(sz) + 2) + 2
+	return UI.wrap_lines(_check_text(ch), 476, sz).size() * (UI.line_height(sz) + 2) + _gap
+
+
+## Зазор между строками списка примерки (сверх межстрочного 2): телефон и 5 ползунков — 0 (место дороже), иначе 2.
+func _item_gap() -> float:
+	return 0.0 if UI.phone() and slider_keys().size() >= 5 else 2.0
 
 
 func _draw_quiz(ci: CanvasItem) -> void:
@@ -1310,4 +1410,32 @@ class SeatSlider extends Control:
 			accept_event()
 		elif e is InputEventKey and e.pressed and ((e as InputEventKey).keycode == KEY_LEFT or (e as InputEventKey).keycode == KEY_RIGHT):
 			scr.step_value(key, 1 if (e as InputEventKey).keycode == KEY_RIGHT else -1)
+			accept_event()
+
+
+## Примерка: блок списка «⚠», когда он не помещается целиком (_warn_plan): касание/клик — следующая страница по
+## кругу. Не в фокусе (клавиатура и чтец экрана слышат состояние каждого ползунка — в его имени); на телефоне — цель
+## (phone_target, высота — всё место под ползунками).
+class WarnBlock extends Control:
+	var scr: Node
+
+	func _init() -> void:
+		focus_mode = Control.FOCUS_NONE
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		visible = false
+
+	func place(r: Rect2) -> void:
+		var on := r.has_area()
+		if on and (position != r.position or size != r.size):
+			position = r.position
+			size = r.size
+			set_meta("phone_target", r)
+		if on != visible:
+			visible = on
+			mouse_filter = Control.MOUSE_FILTER_STOP if on else Control.MOUSE_FILTER_IGNORE
+			mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+
+	func _gui_input(e: InputEvent) -> void:
+		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed 				and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+			scr.next_warn_page()
 			accept_event()

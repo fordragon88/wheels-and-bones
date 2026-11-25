@@ -337,8 +337,12 @@ func state() -> Dictionary:
 				var r: Rect2 = scr.slider_rect(scr.slider_keys().find(k))
 				var sl: Array = SeatLogic.sliders()[k]
 				tr[k] = [r.position.x, r.get_center().y, r.size.x, sl[2], sl[3]]
+			var ts: Dictionary = scr.text_sizes          # список «⚠» под ползунками: всего, видно сразу, страница (25.11)
+			var wr: Rect2 = scr._warn_rect
 			d["seat"] = {"tab": scr.tab, "lesson": scr.lesson, "case": scr.case_i, "solved": scr.solved, "cfg": scr.cfg,
-				"tracks": tr}
+				"tracks": tr, "warn_total": ts.get("warn_total", 0), "warn_shown": ts.get("warn_shown", 0),
+				"warn_n": ts.get("warn_n", ""), "warn_page": scr.warn_page, "warn_pages": ts.get("warn_pages", 1),
+				"warn_size": ts.get("warn", 0), "warn_block": [wr.position.x, wr.position.y, wr.size.x, wr.size.y]}
 		var mg: Variant = scr.get("mini") if "mini" in scr else null
 		if mg is MiniGame:
 			d["mini"] = {"kind": mg.kind, "value": mg.value, "cfg": mg.cfg}
