@@ -1244,14 +1244,28 @@ func _draw_lesson_btn(b: GameButton, r: Rect2) -> void:
 			else Callable())
 		return
 	var isz := desk_icon("lessons") if LessonIcons.has(i + 1) else 0.0
-	var tx := _desk_text_x(isz)
 	var title := "%d. %s" % [i + 1, Loc.t(lessons()[i]["title"])]
 	var bold := i == lesson
-	if isz > 0.0:
-		_draw_lesson_icon(b, i, Rect2(r.position.x + DESK_ICON_X, r.position.y + floorf((r.size.y - isz) / 2.0), isz, isz))
-		if bold and not _fits_line(title, r.size.x - tx - 10, 15, true):
-			bold = false                          # со значком: жирным не помещается — обычным (выбран — видно по кнопке)
-	_fit(b, title, r.position + Vector2(tx, 9), r.size.x - tx - 10, 15, UI.WHITE, bold)
+	if isz <= 0.0:
+		_fit(b, title, r.position + Vector2(_desk_text_x(0.0), 9), r.size.x - 20, 15, UI.WHITE, bold)
+		return
+	var tier: Array = _desk_les_tier()            # [значок, отступ, зазор, справа, строк]
+	var tx: float = tier[1] + isz + tier[2]
+	var tw: float = r.size.x - tx - tier[3]
+	_draw_lesson_icon(b, i, Rect2(r.position.x + tier[1], r.position.y + floorf((r.size.y - isz) / 2.0), isz, isz))
+	var lay := _desk_les_lay(title, tw, r.size.y, bold, tier[4])
+	if bold and lay.is_empty():
+		bold = false                              # со значком: жирным не помещается — обычным (выбран — видно по кнопке)
+		lay = _desk_les_lay(title, tw, r.size.y, false, tier[4])
+	if lay.size() < 2 or (lay[1] as PackedStringArray).size() < 2:
+		_fit(b, title, r.position + Vector2(tx, 9), tw, 15, UI.WHITE, bold)   # одна строка (или «…», как было без значка)
+		return
+	var sz: int = lay[0]
+	var lh := UI.line_height(sz, bold)
+	var y := r.position.y + floorf((r.size.y - 2 * lh) / 2.0)
+	for ln: String in lay[1]:
+		UI.draw_text(b, ln, Vector2(r.position.x + tx, y), sz, UI.WHITE, bold)
+		y += lh
 
 
 func _case_label(i: int) -> String:
@@ -1322,6 +1336,8 @@ func _desk_labels(kind: String) -> Array:
 
 
 func desk_icon(kind: String) -> float:
+	if kind == "lessons":
+		return float(_desk_les_tier()[0])
 	var labels := _desk_labels(kind)
 	var key := "%s|%s|%s|%s|%s" % [kind, Loc.code, Settings.text_k(), Settings.easy_font(), "\n".join(labels)]
 	if not _desk_cache.has(key):
@@ -1345,6 +1361,82 @@ func desk_icon(kind: String) -> float:
 	text_sizes["desk_icons_" + kind] = int(v[0])
 	text_sizes["desk_icons_%s_why" % kind] = v[1]
 	return v[0]
+
+
+## Компьютер, уроки (25.11, «пиктограммы уроков при любом размере текста»): ступени по порядку — значок 30, 26, 22
+## (отступы 6/6/10), 22 с отступами 3/3/4 — название в одну строку (кегль до 75 %); не годится — то же с названием
+## в 2 строки внутри той же кнопки 230×38 (кегль 15 → 11 = 75 %, обе строки по высоте кнопки, номер «3.» — в первой
+## строке со словом; где одна строка крупнее — одна). Ступень годится, если каждое название, помещавшееся без значка,
+## помещается и с ним (без «…»); значки — у всех уроков или ни у кого. Не годится ни одна — прежнее: без значков.
+## [значок, отступ слева, зазор до текста, справа, строк]; итог — text_sizes["desk_icons_lessons"…] (проверки).
+const DESK_LES_TIERS := [[30.0, 6.0, 6.0, 10.0, 1], [26.0, 6.0, 6.0, 10.0, 1], [22.0, 6.0, 6.0, 10.0, 1],
+	[22.0, 3.0, 3.0, 4.0, 1], [30.0, 6.0, 6.0, 10.0, 2], [26.0, 6.0, 6.0, 10.0, 2], [22.0, 6.0, 6.0, 10.0, 2],
+	[22.0, 3.0, 3.0, 4.0, 2]]
+
+
+func _desk_les_tier() -> Array:
+	var labels := _desk_labels("lessons")
+	var key := "les2|%s|%s|%s|%s" % [Loc.code, Settings.text_k(), Settings.easy_font(), "
+".join(labels)]
+	if not _desk_cache.has(key):
+		var w := list_rect(0).size.x
+		var h := list_rect(0).size.y
+		var res := [[0.0, 10.0, 0.0, 10.0, 1], "", 0, 0]   # [ступень, что мешает, наименьший кегль, наибольшее строк]
+		for tier: Array in DESK_LES_TIERS:
+			var tw: float = w - tier[1] - tier[0] - tier[2] - tier[3]
+			var ok := true
+			var fs_min := 99
+			var ln_max := 1
+			var det := PackedStringArray()
+			for s: String in labels:
+				var lay := _desk_les_lay(s, tw, h, false, tier[4])
+				if lay.is_empty():
+					if _fits_line(s, w - 20, 15, false):
+						ok = false
+						res[1] = s
+						break
+					lay = [int(UI.fit_text(s, tw, 15)[1]), PackedStringArray([s])]   # и без значка было «…»
+				fs_min = mini(fs_min, int(lay[0]))
+				ln_max = maxi(ln_max, (lay[1] as PackedStringArray).size())
+				det.append("%d/%d" % [int(lay[0]), (lay[1] as PackedStringArray).size()])
+			if ok:
+				res = [tier, " ".join(det), fs_min, ln_max]
+				break
+		if _desk_cache.size() > 64:
+			_desk_cache.clear()
+		_desk_cache[key] = res
+	var v: Array = _desk_cache[key]
+	var t: Array = v[0]
+	text_sizes["desk_icons_lessons"] = int(t[0])
+	text_sizes["desk_icons_lessons_why"] = v[1] if t[0] <= 0.0 else ""
+	text_sizes["desk_lessons_each"] = v[1] if t[0] > 0.0 else ""    # кегль/строк каждого урока
+	text_sizes["desk_lessons_lay"] = "%d px, отступы %d/%d/%d, строк до %d, кегль от %d" % [int(t[0]), int(t[1]),
+		int(t[2]), int(t[3]), int(v[3]), int(v[2])] if t[0] > 0.0 else "без значков"
+	text_sizes["desk_lessons_fs"] = int(v[2])
+	text_sizes["desk_lessons_lines"] = int(v[3])
+	return t
+
+
+## Подпись урока со значком в ширину tw и высоту кнопки h: [кегль, строки] или [] (не помещается без «…»). Одна
+## строка — как было (fit_text, кегль до 75 %); maxl 2 — ещё 2 строки кеглем 15 → 11, обе по высоте кнопки, в первой
+## строке — номер и хотя бы одно слово; из двух вариантов — с кеглем крупнее (поровну — одна строка).
+static func _desk_les_lay(title: String, tw: float, h: float, bold: bool, maxl: int) -> Array:
+	var one: Array = []
+	if _fits_line(title, tw, 15, bold):
+		one = [int(UI.fit_text(title, tw, 15, bold)[1]), PackedStringArray([title])]
+	if maxl < 2 or (not one.is_empty() and int(one[0]) >= 15):
+		return one
+	for sz in range(15, 10, -1):
+		if not one.is_empty() and sz <= int(one[0]):
+			break
+		if 2 * UI.line_height(sz, bold) > h:
+			continue
+		var lines := UI.wrap_lines(title, tw, sz, bold)
+		if lines.size() != 2 or lines[0].split(" ", false).size() < 2:
+			continue
+		if UI.text_width(lines[0], sz, bold) <= tw and UI.text_width(lines[1], sz, bold) <= tw:
+			return [sz, lines]
+	return one
 
 
 ## Название помещается в ширину без «…» (fit_text: кегль до 75 %, потом многоточие).
