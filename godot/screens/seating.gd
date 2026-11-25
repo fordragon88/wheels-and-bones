@@ -9,7 +9,7 @@ extends Screen
 
 ## Раскладка (_layout() в build()): вне телефонного режима — как было; в телефонном (UI.phone(), 21.11) — цели ≥ 56:
 ## вкладки и «В МАСТЕРСКУЮ» 56 в высоту, реплика и рамка ниже на 18; уроки — список в 2 столбца, клиенты — в 3, строки
-## уроков 56 через 64, клиентов 48 через 56 (21.11, владелец), на кнопке мини-иконка (урок — пиктограмма
+## уроков и клиентов 48 через 56 (клиенты — 21.11, уроки — 25.11, владелец), на кнопке мини-иконка (урок — пиктограмма
 ## ui/lesson_icons.gd, клиент — верх портрета) и название целиком (до 2 строк); ползунки — строки-зоны 476×56 через 64 (4 ползунка — 52 через 60, 5 — 48 через 56): подпись и значение сверху,
 ## дорожка снизу; «ПОЗА…/ВИД…» 228×56, нижняя кнопка 56 у низа экрана. Список «⚠/✔» под ползунками — _warn_plan
 ## (и на компьютере): не помещается — только «⚠», не помещаются и они — страницы со счётчиком «⚠ +N» (касание — дальше).
@@ -21,8 +21,8 @@ var BUBBLE := Rect2(96, 110, 658, 60)
 var TAB_H := 38.0
 var Q_TOP := 0.0                          # сдвиг «Вопрос N из M», вопроса и ответов зачёта (телефон: ниже вкладок)
 const TAB_NAMES := {"lessons": "УРОКИ", "fit": "ПРИМЕРКА", "quiz": "ПРОВЕРЬ СЕБЯ"}
-const ROW_H := 56.0                       # телефон: строка списка уроков и шаг 64
-const ROW_STEP := 64.0
+const ROW_H := 48.0                       # телефон: кнопка урока и шаг 56 — как у клиентов (25.11: было 56 через 64;
+const ROW_STEP := 56.0                    # освободившиеся 32 px — тексту урока)
 const CASE_H := 48.0                      # телефон: кнопка клиента и шаг 56 (решение владельца 21.11: «можно ещё меньше»;
 const CASE_STEP := 56.0                   # освободившиеся 24 px — предупреждениям под ползунками)
 const LessonIcons := preload("res://ui/lesson_icons.gd")   # телефон: пиктограммы уроков 1…7 на кнопках списка
@@ -178,7 +178,7 @@ func _list_bottom() -> float:
 
 @warning_ignore("integer_division")
 func list_rect(i: int) -> Rect2:
-	if UI.phone():                               # уроки — 2 столбца по 234 (56 через 64), клиенты — 3 по 153 (48 через 56)
+	if UI.phone():                               # уроки — 2 столбца по 234, клиенты — 3 по 153 (оба 48 через 56)
 		if tab == "lessons":
 			return Rect2(780 + (i % 2) * 242, 128 + (i / 2) * ROW_STEP, 234, ROW_H)
 		return Rect2(780 + (i % 3) * 161, 128 + (i / 3) * CASE_STEP, 153, CASE_H)
@@ -821,7 +821,8 @@ func _pt_gap() -> float:
 func _lesson_title_phone(ci: CanvasItem, title: String) -> float:
 	var n := lessons().size()
 	if n % 2 == 1:
-		var box := list_rect(n)                  # клетка рядом с последним уроком
+		# клетка рядом с последним уроком и по 4 px зазора над и под ней (кнопки 48 через 56 — высота названия 56, как было)
+		var box := list_rect(n).grow_individual(0, 4, 0, 4)
 		var sz := 20
 		var lines := UI.wrap_lines(title, box.size.x, sz, true)
 		while sz > 12:
@@ -833,6 +834,7 @@ func _lesson_title_phone(ci: CanvasItem, title: String) -> float:
 				break
 			sz -= 1
 		var lh := UI.line_height(sz, true) + 2
+		text_sizes["lesson_title"] = sz              # проверки: кегль названия урока
 		var ty := box.position.y + floorf((box.size.y - (mini(lines.size(), 2) * lh - 2)) / 2.0)
 		for k in mini(lines.size(), 2):
 			UI.draw_text(ci, lines[k], Vector2(box.position.x, ty + k * lh), sz, UI.AMBER, true)
@@ -1162,8 +1164,8 @@ func _fix_caption(ci: CanvasItem, text: String, top: bool) -> void:
 
 
 ## Телефон: кнопка списка — мини-иконка слева (если icon задан) и название целиком (до 2 строк, по середине кнопки).
-func _draw_row(b: GameButton, r: Rect2, text: String, base: int, bold: bool, icon: Callable) -> void:
-	var lay := _row_fit(text, r.size.x, base, bold, icon.is_valid(), r.size.y)
+func _draw_row(b: GameButton, r: Rect2, text: String, base: int, bold: bool, icon: Callable, keep := false) -> void:
+	var lay := _row_fit(text, r.size.x, base, bold, icon.is_valid(), r.size.y, keep)
 	var isz: float = lay[0]
 	var x := r.position.x + 8
 	if isz > 0.0:
@@ -1183,10 +1185,12 @@ static var _row_cache := {}
 
 ## Раскладка подписи кнопки высотой h: [иконка px, кегль, строки]. Уступки по порядку: иконка 44 (кнопка 48 —
 ## 40) при кегле base, base − 1 (в 1–2 строки), потом иконка 32, потом без иконки; не влезло и так — кегль ещё меньше
-## (до 9), строк не больше 2.
-func _row_fit(text: String, w: float, base: int, bold: bool, with_icon := true, h := ROW_H) -> Array:
+## (до 9), строк не больше 2. keep (уроки, 25.11: кнопки 48) — без иконки кегль вышел мельче: иконка 40/32 остаётся,
+## если подпись с ней помещается тем же кеглем, что и без неё (текст не мельче, значок не пропадает).
+func _row_fit(text: String, w: float, base: int, bold: bool, with_icon := true, h := ROW_H, keep := false) -> Array:
 	# множитель текста, а не выбор игрока: на вкладке примерки потолок 125 % (text_cap) — при 150 % раскладка как при 125 %
-	var key := "%s|%d|%d|%s|%s|%s|%s|%d" % [text, w, base, bold, Settings.text_k(), Settings.easy_font(), with_icon, h]
+	var key := "%s|%d|%d|%s|%s|%s|%s|%d|%s" % [text, w, base, bold, Settings.text_k(), Settings.easy_font(), with_icon, h,
+		keep]
 	if _row_cache.has(key):
 		return _row_cache[key]
 	var out: Array = []
@@ -1199,6 +1203,12 @@ func _row_fit(text: String, w: float, base: int, bold: bool, with_icon := true, 
 				break
 		if not out.is_empty():
 			break
+	if keep and with_icon and not out.is_empty() and float(out[0]) <= 0.0:
+		for isz: float in [minf(44.0, h - 8.0), 32.0]:
+			var lines := _row_lines(text, w - 16 - isz - 6, int(out[1]), bold, h - 4.0)
+			if not lines.is_empty():
+				out = [isz, int(out[1]), lines]
+				break
 	if out.is_empty():
 		out = [0.0, 9, UI.wrap_lines(text, w - 16, 9, bold).slice(0, 2)]
 	if _row_cache.size() > 400:
@@ -1241,7 +1251,7 @@ func _draw_lesson_btn(b: GameButton, r: Rect2) -> void:
 	if UI.phone():
 		_draw_row(b, r, "%d. %s" % [i + 1, Loc.t(lessons()[i]["title"])], 15, i == lesson,
 			(func(ci: CanvasItem, box: Rect2) -> void: _draw_lesson_icon(ci, i, box)) if LessonIcons.has(i + 1)
-			else Callable())
+			else Callable(), true)
 		return
 	var isz := desk_icon("lessons") if LessonIcons.has(i + 1) else 0.0
 	var title := "%d. %s" % [i + 1, Loc.t(lessons()[i]["title"])]

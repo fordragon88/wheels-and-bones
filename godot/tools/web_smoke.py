@@ -934,7 +934,11 @@ async def seat_phone(p):
     if not st:
         check(False, f"{p.name}: Кабинет посадки не открылся")
         return
-    phone_small(p, st, "уроки")
+    les = [b for b in st.get("buttons", []) if b[0].startswith("Lesson_")]   # уроки 48 через 56 (25.11, как клиенты)
+    small = [b for b in st.get("buttons", []) if min(b[3], b[4]) < 56 and not b[0].startswith("Lesson_")]
+    check(len(les) == 7 and all(round(b[4]) == 48 and min(b[3], b[4]) >= 48 for b in les) and not small,
+          f"{p.name}: уроки — кнопки уроков 48 ({sorted({round(b[4]) for b in les})}), прочие цели ≥ 56 (мельче: "
+          f"{[(b[0], b[3], b[4]) for b in small][:6]})")
     await p.press("Lesson_3", wait=600)
     st = await p.state()
     check(st.get("seat", {}).get("lesson") == 3,
