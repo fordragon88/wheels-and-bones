@@ -345,8 +345,8 @@ async def sticky_hold(p, where):
     t1 = time.time()
     s = await p.wait(lambda s: not s.get("toast"), "", 3, quiet=True)
     dt = time.time() - t1
-    check(bool(had) and bool(s) and dt <= 0.6,
-          f"{p.name}: {where} — касание по пустому месту {xy} погасило итог «{had[:30]}» за {dt:.2f} с (≤ 0,6)")
+    check(bool(had) and bool(s) and dt <= 1.0,   # гаснет за 0,3 с; замер ступенями ~0,17 с, под нагрузкой бывало 0,67
+          f"{p.name}: {where} — касание по пустому месту {xy} погасило итог «{had[:30]}» за {dt:.2f} с (≤ 1,0)")
 
 
 PORTRAIT_SEEN = {}   # задание -> какими петлями рисовался портрет героя ("" — картинкой); debug state «portrait»

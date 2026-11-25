@@ -37,6 +37,8 @@ SRC = os.path.join(ROOT, "assets")
 DST = os.path.join(GODOT, "content")
 WEBP_Q = 85                    # качество цвета кадров (исходники — JPEG 90)
 ANIM_MAX_H = 400               # петли: как в браузерной сборке (build_web.shrink_anim), машущие — без уменьшения
+MAGIC_MAX_H = 480              # «волшебство» (magic_*, с 25.11 нарезано 480 px): портрет в кадре ~380 px — на 1080p без
+                               # растяжения; magic_martin (562) тоже до 480
 
 
 def newer(src_files, dst):
@@ -111,7 +113,8 @@ def sync_frames(force):
             jpg, mask = os.path.join(d, f"{n:02d}.jpg"), os.path.join(d, f"{n:02d}.a.png")
             out = os.path.join(an_dst, name, f"{n:02d}.webp")
             if force or newer([jpg, mask], out):
-                merge_frame(jpg, mask, out, None if name.endswith("_wave") else ANIM_MAX_H)
+                merge_frame(jpg, mask, out, None if name.endswith("_wave") else
+                            (MAGIC_MAX_H if name.startswith("magic_") else ANIM_MAX_H))
                 made += 1
             else:
                 kept += 1
