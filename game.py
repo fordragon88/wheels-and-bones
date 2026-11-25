@@ -715,6 +715,157 @@ def aa_circle(surf, color, center, radius, width=0, **kw):
         pygame.Surface.blit(surf, img, (x - r - 1, y - r - 1))
     return pygame.Rect(int(center[0] - radius), int(center[1] - radius), int(2 * radius), int(2 * radius))
 
+
+# --- пиктограммы семи уроков Кабинета посадки (кнопки списка; как ui/lesson_icons.gd Godot-версии, 25.11) ---
+# Поле 256×256, те же точки и толщины, что в Godot (_i1…_i7) и в исходном эскизе на PIL: line — ломаная со
+# скруглёнными стыками и концами, dash — пунктир, dot — круг, ring — кольцо, arc — дуга эллипса внутрь от рамки
+# (углы по часовой от оси X), head — наконечник стрелки, poly — многоугольник. Рисуем ×4 и сглаженно уменьшаем;
+# готовая пиктограмма кэшируется на (урок, размер в пикселях экрана) — не каждый кадр.
+LESSON_ICON_COUNT = 7
+_LESSON_ICON_CACHE = {}
+
+
+def _lesson_icon_paint(n, px):
+    """Пиктограмма урока n (1…7) — обычная поверхность px×px (пиксели экрана)."""
+    big = pygame.Surface((px * 4, px * 4), pygame.SRCALPHA)
+    k = px * 4 / 256.0
+    bone, cy, gold, red, green = (234, 226, 206), CYAN, AMBER, BAD, GOOD
+
+    def P(p):
+        return (p[0] * k, p[1] * k)
+
+    def dot(c, r, col):
+        pygame.draw.circle(big, col, P(c), max(1.0, r * k))
+
+    def line(pts, col, w=16.0):
+        h = w / 2.0
+        for a, b in zip(pts, pts[1:]):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            ln = math.hypot(dx, dy)
+            if ln < 0.001:
+                continue
+            nx, ny = -dy / ln * h, dx / ln * h
+            pygame.draw.polygon(big, col, [P((a[0] + nx, a[1] + ny)), P((b[0] + nx, b[1] + ny)),
+                                           P((b[0] - nx, b[1] - ny)), P((a[0] - nx, a[1] - ny))])
+        for p in pts:
+            dot(p, h, col)
+
+    def dash(a, b, col, w=8.0, n=7):
+        for i in range(n):
+            t0, t1 = i / n, (i + 0.55) / n
+            line([(a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0),
+                  (a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1)], col, w)
+
+    def ell(c, rx, ry, ang):
+        cs, sn = math.cos(ang), math.sin(ang)
+        r = rx * ry / max(0.001, math.sqrt((ry * cs) ** 2 + (rx * sn) ** 2))
+        return (c[0] + cs * r, c[1] + sn * r)
+
+    def arc(box, a0, a1, col, w=10.0):
+        """box = (x, y, ширина, высота) в поле 256; толщина w — внутрь от рамки."""
+        while a1 < a0:
+            a1 += 360.0
+        if a1 - a0 >= 359.99:                      # полное кольцо — две половины (многоугольник без самокасания)
+            arc(box, a0, a0 + 180.0, col, w)
+            arc(box, a0 + 180.0, a0 + 359.99, col, w)
+            return
+        c = (box[0] + box[2] / 2.0, box[1] + box[3] / 2.0)
+        rx, ry = box[2] / 2.0, box[3] / 2.0
+        ns = max(8, int((a1 - a0) / 2))
+        angs = [math.radians(a0 + (a1 - a0) * i / ns) for i in range(ns + 1)]
+        outer = [P(ell(c, rx, ry, a)) for a in angs]
+        inner = [P(ell(c, rx - w, ry - w, a)) for a in reversed(angs)]
+        pygame.draw.polygon(big, col, outer + inner)
+
+    def ring(c, r, col, w=12.0):
+        arc((c[0] - r, c[1] - r, 2 * r, 2 * r), 0.0, 360.0, col, w)
+
+    def poly(pts, col):
+        pygame.draw.polygon(big, col, [P(p) for p in pts])
+
+    def head(tip, ang, col, sz=20.0):
+        a = math.radians(ang)
+        poly([tip] + [(tip[0] - sz * math.cos(a + s), tip[1] - sz * math.sin(a + s)) for s in (0.5, -0.5)], col)
+
+    def rot(p, c, deg):
+        a = math.radians(deg)
+        x, y = p[0] - c[0], p[1] - c[1]
+        return (c[0] + x * math.cos(a) - y * math.sin(a), c[1] + x * math.sin(a) + y * math.cos(a))
+
+    if n == 1:                                      # таз спереди: два крыла, крестец, два кольца, «тазобедренные» точки
+        for m in (-1, 1):
+            line([(128 + m * 20, 104), (128 + m * 72, 58), (128 + m * 100, 98), (128 + m * 84, 144),
+                  (128 + m * 44, 166)], green, 15)
+            ring((128 + m * 30, 188), 22, green, 13)
+            dot((128 + m * 92, 178), 15, bone)
+        poly([(104, 98), (152, 98), (128, 158)], green)
+        dash((24, 240), (232, 240), cy, 7, 8)
+    elif n == 2:                                    # сидение на крестце: спина дугой, красная точка под крестцом
+        line([(48, 60), (58, 196), (196, 196)], cy, 12)
+        line([(100, 186), (84, 150), (86, 116), (104, 88), (130, 72)], bone, 16)
+        dot((156, 62), 23, bone)
+        line([(100, 186), (190, 180), (206, 240)], bone, 16)
+        dot((90, 190), 17, red)
+    elif n == 3:                                    # подножка: колено, голень, стопа на площадке, длина
+        line([(30, 84), (140, 84)], bone, 18)
+        dot((146, 86), 17, bone)
+        line([(148, 90), (158, 190), (214, 194)], bone, 16)
+        line([(132, 218), (236, 218)], gold, 16)
+        line([(70, 112), (70, 206)], gold, 8)
+        head((70, 104), 270, gold, 22)
+        head((70, 216), 90, gold, 22)
+    elif n == 4:                                    # перекос таза: уровень пунктиром, наклонённая «перекладина», поворот
+        dash((22, 150), (234, 150), cy, 7, 8)
+        line([(60, 176), (196, 124)], green, 18)
+        ring((52, 182), 20, bone, 11)
+        ring((204, 118), 20, bone, 11)
+        line([(128, 146), (118, 96), (134, 44)], bone, 14)
+        arc((70, 176, 116, 74), 20, 150, gold, 9)
+        head((74, 214), 245, gold, 22)
+    elif n == 5:                                    # исправить (ключ) или учесть (подушка по форме)
+        line([(44, 214), (104, 124)], gold, 20)
+        gap = math.degrees(math.atan2(98 - 124, 120 - 104))   # зев ключа 70° — в сторону от ручки (как в Godot)
+        arc((90, 68, 60, 60), gap + 35.0, gap - 35.0 + 360.0, gold, 16)
+        line([(146, 184), (146, 216), (240, 216), (240, 170), (214, 186), (184, 198), (160, 194), (146, 184)], cy, 12)
+        dot((180, 170), 13, bone)
+    elif n == 6:                                    # мерки: линейка с делениями и размер
+        pts = []                                    # рамка со скруглением (средняя линия — радиус 4, толщина 12)
+        for c, a0 in (((222, 106), -90.0), ((222, 158), 0.0), ((34, 158), 90.0), ((34, 106), 180.0)):
+            for j in range(3):
+                a = math.radians(a0 + 45.0 * j)
+                pts.append((c[0] + math.cos(a) * 4.0, c[1] + math.sin(a) * 4.0))
+        line(pts + [pts[0]], gold, 12)
+        for i in range(9):
+            x = 46 + i * 21
+            line([(x, 104), (x, 138 if i % 2 == 0 else 124)], gold, 7)
+        line([(40, 206), (216, 206)], cy, 8)
+        head((30, 206), 180, cy, 22)
+        head((226, 206), 0, cy, 22)
+    elif n == 7:                                    # давление и наклон: сиденье наклонено назад, стрелки
+        cc = (112, 176)
+        line([rot(p, cc, -24) for p in [(60, 62), (60, 176), (184, 176)]], cy, 16)
+        ring((120, 214), 22, cy, 11)
+        line([(34, 242), (226, 242)], cy, 7)
+        arc((-8, 56, 240, 240), 262, 312, gold, 9)
+        head((86, 58), 174, gold, 24)
+        for q in ((118, 128), (158, 110)):
+            line([(q[0] - 10, q[1] - 34), q], red, 8)
+            head((q[0] + 2, q[1] + 8), 74, red, 20)
+    return pygame.transform.smoothscale(big, (px, px))
+
+
+def lesson_icon(n, size):
+    """Пиктограмма урока n (1…7) размером size×size (логические px) — Surf из кэша; нет такого урока — None."""
+    if not 1 <= n <= LESSON_ICON_COUNT:
+        return None
+    px = max(1, round(size * RS))
+    key = (n, px)
+    img = _LESSON_ICON_CACHE.get(key)
+    if img is None:
+        img = Surf.adopt(_lesson_icon_paint(n, px), (size, size))
+        _LESSON_ICON_CACHE[key] = img
+    return img
+
 # ----------------------------------------------------------------------------- #
 #  Шрифты / текст
 # ----------------------------------------------------------------------------- #
@@ -987,10 +1138,10 @@ def fit_wrapped_size(text, width, size, room, lo=10, line_gap=2):
     return size
 
 
-def wrap_lines(text, width, size=16, raw=False):
-    """raw=True — текст игрока (комментарий): без перевода."""
+def wrap_lines(text, width, size=16, raw=False, bold=False):
+    """raw=True — текст игрока (комментарий): без перевода; bold — перенос жирным шрифтом."""
     text = text if raw else tr(text)
-    f = font(size)
+    f = font(size, bold)
     out, cur = [], ""
     for w in text.split(" "):
         test = (cur + " " + w).strip()
@@ -12948,6 +13099,145 @@ class Game:
                 pose["slide"] = spec["slide"]
         return case, cfg, pose
 
+    # --- значки на кнопках списков (25.11; как desk_icon / _desk_les_tier в seating.gd Godot-версии на компьютере) ---
+    # Кнопки и их места прежние (уроки 230×38, клиенты 230×35), меняется только рисунок внутри: значок в 6 px от края,
+    # текст — через 6 px после значка. Клиенты: верх портрета 28/25/22 px — наибольший, при котором ни одно имя,
+    # помещавшееся без значка (fit_text: кегль до 75 %, без «…»), не начинает обрезаться; не годится и 22 — без
+    # значков у всего списка. Уроки — ступени SEAT_LES_TIERS по порядку: [значок, отступ, зазор до текста, справа,
+    # строк]; сначала название в одну строку (значок 30, 26, 22, потом 22 с отступами 3/3/4), потом в 2 строки внутри
+    # той же кнопки (кегль 15 → 11 = 75 %, номер «3.» — в первой строке со словом). Ступень годится, если каждое
+    # название, помещавшееся без значка, помещается и с ним; значки — у всех уроков или ни у кого. Выбранный урок —
+    # жирным, только если жирным помещается. Считается по подписи (подписи на языке, множитель текста, шрифт), не
+    # каждый кадр; итог — в SEAT_ICON_INFO (проверки).
+    SEAT_CASE_ICONS = (28, 25, 22)
+    SEAT_LES_TIERS = ((30, 6, 6, 10, 1), (26, 6, 6, 10, 1), (22, 6, 6, 10, 1), (22, 3, 3, 4, 1),
+                      (30, 6, 6, 10, 2), (26, 6, 6, 10, 2), (22, 6, 6, 10, 2), (22, 3, 3, 4, 2))
+    SEAT_ICON_INFO = {}
+    _seat_icon_cache = {}
+
+    @staticmethod
+    def _seat_fit_line(s, w, size, bold):
+        """Как fit_text: (помещается без «…», кегль) — кегль уменьшается до 75 %."""
+        sz = size
+        while sz > int(size * 0.75) and font(sz, bold).size(s)[0] > w:
+            sz -= 1
+        return font(sz, bold).size(s)[0] <= w, sz
+
+    @classmethod
+    def _seat_les_lay(cls, title, tw, h, bold, maxl):
+        """Название урока со значком в ширину tw и высоту кнопки h: (кегль, строки) или None (без «…» не помещается).
+        Одна строка — как fit_text; maxl 2 — ещё 2 строки кеглем 15 → 11 (обе по высоте кнопки, в первой — номер и
+        хотя бы одно слово); из двух вариантов — с кеглем крупнее (поровну — одна строка)."""
+        ok, sz1 = cls._seat_fit_line(title, tw, 15, bold)
+        one = (sz1, [title]) if ok else None
+        if maxl < 2 or (one and one[0] >= 15):
+            return one
+        for sz in range(15, 10, -1):
+            if one and sz <= one[0]:
+                break
+            f = font(sz, bold)
+            if 2 * f.get_height() > h:
+                continue
+            lines = wrap_lines(title, tw, sz, raw=True, bold=bold)
+            if len(lines) != 2 or len(lines[0].split()) < 2:
+                continue
+            if all(f.size(ln)[0] <= tw for ln in lines):
+                return sz, lines
+        return one
+
+    def _seat_les_tier(self, w, h):
+        """Ступень значков уроков (кортеж из SEAT_LES_TIERS) или None — без значков."""
+        labels = [tr(f"{i + 1}. {les['title']}") for i, les in enumerate(SEAT_LESSONS) if i < LESSON_ICON_COUNT]
+        key = ("les", w, h, text_k(), A11Y.get("font"), tuple(labels))
+        res = self._seat_icon_cache.get(key)
+        if res is None:
+            res = (None, "", labels[0] if labels else "")
+            for tier in self.SEAT_LES_TIERS:
+                tw = w - tier[1] - tier[0] - tier[2] - tier[3]
+                ok, det, why = True, [], ""
+                for s in labels:
+                    lay = self._seat_les_lay(s, tw, h, False, tier[4])
+                    if lay is None:
+                        if self._seat_fit_line(s, w - 20, 15, False)[0]:
+                            ok, why = False, s
+                            break
+                        lay = (self._seat_fit_line(s, tw, 15, False)[1], [s])   # и без значка было «…»
+                    det.append(lay)
+                if ok:
+                    res = (tier, " ".join(f"{sz}/{len(ln)}" for sz, ln in det), "")
+                    break
+                res = (None, "", why)
+            if len(self._seat_icon_cache) > 64:
+                self._seat_icon_cache.clear()
+            self._seat_icon_cache[key] = res
+        self.SEAT_ICON_INFO["lessons"] = res
+        return res[0]
+
+    def _seat_case_icon_size(self, labels, w):
+        """Размер портрета на кнопках клиентов (0 — без портретов у всего списка)."""
+        key = ("fit", w, text_k(), A11Y.get("font"), tuple(labels))
+        res = self._seat_icon_cache.get(key)
+        if res is None:
+            res = 0
+            for isz in self.SEAT_CASE_ICONS:
+                if all(not (self._seat_fit_line(s, w - 20, 14, False)[0]
+                            and not self._seat_fit_line(s, w - (6 + isz + 6) - 10, 14, False)[0]) for s in labels):
+                    res = isz
+                    break
+            self._seat_icon_cache[key] = res
+        self.SEAT_ICON_INFO["fit"] = (res, " ".join(str(self._seat_fit_line(s, w - (12 + res) - 10 if res else w - 20,
+                                                                          14, False)[1]) for s in labels))
+        return res
+
+    def _seat_case_icon(self, art, size):
+        """Мини-портрет клиента: верх картинки, квадратная вырезка (0,72 ширины) — Surf size×size из кэша."""
+        px = max(1, round(size * RS))
+        key = ("case", art, px)
+        img = self._seat_icon_cache.get(key)
+        if img is None:
+            src = load_image(art)
+            w, h = pygame.Surface.get_size(src)
+            s = max(1, int(min(w, h) * 0.72))
+            part = pygame.Surface((s, s), pygame.SRCALPHA)
+            part.fill((0, 0, 0, 0))
+            pygame.Surface.blit(part, src, (0, 0), pygame.Rect((w - s) // 2, 0, s, s))
+            img = Surf.adopt(pygame.transform.smoothscale(part, (px, px)), (size, size))
+            self._seat_icon_cache[key] = img
+        return img
+
+    def _draw_seat_lesson_label(self, surf, i, r, tier, bold):
+        """Название урока на кнопке списка: со значком (ступень tier) или как раньше — fit_text без значка."""
+        title = f"{i + 1}. {SEAT_LESSONS[i]['title']}"
+        icon = lesson_icon(i + 1, tier[0]) if tier else None
+        if icon is None:
+            fit_text(surf, title, (r.x + 10, r.y + 9), r.w - 20, 15, WHITE, bold=bold)
+            return
+        s = tr(title)
+        _cap_text(surf, s, pygame.Rect((r.x + 10, r.y + 9), (r.w - 20, 19)))   # обход и озвучка — как без значка
+        CAPTURE["mute"] += 1
+        try:
+            isz, left, gap, right, maxl = tier
+            ix, iy = r.x + left, r.y + (r.h - isz) // 2
+            aa_rect(surf, (14, 12, 20, 200), (ix - 2, iy - 2, isz + 4, isz + 4), border_radius=6)
+            surf.blit(icon, (ix, iy))
+            tx = left + isz + gap
+            tw = r.w - tx - right
+            lay = self._seat_les_lay(s, tw, r.h, bold, maxl)
+            if bold and lay is None:
+                bold = False                        # жирным не помещается — обычным (выбранный виден по кнопке)
+                lay = self._seat_les_lay(s, tw, r.h, False, maxl)
+            if lay is None or len(lay[1]) < 2:
+                fit_text(surf, s, (r.x + tx, r.y + 9), tw, 15, WHITE, bold=bold)
+                return
+            sz, lines = lay
+            lh = font(sz, bold).get_height()
+            y = r.y + (r.h - 2 * lh) // 2
+            for ln in lines:
+                draw_text(surf, ln, (r.x + tx, y), sz, WHITE, bold)
+                y += lh
+        finally:
+            CAPTURE["mute"] -= 1
+
     def draw_seating(self, surf):
         self._bg(surf, "bg_workshop.png", WOOD)
         self._topbar(surf, "Кабинет посадки некроманта Мортимера")
@@ -12963,10 +13253,11 @@ class Game:
         surf.blit(bg, cv)
         aa_rect(surf, (96, 78, 136), cv, 2, border_radius=12)
         if sc["tab"] == "lessons":
-            for i, r in self._seat_list_rects():
+            lrects = self._seat_list_rects()
+            tier = self._seat_les_tier(lrects[0][1].w, lrects[0][1].h)   # значки уроков — у всех или ни у кого
+            for i, r in lrects:
                 Button(r, "", CYAN).draw(surf, mouse, active=i == sc["lesson"])
-                fit_text(surf, f"{i + 1}. {SEAT_LESSONS[i]['title']}", (r.x + 10, r.y + 9), r.w - 20, 15,
-                         WHITE, bold=i == sc["lesson"])
+                self._draw_seat_lesson_label(surf, i, r, tier, bold=i == sc["lesson"])
             les = SEAT_LESSONS[sc["lesson"]]
             lpose = les.get("pose") or {}
             demo_good = sc.get("demo_good", False)
@@ -13032,10 +13323,22 @@ class Game:
             elif self.SEAT_BODY_ON:                         # без тел клиентов переключать нечего
                 Button(tbtn, "ТЕЛО: ВИДНО" if xray else "ТЕЛО: СКРЫТО",
                        PURPLE if xray else CYAN).draw(surf, mouse, active=xray)
-            for i, r in self._seat_list_rects():
+            crects = self._seat_list_rects()
+            clabels = [("✔ " if self.is_done(SEAT_CASES[i]["id"]) else "") + SEAT_CASES[i]["client"] for i, _ in crects]
+            isz = self._seat_case_icon_size([tr(s_) for s_ in clabels], crects[0][1].w) if crects else 0
+            for (i, r), label in zip(crects, clabels):
                 done = self.is_done(SEAT_CASES[i]["id"])
                 Button(r, "", GOOD if done else CYAN).draw(surf, mouse, active=i == sc["case"])
-                fit_text(surf, ("✔ " if done else "") + SEAT_CASES[i]["client"], (r.x + 10, r.y + 8), r.w - 20, 14, WHITE)
+                if not isz:
+                    fit_text(surf, label, (r.x + 10, r.y + 8), r.w - 20, 14, WHITE)
+                    continue
+                _cap_text(surf, tr(label), pygame.Rect((r.x + 10, r.y + 8), (r.w - 20, 18)))   # обход — как без значка
+                CAPTURE["mute"] += 1
+                try:                                # мини-портрет слева, имя — через 6 px
+                    surf.blit(self._seat_case_icon(SEAT_CASES[i]["client_art"], isz), (r.x + 6, r.y + (r.h - isz) // 2))
+                    fit_text(surf, label, (r.x + 12 + isz, r.y + 8), r.w - 12 - isz - 10, 14, WHITE)
+                finally:
+                    CAPTURE["mute"] -= 1
             b = case["body"]
             draw_wrapped(surf, case["story"], (cv.x + 112, cv.y + 10), cv.w - 362, 14, WHITE)
             draw_wrapped(surf, chart, (cv.x + 112, ch_y), cv.w - 126, 13, CYAN)
