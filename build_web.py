@@ -75,15 +75,16 @@ def web_loops():
     return out
 
 
-def shrink_anim(fp, out=None):
+def shrink_anim(fp, out=None, max_h=400):
     """Кадр петли героя (JPEG + маска 560 px) для браузера: холсту 1920×1080 хватает 400 px, маске — половины (игра
-    растягивает её до размера кадра, _load_split) и 32 уровней прозрачности — втрое легче. Меньшие кадры
-    («волшебство» на портрете — 360 px) не увеличиваются: маска — вдвое меньше кадра, но не выше 200 px."""
+    растягивает её до размера кадра, _load_split) и 32 уровней прозрачности — втрое легче. Меньшие кадры не
+    увеличиваются: маска — вдвое меньше кадра, но не выше max_h / 2. max_h — предел высоты кадра: в браузере 400
+    (вес и память телефона), в exe у «волшебства» 480 (exe_assets.py: портрет в кадре ~380 px — как на экране 1080p)."""
     from PIL import Image
     out = out or fp
     name = os.path.basename(fp)
     im = Image.open(fp)
-    h = min(400, im.height) if not name.endswith(".a.png") else min(200, im.height)
+    h = min(max_h, im.height) if not name.endswith(".a.png") else min(max_h // 2, im.height)
     if h != im.height:
         im = im.resize((round(im.width * h / im.height), h), Image.LANCZOS)
     if name.endswith(".jpg"):

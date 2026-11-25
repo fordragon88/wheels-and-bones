@@ -45,7 +45,9 @@ for dp, _, files in os.walk(os.path.join(DST, "anim")):
                 and os.path.basename(dp) not in EXE_FULL_LOOPS):                                  # машущие — как были
             fp = os.path.join(dp, fn)
             before += os.path.getsize(fp)
-            build_web.shrink_anim(fp)
+            # «волшебство» 20 героев с 25.11 нарезано 480 px (портрет в кадре ~380 px — без растяжения на 1080p):
+            # в exe оставляем эту высоту (JPEG 80 и половинная маска — как у всех), проезд — 400, как на сайте
+            build_web.shrink_anim(fp, max_h=480 if os.path.basename(dp).startswith("magic_") else 400)
             after += os.path.getsize(fp)
             n_anim += 1
 print(f"exe assets: петли anim — {n_anim} кадров ужато, {before / 1e6:.1f} → {after / 1e6:.1f} МБ")
