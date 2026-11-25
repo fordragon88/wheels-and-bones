@@ -2601,11 +2601,79 @@ async def sc_phonebig(b):
     check(n > 0, f"phonebig: снимков {n} → {os.path.relpath(out, SHOTS)}/")
 
 
+async def sc_seatrough(b):
+    """Кабинет посадки, «шероховатости» (25.11) — снимки для владельца в tests/web_shots/seat_rough/: телефон 780×360
+    dpr 3 — примерка Искры в начале (все «⚠» видны сразу или листанием касанием по блоку; страницы — «…_page2»), RU/EN
+    100 и 150 %, уроки RU 100/150 %; компьютер 1280×720 — уроки RU 125/150 %, EN 125 % (значки при любом тексте),
+    крупный план списка ×2 (RU 150 %), примерка Искры RU 150 % / EN 125 % (листание щелчком)."""
+    out = os.path.join(SHOTS, "seat_rough")
+    os.makedirs(out, exist_ok=True)
+
+    async def stage(p, name, wait=1800):
+        if not await set_stage(p, name):
+            check(False, f"{p.name}: состояние {name} не встало")
+            return False
+        await p.wait(lambda q: q["frames"]["queue"] == 0 and q["frames"]["inflight"] == 0, "кадры", 6, quiet=True)
+        await p.pg.wait_for_timeout(wait)                 # реплика Мортимера допечаталась
+        return True
+
+    rows = []
+    for lang, text in (("ru", 0), ("en", 0), ("ru", 3), ("en", 3)):
+        tag = f"{lang}{'' if text == 0 else 150}"
+        p = await new_page(b, f"sr_phone_{tag}", legacy=SKIP_SEED, touch=True, mobile=True, w=780, h=360, dpr=3)
+        p.allow.append("ERR_NO_BUFFER_SPACE")
+        await orient(p, 780, 360, True, 3)
+        await p.boot("&phone=1")
+        await title_ready(p)
+        for x in (f"set:lang={lang}", f"set:text={text}"):
+            await set_stage(p, x)
+        st = await p.state()
+        check(st.get("phone") is True, f"{p.name}: телефонный режим ({st.get('phone')})")
+        if lang == "ru" and await stage(p, "seat_lessons"):     # уроки — до примерки (seat_lessons вкладку не ставит)
+            st = await p.state()
+            les = [b_ for b_ in st.get("buttons", []) if b_[0].startswith("Lesson_")]
+            check(bool(les) and all(round(b_[4]) == 48 for b_ in les), f"{p.name}: кнопки уроков 48 "
+                  f"({sorted({round(b_[4]) for b_ in les})})")
+            await p.pg.screenshot(path=os.path.join(out, f"phone_{tag}_lessons.png"), timeout=20000)
+        if await stage(p, "seat_fit_golem", 600):
+            await p.press("Case_5", wait=1800)
+            st = await p.state()
+            check(st.get("seat", {}).get("case") == 5, f"{p.name}: касание Искры — клиент выбран")
+            r = await warn_reach(p, f"телефон {tag}: Искра в начале примерки", os.path.join(out, f"phone_{tag}_fit_iskra"))
+            rows.append((f"телефон {tag}",) + r)
+        p.check_console()
+        await p.ctx.close()
+    for lang, text, fit in (("ru", 2, False), ("ru", 3, True), ("en", 2, True)):
+        tag = f"{lang}{[100, 112, 125, 150][text]}"
+        p = await new_page(b, f"sr_desk_{tag}", legacy=SKIP_SEED, w=1280, h=720, dpr=2 if text == 3 else 1)
+        await p.boot()
+        await title_ready(p)
+        for x in (f"set:lang={lang}", f"set:text={text}"):
+            await set_stage(p, x)
+        if await stage(p, "seat_lessons"):
+            await p.pg.screenshot(path=os.path.join(out, f"desk_{tag}_lessons.png"), timeout=20000,
+                                  **({"scale": "css"} if text == 3 else {}))
+            if text == 3:                                 # крупный план списка уроков ×2 (dpr 2)
+                x0, y0 = await p.at(776, 108)
+                x1, y1 = await p.at(1260, 310)
+                await p.pg.screenshot(path=os.path.join(out, f"desk_{tag}_lessons_zoom.png"), timeout=20000,
+                                      clip={"x": x0, "y": y0, "width": x1 - x0, "height": y1 - y0})
+        if fit and await stage(p, "seat_fit_golem", 600):
+            await p.press("Case_5", wait=1800)
+            r = await warn_reach(p, f"компьютер {tag}: Искра в начале примерки", os.path.join(out, f"desk_{tag}_fit_iskra"))
+            rows.append((f"компьютер {tag}",) + r)
+        p.check_console()
+        await p.ctx.close()
+    for r in rows:
+        info(f"seatrough: {r[0]} — «⚠» всего {r[1]}, видно сразу {r[2]}, страниц {r[3]}, кегль {r[4]}")
+    check(len(rows) == 6, f"seatrough: Искра снята {len(rows)} раз из 6 → seat_rough/")
+
+
 SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
              "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "feedback": sc_feedback, "perf": sc_perf,
              "prof": sc_prof, "screens": sc_screens, "tabs": sc_tabs, "store": sc_store, "loader": sc_loader,
              "netfail": sc_netfail, "fsexit": sc_fsexit, "res": sc_resparam, "zoom": sc_zoom, "assign": sc_assign,
-             "pad": sc_pad, "bg": sc_bg, "phonetext": sc_phonetext, "phonebig": sc_phonebig}
+             "pad": sc_pad, "bg": sc_bg, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "seatrough": sc_seatrough}
 TIMEOUT = {"screens": 5400, "phonetext": 7200,            # все экраны × 4 прохода — долго
            "bg": 2 * float(os.environ.get("WNB_BG_SECS", "70")) + 480}   # два раза «в фоне» + задание
 

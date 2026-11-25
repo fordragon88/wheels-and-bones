@@ -1271,8 +1271,8 @@ func _draw_lesson_btn(b: GameButton, r: Rect2) -> void:
 		_fit(b, title, r.position + Vector2(tx, 9), tw, 15, UI.WHITE, bold)   # одна строка (или «…», как было без значка)
 		return
 	var sz: int = lay[0]
-	var lh := UI.line_height(sz, bold)
-	var y := r.position.y + floorf((r.size.y - 2 * lh) / 2.0)
+	var lh := UI.line_height(sz, bold) - 2          # строки на 2 px теснее (внутри высоты строки — запас шрифта),
+	var y := r.position.y + floorf((r.size.y - 2 * lh) / 2.0)   # блок — по середине кнопки, не вплотную к рамке
 	for ln: String in lay[1]:
 		UI.draw_text(b, ln, Vector2(r.position.x + tx, y), sz, UI.WHITE, bold)
 		y += lh
