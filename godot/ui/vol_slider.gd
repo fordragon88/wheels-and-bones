@@ -4,6 +4,7 @@ extends Control
 ## ←/→ с клавиатуры — по 5 %. Подпись и проценты рисует окно.
 
 signal changed(v: float)
+signal released                           # мышь отпустили после перетаскивания (сохранить, «ok» — как game.py)
 
 var value: float = 0.5
 var muted: bool = false
@@ -39,9 +40,12 @@ func _set_x(x: float) -> void:
 
 func _gui_input(e: InputEvent) -> void:
 	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
+		var was := _drag
 		_drag = e.pressed
 		if e.pressed:
 			_set_x(e.position.x)
+		elif was:
+			released.emit()
 		accept_event()
 	elif e is InputEventMouseMotion and _drag:
 		_set_x(e.position.x)
@@ -51,6 +55,12 @@ func _gui_input(e: InputEvent) -> void:
 		changed.emit(value)
 		queue_redraw()
 		accept_event()
+		Audio.sfx("tick")                     # _a11y_vol + say_focus game.py: щелчок и новое значение вслух
+		Speech.say(str(accessibility_name), true)
+
+
+func dragging() -> bool:
+	return _drag
 
 
 func _draw() -> void:

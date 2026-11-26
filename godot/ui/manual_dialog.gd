@@ -86,6 +86,8 @@ func _update() -> void:
 
 
 func close() -> void:
+	if is_queued_for_deletion():                # второй close() в том же кадре (двойное нажатие) — уже закрыто
+		return
 	Audio.sfx("tick")
 	closed.emit()
 	queue_free()

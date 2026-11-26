@@ -241,6 +241,22 @@ static func with_screen_back(items: Array) -> Array:
 	return out
 
 
+## Пересборка окна или экрана root: пункт клавиатуры (kb_cur) запоминается путём от root и после сборки ставится на
+## новый узел с тем же путём (в game.py ключ пункта — строка, он переживает пересборку). Пустой путь — kb_cur не в root.
+func kb_save(root: Node) -> NodePath:
+	if is_instance_valid(kb_cur) and root.is_ancestor_of(kb_cur):
+		return root.get_path_to(kb_cur)
+	return NodePath()
+
+
+func kb_restore(root: Node, path: NodePath) -> void:
+	if path.is_empty() or not root.has_node(path):
+		return
+	var n := root.get_node(path)
+	if n is Control:
+		kb_cur = n as Control
+
+
 func kb_index(items: Array) -> int:
 	return items.find(kb_cur) if is_instance_valid(kb_cur) else -1
 
@@ -257,6 +273,8 @@ func nav_key(k: InputEventKey) -> bool:
 	var fo := get_viewport().gui_get_focus_owner()
 	if code in [KEY_LEFT, KEY_RIGHT] and fo != null and is_slider(fo):
 		return false                           # ползунок: ← → — значение (cur["adj"])
+	if code in [KEY_LEFT, KEY_RIGHT] and fo is ChairView:
+		return false                           # фокус на коляске (щёлкнули по ней): ← → — повернуть, как в её подписи
 	var items := kb_items()
 	if items.is_empty():
 		return false
@@ -398,7 +416,7 @@ func active_root() -> Node:
 	var scr: Node = Nav.current
 	if scr == null:
 		return null
-	for k: String in ["mini", "spec_dlg", "manual_dlg", "notes"]:
+	for k: String in ["mini", "manual_dlg", "spec_dlg", "notes"]:   # мануал, открытый из спеки, — поверх неё
 		var w: Variant = scr.get(k)
 		if w is Control and is_instance_valid(w) and (w as Control).is_visible_in_tree():
 			return w

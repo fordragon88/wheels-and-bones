@@ -54,16 +54,27 @@ func _on_settings(key: String) -> void:
 		_rebuild()
 
 
+var _focus_nm := StringName()               # пункт с фокусом при прошлой пересборке (их бывает две за нажатие)
+
+
+## Пересобрать окно: фокус и пункт клавиатуры (A11y.kb_cur) — на тех же по имени пунктах. Переключатель доступности
+## пересобирает окно дважды (Settings.changed и сам _access_toggle): ко второй фокус уже снят (кнопку удалили) —
+## берём имя с первой.
 func _rebuild() -> void:
 	var fo := get_viewport().gui_get_focus_owner()
-	var nm := fo.name if fo != null and is_ancestor_of(fo) else StringName()
+	var nm := fo.name if fo != null and is_ancestor_of(fo) else _focus_nm
+	var kb := A11y.kb_save(self)
 	for c in get_children():
 		remove_child(c)
 		c.queue_free()
 	_build()
+	A11y.kb_restore(self, kb)
 	var n := find_child(nm, true, false) if nm != StringName() else null
+	_focus_nm = nm if n is Control else StringName()
 	if n is Control:
 		UI.focus_later(n as Control)
+	if Nav.settings == self and Nav.top_layer() != self:
+		Nav.sync_focus(null, false)             # под справкой/окном кодов новые пункты — без фокуса
 
 
 func _btn(nm: String, r: Rect2, lbl: String, col: Color, cb: Callable, active := false, help := "") -> GameButton:
@@ -114,19 +125,25 @@ func _build() -> void:
 				s.changed.connect(func(v: float) -> void:
 					s.accessibility_name = "%s: %d%%" % [Loc.t(VOL_NAMES[key]), int(v * 100)]
 					Settings.vol[key] = v
-					Settings.save()
+					if not s.dragging():           # перетаскивание мышью — сохранить по отпусканию
+						Settings.save()
 					Audio.apply_volume()
 					queue_redraw())
+				s.released.connect(func() -> void:
+					Settings.save()
+					if key in ["master", "sfx"]:
+						Audio.sfx("ok"))              # услышать новую громкость (как game.py)
 				UI.touch_block(s, Vector2(0, -1))     # handle_sound_event: block — дорожка 230×8 inflate(24, 30)
 				add_child(s)
 				_zones.append(["vol_" + key, Rect2(P.position.x + 24, s.position.y, P.size.x - 48, s.size.y) if UI.phone()
 					else Rect2(P.position.x + 24, P.position.y + 146 + i * 58 - 20, P.size.x - 48, 40), s])
 			var on: bool = Settings.vol.get("on", true)
-			_btn("Mute", Rect2(P.position.x + 32, P.end.y - 72, 220, 56) if UI.phone() else Rect2(P.position.x + 32, P.end.y - 70, 220, 44),
-				"БЕЗ ЗВУКА" if on else "ВКЛЮЧИТЬ ЗВУК",
+			var mr := Rect2(P.position.x + 32, P.end.y - 72, 220, 56) if UI.phone() else Rect2(P.position.x + 32, P.end.y - 70, 220, 44)
+			_btn("Mute", mr, "БЕЗ ЗВУКА" if on else "ВКЛЮЧИТЬ ЗВУК",
 				UI.GREY if on else UI.GOOD, func() -> void:
 					Audio.toggle_sound()
 					Audio.sfx("tick"), false, "mute")
+			_zones[-1][1] = mr.grow(4)              # зона подсказки — только кнопка (_sound_mute_rect), не «ГОТОВО» рядом
 		"graphics":
 			var fs := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 			if OS.has_feature("web"):
@@ -185,6 +202,7 @@ func _build() -> void:
 				var k: String = sp[0]
 				_btn("Share_" + k.trim_prefix("share_"), sp[1], SHARE_LABELS[k], UI.PURPLE if k == "share_restore" else UI.CYAN,
 					_share_action.bind(k))
+				_zones.append([k, (sp[1] as Rect2), get_node("Share_" + k.trim_prefix("share_"))])   # подсказка — по кнопке
 			if reset_ask:
 				var w := (P.size.x - 80) / 2
 				var ry := P.position.y + (452 if ph else 352)
@@ -339,17 +357,54 @@ func first_focus() -> Control:
 
 
 func close() -> void:
+	if is_queued_for_deletion():
+		return
 	Audio.sfx("tick")
 	closed.emit()
 	queue_free()
 
 
-func _gui_input(_e: InputEvent) -> void:
+## Esc: сначала снимает вопрос о сбросе, потом закрывает окно (handle_sound_event в game.py).
+func escape() -> void:
+	if reset_ask:
+		reset_ask = false
+		Audio.sfx("tick")
+		Speech.say(Loc.t("Сброс отменён."), true)
+		_rebuild()
+		return
+	close()
+
+
+func _gui_input(e: InputEvent) -> void:
+	if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT and not P.has_point(e.position):
+		close()                             # щелчок мимо окна — закрыть (как в game.py)
 	accept_event()                          # клики мимо элементов окна — не на экран под ним
 
 
-func _process(_dt: float) -> void:
-	Screen.redraw_on(_help, [_help_zone(), UI.kb_active, tab, _zones.size()])   # карточка — только когда сменился пункт
+var _say_zone: int = -2                     # пункт, о котором думаем сказать подсказку (_settings_help_say)
+var _say_t: float = 0.0
+var _said: bool = false
+
+
+func _process(dt: float) -> void:
+	var hz := _help_zone()
+	Screen.redraw_on(_help, [hz, UI.kb_active, tab, _zones.size()])   # карточка — только когда сменился пункт
+	# озвучка: фокус клавиатуры задержался на настройке 1,2 с — прочитать, что она делает (один раз на пункт)
+	if not (UI.kb_active and Settings.a11y.get("on", false)):
+		_say_zone = -2
+		return
+	var key: String = _zones[hz][0] if hz >= 0 else ""
+	if hz != _say_zone:
+		_say_zone = hz
+		_say_t = 0.0
+		_said = false
+	elif key != "" and not _said:
+		_say_t += dt
+		if _say_t > 1.2:
+			_said = true
+			var text := Loc.t(Content.consts.get("setting_help", {}).get(key, ""))
+			if text != "":
+				Speech.say(text)
 
 
 ## Пункт под мышью (или в фокусе клавиатуры), о котором карточка справа; -1 — нет.

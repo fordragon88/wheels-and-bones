@@ -522,6 +522,7 @@ func rebuild() -> void:
 	if portrait:
 		_portrait_state = [portrait.t, portrait.auto, portrait.idle_t0 if not portrait.playing() else portrait.t]
 	var keep: Array[Control] = []                            # окна мини-игры и сносок переживают пересборку
+	var fo := get_viewport().gui_get_focus_owner()
 	for w: Control in [mini, notes]:
 		if w and w.get_parent() == self:
 			remove_child(w)
@@ -545,10 +546,10 @@ func rebuild() -> void:
 	for w in keep:
 		add_child(w)
 	if not keep.is_empty():
-		UI.set_focus_enabled(self, false)
-		for w in keep:
-			UI.set_focus_enabled(w, true)
-			UI.focus_later((w as Variant).first_focus())
+		raise_header()
+		var top := modal()                                    # фокус — где был в окне, иначе первый пункт окна
+		Nav.sync_focus(fo if is_instance_valid(fo) and top != null and top.is_ancestor_of(fo)
+			else (top as Variant).first_focus() if top != null else null)
 
 
 # ---------------- диагностика ----------------
@@ -857,16 +858,24 @@ func open_notes() -> void:
 		return
 	notes = NotesDialog.make(job)
 	notes.closed.connect(close_notes)
-	UI.set_focus_enabled(self, false)
 	add_child(notes)
+	raise_header()
+	Nav.sync_focus(null, false)                       # фокус в окне ставит само окно
+
+
+## Окно сверху: мини-игра (поверх сносок, если обе), сноски мануала.
+func modal() -> Control:
+	for w: Variant in [mini, notes]:
+		if _is_modal(w):
+			return w
+	return null
 
 
 func close_notes() -> void:
 	if notes:
 		notes.queue_free()
 		notes = null
-		UI.set_focus_enabled(self, true)
-		_focus_default()
+		Nav.sync_focus(first_focus())
 
 
 # ---------------- мини-игры ----------------
@@ -877,19 +886,21 @@ func start_mini(st_: Dictionary) -> void:
 	mini.solved.connect(_mini_solved)
 	mini.missed.connect(func(msg: String, secs: float) -> void: miss(msg, secs))
 	mini.closed.connect(close_mini)
-	UI.set_focus_enabled(self, false)
 	add_child(mini)
+	raise_header()
+	Nav.sync_focus(null, false)                       # фокус в окне ставит само окно
 
 
 func close_mini() -> void:
 	if mini:
 		mini.queue_free()
 		mini = null
-		UI.set_focus_enabled(self, true)
-		_focus_default()
+		Nav.sync_focus(first_focus())
 
 
 func _mini_solved() -> void:
+	if mini == null:                                  # второй сигнал в том же кадре — шаг уже засчитан
+		return
 	var st_: Dictionary = mini.step
 	close_mini()
 	complete_base_step(st_)

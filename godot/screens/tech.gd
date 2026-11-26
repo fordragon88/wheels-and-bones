@@ -316,6 +316,7 @@ func _update_a11y() -> void:
 
 func rebuild() -> void:
 	var keep: Array[Control] = []
+	var fo := get_viewport().gui_get_focus_owner()
 	for w: Control in [mini, spec_dlg, manual_dlg]:
 		if w and w.get_parent() == self:
 			remove_child(w)
@@ -340,9 +341,10 @@ func rebuild() -> void:
 	for w in keep:
 		add_child(w)
 	if not keep.is_empty():
-		UI.set_focus_enabled(self, false)
-		UI.set_focus_enabled(keep[-1], true)
-		UI.focus_later((keep[-1] as Variant).first_focus())
+		raise_header()
+		var top := modal()                        # фокус — где был в окне, иначе первый пункт верхнего окна
+		Nav.sync_focus(fo if is_instance_valid(fo) and top != null and top.is_ancestor_of(fo)
+			else (top as Variant).first_focus() if top != null else null)
 
 
 # ---------------- для панели инструментов ----------------
@@ -512,20 +514,26 @@ func step_skip() -> void:
 
 # ---------------- окна: мануал, спека, мини-игра ----------------
 
+## Окно сверху: мини-игра, мануал (открытый из спеки — поверх неё), спека.
+func modal() -> Control:
+	for w: Variant in [mini, manual_dlg, spec_dlg]:
+		if _is_modal(w):
+			return w
+	return null
+
+
 func _modal(w: Control) -> void:
-	UI.set_focus_enabled(self, false)
 	add_child(w)
+	raise_header()
+	Nav.sync_focus(null, false)                   # фокус в окне ставит само окно (_ready)
 
 
 func _unmodal() -> void:
-	UI.set_focus_enabled(self, true)
 	if spec_dlg:                                  # мануал поверх спеки — фокус обратно в спеку
-		UI.set_focus_enabled(self, false)
-		UI.set_focus_enabled(spec_dlg, true)
 		spec_dlg.refresh()
-		UI.focus_later(spec_dlg.first_focus())
+		Nav.sync_focus(spec_dlg.first_focus())
 	else:
-		_focus_default()
+		Nav.sync_focus(first_focus())
 
 
 ## click_job_tech: мини-окно, потом окно мануала (без переноса), спека, фаза ремонта (manual, skip, инструменты,
@@ -548,6 +556,8 @@ func open_manual(key: String = "") -> void:
 		pages = Content.manual.keys()
 	manual_dlg = ManualDialog.make(pages, key if key != "" else _manual_page, manual_viewed)
 	manual_dlg.closed.connect(func() -> void:
+		if manual_dlg == null:                        # второй close() в том же кадре — окно уже закрыто
+			return
 		_manual_page = manual_dlg.page
 		manual_dlg = null
 		_unmodal())
@@ -576,6 +586,8 @@ func start_mini(st: Dictionary) -> void:
 	close_mini()
 	mini = MiniGame.make(st)
 	mini.solved.connect(func() -> void:
+		if mini == null:                              # второй сигнал в том же кадре — шаг уже засчитан
+			return
 		var s: Dictionary = mini.step
 		close_mini()
 		complete_tech_step(s))

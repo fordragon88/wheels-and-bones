@@ -99,8 +99,8 @@ func go(name: String, p: Dictionary = {}, remember: bool = true) -> void:
 	current.params = p
 	current.screen_name = name
 	host.add_child(current)
-	if Share.dlg != null:                      # окно кодов поверх нового экрана (итог задания) — фокус у окна
-		UI.set_focus_enabled(host, false)
+	sync_focus(null, false)                    # окно поверх нового экрана (итог задания) — фокус у окна, не у экрана
+	if Share.dlg != null:
 		UI.focus_later(Share.dlg.first_focus())
 	Audio.scene(name, current.music_theme())
 	_esc_t = 0.0
@@ -159,11 +159,10 @@ func open_settings() -> void:
 		return
 	settings = SettingsDialog.new()
 	settings.closed.connect(_on_settings_closed)
-	UI.set_focus_enabled(host, false)
+	_remember_focus(settings)
 	overlay.get_node("Top").add_child(settings)
 	overlay.get_node("Top").move_child(toast, -1)
-	var f := settings.first_focus()
-	UI.focus_later(f)
+	sync_focus(settings.first_focus())
 
 
 ## Окно замечания: d — что за замечание (kind general — флажок ⚑, иначе — «Я не согласен» с ошибкой);
@@ -175,19 +174,21 @@ func open_feedback(d: Dictionary, on_done: Callable = Callable()) -> void:
 	if DisplayServer.get_name() != "headless":
 		shot = get_viewport().get_texture().get_image()
 	feedback = FeedbackDialog.make(d, shot)
+	var fb := feedback
 	feedback.closed.connect(func(sent: bool, online: bool) -> void:
+		if feedback != fb:                     # второй send()/close() того же окна в одном кадре — уже закрыто
+			return
 		feedback = null
-		UI.set_focus_enabled(host, true)
-		if settings == null and current != null:
-			current._focus_default()
+		_restore_focus(fb)
 		if sent and d.get("kind", "general") == "general":
 			flash("Спасибо! Замечание отправляется разработчикам." if online else
 				"Спасибо! Замечание сохранено — его проверят и поправят игру.", UI.GOOD, 5.0)
 		if on_done.is_valid():
 			on_done.call(sent, online))
-	UI.set_focus_enabled(host, false)
+	_remember_focus(feedback)
 	overlay.get_node("Top").add_child(feedback)
 	overlay.get_node("Top").move_child(toast, -1)
+	sync_focus(null, false)                    # фокус ставит само окно (первая причина)
 	Audio.sfx("tick")
 
 
@@ -200,11 +201,10 @@ func open_flag() -> void:
 ## F1 — справка по клавишам (модально; Esc или F1 — закрыть).
 func toggle_help() -> void:
 	if help != null:
-		help.queue_free()
+		var h := help
+		h.queue_free()
 		help = null
-		UI.set_focus_enabled(host, true)
-		if current != null:
-			current._focus_default()
+		_restore_focus(h)                       # фокус — тому окну, что под справкой (настройки, замечание…), не экрану
 		Speech.say(Loc.t("Справка закрыта."), true)
 		return
 	var keys: Array = []                       # справка вслух — все клавиши (toggle_help в game.py)
@@ -212,32 +212,24 @@ func toggle_help() -> void:
 		keys.append("%s: %s." % [Loc.t(kv[0]), Loc.t(kv[1])])
 	Speech.say(Loc.t("Клавиши.") + " " + " ".join(keys) + " " + Loc.t("Esc — закрыть справку."), true)
 	help = HelpOverlay.new()
-	UI.set_focus_enabled(host, false)
+	_remember_focus(help)
 	overlay.get_node("Top").add_child(help)
+	sync_focus()
 
 
 ## Модальное окно поверх экрана (и поверх настроек): окно кодов и ссылок.
 func show_modal(c: Control) -> void:
-	UI.set_focus_enabled(host, false)
-	if settings != null:
-		UI.set_focus_enabled(settings, false)
+	_remember_focus(c)
 	overlay.get_node("Top").add_child(c)
 	overlay.get_node("Top").move_child(toast, -1)
-	if c.has_method("first_focus"):
-		UI.focus_later(c.call("first_focus"))
+	sync_focus(c.call("first_focus") if c.has_method("first_focus") else null)
 
 
 func hide_modal(c: Control) -> void:
 	if c.get_parent():
 		c.get_parent().remove_child(c)
 	c.queue_free()
-	if settings != null:
-		UI.set_focus_enabled(settings, true)
-		UI.focus_later(settings.first_focus())
-	else:
-		UI.set_focus_enabled(host, true)
-		if current != null:
-			current._focus_default()
+	_restore_focus(c)
 
 
 func close_settings() -> void:
@@ -246,10 +238,77 @@ func close_settings() -> void:
 
 
 func _on_settings_closed() -> void:
+	var s := settings
 	settings = null
-	UI.set_focus_enabled(host, true)
-	if current != null:
-		current._focus_default()
+	_restore_focus(s)
+
+
+# ================= слои окон и фокус (один диспетчер на все окна) =================
+## Сверху вниз: справка F1 > замечание > окно кодов и ссылок > настройки > окно экрана (мини-игра, мануал, спека,
+## сноски, карточка гаража — Screen.modal()) > сам экран. Фокус Godot (Tab, Enter, чтец экрана) — только у верхнего
+## слоя, у нижних выключен (UI.set_focus_enabled). sync_focus зовут при открытии и закрытии любого окна и в конце
+## пересборки экрана (Screen.rebuild): пересобранный под окном экран не забирает фокус (E7), закрытое окно отдаёт
+## фокус следующему открытому, а не экрану (E9). Как в game.py: там модальное окно просто ловит ввод первым.
+var _focus_before: Dictionary = {}           # id окна → элемент, у которого был фокус до его открытия
+
+
+## Верхний слой: окно поверх экрана, окно экрана или сам экран (null — экрана ещё нет).
+func top_layer() -> Node:
+	for w: Variant in [help, feedback, Share.dlg, settings]:
+		if w != null and is_instance_valid(w) and (w as Node).is_inside_tree():
+			return w
+	if current == null or not is_instance_valid(current):
+		return null
+	var m := current.modal()
+	return m if m != null else current
+
+
+## Фокус только у верхнего слоя. want — куда поставить фокус (если он в верхнем слое); иначе (fallback) — фокус
+## остаётся, где был, если он в верхнем слое, а нет — первый пункт верхнего слоя. Справка своих пунктов не имеет.
+func sync_focus(want: Control = null, fallback: bool = true) -> void:
+	var top := top_layer()
+	for w: Variant in [feedback, Share.dlg, settings]:
+		if w != null and is_instance_valid(w):
+			UI.set_focus_enabled(w, w == top)
+	if current != null and is_instance_valid(current):
+		if top == current or (top != null and current.is_ancestor_of(top)):
+			current.apply_focus()
+		else:
+			UI.set_focus_enabled(host, false)
+	if top == null or top == help:
+		return
+	if want != null and is_instance_valid(want) and (want == top or top.is_ancestor_of(want)):
+		UI.focus_later(want)
+		return
+	if not fallback:
+		return
+	var fo := get_viewport().gui_get_focus_owner()
+	if fo != null and top.is_ancestor_of(fo):
+		return
+	UI.focus_later(_first_focus_of(top))
+
+
+static func _first_focus_of(n: Node) -> Control:
+	return n.call("first_focus") as Control if n.has_method("first_focus") else null
+
+
+## Окно открывается: запомнить, у кого был фокус (вернуть ему при закрытии).
+func _remember_focus(w: Node) -> void:
+	_focus_before[w.get_instance_id()] = get_viewport().gui_get_focus_owner()
+
+
+## Окно закрылось: фокус — тому, у кого он был до окна (если он в новом верхнем слое), или пункту клавиатуры, или
+## первому пункту верхнего слоя.
+func _restore_focus(w: Node) -> void:
+	var prev: Variant = _focus_before.get(w.get_instance_id() if w != null else 0)
+	_focus_before.erase(w.get_instance_id() if w != null else 0)
+	var want: Control = prev as Control if is_instance_valid(prev) else null
+	if want == null and is_instance_valid(A11y.kb_cur):
+		want = A11y.kb_cur
+	var top := top_layer()
+	if want != null and top != null and not (want == top or top.is_ancestor_of(want)):
+		want = null
+	sync_focus(want if want != null else (_first_focus_of(top) if top != null else null))
 
 
 func _process(dt: float) -> void:
@@ -325,9 +384,10 @@ func _pad(e: InputEvent) -> bool:
 					_pad_key(KEY_TAB, true, b.button_index == JOY_BUTTON_LEFT_SHOULDER)
 					_pad_key(KEY_TAB, false, b.button_index == JOY_BUTTON_LEFT_SHOULDER)
 			JOY_BUTTON_START:
-				if b.pressed:
+				if b.pressed:                       # закрыть — только когда настройки сверху (не под справкой/окном)
 					if settings != null:
-						close_settings()
+						if top_layer() == settings:
+							close_settings()
 					elif feedback == null and Share.dlg == null and help == null:
 						open_settings()
 			_:
@@ -409,12 +469,16 @@ func _input(e: InputEvent) -> void:
 			_snapping = false
 			get_viewport().set_input_as_handled()
 			return
-	if (e is InputEventJoypadButton or e is InputEventJoypadMotion) and _pad(e):
-		if not UI.kb_active:
-			UI.kb_active = true
-			_redraw_focus()
-		get_viewport().set_input_as_handled()
-		return
+	if e is InputEventJoypadButton or e is InputEventJoypadMotion:
+		var n0 := pad_presses
+		if _pad(e):
+			# режим клавиатуры — только когда геймпад что-то нажал (кнопка, стик за мёртвой зоной 0,5): дрожь стика
+			# в покое и правый стик рамку фокуса не включают (pad_actions в game.py дают для них [])
+			if pad_presses != n0 and not UI.kb_active:
+				UI.kb_active = true
+				_redraw_focus()
+			get_viewport().set_input_as_handled()
+			return
 	if e is InputEventMouseMotion:
 		if UI.kb_active:
 			UI.kb_active = false
@@ -423,9 +487,9 @@ func _input(e: InputEvent) -> void:
 		if not UI.kb_active:
 			UI.kb_active = true
 			_redraw_focus()
-	if (e is InputEventKey or e is InputEventMouseButton or e is InputEventScreenTouch or e is InputEventJoypadButton) \
+	if (e is InputEventKey or is_click(e) or e is InputEventScreenTouch or e is InputEventJoypadButton) \
 			and e.is_pressed() and not e.is_echo():
-		toast.on_input()
+		toast.on_input()                       # колёсико (зум коляски) итог хода не гасит — как _toast_input game.py
 	if e is InputEventKey and e.is_pressed():   # стрелки и Tab — по списку пунктов game.py (A11y.kb_items)
 		var k := e as InputEventKey
 		if A11y.nav_key(k):
@@ -465,6 +529,13 @@ func touch_snap(p: Vector2, on: bool = UI.touch()) -> Vector2:
 	return UI.touch_snap(p, targets, block, true)
 
 
+## Нажатие кнопки мыши 1–3 (левая, правая, средняя): колёсико — не «игрок что-то нажал» (MOUSEBUTTONDOWN с
+## button 1–3 в _toast_input game.py; окна замечания и карточка гаража там закрываются только левой).
+static func is_click(e: InputEvent) -> bool:
+	return e is InputEventMouseButton and (e as InputEventMouseButton).button_index in \
+		[MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]
+
+
 func _redraw_focus() -> void:
 	var f := get_viewport().gui_get_focus_owner()
 	if f:
@@ -478,28 +549,42 @@ func _unhandled_input(e: InputEvent) -> void:
 			toggle_help()
 			get_viewport().set_input_as_handled()
 			return
+		# окна поверх экрана — как a11y_key game.py: F2 работает везде; R/T/H/C — кроме справки и полей ввода
+		# (A11y.key сам смотрит, печатают ли в поле); F11/Alt+Enter — весь экран (в справке Alt+Enter — это Enter)
 		if help != null:
-			if k.keycode == KEY_ESCAPE:
-				toggle_help()
+			if k.keycode in [KEY_ESCAPE, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE] and not k.echo:
+				toggle_help()                      # справку закрывают Esc, Enter, пробел (и A геймпада — это Enter)
+			elif k.keycode == KEY_F2 and not k.echo:
+				A11y.toggle_speech()
+			elif k.keycode == KEY_F11:
+				_toggle_fullscreen()
 			get_viewport().set_input_as_handled()
 			return
 		if feedback != null:
 			if k.keycode == KEY_ESCAPE:
 				feedback.close()
-				get_viewport().set_input_as_handled()
+			elif not A11y.key(k) and not _fullscreen_key(k):
+				return
+			get_viewport().set_input_as_handled()
 			return
 		if Share.dlg != null:
-			if k.keycode == KEY_ESCAPE and not k.echo:
-				Share.dlg.escape()
-				get_viewport().set_input_as_handled()
+			if k.keycode == KEY_ESCAPE:
+				if not k.echo:
+					Share.dlg.escape()
+			elif not A11y.key(k) and not _fullscreen_key(k):
+				return
+			get_viewport().set_input_as_handled()
 			return
 		if settings != null:
 			if k.keycode == KEY_ESCAPE:
-				close_settings()
-				get_viewport().set_input_as_handled()
-			elif k.keycode == KEY_M and not k.echo:    # как game.py: M работает и при открытых настройках
-				_toggle_sound_key()
-				get_viewport().set_input_as_handled()
+				if not k.echo:
+					settings.escape()
+			elif k.keycode == KEY_M:              # как game.py: M работает и при открытых настройках
+				if not k.echo:
+					_toggle_sound_key()
+			elif not A11y.key(k) and not _fullscreen_key(k):
+				return
+			get_viewport().set_input_as_handled()
 			return
 		if A11y.key(k):
 			get_viewport().set_input_as_handled()
@@ -516,12 +601,8 @@ func _unhandled_input(e: InputEvent) -> void:
 				if not k.echo:
 					_toggle_sound_key()
 				get_viewport().set_input_as_handled()
-			KEY_F11:
-				_toggle_fullscreen()
-				get_viewport().set_input_as_handled()
-			KEY_ENTER:
-				if k.alt_pressed:
-					_toggle_fullscreen()
+			KEY_F11, KEY_ENTER, KEY_KP_ENTER:
+				if _fullscreen_key(k):
 					get_viewport().set_input_as_handled()
 	elif e is InputEventJoypadButton and e.pressed and (e as InputEventJoypadButton).button_index == JOY_BUTTON_B:
 		back()                                     # (геймпад переводится в клавиши в _input — сюда не доходит)
@@ -533,7 +614,20 @@ func _toggle_sound_key() -> void:
 	flash("Звук включён" if on else "Звук выключен (M — включить)", UI.GHOST, 1.8)
 
 
+## F11 или Alt+Enter — весь экран / в окне. true — это была она.
+func _fullscreen_key(k: InputEventKey) -> bool:
+	if k.keycode == KEY_F11 or (k.keycode in [KEY_ENTER, KEY_KP_ENTER] and k.alt_pressed):
+		if not k.echo:
+			_toggle_fullscreen()
+		return true
+	return false
+
+
+var fullscreen_toggles: int = 0              # сколько раз переключали весь экран (тесты: там окно не трогаем)
+
+
 func _toggle_fullscreen() -> void:
+	fullscreen_toggles += 1
 	if test_mode:
 		return
 	# браузер: полный экран можно включить только из обработчика нажатия — Godot сам вызывает это внутри события

@@ -21,8 +21,8 @@ func _ready() -> void:
 
 
 func _gui_input(e: InputEvent) -> void:
-	if e is InputEventMouseButton and e.pressed:
-		Nav.toggle_help()                         # клик — закрыть (как в game.py)
+	if Nav.is_click(e) and e.pressed:
+		Nav.toggle_help()                         # щелчок — закрыть (как в game.py; колёсико — нет)
 	accept_event()
 
 

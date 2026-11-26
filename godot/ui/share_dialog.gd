@@ -141,6 +141,10 @@ func _ready() -> void:
 
 
 func build() -> void:
+	# пересборка («СНЯТЬ ВСЁ», «ОТПРАВИТЬ»): фокус и пункт клавиатуры — на тех же по имени кнопках
+	var fo := get_viewport().gui_get_focus_owner() if is_inside_tree() else null
+	var fnm := fo.name if fo != null and is_ancestor_of(fo) else StringName()
+	var kb := A11y.kb_save(self)
 	for c in get_children():
 		remove_child(c)
 		c.queue_free()
@@ -178,6 +182,10 @@ func build() -> void:
 		b.update_a11y()
 		b.pressed.connect(action.bind(bs[0]))
 		add_child(b)
+	A11y.kb_restore(self, kb)
+	var n := find_child(fnm, true, false) if fnm != StringName() else null
+	if n is Control and (n as Control).focus_mode != Control.FOCUS_NONE:
+		UI.focus_later(n as Control)
 	queue_redraw()
 
 

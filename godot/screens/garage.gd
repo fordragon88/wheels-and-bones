@@ -93,7 +93,8 @@ func build() -> void:
 	_popup.draw.connect(_draw_popup)
 	_popup.gui_input.connect(func(e: InputEvent) -> void:
 		if e is InputEventMouseButton and e.pressed:
-			close_card()                     # окно урока: любой клик закрывает
+			if e.button_index == MOUSE_BUTTON_LEFT:
+				close_card()                 # окно урока: любой щелчок закрывает (левой, как в game.py; колёсико — нет)
 			_popup.accept_event())
 	add_child(_popup)
 	_close = GameButton.make(Rect2(UI.W / 2.0 - 90, 110 + 470 - 72, 180, 56) if UI.phone()
@@ -102,6 +103,7 @@ func build() -> void:
 	_close.pressed.connect(close_card)
 	_popup.add_child(_close)
 	_popup.visible = open_idx >= 0
+	_popup_a11y()                            # пересборка (RU/EN) при открытой карточке — подписи окна на новом языке
 
 
 func first_focus() -> Control:
@@ -110,21 +112,36 @@ func first_focus() -> Control:
 	return _cards[0] if not _cards.is_empty() else get_node_or_null("BackBtn")
 
 
+## Окно урока сверху (Nav.sync_focus).
+func modal() -> Control:
+	return _popup if open_idx >= 0 and _is_modal(_popup) else null
+
+
+## При окне урока фокус — у окна и, как в game.py, у значков настроек, флажка и языка (они в списке клавиатуры).
+func apply_focus() -> void:
+	super.apply_focus()
+	if modal() != null:
+		for n: String in ["Gear", "Flag", "Lang"]:
+			var ic := get_node_or_null(n) as Control
+			if ic != null and ic.has_meta("_focus_mode"):
+				ic.focus_mode = ic.get_meta("_focus_mode")
+				ic.remove_meta("_focus_mode")
+
+
+func _popup_a11y() -> void:
+	if open_idx < 0 or open_idx >= SaveGame.garage.size():
+		return
+	var job := Content.job_by_id(SaveGame.garage[open_idx][0])
+	_popup.accessibility_name = Loc.t(job.get("client", ""))
+	_popup.accessibility_description = Loc.t("ЧЕМУ НАУЧИЛСЯ") + ": " + Loc.t(job.get("fact", _fact(job)))
+
+
 func open_card(i: int) -> void:
 	open_idx = i
 	Audio.sfx("tick")
 	_popup.visible = true
-	UI.set_focus_enabled(self, false)
-	UI.set_focus_enabled(_popup, true)
-	for n: String in ["Gear", "Flag", "Lang"]:   # как в game.py: при окне урока настройки, флажок и язык — в списке
-		var ic := get_node_or_null(n) as Control
-		if ic != null and ic.has_meta("_focus_mode"):
-			ic.focus_mode = ic.get_meta("_focus_mode")
-			ic.remove_meta("_focus_mode")
-	var job := Content.job_by_id(SaveGame.garage[i][0])
-	_popup.accessibility_name = Loc.t(job.get("client", ""))
-	_popup.accessibility_description = Loc.t("ЧЕМУ НАУЧИЛСЯ") + ": " + Loc.t(job.get("fact", _fact(job)))
-	UI.focus_later(_close)
+	_popup_a11y()
+	Nav.sync_focus(_close)
 
 
 func close_card() -> void:
@@ -133,8 +150,7 @@ func close_card() -> void:
 	open_idx = -1
 	Audio.sfx("tick")
 	_popup.visible = false
-	UI.set_focus_enabled(self, true)
-	_focus_default()
+	Nav.sync_focus(first_focus())
 
 
 func go_back() -> void:

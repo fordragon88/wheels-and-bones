@@ -119,7 +119,10 @@ func _ready() -> void:
 	text.gui_input.connect(func(e: InputEvent) -> void:
 		if e is InputEventKey and e.pressed and (e.keycode == KEY_ENTER or e.keycode == KEY_KP_ENTER):
 			text.accept_event()
-			send())
+			if e.alt_pressed:                  # Alt+Enter — весь экран, как в game.py (не «отправить»)
+				Nav._fullscreen_key(e)
+			elif not e.echo:
+				send())
 	add_child(text)
 	var bh := 56 if UI.phone() else 44
 	var by := P.end.y - (72 if UI.phone() else 62)
@@ -188,19 +191,25 @@ func _update() -> void:
 
 
 func _gui_input(e: InputEvent) -> void:
-	if e is InputEventMouseButton and e.pressed and not P.has_point(e.position):
-		close()                                   # клик мимо окна — закрыть (как в game.py)
+	if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT and not P.has_point(e.position):
+		close()                                   # щелчок мимо окна — закрыть (как в game.py; колёсико — нет)
 	accept_event()
 
 
 func _unhandled_key_input(e: InputEvent) -> void:
 	if e is InputEventKey and e.pressed and (e.keycode == KEY_ENTER or e.keycode == KEY_KP_ENTER) \
-			and get_viewport().gui_get_focus_owner() == text:
+			and not e.alt_pressed and not e.echo and get_viewport().gui_get_focus_owner() == text:
 		send()
 		get_viewport().set_input_as_handled()
 
 
+var _done := false                              # окно уже закрыто (второе нажатие в том же кадре — мимо)
+
+
 func close() -> void:
+	if _done:
+		return
+	_done = true
 	Audio.sfx("tick")
 	closed.emit(false, false)
 	queue_free()
@@ -215,6 +224,9 @@ func entry() -> Dictionary:
 
 
 func send() -> void:
+	if _done:                                   # двойное «Отправить» в одном кадре — одно замечание, не два
+		return
+	_done = true
 	var online := Feedback.send(Feedback.payload(entry()), shot)
 	Audio.sfx("ok")
 	closed.emit(true, online)

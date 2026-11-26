@@ -115,19 +115,54 @@ func client_now() -> String:
 	return ""
 
 
+## Окно экрана поверх него (мини-игра, мануал, спека, сноски, карточка гаража) — верхнее; null — окна нет.
+## Nav.sync_focus отдаёт фокус ему (или окну поверх экрана), а не экрану.
+func modal() -> Control:
+	return null
+
+
+## Окно экрана w — его ребёнок (не вынуто на время пересборки) и видно.
+func _is_modal(w: Variant) -> bool:
+	return w is Control and is_instance_valid(w) and (w as Control).get_parent() == self and (w as Control).visible
+
+
+## Фокус внутри экрана (Nav.sync_focus, когда сверху нет окон Nav): есть окно экрана — только у окна, иначе — у всего.
+func apply_focus() -> void:
+	var w := modal()
+	UI.set_focus_enabled(self, w == null)
+	if w != null:
+		UI.set_focus_enabled(w, true)
+
+
+## Шапка экрана поверх окон задания: «Я НЕ СОГЛАСЕН», «пропустить обучение», ◂, ⚑, RU/EN, ⚙ (в game.py они
+## рисуются после сцены и их щелчки проверяются раньше click_job). Затемнение окна — под шапкой.
+func raise_header() -> void:
+	for nm: String in ["Dispute", "SkipTutorial", "Back", "Flag", "Lang", "Gear"]:
+		var n := get_node_or_null(nm)
+		if n != null:
+			move_child(n, -1)
+
+
 func rebuild() -> void:
 	var fo := get_viewport().gui_get_focus_owner() if is_inside_tree() else null
 	var path := get_path_to(fo) if fo != null and is_ancestor_of(fo) else NodePath()
+	var kb := A11y.kb_save(self)
 	for c in get_children():
 		remove_child(c)
 		c.queue_free()
 	build()
+	A11y.kb_restore(self, kb)                 # пункт клавиатуры — тот же по имени (↓ идёт дальше, а не к первому)
+	var want: Control = null
 	if not path.is_empty() and has_node(path):
 		var n := get_node(path)
 		if n is Control and (n as Control).focus_mode != Control.FOCUS_NONE:
-			UI.focus_later(n as Control)
-			return
-	_focus_default()
+			want = n as Control
+	if want == null:
+		want = first_focus()
+	if Nav.current == self:
+		Nav.sync_focus(want, false)           # под окном (настройки, справка…) экран фокус не забирает
+	else:
+		UI.focus_later(want)
 
 
 func _focus_default() -> void:
