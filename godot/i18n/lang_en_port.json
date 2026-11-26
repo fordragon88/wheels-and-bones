@@ -17,6 +17,5 @@
   "Продолжить задание ({0}/{1}) или обычная игра?": "Continue the assignment ({0}/{1}) or play the normal game?",
   "Обычная игра — твой прогресс; задание сохранится, та же ссылка вернёт его с места.": "The normal game uses your own progress; the assignment is kept, and the same link brings it back where you left off.",
   "Код или ссылка": "Code or link",
-  "Имя": "Name",
-  "Сохранение было повреждено — восстановлено из предыдущей копии.": "The save file was damaged — restored from the previous copy."
+  "Имя": "Name"
 }

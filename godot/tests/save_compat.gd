@@ -3,7 +3,8 @@ extends SceneTree
 ## (tests/saves/, их пишет tools/save_fixtures.py вместе с эталоном чтения game.py expected.json).
 ##   D:\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path godot -s res://tests/save_compat.gd -- --test --out <dump.json>
 ## Сверку поле в поле делает python godot/tools/save_fixtures.py --godot (сам запускает это).
-## Битый файл: прогресс не меняется, файл не затирается (копия .bad рядом) — поле "kept".
+## Битый файл: прогресс не меняется, файл не затирается (копия .bad рядом) — поле "kept"; цела копия
+## <случай>.prev.json — прогресс из неё (S2), поле "restored_prev".
 
 func _initialize() -> void:
 	_run.call_deferred()
@@ -31,8 +32,13 @@ func _run() -> void:
 		var dst := tmp + "save.json"
 		DirAccess.remove_absolute(dst + ".bad")
 		DirAccess.copy_absolute(src, dst)
+		var prev := tmp + "save.prev.json"       # S2: копия прежнего сохранения рядом — если у случая она есть
+		DirAccess.remove_absolute(prev)
+		if FileAccess.file_exists(dir + name + ".prev.json"):
+			DirAccess.copy_absolute(dir + name + ".prev.json", prev)
 		var before := FileAccess.get_file_as_bytes(dst)
 		sg.call("reset")
+		sg.set("restored_prev", false)
 		sg.call("load_file", dst)
 		var st: Node = settings_gd.new()
 		var stp := dir + name + ".settings.json"

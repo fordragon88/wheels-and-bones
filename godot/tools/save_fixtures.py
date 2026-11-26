@@ -39,6 +39,7 @@ def main():
     g_.SAVE_PATH = os.path.join(tmp, "save.json")
     g_.SETTINGS_PATH = os.path.join(tmp, "settings.json")
     g_.BAK_PATH = os.path.join(tmp, "save.bak.json")
+    g_.PREV_PATH = os.path.join(tmp, "save.prev.json")    # S2: прежний save.json — тоже во временную папку
     g_.FEEDBACK_PATH = os.path.join(tmp, "feedback.json")
     g_.DATA_DIR = tmp
     a11y0, vol0, disp0 = dict(g_.A11Y), dict(g_.VOL), dict(g_.DISPLAY)
@@ -54,7 +55,7 @@ def main():
         g_.set_lang("en")
 
     def new_game():
-        for p in (g_.SAVE_PATH, g_.SETTINGS_PATH):
+        for p in (g_.SAVE_PATH, g_.SETTINGS_PATH, g_.PREV_PATH):
             if os.path.exists(p):
                 os.remove(p)
         defaults()
@@ -79,7 +80,7 @@ def main():
 
     cases = {}
 
-    def keep(name, g=None, save_text=None, settings_text=None):
+    def keep(name, g=None, save_text=None, settings_text=None, prev_text=None):
         sv = save_text if save_text is not None else open(g_.SAVE_PATH, encoding="utf-8").read()
         st = settings_text if settings_text is not None else (
             open(g_.SETTINGS_PATH, encoding="utf-8").read() if os.path.exists(g_.SETTINGS_PATH) else None)
@@ -88,7 +89,10 @@ def main():
         if st is not None:
             with open(os.path.join(OUT, name + ".settings.json"), "w", encoding="utf-8", newline="") as f:
                 f.write(st)
-        cases[name] = {"settings": st is not None}
+        if prev_text is not None:                # S2: копия прежнего сохранения рядом (save.prev.json)
+            with open(os.path.join(OUT, name + ".prev.json"), "w", encoding="utf-8", newline="") as f:
+                f.write(prev_text)
+        cases[name] = {"settings": st is not None, "prev": prev_text is not None}
 
     # 1. свежее: вступление пройдено, обучение не начато (прогресса нет, настройки по умолчанию)
     g = new_game()
@@ -184,6 +188,26 @@ def main():
          settings_text=open(os.path.join(OUT, "settings_custom.settings.json"), encoding="utf-8").read()[:60])
     keep("broken_list", save_text="[\"flat\", \"caster\"]", settings_text="null")
     keep("broken_empty", save_text="", settings_text="")
+    # 10. S2: save.json оборван, цела копия save.prev.json — прогресс из копии (game.py: тост «восстановлено…»)
+    mid_text = open(os.path.join(OUT, "mid.save.json"), encoding="utf-8").read()
+    keep("prev_restore", save_text=full_text[:len(full_text) // 3], prev_text=mid_text)
+    # 10б. оборваны оба — пустой прогресс, без восстановления
+    keep("prev_broken", save_text=full_text[:40], prev_text=mid_text[:50])
+    # 11. браузерное сохранение с поколением gen > 0 (E30: две вкладки — сброс/код/«Вернуть прежний» дают gen + 1);
+    #     game.py пишет «gen» только с объединением (_save_merge, как IS_WEB) — здесь включается вручную
+    g = new_game()
+    g._save_merge = True
+    finish(g, "flat", 0)
+    g._save_replace = True                       # как «Сбросить прогресс»/код: gen + 1
+    write(g, settings=False)
+    finish(g, "caster", 1)                       # обычная запись — объединение, gen прежний
+    g._save_replace = True
+    write(g, settings=False)
+    assign_g = g_.assign_parse({"jobs": "brake", "from": "Т", "title": ""})
+    g.start_assignment(assign_g)
+    g.assign_record("brake", 1, 33)
+    write(g, settings=False)
+    keep("web_gen")
 
     # эталон: как game.py ЧИТАЕТ каждый случай (новый Game, тот же код load_progress/load_settings)
     expected = {}
@@ -194,6 +218,10 @@ def main():
             shutil.copyfile(sp, g_.SETTINGS_PATH)
         elif os.path.exists(g_.SETTINGS_PATH):
             os.remove(g_.SETTINGS_PATH)
+        if info["prev"]:
+            shutil.copyfile(os.path.join(OUT, name + ".prev.json"), g_.PREV_PATH)
+        elif os.path.exists(g_.PREV_PATH):
+            os.remove(g_.PREV_PATH)
         defaults()
         g = g_.Game(headless=False)
         a = g.assign
@@ -209,6 +237,8 @@ def main():
             "a11y": {k: acc[k] for k in ("on", "voices", "rate", "contrast", "instant", "speech_set", "text", "text_set",
                                          "calm_set", "font", "barty", "quiet", "quiet_set")},
             "calm": acc["calm"] if acc.get("calm_set") else "system",   # без calm_set — как в системе (пункт 4)
+            "gen": g.gen,                                               # поколение (E30), без поля — 0
+            "restored_prev": g._restored_prev,                          # S2: прогресс из save.prev.json
         }
         for p in (g_.SAVE_PATH + ".bad",):
             if os.path.exists(p):

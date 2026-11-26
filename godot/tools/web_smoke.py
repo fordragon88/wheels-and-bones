@@ -737,6 +737,9 @@ async def migrate_real(b):
         sp = os.path.join(sf.OUT, name + ".settings.json")
         if os.path.exists(sp):
             raw["settings.json"] = open(sp, encoding="utf-8").read()
+        pp = os.path.join(sf.OUT, name + ".prev.json")      # S2: «wnb:save.prev.json» pygame-версии
+        if os.path.exists(pp):
+            raw["save.prev.json"] = open(pp, encoding="utf-8").read()
         p = await new_page(b, "migrate_" + name, legacy_raw=raw)
         st, _, _ = await p.boot("&compat=1")
         got = st.get("compat") or {}
@@ -749,7 +752,7 @@ async def migrate_real(b):
         got = dict(got, calm=got.get("calm") if got.get("calm") != "system" else
                    (await p.state()).get("calm"))
         bad = sf.compare({name: e}, {name: got})
-        broken = name.startswith("broken")
+        broken = name.startswith("broken") or name == "prev_broken"
         check(not bad and bool(st.get("screen")) and st.get("migrated") is (not broken and name != "broken_list"),
               f"{p.name}: прогресс и настройки = game.py ({len(e)} полей; перенос {st.get('migrated')})"
               + ("" if not bad else " — " + "; ".join(bad)[:400]))
@@ -2749,7 +2752,8 @@ async def sc_phonetext(b):
 
 PB_STAGES = ["hub", "job_flat_diagnose", "job_flat_repair", "mini_pump", "result_lift", "settings_sound", "settings_access",
              "seat_lesson_slump", "seat_fit_troll", "seat_quiz_q1", "guild_open", "tech_ops", "garage", "share_paste", "title",
-             "tech_ops_t_battery", "tech_ops_t_q6brake", "seat_fit_golem", "ride_done_mora", "ride_done_tilly"]
+             "tech_ops_t_battery", "tech_ops_t_q6brake", "seat_fit_golem", "ride_done_mora", "ride_done_tilly",
+             "tech_ops_t_battery_q6"]   # 15 шагов (внешняя проверка 26.11: два новых шага подключения жгута)
 PB_BIG = ["hub", "job_flat_diagnose", "job_flat_repair", "settings_access", "tech_ops", "seat_lesson_slump", "seat_fit_troll",
           "seat_quiz_q1", "tech_ops_t_battery", "seat_fit_golem"]
 

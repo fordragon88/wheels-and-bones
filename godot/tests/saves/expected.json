@@ -158,8 +158,10 @@
     3
    ]
   ],
+  "gen": 0,
   "glow": true,
   "lang": "en",
+  "restored_prev": false,
   "seat_done": [
    "seat_aeroz",
    "seat_dryad",
@@ -235,8 +237,10 @@
     3
    ]
   ],
+  "gen": 0,
   "glow": true,
   "lang": "en",
+  "restored_prev": false,
   "seat_done": [],
   "seat_quiz_ok": false,
   "tutorial_skipped": false,
@@ -298,8 +302,10 @@
   "ending_seen": false,
   "exam_passed": false,
   "garage": [],
+  "gen": 0,
   "glow": true,
   "lang": "en",
+  "restored_prev": false,
   "seat_done": [],
   "seat_quiz_ok": false,
   "tutorial_skipped": true,
@@ -333,8 +339,10 @@
   "ending_seen": false,
   "exam_passed": false,
   "garage": [],
+  "gen": 0,
   "glow": true,
   "lang": "en",
+  "restored_prev": false,
   "seat_done": [],
   "seat_quiz_ok": false,
   "tutorial_skipped": false,
@@ -368,8 +376,10 @@
   "ending_seen": false,
   "exam_passed": false,
   "garage": [],
+  "gen": 0,
   "glow": true,
   "lang": "en",
+  "restored_prev": false,
   "seat_done": [],
   "seat_quiz_ok": false,
   "tutorial_skipped": false,
@@ -403,8 +413,10 @@
   "ending_seen": false,
   "exam_passed": false,
   "garage": [],
+  "gen": 0,
   "glow": true,
   "lang": "en",
+  "restored_prev": false,
   "seat_done": [],
   "seat_quiz_ok": false,
   "tutorial_skipped": false,
@@ -438,8 +450,10 @@
   "ending_seen": false,
   "exam_passed": false,
   "garage": [],
+  "gen": 0,
   "glow": true,
   "lang": "en",
+  "restored_prev": false,
   "seat_done": [],
   "seat_quiz_ok": false,
   "tutorial_skipped": false,
@@ -495,8 +509,10 @@
     2
    ]
   ],
+  "gen": 0,
   "glow": true,
   "lang": "en",
+  "restored_prev": false,
   "seat_done": [
    "seat_elf",
    "seat_troll"
@@ -581,8 +597,10 @@
     2
    ]
   ],
+  "gen": 0,
   "glow": true,
   "lang": "ru",
+  "restored_prev": false,
   "seat_done": [
    "seat_troll"
   ],
@@ -625,8 +643,10 @@
     3
    ]
   ],
+  "gen": 0,
   "glow": false,
   "lang": "ru",
+  "restored_prev": false,
   "seat_done": [],
   "seat_quiz_ok": false,
   "tutorial_skipped": false,
@@ -635,6 +655,105 @@
    "master": 0.25,
    "music": 1.0,
    "on": false,
+   "sfx": 0.9
+  }
+ },
+ "prev_broken": {
+  "a11y": {
+   "barty": true,
+   "calm_set": true,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 1,
+   "text_set": true,
+   "voices": true
+  },
+  "assign": null,
+  "calm": false,
+  "done": [],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [],
+  "gen": 0,
+  "glow": true,
+  "lang": "en",
+  "restored_prev": false,
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
+   "sfx": 0.9
+  }
+ },
+ "prev_restore": {
+  "a11y": {
+   "barty": true,
+   "calm_set": true,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 1,
+   "text_set": true,
+   "voices": true
+  },
+  "assign": null,
+  "calm": false,
+  "done": [
+   "brake",
+   "caster",
+   "flat",
+   "lift"
+  ],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [
+   [
+    "flat",
+    3
+   ],
+   [
+    "caster",
+    3
+   ],
+   [
+    "brake",
+    1
+   ],
+   [
+    "lift",
+    2
+   ]
+  ],
+  "gen": 0,
+  "glow": true,
+  "lang": "en",
+  "restored_prev": true,
+  "seat_done": [
+   "seat_elf",
+   "seat_troll"
+  ],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
    "sfx": 0.9
   }
  },
@@ -660,8 +779,10 @@
   "ending_seen": false,
   "exam_passed": false,
   "garage": [],
+  "gen": 0,
   "glow": true,
   "lang": "en",
+  "restored_prev": false,
   "seat_done": [],
   "seat_quiz_ok": false,
   "tutorial_skipped": false,
@@ -702,8 +823,10 @@
     3
    ]
   ],
+  "gen": 0,
   "glow": false,
   "lang": "ru",
+  "restored_prev": false,
   "seat_done": [],
   "seat_quiz_ok": false,
   "tutorial_skipped": false,
@@ -713,6 +836,74 @@
    "music": 0.0,
    "on": false,
    "sfx": 0.6
+  }
+ },
+ "web_gen": {
+  "a11y": {
+   "barty": true,
+   "calm_set": false,
+   "contrast": false,
+   "font": false,
+   "instant": false,
+   "on": false,
+   "quiet": false,
+   "quiet_set": false,
+   "rate": 0,
+   "speech_set": false,
+   "text": 0,
+   "text_set": false,
+   "voices": true
+  },
+  "assign": {
+   "active": true,
+   "done": [
+    "brake"
+   ],
+   "errors": {
+    "brake": 1
+   },
+   "from": "Т",
+   "id": "dfb31b92",
+   "jobs": [
+    "brake"
+   ],
+   "seat": [],
+   "secs": {
+    "brake": 33
+   },
+   "sent": false,
+   "title": ""
+  },
+  "calm": "system",
+  "done": [
+   "caster",
+   "flat"
+  ],
+  "ending_seen": false,
+  "exam_passed": false,
+  "garage": [
+   [
+    "flat",
+    3
+   ],
+   [
+    "caster",
+    3
+   ]
+  ],
+  "gen": 2,
+  "glow": true,
+  "lang": "en",
+  "restored_prev": false,
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "volume": {
+   "amb": 0.45,
+   "master": 0.8,
+   "music": 0.45,
+   "on": true,
+   "sfx": 0.9
   }
  }
 }

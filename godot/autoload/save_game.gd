@@ -54,7 +54,11 @@ func migrate_web() -> bool:
 	var text := Settings.web_legacy("save.json")
 	var data: Variant = Settings.parse_json(text)
 	if not data is Dictionary:
-		return false
+		# S2 (game.py в браузере пишет и «wnb:save.prev.json»): save.json битый, цела копия прежнего — из неё
+		data = Settings.parse_json(Settings.web_legacy("save.prev.json"))
+		if not data is Dictionary:
+			return false
+		restored_prev = true
 	apply_dict(data)
 	migrated = true
 	var bak := Settings.web_legacy("save.bak.json")
@@ -349,7 +353,7 @@ func compat_dump(st: Node) -> Dictionary:
 	return {"done": d["done"], "garage": d["garage"], "exam_passed": d["exam_passed"], "seat_done": d["seat_done"],
 		"seat_quiz_ok": d["seat_quiz_ok"], "tutorial_skipped": d["tutorial_skipped"], "ending_seen": d["ending_seen"],
 		"assign": a if a is Dictionary else null, "volume": st.get("vol"), "lang": st.get("lang"), "glow": st.get("glow"),
-		"a11y": a11y, "calm": acc["calm"] if acc["calm_set"] else "system"}
+		"a11y": a11y, "calm": acc["calm"] if acc["calm_set"] else "system", "gen": gen, "restored_prev": restored_prev}
 
 
 ## Отметка ✔: в задании по ссылке — по прогрессу задания, иначе — по обычному.

@@ -1,0 +1,42 @@
+{
+  "done": [
+    "caster",
+    "flat"
+  ],
+  "garage": [
+    [
+      "flat",
+      3
+    ],
+    [
+      "caster",
+      3
+    ]
+  ],
+  "exam_passed": false,
+  "seat_done": [],
+  "seat_quiz_ok": false,
+  "tutorial_skipped": false,
+  "ending_seen": false,
+  "assign": {
+    "id": "dfb31b92",
+    "jobs": [
+      "brake"
+    ],
+    "seat": [],
+    "from": "Т",
+    "title": "",
+    "done": {
+      "brake": 1
+    },
+    "errors": {
+      "brake": 1
+    },
+    "secs": {
+      "brake": 33
+    },
+    "active": true,
+    "sent": false
+  },
+  "gen": 2
+}
