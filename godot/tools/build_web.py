@@ -13,8 +13,13 @@
      game_consts.json → web).
   5. Рядом с игрой: frames/ (кадры поворота и петли — WebP, качаются по мере надобности), music/<тема>.mp3 (моно,
      ffmpeg; играет элемент <audio> страницы), splash.jpg (заставка загрузки).
-  6. Печатает размеры: .wasm (и в gzip — так его отдаёт GitHub Pages), .pck, первая загрузка, кадры, музыка.
+  6. Счётчик посещений GoatCounter — тот же тег, что у pygame-версии (goatcounter_tag() корневого build_web.py:
+     код сайта и allow_frame — иначе в рамке страницы WordPress не считает), в <head> index.html; --no-counter — без.
+  7. Печатает размеры: .wasm (и в gzip — так его отдаёт GitHub Pages), .pck, первая загрузка, кадры, музыка.
 Все пути в index.html относительные — папку build/web/ можно выложить в любую подпапку сайта как есть.
+--main — сборка для основного сайта: ссылки-задания ведут на страницу WordPress (share.base_url из
+         content/data/game_consts.json — его пишет sync_content.py из game.SHARE_BASE_URL, так адрес не разойдётся
+         с game.py). По умолчанию — тестовый адрес (DEFAULT_BASE).
 --serve [PORT] — после сборки раздать build/web/ локально (http://127.0.0.1:PORT/, по умолчанию 8060)."""
 import argparse
 import gzip
@@ -46,6 +51,39 @@ PYGAME_APK_MB = 15.3           # pygame-сборка (wheels_and_bones.apk) дл
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+
+def pygame_build():
+    """Корневой build_web.py (сборка pygame-версии) — модулем под своим именем (у нас то же имя файла). Берём из него
+    счётчик посещений, чтобы тег не расходился с pygame-версией. При импорте он ничего не делает (только main)."""
+    import importlib.util
+    mod = sys.modules.get("pygame_build_web")
+    if mod is None:
+        spec = importlib.util.spec_from_file_location("pygame_build_web", os.path.join(ROOT, "build_web.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        sys.modules["pygame_build_web"] = mod
+    return mod
+
+
+def counter_tag():
+    """<script> GoatCounter pygame-версии (пусто, если код счётчика там не задан)."""
+    return pygame_build().goatcounter_tag()
+
+
+def share_consts():
+    """share из content/data/game_consts.json (sync_content.py пишет из game.py): base_url — страница WordPress
+    (SHARE_BASE_URL), direct_url — сама сборка на GitHub Pages (SHARE_DIRECT_URL)."""
+    with open(os.path.join(CONTENT, "data", "game_consts.json"), encoding="utf-8") as f:
+        return json.load(f).get("share", {})
+
+
+def main_base_url():
+    """Адрес ссылок-заданий основного сайта — как game.SHARE_BASE_URL (страница WordPress с игрой в рамке)."""
+    u = str(share_consts().get("base_url", ""))
+    if not u.startswith("https://"):
+        raise SystemExit("game_consts.json: нет share.base_url — запусти tools/sync_content.py")
+    return u
 
 
 def log(msg):
@@ -276,6 +314,20 @@ def stamp():
     return exe, pck
 
 
+def add_counter(on):
+    """Тег счётчика посещений в <head> index.html (как polish_index pygame-версии). Возврат: вставленный тег или ""."""
+    tag = counter_tag() if on else ""
+    p = os.path.join(OUT, "index.html")
+    html = open(p, encoding="utf-8").read()
+    if tag and "wnb-goatcounter" not in html:
+        if "</head>" not in html:
+            raise SystemExit("index.html: нет </head> для счётчика")
+        html = html.replace("</head>", tag + "\n</head>", 1)
+        with open(p, "w", encoding="utf-8", newline="\n") as f:
+            f.write(html)
+    return tag
+
+
 def copy_frames():
     src = os.path.join(CONTENT, "frames")
     return mirror(src, os.path.join(OUT, "frames"),
@@ -333,9 +385,12 @@ def make_server(path, port):
     return srv, th
 
 
-def build(base_url=DEFAULT_BASE, sync=False):
+def build(base_url=DEFAULT_BASE, sync=False, counter=True):
+    """base_url=None — основной сайт (main_base_url: страница WordPress, как game.SHARE_BASE_URL)."""
     t0 = time.time()
     ensure_content(sync)
+    if base_url is None:
+        base_url = main_base_url()
     log("== кадры и музыка рядом с игрой")
     os.makedirs(OUT, exist_ok=True)
     nfr = copy_frames()
@@ -348,29 +403,39 @@ def build(base_url=DEFAULT_BASE, sync=False):
     log("== Godot")
     export()
     exe, pck = stamp()
+    tag = add_counter(counter)
     splash = os.path.join(ROOT, "art_tests", "web_splash.jpg")
     if os.path.exists(splash):
         shutil.copy2(splash, os.path.join(OUT, "splash.jpg"))
     sizes = report(exe, pck, themes)
+    code = re.search(r"https://([\w-]+)\.goatcounter\.com", tag)
     with open(os.path.join(OUT, "build_info.json"), "w", encoding="utf-8") as f:
-        json.dump({"base_url": base_url, "engine": exe, "pack": pck, "frames_v": frames_v, "music_v": music_v,
+        json.dump({"base_url": base_url, "main": base_url == main_base_url(), "counter": code.group(1) if code else "",
+                   "engine": exe, "pack": pck, "frames_v": frames_v, "music_v": music_v,
                    "sizes": sizes, "time": time.strftime("%Y-%m-%d %H:%M")}, f, ensure_ascii=False, indent=1)
     log(f"== готово за {time.time() - t0:.0f} с: {OUT}")
-    log(f"   ссылки-задания ведут на {base_url}")
+    log(f"   ссылки-задания ведут на {base_url}" + ("  (основной сайт — как game.SHARE_BASE_URL)"
+                                                  if base_url == main_base_url() else ""))
+    log(f"   счётчик посещений: {('GoatCounter ' + code.group(1)) if code else 'нет'}")
     return sizes
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--base-url", default=DEFAULT_BASE, help="адрес сборки на сайте (для ссылок-заданий)")
+    ap.add_argument("--base-url", default=None, help="адрес сборки на сайте (для ссылок-заданий)")
+    ap.add_argument("--main", action="store_true", help="основной сайт: ссылки ведут на страницу WordPress (game.py)")
+    ap.add_argument("--no-counter", action="store_true", help="без счётчика посещений GoatCounter")
     ap.add_argument("--sync", action="store_true", help="сначала sync_content.py")
     ap.add_argument("--serve", nargs="?", const=8060, type=int, help="после сборки раздать локально (порт)")
     ap.add_argument("--no-build", action="store_true", help="только раздать готовое (с --serve)")
     a = ap.parse_args()
-    if not a.base_url.endswith("/"):
-        a.base_url += "/"
+    if a.main and a.base_url:
+        ap.error("--main и --base-url вместе не задаются")
+    base = None if a.main else (a.base_url or DEFAULT_BASE)
+    if base and not base.endswith("/"):
+        base += "/"
     if not a.no_build:
-        build(a.base_url, a.sync)
+        build(base, a.sync, counter=not a.no_counter)
     if a.serve:
         srv, _ = make_server(OUT, a.serve)
         log(f"== http://127.0.0.1:{a.serve}/  (Ctrl+C — остановить)")
