@@ -51,7 +51,7 @@ Zmey Gorynych · Оборотень Вольф → Wolf the Werewolf.
 «восьмёрка» обода → wheel wobble (out-of-true rim) · правка обода → truing ·
 правочный станок → truing stand · биение → runout · индикатор (часового типа) → dial indicator ·
 тензиометр → spoke tension meter · спицевой ключ → spoke wrench · шестигранник → hex key (Allen key) ·
-торцевой ключ → socket wrench · разводной ключ → adjustable wrench · отвёртка → screwdriver ·
+торцевой ключ → socket wrench · разводной ключ → Crescent wrench (отзывы №103, №107) · отвёртка → screwdriver ·
 монтажка → tire lever · насос → pump · заплатка / ремкомплект → patch / patch kit ·
 смазка → lubricant · щётка/пинцет → brush/tweezers · тряпка/салфетка → cloth ·
 таз с водой → bowl of water · пинг-тест → ping test · манометр → pressure gauge ·
