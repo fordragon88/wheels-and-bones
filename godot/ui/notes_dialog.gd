@@ -25,13 +25,24 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	_close = GameButton.make(Rect2(P.end.x - 200, P.end.y - 64, 180, 46), "ЗАКРЫТЬ [Esc]", UI.AMBER)
+	# телефон: кнопка 56 по высоте (цель для пальца; Esc на телефоне нет) — обзор 26.11, E24
+	_close = GameButton.make(Rect2(P.end.x - 200, P.end.y - 72, 180, 56) if UI.phone()
+		else Rect2(P.end.x - 200, P.end.y - 64, 180, 46), "ЗАКРЫТЬ [Esc]", UI.AMBER)
 	_close.name = "Close"
 	_close.pressed.connect(close)
 	add_child(_close)
+	_lang_names()
+	Loc.changed.connect(_lang_names)
+	UI.focus_later(_close)
+
+
+## Подписи окна для чтеца — и после смены языка при открытом окне (обзор 26.11, E24).
+func _lang_names() -> void:
 	accessibility_name = Loc.t("СНОСКИ ИЗ МАНУАЛОВ")
 	accessibility_description = "\n".join(lines())
-	UI.focus_later(_close)
+	_close.update_a11y()
+	_close.queue_redraw()
+	queue_redraw()
 
 
 func first_focus() -> Control:

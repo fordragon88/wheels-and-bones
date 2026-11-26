@@ -232,6 +232,22 @@ func cur_step() -> Dictionary:
 
 # ---------------- раскладка (как в game.py) ----------------
 
+## Инструкция шага ремонта (от y 100 до верха коляски 226): ширина — на телефоне до «◂ ШАГ ▸» (408), иначе 560.
+## Телефон: длинная инструкция при крупном тексте мельче (19 → 11), чтобы не заходить на коляску (обзор 26.11, E22;
+## замер — «-- --test --only instr-sizes»). Что помещается кеглем 19 (в том числе всё при 100 %) — как было.
+## Компьютер — как game.py (наезд при 150 % там тот же — правится в обеих версиях).
+const INSTR_Y := 100.0
+const INSTR_ROOM := 226.0 - INSTR_Y
+
+
+static func instr_width() -> float:
+	return PH_PREV.position.x - 12 - 360 if UI.phone() else 560.0
+
+
+static func instr_size(text: String) -> int:
+	return UI.fit_wrapped_size(text, instr_width(), 19, INSTR_ROOM, 11) if UI.phone() else 19
+
+
 func chair_rect() -> Rect2:
 	var top: float
 	var h: float
@@ -1165,8 +1181,8 @@ func _draw_deco() -> void:
 			var hdr := UI.draw_text(_deco, Loc.tf("РЕМОНТ — шаг {0}/{1}", [mini_safe_idx() + 1, n]), Vector2(360, 70), 20,
 				UI.AMBER, true)
 			_draw_step_dots(n, Vector2(hdr.end.x + 22, hdr.get_center().y), prev_rect().position.x - 18)
-			UI.draw_wrapped(_deco, Loc.t(cur_step().get("instr", "")), Vector2(360, 100),
-				prev_rect().position.x - 12 - 360 if UI.phone() else 560, 19, UI.WHITE)
+			var instr := Loc.t(cur_step().get("instr", ""))
+			UI.draw_wrapped(_deco, instr, Vector2(360, INSTR_Y), instr_width(), instr_size(instr), UI.WHITE)
 			UI.draw_text(_deco, Loc.t("ДЕТАЛЬ"), Vector2(980, 70), 16, UI.AMBER, true)
 		"test":
 			UI.draw_text(_deco, Loc.t("ТЕСТ-ДРАЙВ"), Vector2(360, 70), 20, UI.GOOD, true)

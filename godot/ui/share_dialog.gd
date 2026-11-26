@@ -124,6 +124,16 @@ func btn_specs() -> Array:
 	return _row(p, specs, p.end.y - (72 if UI.phone() else 66))
 
 
+## Строка «Скопировано…» окна кода: телефон — выше, если подсказка под ней (до 2 строк) зашла бы на кнопки
+## (кнопки 56 от p.end.y − 72): +6 px уже при 100 %, +14 при 125 % (обзор 26.11, E25). Компьютер — как game.py.
+static func status_y(y: float, w: float, p: Rect2, note: String) -> float:
+	if not UI.phone() or note == "":
+		return y
+	var nl := mini(2, UI.wrap_lines(Loc.t(note), w, 14).size())
+	var bottom := y + 26 + nl * (UI.line_height(14) + 2) - 2
+	return y - maxf(0.0, bottom - (p.end.y - 72 - 6))
+
+
 ## Ряд кнопок окна; телефон — высота 56.
 @warning_ignore("integer_division")
 static func _row(p: Rect2, specs: Array, y: float) -> Array:
@@ -263,6 +273,7 @@ func _draw() -> void:
 						UI.GREY)
 					_code_block(Rect2(x, fr.end.y + 36, w, 150), full)
 				y = p.end.y - 128
+			y = status_y(y, w, p, str(ui.get("note", "")))
 			var ok: Variant = ui.get("ok")
 			var st := "Скопировано в буфер обмена ✔"
 			if ok == null:

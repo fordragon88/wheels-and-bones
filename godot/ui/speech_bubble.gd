@@ -232,24 +232,50 @@ func _draw_spk() -> void:
 	if kind != Kind.MENTOR or not shown() or side.size != Vector2.ZERO:   # side: без портрета (имя — в начале реплики)
 		return
 	if col.size != Vector2.ZERO:
-		_draw_speaker(speaker_img(line), Rect2(col.position + Vector2(6, 6), Vector2(46, 56)))
+		if col_portrait():
+			_draw_speaker(speaker_img(line), Rect2(col.position + Vector2(6, 6), Vector2(46, 56)))
 	else:
 		_draw_speaker(speaker_img(line), Rect2(24, top_y, 90, 110))
+
+
+## Портрет в узком пузыре — когда колонка выше портрета (46×56 с полями). Телефон, много деталей и сноски
+## (aeroz_lock: колонка 35 px, при 150 % — 26): портрет ложился на «СНОСКИ МАНУАЛА» — без портрета (обзор 26.11, E22).
+const COL_PORTRAIT_H := 72.0
+
+
+func col_portrait() -> bool:
+	return col.size.y >= COL_PORTRAIT_H
+
+
+## Раскладка узкого пузыря: [x текста, ширина, кегль, строк не больше (0 — без ограничения)]. Без портрета —
+## текст во всю ширину, кегль 15 → 10, строки — сколько входит по высоте (последняя с «…»; целиком — озвучка).
+func col_layout() -> Array:
+	var text := Loc.t(line)
+	var por := col_portrait()
+	var x := 60.0 if por else 10.0
+	var tw := col.size.x - (70.0 if por else 20.0)
+	var sizes: Array = [15, 14, 13, 12] if por else [15, 14, 13, 12, 11, 10]
+	var sz: int = sizes[-1]
+	for s: int in sizes:
+		sz = s
+		if UI.wrap_lines(text, tw, s).size() * (UI.line_height(s) + 2) <= col.size.y - (16 if por else 8):
+			break
+	var cap := 0 if por else maxi(1, int((col.size.y - 8 + 2) / (UI.line_height(sz) + 2)))
+	return [x, tw, sz, cap]
 
 
 ## Узкий пузырь наставника в правой колонке (ремонт): портрет 46×56 и текст рядом.
 func _draw_mentor_col() -> void:
 	var text := Loc.t(line)
-	var tw := col.size.x - 70
-	var sz := 12
-	for s: int in [15, 14, 13, 12]:
-		sz = s
-		if UI.wrap_lines(text, tw, s).size() * (UI.line_height(s) + 2) <= col.size.y - 16:
-			break
+	var lay := col_layout()
+	var tw: float = lay[1]
+	var sz: int = lay[2]
 	var box := col
-	if UI.phone():                           # телефон (21.11): поле по высоте реплики (не меньше портрета), остаток пуст
+	if UI.phone() and col_portrait():        # телефон (21.11): поле по высоте реплики (не меньше портрета), остаток пуст
 		var th := UI.wrap_lines(text, tw, sz).size() * (UI.line_height(sz) + 2) + 16
 		box.size.y = clampf(th, minf(72.0, col.size.y), col.size.y)
 	draw_rect(box, Color8(24, 30, 36, 220))
 	UI.draw_round_rect(self, box, Color(0, 0, 0, 0), UI.CYAN, 2, 8)
-	UI.draw_wrapped(self, text, col.position + Vector2(60, 8), tw, sz, UI.GHOST, false, 2, typed(text, 90))
+	var top := 8.0 if col_portrait() else maxf(1.0, (col.size.y - mini(int(lay[3]), UI.wrap_lines(text, tw, sz).size())
+		* (UI.line_height(sz) + 2) + 2) / 2.0)
+	UI.draw_wrapped(self, text, col.position + Vector2(lay[0], top), tw, sz, UI.GHOST, false, 2, typed(text, 90), lay[3])

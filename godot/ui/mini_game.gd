@@ -130,6 +130,10 @@ func _ready() -> void:
 ## открытом окне (Loc.changed).
 func _lang_names() -> void:
 	accessibility_name = Loc.t(step["instr"])
+	for c: Node in get_children():                 # «ПОЗЖЕ», «НАКАЧАТЬ»… — подписи кнопок на новом языке (обзор 26.11, E24)
+		if c is GameButton:
+			(c as GameButton).update_a11y()
+			(c as GameButton).queue_redraw()
 	if kind == "meter":
 		var opts: Array = cfg["options"]
 		for i in opts.size():

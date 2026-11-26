@@ -310,4 +310,8 @@ func _draw() -> void:
 func _draw_reason(b: GameButton, r: Rect2) -> void:
 	var i: int = b.get_meta("i")
 	var lbl := ("◉  " if i == reason else "○  ") + Loc.t(reasons()[i])
-	UI.draw_text(b, lbl, Vector2(r.position.x + 14, r.get_center().y - floorf(UI.line_height(16) / 2.0)), 16, UI.WHITE)
+	var pos := Vector2(r.position.x + 14, r.get_center().y - floorf(UI.line_height(16) / 2.0))
+	if UI.phone():                               # два столбца по 486: длинная причина — мельче, в ширину кнопки (E23)
+		UI.draw_text_w(b, lbl, pos, r.size.x - 28, 16, UI.WHITE)
+	else:
+		UI.draw_text(b, lbl, pos, 16, UI.WHITE)
