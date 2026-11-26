@@ -1136,7 +1136,7 @@ premultiplied-наложением, в разрешении холста тел�
 740×360 dpr 3, он же `?res=720`, настольный 1280×720): разница — только нити и дыхание Мортимера. Пары —
 `tests/web_shots/before_*`/`after_*` (не в git).
 
-## Замена сайта: как выпускать и откатывать (подготовлено 27.11, выпуска ещё не было)
+## Замена сайта: как выпускать и откатывать (подготовлено 26.11, выпуска ещё не было)
 Владелец: «Да, подготовь» (замена основного сайта Godot-версией). Всё готово так, что замена — одна команда; на
 основной сайт ничего не выкладывалось, репетиция — на тестовом адресе.
 
@@ -1144,7 +1144,7 @@ premultiplied-наложением, в разрешении холста тел�
 - выпуск: `python godot/tools/release_web.py deploy --owner-approved`
 - откат: `python godot/tools/release_web.py rollback --owner-approved`
 - посмотреть, что будет, ничего не меняя: `deploy --dry-run`, `rollback --dry-run`.
-Перед выпуском (если что-то менялось после 27.11): `release_web.py stage` → `check` (→ `rehearse`). deploy сверяет,
+Перед выпуском (если что-то менялось после 26.11): `release_web.py stage` → `check` (→ `rehearse`). deploy сверяет,
 что `web_deploy` с тех пор не менялся (иначе classic/ устарел — заново stage), делает `git pull --ff-only`, копирует
 `godot/build/site_main` в `web_deploy` (лишнее удаляет, `.git` не трогает), коммит «Godot-версия в корне…», push,
 ждёт сборку Pages именно этого коммита (при «errored» — один повтор), ждёт ответ 200 на `.pck`, гонит живые
@@ -1213,7 +1213,7 @@ selftest).
 `.catch` у «Play fullscreen» (Firefox писал «Fullscreen request denied» в консоль страницы).
 Новый блок — `godot/web/wordpress_embed_godot.html`, что поменять — `godot/web/WORDPRESS_CHANGES.md`.
 
-**Итоги 27.11:** `stage` — 13 993 файла, 484,8 МБ (45 % предела Pages), пакет `wnb-2cebe665d0.pck`, ссылки → страница
+**Итоги 26.11:** `stage` — 13 993 файла, 484,8 МБ (45 % предела Pages), пакет `wnb-2cebe665d0.pck`, ссылки → страница
 WordPress, счётчик `wheelsandbones`, первая загрузка 19,4 МБ (в блоке «about 19 MB»); `check` — «RELEASE CHECK: 21 ok, 0
 FAIL» (Godot web_smoke по site_main 214 ok, pygame web_smoke по classic/ 77 ok); `rehearse` — «REHEARSE: 23 ok, 0 FAIL»
 (тестовый репозиторий 372f958, https://fordragon88.github.io/wheels-and-bones-test/rehearsal/: Pages за 78 с, Godot
@@ -1221,6 +1221,19 @@ web_smoke живьём 213 ok, pygame по rehearsal/classic/ 77 ok); `deploy --
 (index.html, README.md), −0; новых данных в git 136,9 МБ. В репетиции classic/ без счётчика (pygame web_smoke его не
 глушит), `test/` не кладётся. web_smoke тестовой сборки: Chromium 213 ok (boot, play, links, migrate, phone, embed),
 Firefox 60 ok и WebKit 59 ok (boot, embed).
+
+**Доработано при перепроверке (294d4a1).** (1) Повторный выпуск: после первого в корне `web_deploy` уже Godot, и
+`assemble` раньше взял бы его index.html как pygame-страницу — `classic/` стал бы копией Godot. Теперь источник
+pygame — `web_deploy/classic/`, если он есть (`pygame_src`), страница проверяется (`is_pygame_page`). (2) `check`
+пишет итог в `godot/build/site_main.json`; `deploy --owner-approved` отказывается, если check для этого дерева не
+пройден (или шёл с `--godot-only`), если stage был с незакоммиченными правками или если после stage менялись файлы
+`godot/` (кроме `.md`) — тогда заново `stage` и `check` (~25 мин). (3) Не прошёл push — сообщение: сайт не изменён,
+как повторить или отменить. Пробный выпуск и откат на копии сайта с локальным origin (ожидание Pages и живые проверки
+подменены): «RELEASE TRIAL: 23 ok, 0 FAIL» — дерево после выпуска = `site_main`, `classic/index.html` побайтно =
+прежняя страница, второй выпуск берёт pygame из `classic/`, дерево после отката побайтно = дерево до выпуска, история
+не переписана. **После замены нельзя запускать `python build_web.py --deploy` (pygame) в корень `web_deploy`** — он
+перезапишет index.html Godot-версии; обновлять pygame-версию тогда нужно в `classic/` (команды для этого пока нет).
+Итог после доработок (26.11, код 294d4a1): `stage` — 13 993 файла, 484,8 МБ, пакет `wnb-2cebe665d0.pck`; `check` — «RELEASE CHECK: 21 ok, 0 FAIL» (Godot web_smoke 214 ok, pygame по classic/ 77 ok; первый прогон дал 77 ok, 1 FAIL — гонка в pygame web_smoke `boot` по ссылке-заданию, исправлено 683986c / test-build 06090b8); Firefox 60 ok, WebKit 59 ok (boot, embed); «GODOT SELFTEST OK», check_share — расхождений 0, «SAVE COMPAT: 15 сохранений, полей сверено 225, расхождений 0», «FEEDBACK COMPARE: 14 ok, 0 FAIL»; `deploy --dry-run` — +7403 файла, ~2, −0, «Проверка check пройдена».
 
 **Проверить вживую до замены** (не эмулируется): настоящий телефон в рамке страницы WordPress (Android Chrome —
 первое касание и поворот в полном экране; iPhone — «Play fullscreen» открывает отдельную страницу), Safari на
