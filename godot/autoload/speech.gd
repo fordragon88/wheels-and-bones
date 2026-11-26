@@ -19,6 +19,7 @@ var _queue: Array = []                    # [текст, interrupt]
 var _voice: String = ""
 var _live: Label                          # «живая область» для чтеца экрана (AccessKit)
 var _uid: int = 0
+var _live_flip := false
 
 const SUBS := [["✔", ""], ["⚑", ""], ["◉", ""], ["○", ""], ["✉", ""], ["⚠", ""], ["▶", ""], ["◀", ""], ["★", ""],
 	["☆", ""], ["⟲", ""], ["•", ""], ["[", ""], ["]", ""], ["…", "..."], ["·", ","], ["″", ""]]
@@ -27,6 +28,7 @@ const SUBS := [["✔", ""], ["⚑", ""], ["◉", ""], ["○", ""], ["✉", ""], 
 func _ready() -> void:
 	process_priority = 1000                # после экранов: очередь кадра — одной фразой
 	init()
+	Loc.changed.connect(set_voice)         # RU/EN при включённой озвучке — голос на новом языке (toggle_lang в game.py)
 
 
 ## Выбор голоса (Speech.init в game.py).
@@ -42,7 +44,15 @@ func init() -> void:
 		kind = "tts"
 	else:
 		kind = ""
+	reader_auto_on()
 	set_voice()
+
+
+## Работает чтец экрана, а озвучку игрок сам не трогал (F2, настройки) — включить: сводки экранов, улики и реплики
+## уходят в «живую область» только при включённой озвучке (game.py: if not speech_set and Tolk — A11Y["on"] = True).
+func reader_auto_on() -> void:
+	if kind == "reader" and not Settings.a11y.get("speech_set", false) and not Settings.a11y.get("on", false):
+		Settings.a11y["on"] = true
 
 
 ## Голос на языке игры (русский — Irina/Pavel, английский — David/Zira…).
@@ -149,8 +159,9 @@ func _live_say(text: String) -> void:
 		layer.layer = 100
 		layer.add_child(_live)
 		get_tree().root.add_child.call_deferred(layer)
-	_live.text = ""
-	_live.text = text
+	# та же фраза ещё раз (R дважды) — текст должен измениться, иначе AccessKit не объявит: чередуем пробел в конце
+	_live_flip = not _live_flip
+	_live.text = text + (" " if _live_flip else "")
 
 
 func stop() -> void:

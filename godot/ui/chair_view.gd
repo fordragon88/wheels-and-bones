@@ -410,6 +410,6 @@ func _gui_input(e: InputEvent) -> void:
 		if k.keycode == KEY_LEFT or k.keycode == KEY_RIGHT:
 			rotate_step(-1 if k.keycode == KEY_LEFT else 1)
 			accept_event()
-		elif k.keycode == KEY_R or k.keycode == KEY_HOME:
+		elif k.keycode == KEY_HOME:             # R — «где я» (сводка, как в game.py), не сброс вида
 			reset_view()
 			accept_event()

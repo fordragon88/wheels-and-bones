@@ -35,7 +35,7 @@ func summary() -> String:
 
 
 func toast_bounds() -> Vector2:
-	return Vector2(8, 56)
+	return Vector2(8, 164)                    # справа ⚑ и шестерёнка (reserve 164 в _draw_toast game.py)
 
 
 ## Строки: [текст, размер, цвет, жирный, y от начала] и высота всего.

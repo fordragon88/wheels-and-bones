@@ -44,7 +44,15 @@ static func make_icon(k: Kind) -> IconButton:
 		b.touch_grow = UI.TOUCH_TAP_GROW
 	UI.touch_skip(b)                           # не цель переноса тапа, но зона, где тап не трогают (Nav.touch_snap)
 	b.update_a11y()
+	if k == Kind.GEAR:                         # значок «без звука» и имя для чтеца — сразу после M (game.py рисует каждый кадр)
+		Settings.changed.connect(b._on_settings)
 	return b
+
+
+func _on_settings(key: String) -> void:
+	if key == "vol":
+		update_a11y()
+		queue_redraw()
 
 
 func update_a11y() -> void:
