@@ -555,6 +555,8 @@ func rebuild() -> void:
 		ride.drawn = rs["drawn"]
 		ride.stay = rs["stay"]
 		ride.active = true
+		if Settings.calm():                   # «Без анимации» посреди проезда — проезд сразу кончается (как start_ride), E14
+			ride.t0 = ride.t - ride.secs()
 		chair.visible = false
 		portrait.paused = true
 		_test_btn.visible = not ride.riding()
@@ -733,6 +735,7 @@ func step_back() -> void:
 		return
 	step_idx -= 1
 	close_mini()
+	action.stop()                            # обзор 26.11, E29.8: как game.py step_back (act = None)
 	sel_tool = ""
 	last_note = steps()[step_idx - 1].get("note", "") if step_idx > 0 else ""
 	_set_step_ghost()

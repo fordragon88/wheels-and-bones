@@ -240,7 +240,7 @@ func _gui_input(_e: InputEvent) -> void:
 
 
 func _process(_dt: float) -> void:
-	Screen.redraw_on(self, [mode(), ui.duplicate(true)])     # окно стоит — перерисовка только при изменении
+	Screen.redraw_on(self, [mode(), ui.hash()])     # окно стоит — перерисовка только при изменении (без копии ui каждый кадр, E29.7)
 
 
 # ---------------- рисование (_draw_share) ----------------

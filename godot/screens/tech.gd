@@ -47,6 +47,10 @@ var dispute: Dictionary = {}
 var max_mistakes: int = 3
 
 var tools: ToolPanel
+var _fx: Control                          # инструмент у курсора и вспышка верного шага (_draw_tool_in_hand game.py)
+var _ok_t: float = -9.0
+var _ok_pos: Vector2
+var _fx_on: bool = false
 var action: ToolAction
 var ride: RideView
 var mini: MiniGame
@@ -276,6 +280,12 @@ func build() -> void:
 	ride.chair_art = job["chair_art"]
 	ride.job_id = job["id"]
 	add_child(ride)
+	_fx = Control.new()
+	_fx.name = "Fx"
+	_fx.size = size
+	_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fx.draw.connect(_draw_fx)
+	add_child(_fx)
 	_dispute_btn = GameButton.make(Rect2(UI.W - 192 - 8 - 176, 0, 176, 56) if UI.phone() else Rect2(UI.W - 340, 10, 176, 34),
 		"Я НЕ СОГЛАСЕН", UI.PURPLE)
 	if UI.phone():
@@ -334,6 +344,10 @@ func rebuild() -> void:
 		ride.drawn = rs["drawn"]
 		ride.active = rs["active"]
 		ride.stay = rs["stay"]
+		if Settings.calm():                   # «Без анимации» во время/после проезда: герой не стоит, коляска видна; идёт —
+			ride.stay = false                 # сразу кончается (как start_ride в calm) — обзор 26.11, E14
+			if ride.active:
+				ride.t0 = ride.t - ride.secs()
 		chair.visible = not (ride.active or ride.stay)
 		if _test_btn:
 			_test_btn.visible = not ride.riding()
@@ -420,6 +434,8 @@ func complete_tech_step(st: Dictionary) -> void:
 	action.start(st["tool"], true, _op_pos(st["id"]))
 	done_steps[st["id"]] = true
 	sel_tool = ""
+	_ok_t = t                                  # верный шаг — вспышка у курсора (как в мастерской)
+	_ok_pos = get_local_mouse_position()
 	close_spec()
 	Audio.sfx("ok")
 	Nav.flash("Шаг выполнен. " + str(st.get("note", "")), UI.GOOD, 4.0, true)
@@ -815,6 +831,37 @@ func tick(dt: float) -> void:
 		_bar_sig = [_bar.brand, _bar.right_edge]
 		_bar.queue_redraw()
 	redraw_on(_deco, [phase, step_order.size(), done_steps.size(), mistakes, ride_done, ride.riding()])
+	if _fx and (_fx_on or _fx_wanted()):         # слой рисует только пока есть что (и один раз — стереть)
+		_fx.queue_redraw()
+
+
+## Инструмент в руке у курсора (выбран, ремонт, окон нет, курсор не над плиткой) — как в мастерской и game.py
+## (_draw_tool_in_hand работает и для про-задания; обзор 26.11, E28.1). Вспышка искр — 0,7 с после верного шага.
+func _fx_wanted() -> bool:
+	return (t - _ok_t < 0.7 and not Settings.calm()) or (sel_tool != "" and phase == "repair" and mini == null
+		and spec_dlg == null and manual_dlg == null and not UI.kb_active)
+
+
+func _draw_fx() -> void:
+	_fx_on = false
+	if t - _ok_t < 0.7 and not Settings.calm():
+		_fx_on = true
+		var ph := (t - _ok_t) / 0.7
+		for i in 12:
+			var a := i * TAU / 12 + 0.3
+			_fx.draw_circle(_ok_pos + Vector2(cos(a), sin(a)) * 60 * UI.ease_out(ph), 4 * (1 - ph), Color(UI.GOOD, 1 - ph))
+	if sel_tool == "" or phase != "repair" or mini != null or spec_dlg != null or manual_dlg != null or UI.kb_active 			or tools == null:
+		return
+	for b: GameButton in tools.tiles.values():
+		if b.is_hovered():
+			return
+	var tex := Content.texture("tool_%s.png" % sel_tool)
+	if tex:
+		_fx_on = true
+		var m := get_local_mouse_position()
+		_fx.draw_set_transform(m + Vector2(22, 20), deg_to_rad(12 - 4 * UI.wsin(t * 4)))
+		_fx.draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(-17, -17, 34, 34)), false)
+		_fx.draw_set_transform(Vector2.ZERO)
 
 
 func _draw_deco() -> void:
