@@ -109,7 +109,7 @@ class Page:
             await self.pg.touchscreen.tap(vw[0] / 2, vw[1] / 2)   # pygbag ждёт первое действие
         else:
             await self.pg.mouse.click(vw[0] / 2, vw[1] / 2)
-        st = await self.wait(lambda s: s.get("scene") in ("title", "intro"), "игра запустилась", 90)
+        st = await self.wait(lambda s: s.get("scene") in ("title", "intro", "hub"), "игра запустилась", 90)
         await self.pg.wait_for_timeout(2500)                     # «авто» подстраивает холст
         for _ in range(3):                                       # первое касание прошло в игру — на титул (Esc,
             if (await self.state()).get("scene") not in ("intro", "hub"):   # нажатый во время смены размера холста,
