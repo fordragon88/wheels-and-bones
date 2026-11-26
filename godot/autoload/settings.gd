@@ -115,7 +115,9 @@ static func _js_key(name: String) -> String:
 
 ## Один раз: сохранения Godot-версии, записанные до 20.11 в user:// (IndexedDB), — в ключи localStorage. Файлы
 ## user:// не удаляются (на случай отката). Отметка «wnb-godot:moved» — переносим только раз (иначе после «Сбросить
-## прогресс» и удаления копии старый файл вернулся бы).
+## прогресс» и удаления копии старый файл вернулся бы) и только если все файлы записались: место в localStorage
+## кончилось — отметки нет, перенос повторится при следующем запуске (обзор 26.11, E3; раньше отметка ставилась
+## всегда, и прогресс из user:// больше не переносился).
 static func _move_once() -> void:
 	if _moved:
 		return
@@ -123,11 +125,15 @@ static func _move_once() -> void:
 	var done: Variant = JavaScriptBridge.eval("(function(){try{return localStorage.getItem('wnb-godot:moved')||''}catch(e){return ''}})()", true)
 	if str(done) == "1":
 		return
+	var ok := true
 	for name: String in STORE_FILES:
 		var p := "user://" + name
 		if FileAccess.file_exists(p) and not _ls_has(name):
-			_ls_set(name, FileAccess.get_file_as_string(p))
-	JavaScriptBridge.eval("(function(){try{localStorage.setItem('wnb-godot:moved','1')}catch(e){}})()", true)
+			if not _ls_set(name, FileAccess.get_file_as_string(p)):
+				ok = false
+				push_warning("%s не перенесён из user:// в localStorage (место кончилось?) — повторю при следующем запуске" % name)
+	if ok:
+		JavaScriptBridge.eval("(function(){try{localStorage.setItem('wnb-godot:moved','1')}catch(e){}})()", true)
 
 
 static func _ls_has(name: String) -> bool:

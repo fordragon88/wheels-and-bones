@@ -554,7 +554,7 @@ func quiz_next() -> void:
 		say = mentor("pass" if ok else "nopass")
 		if ok:
 			if not SaveGame.assign_on():
-				SaveGame.seat_quiz_ok = true
+				SaveGame.mark_flag("seat_quiz_ok")
 				SaveGame.save()
 			Audio.sfx("fanfare")
 	refresh()

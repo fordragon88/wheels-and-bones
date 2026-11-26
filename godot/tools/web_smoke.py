@@ -1953,8 +1953,47 @@ async def sc_tabs(b):
     for p in (a, bq, c):
         p.check_console()
     await a.ctx.close()
+    # 4) обзор 26.11, E1: обе вкладки в одном задании по ссылке; «Сбросить прогресс» в A (задание остаётся, gen + 1) —
+    # первый же пройденный во вкладке B пункт задания не теряется (раньше бралось хранимое задание без него)
+    link = "&jobs=flat,spokes&from=" + urllib.parse.quote("Тест")
+    a = await new_page(b, "tabs_F", legacy=SKIP_SEED)
+    await a.boot(link)
+    await to_hub(a)
+    bq = Page(a.ctx, await a.ctx.new_page(), "tabs_G")
+    await bq.boot(link)
+    st = await bq.wait(lambda s: s.get("assign"), "B: задание по ссылке", 15)
+    aid = st.get("assign")
+    await to_hub(bq)
+    await a.pg.bring_to_front()
+    await a.press("Gear", wait=600)
+    await a.press("Tab_game", wait=400)
+    await a.press("Reset", wait=400)
+    await a.press("ResetYes", wait=1200)
+    await a.wait(lambda s: s.get("screen") == "title", "A: титул после сброса", 15)
+    gen_a = json.loads(await a.pg.evaluate("localStorage.getItem('wnb-godot:save.json')") or "{}").get("gen")
+    await bq.pg.bring_to_front()
+    st = await job_to_hub(bq, "flat")
+    saved = json.loads(await bq.pg.evaluate("localStorage.getItem('wnb-godot:save.json')") or "{}")
+    sa = saved.get("assign") or {}
+    check(st.get("assign") == aid and "flat" in st.get("assign_done", []) and "flat" in (sa.get("done") or {})
+          and saved.get("gen") == gen_a,
+          f"tabs: сброс в A при общем задании — пункт flat, пройденный в B первым, сохранён (B: {st.get('assign_done')}, "
+          f"хранилище: {list((sa.get('done') or {}).keys())}, gen {saved.get('gen')} = {gen_a}; задание B {st.get('assign')} = {aid}, "
+          f"хранимое {json.dumps(sa, ensure_ascii=False)[:200]})")
+    for p in (a, bq):
+        p.check_console()
+    await a.ctx.close()
 
 
+# ?fill=1 — localStorage почти полон (обзор 26.11, E3): кусками всё меньше, пока пишется; свободно < 256 знаков
+FILL_JS = """if (/[?&]fill=1/.test(location.search)) { if (!localStorage.getItem('wnb-fill-0')) { let n = 0, i = 0;
+  const put = [];
+  for (const sz of [1 << 20, 1 << 16, 1 << 12, 1 << 8, 16, 1]) { const v = 'x'.repeat(sz);
+    for (;;) { try { localStorage.setItem('wnb-fill-' + i, v); put.push(['wnb-fill-' + i, sz]); i++; n += sz; }
+               catch (e) { break; } } }
+  let free = 0;                                   // освободить 40+ знаков: «moved» влезет, save.json — нет
+  while (free < 40 && put.length > 1) { const e = put.pop(); localStorage.removeItem(e[0]); free += e[1] + e[0].length; n -= e[1]; }
+  window.__wnbFill = n; } else window.__wnbFill = 1; }"""
 NOLS_JS = """if (/[?&]nols=1/.test(location.search)) Object.defineProperty(window, 'localStorage', { configurable: true,
     get() { throw new DOMException('The operation is insecure.', 'SecurityError'); } });"""
 
@@ -1976,6 +2015,20 @@ async def sc_store(b):
     check("flat" in st.get("done", []), f"store: без localStorage задание пройдено ({st.get('done')})")
     await p.pg.wait_for_timeout(1500)                    # запись user:// дошла до IndexedDB
     await p.pg.goto(URL + "?test=1")                     # теперь localStorage есть
+    # обзор 26.11, E3: localStorage почти полон (save.json не помещается, отметка «moved» — помещается): перенос не
+    # удался — отметки нет (раньше ставилась, и прогресс из user:// больше не переносился никогда)
+    await p.ctx.add_init_script(FILL_JS)
+    p.allow += ["не записан", "не перенесён", "at: push_warning", "QuotaExceeded"]   # ожидаемо: места нет
+    await p.pg.goto(URL + "?test=1&fill=1")
+    st = await p.wait(lambda s: s.get("screen") in ("title", "hub"), "старт при полном localStorage", 60)
+    keys = await p.pg.evaluate("[localStorage.getItem('wnb-godot:moved'), !!localStorage.getItem('wnb-godot:save.json'), "
+                               "window.__wnbFill || 0]")
+    check(keys[0] is None and not keys[1] and keys[2] > 0,
+          f"store: место в localStorage кончилось — перенос не удался, отметки «moved» нет: moved={keys[0]}, "
+          f"save.json={keys[1]}, заполнено {keys[2]} знаков")
+    await p.pg.evaluate("Object.keys(localStorage).filter(k => k.indexOf('wnb-fill-') === 0)"
+                        ".forEach(k => localStorage.removeItem(k))")
+    await p.pg.goto(URL + "?test=1")                     # место есть — перенос при следующем запуске
     st = await p.wait(lambda s: s.get("screen") in ("title", "hub"), "после смены адреса", 60)
     keys = await p.pg.evaluate("[localStorage.getItem('wnb-godot:moved'), !!localStorage.getItem('wnb-godot:save.json')]")
     check("flat" in st.get("done", []) and keys == ["1", True],
@@ -2069,6 +2122,34 @@ async def sc_loader(b):
     check(bool(s and s.get("reload")) and s.get("tries") == 2,
           f"loader: пакет 500 — два автоповтора, потом «Игра не запустилась» и кнопка «Обновить» ({s}, запросов .pck {cnt['pck']})")
     await p.shot("2_pck500")
+    await p.ctx.close()
+
+    # обзор 26.11, E5: файла движка (wnb-engine-<хэш>.js) нет — старая index.html из кеша после выкладки. Раньше
+    # ReferenceError: Engine is not defined — вечная заставка без автоповтора и кнопки
+    js = {"n": 0}
+
+    async def hook_js(r, path):
+        if re.search(r"/wnb-engine-[^/]*\.js$", path) and "worklet" not in path:
+            js["n"] += 1
+            await r.fulfill(status=404, body="not found")
+            return True
+        return False
+    p = await new_page(b, "loader_js404", hook=hook_js)
+    p.allow += ["404", "Failed to load", "did not load", "Engine"]
+    await p.pg.goto(URL + "?test=1&stall=3")
+    t0 = time.time()
+    s = None
+    while time.time() - t0 < 60:
+        try:
+            s = await load_state(p)
+        except Exception:
+            s = None
+        if s and s.get("reload"):
+            break
+        await p.pg.wait_for_timeout(500)
+    check(bool(s and s.get("reload")) and s.get("tries") == 2 and js["n"] == 3,
+          f"loader: файл движка 404 — два автоповтора, потом сообщение и кнопка «Обновить» ({s}, запросов .js {js['n']})")
+    await p.shot("3_js404")
     await p.ctx.close()
 
 

@@ -611,7 +611,7 @@ func _test_pressed() -> void:
 func finish_test() -> void:
 	Audio.sfx("fanfare")
 	if exam:
-		SaveGame.exam_passed = true
+		SaveGame.mark_flag("exam_passed")
 		SaveGame.save()
 		Nav.go("exam_result", {"mistakes": mistakes})
 		return

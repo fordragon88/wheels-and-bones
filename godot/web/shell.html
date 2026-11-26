@@ -644,7 +644,10 @@ $GODOT_HEAD_INCLUDE
 <script>
 const GODOT_CONFIG = $GODOT_CONFIG;
 const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
-const engine = new Engine(GODOT_CONFIG);
+// Файл движка (wnb-engine-<хэш>.js) не загрузился — старая index.html из кеша ссылается на движок, которого после
+// выкладки уже нет: Engine не определён. Раньше здесь падал весь скрипт (ReferenceError) — вечная заставка без
+// автоповтора и кнопки (обзор 26.11, E5); теперь — сторож ниже: два автоповтора с обновлением index.html, потом кнопка.
+const engine = typeof Engine === 'function' ? new Engine(GODOT_CONFIG) : null;
 (function () {
   const load = document.getElementById('wnb-load');
   const bar = document.getElementById('wnb-bar');
@@ -710,6 +713,10 @@ const engine = new Engine(GODOT_CONFIG);
     const idle = (performance.now() - lastT) / 1000;
     if (idle > (allIn ? LATE_S : STALL_S)) stall();
   }, 1000);
+  if (!engine) {
+    fail(new Error('Game engine script did not load (' + GODOT_CONFIG.executable + '.js)'), true);
+    return;
+  }
   const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
   if (missing.length !== 0) {
     clearInterval(watch);
