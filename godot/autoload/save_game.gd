@@ -566,15 +566,18 @@ func apply_progress(p: Dictionary) -> void:
 
 
 ## «Вернуть прежний прогресс»: копия → текущий прогресс (задание не трогаем); копия удаляется.
-func restore_backup() -> void:
+## false — копии нет или она повреждена (E31.2 в game.py): прогресс прежний, копия НЕ стирается.
+func restore_backup() -> bool:
 	if not has_backup():
-		return
+		return false
 	var d: Variant
 	if not persist:
 		d = _bak_mem
 		_bak_mem = null
 	else:
 		d = Settings.parse_json(Settings.store_read("save.bak.json"))
+		if not d is Dictionary:
+			return false
 		Settings.store_remove("save.bak.json")
 	if d is Dictionary:
 		var keep := gen
@@ -583,3 +586,4 @@ func restore_backup() -> void:
 	Nav.hub_page = 0                         # как _progress_reset_scene в game.py
 	_replace = true
 	save()
+	return true

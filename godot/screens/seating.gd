@@ -1503,6 +1503,7 @@ class SeatSlider extends Control:
 			_drag = e.pressed
 			scr.drag = key if e.pressed else ""
 			if e.pressed:
+				_focus_self()
 				scr.set_from_x(key, position.x + e.position.x)
 			accept_event()
 		elif e is InputEventMouseMotion and _drag:
@@ -1512,6 +1513,7 @@ class SeatSlider extends Control:
 			_drag = e.pressed
 			scr.drag = key if e.pressed else ""
 			if e.pressed:
+				_focus_self()
 				scr.set_from_x(key, position.x + e.position.x)
 			accept_event()
 		elif e is InputEventScreenDrag:
@@ -1520,6 +1522,13 @@ class SeatSlider extends Control:
 		elif e is InputEventKey and e.pressed and ((e as InputEventKey).keycode == KEY_LEFT or (e as InputEventKey).keycode == KEY_RIGHT):
 			scr.step_value(key, 1 if (e as InputEventKey).keycode == KEY_RIGHT else -1)
 			accept_event()
+
+	## E37.3 (game.py): нажали на ползунок — он в фокусе, дальше двигается стрелками (фокус — при нажатии, а не по
+	## отпусканию: потерянное отпускание после Alt+Tab фокус не отнимает).
+	func _focus_self() -> void:
+		scr.focus_key = key
+		if focus_mode != Control.FOCUS_NONE and is_visible_in_tree() and not has_focus():
+			grab_focus()
 
 
 ## Примерка: блок списка «⚠», когда он не помещается целиком (_warn_plan): касание/клик — следующая страница по

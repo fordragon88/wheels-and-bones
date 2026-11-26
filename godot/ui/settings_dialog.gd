@@ -121,9 +121,9 @@ func _build() -> void:
 				s.value = float(Settings.vol[key])
 				s.muted = not Settings.vol.get("on", true)
 				s.set_meta("a11y_group", "Громкость")
-				s.accessibility_name = "%s: %d%%" % [Loc.t(VOL_NAMES[key]), int(s.value * 100)]   # как a11y_items
+				s.accessibility_name = "%s: %d%%" % [Loc.t(VOL_NAMES[key]), vol_pct(s.value)]   # как a11y_items
 				s.changed.connect(func(v: float) -> void:
-					s.accessibility_name = "%s: %d%%" % [Loc.t(VOL_NAMES[key]), int(v * 100)]
+					s.accessibility_name = "%s: %d%%" % [Loc.t(VOL_NAMES[key]), vol_pct(v)]
 					Settings.vol[key] = v
 					if not s.dragging():           # перетаскивание мышью — сохранить по отпусканию
 						Settings.save()
@@ -259,7 +259,10 @@ func _share_action(k: String) -> void:
 		"share_link":
 			Share.copy_progress_link()
 		"share_restore":
-			SaveGame.restore_backup()
+			if not SaveGame.restore_backup():      # E31.2 (game.py): копия повреждена — окно остаётся, честное сообщение
+				Audio.sfx("ghost")
+				Nav.flash(BAK_BAD_MSG, UI.BAD, 5.0)
+				return
 			Audio.sfx("whoosh")
 			close()
 			if Nav.current_name != "title":
@@ -418,6 +421,14 @@ func _help_zone() -> int:
 	return -1
 
 
+const BAK_BAD_MSG := "Копия прежнего прогресса повреждена — прогресс не изменился."
+
+
+## Громкость в процентах — округлением (round в game.py: 0,29 → 29 %, а не 28).
+static func vol_pct(v: float) -> int:
+	return roundi(v * 100.0)
+
+
 func progress_summary() -> PackedStringArray:
 	var g := Loc.tf("Гильдия: {0} из {1}", [SaveGame.tech_done_count(), Content.tech_jobs.size()])
 	if SaveGame.exam_passed:
@@ -442,7 +453,7 @@ func _draw() -> void:
 				var y := P.position.y + (PH_VOL_Y + i * 72 if ph else 146 + i * 58)
 				UI.draw_text_w(self, Loc.t(VOL_NAMES[keys[i]]), Vector2(x, y - 8), P.position.x + 225 - 14 - x, 17,
 					UI.GREY if muted else UI.WHITE)               # 150 %: подпись не касается ползунка
-				UI.draw_text(self, "%d%%" % int(float(Settings.vol[keys[i]]) * 100),
+				UI.draw_text(self, "%d%%" % vol_pct(float(Settings.vol[keys[i]])),
 					Vector2(P.position.x + 225 + (PH_VOL_W + 64 if ph else 230 + 56), y - 8), 16, UI.GREY if muted else UI.WHITE, false, 2)
 			var ny := P.position.y + (PH_VOL_Y + 3 * 72 + 48 if ph else 374)
 			UI.draw_text(self, Loc.t("M — быстро выключить / включить звук"), Vector2(x, ny), 13, UI.GREY)

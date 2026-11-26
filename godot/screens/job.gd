@@ -679,9 +679,10 @@ func do_action(tid: String, pid: String) -> String:
 	action.start(tid, false, act_pos(pid), pid)
 	var msg: String = st_.get("wrongmsg", "")
 	if msg == "":
-		if tid != st_["tool"] and pid == st_["part"]:
+		# E29.3 (как do_action в game.py): деталь из alt и инструмент из alt_tools тоже «верные»
+		if not tool_ok and part_ok:
 			msg = Loc.fmt("Деталь верная, но инструмент не тот. Нужен: {0}.", [Content.tools[st_["tool"]]["name"]])
-		elif tid == st_["tool"] and pid != st_["part"]:
+		elif tool_ok and not part_ok:
 			msg = Loc.fmt("Инструмент верный, но не та деталь. Цель: {0}.", [Content.part_name(st_["part"])])
 		else:
 			msg = "Не то. Перечитай шаг и подсказку."

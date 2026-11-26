@@ -164,7 +164,7 @@ func _draw_tile(b: GameButton, _r: Rect2) -> void:
 		ang = 7 * UI.wsin(t * 5)
 		var since: float = t - _miss_t
 		if since < 0.45:
-			ang += 22 * sin(since * 55) * (1 - since / 0.45)
+			ang += 22 * UI.wsin(since * 55) * (1 - since / 0.45)   # E35.3: в «Без анимации» не дёргается
 	var tex := Content.texture("tool_%s.png" % tid)
 	if tex:
 		var k := enter * (1 + 0.16 * h)

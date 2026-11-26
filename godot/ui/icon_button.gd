@@ -90,7 +90,7 @@ func _draw() -> void:
 		Kind.LANG:
 			UI.draw_text(self, "EN" if Loc.code == "en" else "RU", c, 15, col, true, 1)
 		Kind.GEAR:
-			var ang0 := float(Time.get_ticks_msec()) / 1000.0 * 0.8 * h
+			var ang0 := 0.0 if Settings.calm() else float(Time.get_ticks_msec()) / 1000.0 * 0.8 * h   # E35.3: «Без анимации» — не крутится
 			var pts := PackedVector2Array()
 			for i in 16:                   # 8 зубцов
 				var a := ang0 + i * PI / 8.0
