@@ -337,6 +337,9 @@ game_consts.json); ближняя к низу экрана точка детал
       (было — перевод строки), только печатные знаки. platform — `godot-web/exe/source` (у game.py web/exe/source).
 - [x] Перенос сохранений игроков из браузерной версии (19.11: localStorage `wnb:save.json`/`wnb:settings.json` того же
       сайта берутся один раз, проверено web_smoke `migrate`; на настоящем сайте — после выкладки в подпапку).
+- [x] Подготовка замены (27.11): `tools/release_web.py` (stage/check/rehearse/deploy/rollback), счётчик в сборке,
+      сборка `--main`, игра в рамке WordPress (web_smoke `embed`), новый блок `web/wordpress_embed_godot.html`.
+      См. «Замена сайта: как выпускать и откатывать».
 - [ ] Команда владельца на замену.
 
 ### После паритета (не обещано)
@@ -1132,6 +1135,96 @@ premultiplied-наложением, в разрешении холста тел�
 таза, «5 см», три скелета). С анимацией отличаются только нити и искра (фаза), как и до↔до. Браузер (телефон
 740×360 dpr 3, он же `?res=720`, настольный 1280×720): разница — только нити и дыхание Мортимера. Пары —
 `tests/web_shots/before_*`/`after_*` (не в git).
+
+## Замена сайта: как выпускать и откатывать (подготовлено 27.11, выпуска ещё не было)
+Владелец: «Да, подготовь» (замена основного сайта Godot-версией). Всё готово так, что замена — одна команда; на
+основной сайт ничего не выкладывалось, репетиция — на тестовом адресе.
+
+**Команды владельца** (из `D:\wheels_and_bones\godot_port`):
+- выпуск: `python godot/tools/release_web.py deploy --owner-approved`
+- откат: `python godot/tools/release_web.py rollback --owner-approved`
+- посмотреть, что будет, ничего не меняя: `deploy --dry-run`, `rollback --dry-run`.
+Перед выпуском (если что-то менялось после 27.11): `release_web.py stage` → `check` (→ `rehearse`). deploy сверяет,
+что `web_deploy` с тех пор не менялся (иначе classic/ устарел — заново stage), делает `git pull --ff-only`, копирует
+`godot/build/site_main` в `web_deploy` (лишнее удаляет, `.git` не трогает), коммит «Godot-версия в корне…», push,
+ждёт сборку Pages именно этого коммита (при «errored» — один повтор), ждёт ответ 200 на `.pck`, гонит живые
+проверки (файлы, Godot web_smoke `boot,play,links,migrate,embed` с `WNB_EXPECT_MAIN=1`) и пишет
+`godot/build/release_log.json` (коммит до и после). rollback — дерево коммита «до» (из журнала; без журнала — коммит
+перед последним «Godot-версия в корне…»; или `--to`) новым коммитом «Откат…», push без `--force`, ждёт Pages,
+проверяет, что старая index.html и её apk отвечают 200. Без `--owner-approved` обе печатают план и выходят с кодом 2.
+
+**Дерево сайта** (`release_web.py stage` → `godot/build/site_main`, ~485 МБ, предел Pages 1 ГБ — 45 %):
+- корень — Godot-сборка для основного адреса (`build_web.py --main`: `share.base_url` = страница WordPress из
+  `content/data/game_consts.json`, его пишет sync_content из `game.SHARE_BASE_URL` — адрес не разойдётся с game.py);
+  рамка WordPress с прежним адресом сразу показывает Godot;
+- `classic/` — нынешняя pygame-сборка из `web_deploy` как есть (index.html, apk, tar.gz, anim/, turntable/, favicon,
+  splash). Пути в ней относительные (`fopen("wheels_and_bones.apk?v=…")`, `anim/…?v=`, `turntable/…?v=` — от адреса
+  страницы), из подпапки работает (проверено pygame web_smoke);
+- переходные файлы pygame в корне (apk, tar.gz, anim/, turntable/, favicon.png): у кого открыта или закеширована
+  прежняя index.html (Pages кеширует страницы 10 мин; открытая вкладка качает anim/ и turntable/ по ходу игры),
+  иначе 404. Git хранит одинаковое содержимое один раз — копии в classic/ и корне репозиторий не раздувают: новых
+  данных в git при выпуске ~137 МБ (только Godot: движок, пакет, frames/, music/). Убрать — следующим выпуском
+  (`stage --no-legacy`), когда пройдёт переходный срок;
+- README.md (переписан: корень — Godot, classic/ — прежняя), `.nojekyll`, `test/` (старый pygame-тест) — как были.
+
+**Сохранения при замене.** Источник тот же (`fordragon88.github.io`): Godot в корне при первом запуске один раз
+переносит `wnb:save.json`/`wnb:settings.json` pygame-версии в свои `wnb-godot:*`, старое не трогает. В рамке
+WordPress хранилище разделено по сайту верхнего уровня (Chrome — Storage Partitioning, Firefox — Total Cookie
+Protection, Safari — тоже): прогресс, который pygame записал в рамке на странице сайта, Godot видит именно в этой
+рамке — проверено `embed` (Chromium с включённым разделением и Firefox с cookieBehavior 5: в рамке перенос есть,
+прямой адрес видит только своё). classic/ и Godot друг другу не мешают (разные ключи): поиграл в Godot, открыл
+classic — там прежний прогресс pygame (то, что сделано в Godot, classic не видит); поиграл потом в classic — Godot
+второй раз не переносит (`wnb-godot:moved`). Сказано в FAQ нового блока.
+
+**Ссылки-задания.** Godot для основного сайта строит ссылки на страницу WordPress; ссылка из конструктора
+(отметки flat, caster, seat_elf, имя «Анна П.») побуквенно = `game.share_link` для того же набора — web_smoke `embed`
+(`WNB_EXPECT_MAIN=1` в `release_web.py check`/`deploy`). Старые ссылки (из pygame) Godot понимает (check_share,
+selftest).
+
+**Счётчик посещений** — тот же тег, что у pygame (`build_web.counter_tag()` берёт `goatcounter_tag()` корневого
+`build_web.py`: код `wheelsandbones`, `allow_frame`), вставляется в `<head>` при сборке; `--no-counter` — без.
+`build_info.json`: `counter`, `main`. Путь в статистике прежний (`/wheels-and-bones-web/`), classic — отдельно
+(`/wheels-and-bones-web/classic/`). В тестах запросы к `gc.zgo.at`/`goatcounter.com` обрываются (web_smoke
+`counter_check`: тег на месте, браузер его запросил — в том числе из рамки, игра работает).
+
+**Игра в рамке чужого сайта — web_smoke `embed`** (страница-обёртка из настоящего блока, рамка → проверяемая
+сборка + `?test=1`; обёртка на `localhost:8065`, игра на `127.0.0.1:…` — другой сайт):
+
+| | Chromium | Firefox | WebKit (Windows) |
+|---|---|---|---|
+| загрузка, задание до итога, перезагрузка обёртки | ok | ok | ok |
+| перенос `wnb:*` → `wnb-godot:*` в рамке | ok | ok | ok |
+| хранилище рамки отделено от прямого адреса | да (вкл. вручную — Playwright выключает) | да (cookieBehavior 5) | нет (в этой сборке) |
+| `?jobs/from`, `?load` со страницы-обёртки | ok | ok | ok |
+| «Play fullscreen» обёртки | ok | без окна — отказ браузера | ok |
+| полный экран из игры (allowfullscreen) | ok | ok | ok |
+| буфер без `clipboard-write` | отказ → запасной путь execCommand копирует | пишет и так | пишет и так |
+| геймпад без `gamepad` в allow | разрешён (policy allowsFeature) | getGamepads работает | нет Gamepad API |
+| телефон 780×360: рамка 780×439 выше экрана | первое касание — полный экран рамки | (полный экран заглушён) | (то же) |
+| телефон 360×780: рамка 360×202 | без заслонки, касание — полный экран + заслонка | — | — |
+
+Найдено и починено: (1) **буфер обмена** — Godot копирует через `navigator.clipboard.writeText` и ответа не ждёт:
+в рамке без `clipboard-write` (Chrome) запись отклонялась, а окно писало «Скопировано ✔». Теперь
+(`web/shell.html`): отказ → запасной путь `execCommand('copy')`; не вышло и он — `window.wnbClip.state = 'fail'`,
+`autoload/web.gd` (`_clip_check`) переводит окно в «не удалось» и кладёт код/ссылку в поле страницы только для
+чтения, выделенным (Ctrl+C или долгое нажатие). (2) **Телефон в рамке** — холст ограничивался размером экрана
+(сторож поворота для страницы самой игры), а рамка 16:9 по ширине телефона выше экрана (780×439 при 780×360):
+низ рамки пустовал, картинка меньше. Теперь ограничение — только на странице игры или в полном экране. (3) Блок:
+`.catch` у «Play fullscreen» (Firefox писал «Fullscreen request denied» в консоль страницы).
+Новый блок — `godot/web/wordpress_embed_godot.html`, что поменять — `godot/web/WORDPRESS_CHANGES.md`.
+
+**Итоги 27.11:** `stage` — 13 993 файла, 484,8 МБ (45 % предела Pages), пакет `wnb-2cebe665d0.pck`, ссылки → страница
+WordPress, счётчик `wheelsandbones`, первая загрузка 19,4 МБ (в блоке «about 19 MB»); `check` — «RELEASE CHECK: 21 ok, 0
+FAIL» (Godot web_smoke по site_main 214 ok, pygame web_smoke по classic/ 77 ok); `rehearse` — «REHEARSE: 23 ok, 0 FAIL»
+(тестовый репозиторий 372f958, https://fordragon88.github.io/wheels-and-bones-test/rehearsal/: Pages за 78 с, Godot
+web_smoke живьём 213 ok, pygame по rehearsal/classic/ 77 ok); `deploy --dry-run` — +7403 файла (268,6 МБ), ~2
+(index.html, README.md), −0; новых данных в git 136,9 МБ. В репетиции classic/ без счётчика (pygame web_smoke его не
+глушит), `test/` не кладётся. web_smoke тестовой сборки: Chromium 213 ok (boot, play, links, migrate, phone, embed),
+Firefox 60 ok и WebKit 59 ok (boot, embed).
+
+**Проверить вживую до замены** (не эмулируется): настоящий телефон в рамке страницы WordPress (Android Chrome —
+первое касание и поворот в полном экране; iPhone — «Play fullscreen» открывает отдельную страницу), Safari на
+Mac (разделение хранилища в рамке и перенос прогресса), звук, геймпад в рамке на настоящем устройстве.
 
 ## Грабли Godot 4.7 (найдено при переносе)
 - Живые области чтеца экрана: `AccessibilityServer.AccessibilityLiveMode.LIVE_POLITE` (не `DisplayServer.…`).
