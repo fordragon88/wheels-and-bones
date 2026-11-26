@@ -39,6 +39,11 @@ html, body { width: 100%; height: 100%; background: #18161e; overflow: hidden; t
   background: transparent; color: #f2f2f2; caret-color: #7fe3ff; font-family: "DejaVu Sans", Verdana, sans-serif;
   padding: 0 10px; -webkit-user-select: text; user-select: text; touch-action: auto; }
 #wnb-field::placeholder { color: #6a6a78; }
+/* поле комментария окна замечания (wnbText) — как wnbText game.py: многострочное, экранная клавиатура по касанию */
+#wnb-text { position: fixed; z-index: 5; display: none; box-sizing: border-box; margin: 0; resize: none; outline: none;
+  border: 1px solid #5a5868; border-radius: 8px; background: #0c0c12; color: #ecedf5; caret-color: #7fe3ff;
+  font-family: "DejaVu Sans", Verdana, sans-serif; padding: 6px 8px; -webkit-user-select: text; user-select: text;
+  touch-action: auto; }
 #wnb-live { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; overflow: hidden; }
 html, body, #canvas { overscroll-behavior: none; }
 #canvas { touch-action: none; }
@@ -282,6 +287,57 @@ html, body, #canvas { overscroll-behavior: none; }
     set: function (v) { if (fld.el) fld.el.value = v; }
   };
 
+  // --- поле комментария окна замечания на сенсорном экране (как window.wnbText в game.py): <textarea> поверх рамки
+  // поля игры — касание открывает экранную клавиатуру (поле Godot её не вызывает). Текст — опросом в игру (poll),
+  // клавиши поля до игры не доходят. Прячется, когда окно закрыто или поверх него справка/настройки.
+  var txt = { el: null, key: '', at: null };
+  function placeText() {
+    var t = txt.el, a = txt.at;
+    if (!t || !a || t.style.display === 'none') return;
+    var c = document.getElementById('canvas'), r = c.getBoundingClientRect();
+    var kx = r.width / (c.width || 1), ky = r.height / (c.height || 1);
+    t.style.left = (r.left + a[0] * kx) + 'px'; t.style.top = (r.top + a[1] * ky) + 'px';
+    t.style.width = (a[2] * kx) + 'px'; t.style.height = (a[3] * ky) + 'px';
+    t.style.fontSize = Math.max(14, a[4] * ky) + 'px';
+  }
+  window.wnbText = {
+    relayout: placeText,
+    // key — окно (новое окно — новый текст value); x, y, w, h, fontPx — пиксели буфера холста
+    show: function (key, x, y, w, h, value, maxLen, label, fontPx) {
+      var t = txt.el;
+      if (!t) {
+        t = txt.el = document.createElement('textarea');
+        t.id = 'wnb-text'; t.spellcheck = true;
+        ['keydown', 'keyup', 'keypress'].forEach(function (n) {
+          t.addEventListener(n, function (e) { e.stopPropagation(); });   // клавиши — тексту, не игре
+        });
+        document.body.appendChild(t);
+      }
+      txt.at = [x, y, w, h, fontPx];
+      t.maxLength = maxLen;
+      t.setAttribute('aria-label', label || 'Comment');
+      if (txt.key !== key) { txt.key = key; t.value = value || ''; }
+      if (t.style.display !== 'block') t.style.display = 'block';
+      placeText();
+    },
+    hide: function () {
+      var t = txt.el;
+      if (t && t.style.display !== 'none') {
+        var had = document.activeElement === t;
+        t.style.display = 'none'; t.blur();
+        var c = document.getElementById('canvas'); if (had && c) c.focus();
+      }
+    },
+    close: function () { window.wnbText.hide(); txt.key = ''; },
+    poll: function () { return txt.el ? txt.el.value : ''; },
+    set: function (v) { if (txt.el) txt.el.value = v; },
+    state: function () {
+      var t = txt.el;
+      return t ? { shown: t.style.display === 'block', value: t.value, key: txt.key,
+                   rect: (function (b) { return [b.left, b.top, b.width, b.height]; })(t.getBoundingClientRect()) } : null;
+    }
+  };
+
   // --- язык страницы (заслонка, кнопки, заставка): до загрузки игры — последний язык игры (localStorage) или язык
   // браузера (ru → русский, иначе английский); игра сообщает свой через wnbLang(code) (autoload/web.gd).
   var TXT = {
@@ -426,6 +482,7 @@ $GODOT_HEAD_INCLUDE
     if (c.style.width !== sw || c.style.height !== sh) { c.style.width = sw; c.style.height = sh; changed = true; }
     if (c.width !== bw || c.height !== bh) { c.width = bw; c.height = bh; changed = true; }   // Godot подхватит в кадре
     if (changed && window.wnbField && window.wnbField.relayout) window.wnbField.relayout();
+    if (changed && window.wnbText && window.wnbText.relayout) window.wnbText.relayout();
     if (diag) diagLine();
     return changed;
   }

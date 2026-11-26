@@ -163,8 +163,65 @@ func kb_order(items: Array) -> Array:
 
 ## Подпись поля: «Комментарий: печатай текст, Enter — отправить» и напечатанное (как raw-пункт game.py).
 func _process(_dt: float) -> void:
+	if web_text():
+		_web_text_sync()
 	if text != null and text.text != _named:      # текст поставили кодом (без text_changed) — подпись поля заново
 		_text_name()
+
+
+# Браузер на сенсорном экране (телефон, планшет): поле Godot экранную клавиатуру не вызывает — поверх рамки поля
+# настоящее <textarea> страницы (wnbText в web/shell.html), как wnbText/_touch_text в game.py (обзор 26.11, E6).
+# Текст живёт в поле страницы, сюда — опросом (только печатные знаки, переводы строки → пробел, до 600). Поле
+# страницы прячется, когда поверх окна справка F1 или настройки, и при закрытии окна (_exit_tree).
+var _wt_key: String = ""
+var _wt_rect: Rect2 = Rect2()
+var _wt_shown: bool = false
+
+
+## Поле страницы вместо TextEdit: браузер с сенсорным экраном (в проверках — и «-- --web-text» без браузера).
+static func web_text() -> bool:
+	return (OS.has_feature("web") and UI.touch() and not Share.test_mode) or _wt_force
+
+
+static var _wt_force: bool = false             # тесты: путь поля страницы без браузера (JavaScriptBridge — пусто)
+
+
+func _web_text_show() -> bool:
+	return Nav.help == null and Nav.settings == null and is_visible_in_tree()
+
+
+func _web_text_sync() -> void:
+	if not _web_text_show():
+		if _wt_shown:
+			_wt_shown = false
+			JavaScriptBridge.eval("window.wnbText && wnbText.hide()", true)
+		return
+	var xf := get_viewport().get_final_transform() * text.get_global_transform_with_canvas()
+	var r := xf * Rect2(Vector2.ZERO, text.size)
+	if _wt_key == "" or not _wt_shown or not r.is_equal_approx(_wt_rect):
+		if _wt_key == "":
+			_wt_key = "fb_%d" % get_instance_id()
+		_wt_rect = r
+		_wt_shown = true
+		JavaScriptBridge.eval("wnbText.show(%s, %f, %f, %f, %f, %s, %d, %s, %f)" % [JSON.stringify(_wt_key),
+			r.position.x, r.position.y, r.size.x, r.size.y, JSON.stringify(text.text), 600,
+			JSON.stringify(text.accessibility_description), float(UI.fs(15)) * xf.get_scale().y], true)
+	var v: Variant = JavaScriptBridge.eval("wnbText.poll()", true)
+	if v != null:
+		set_web_text(str(v))
+
+
+## Текст из поля страницы → поле окна (тем же фильтром, что набор с клавиатуры: печатные знаки, до 600).
+func set_web_text(raw: String) -> void:
+	var clean := _printable(raw.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")).substr(0, 600)
+	if clean != text.text:
+		text.text = clean
+		_text_name()
+
+
+func _exit_tree() -> void:
+	if _wt_key != "":
+		JavaScriptBridge.eval("window.wnbText && wnbText.close()", true)
 
 
 var _named: String = ""
@@ -215,6 +272,10 @@ func entry() -> Dictionary:
 
 
 func send() -> void:
+	if _wt_key != "":                             # последние буквы из поля страницы — до отправки
+		var v: Variant = JavaScriptBridge.eval("wnbText.poll()", true)
+		if v != null:
+			set_web_text(str(v))
 	var online := Feedback.send(Feedback.payload(entry()), shot)
 	Audio.sfx("ok")
 	closed.emit(true, online)

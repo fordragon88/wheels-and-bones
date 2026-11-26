@@ -1675,14 +1675,14 @@ async def sc_fpshud(b):
     await p.ctx.close()
 
 
-async def feedback_page(b, name, lang, outbox=None):
+async def feedback_page(b, name, lang, outbox=None, **kw):
     """Страница с перехватом адреса таблицы замечаний: запросы записываются, наружу ничего не уходит (fulfill 200
     или abort — «нет сети»). outbox — очередь pygame-версии в localStorage «wnb:outbox» до запуска."""
     raw = {"save.json": json.dumps({"done": ["flat"], "garage": [["flat", 3]], "tutorial_skipped": True}),
            "settings.json": json.dumps({"lang": lang})}
     if outbox is not None:
         raw["outbox"] = json.dumps(outbox)
-    p = await new_page(b, name, legacy_raw=raw)
+    p = await new_page(b, name, legacy_raw=raw, **kw)
     p.fb = []
     p.fb_mode = ["ok"]
     furl = json.load(open(os.path.join(build_web.OUT, "..", "..", "content", "data", "game_consts.json"),
@@ -1816,6 +1816,80 @@ async def sc_feedback(b):
     same(e, r, "general_garage_en", "⚑ гараж EN")
     e.check_console()
     await e.ctx.close()
+    await feedback_phone(b, ref)
+
+
+async def text_state(p):
+    return await p.pg.evaluate("window.wnbText ? window.wnbText.state() : null")
+
+
+async def feedback_phone(b, ref):
+    """Обзор 26.11, E6: телефон (780×360, касания, dpr 3) — поле комментария Godot экранную клавиатуру не вызывает;
+    поверх рамки — <textarea> страницы (wnbText, как в game.py): появилось над полем, касание даёт ему фокус (на
+    телефоне — клавиатура), набранный текст (с переводом строки) попадает в замечание; поле прячется под справкой и
+    после закрытия окна. Отправка — в перехваченный адрес (наружу ничего)."""
+    p = await feedback_page(b, "feedback_phone", "ru", touch=True, mobile=True, w=780, h=360, dpr=3)
+    if not CHROMIUM:
+        await orient(p, 780, 360, True)
+    await p.boot()
+    await title_ready(p)
+    await p.press("Lang", wait=500)
+    await p.pg.evaluate("(n) => { window.wnbStaged = ''; window.wnbStage(n); }", "hub")
+    t0 = time.time()
+    while time.time() - t0 < 30 and await p.pg.evaluate("window.wnbStaged || ''") != "hub":
+        await p.pg.wait_for_timeout(200)
+    await p.pg.wait_for_timeout(800)
+    st = await p.state()
+    check(st.get("phone") is True and st.get("touch") is True, f"{p.name}: телефонный режим ({st.get('phone')})")
+    await p.press("Flag", wait=800)
+    await p.press("Reason_1", wait=300)
+    ts = await text_state(p)
+    st = await p.state()
+    cm = next((x for x in st.get("buttons", []) if x[0] == "Comment"), None)
+    ok_rect = False
+    if ts and cm:
+        gx, gy = await p.at(cm[1], cm[2])
+        gx2, gy2 = await p.at(cm[1] + cm[3], cm[2] + cm[4])
+        r = ts["rect"]
+        ok_rect = abs(r[0] - gx) < 3 and abs(r[1] - gy) < 3 and abs(r[0] + r[2] - gx2) < 3 and abs(r[1] + r[3] - gy2) < 3
+    check(bool(ts and ts["shown"]) and ok_rect, f"{p.name}: окно замечания — поле страницы (textarea) над полем "
+                                                  f"комментария: {ts and ts['rect']} ↔ {cm}")
+    if ts and ts["shown"]:
+        r = ts["rect"]
+        await p.pg.touchscreen.tap(r[0] + r[2] / 2, r[1] + r[3] / 2)
+        await p.pg.wait_for_timeout(300)
+        foc = await p.pg.evaluate("document.activeElement && document.activeElement.id")
+        check(foc == "wnb-text", f"{p.name}: касание по полю — фокус у поля страницы (экранная клавиатура): {foc}")
+        await p.pg.keyboard.insert_text("Колесо скрипит,")
+        await p.pg.keyboard.press("Enter")
+        await p.pg.keyboard.insert_text("тормоз слабый")
+        await p.pg.wait_for_timeout(500)
+        await p.key("F1", 600)                            # клавиши поля до игры не доходят — справки нет
+        st = await p.state()
+        check(not st.get("help"), f"{p.name}: F1 в поле страницы — текст, а не справка игры")
+        await p.pg.evaluate("document.getElementById('canvas').focus()")
+        await p.key("F1", 600)
+        st = await p.state()
+        ts = await text_state(p)
+        check(st.get("help") is True and not ts["shown"], f"{p.name}: справка поверх окна — поле страницы спрятано "
+                                                           f"(справка {st.get('help')}, поле {ts['shown']})")
+        await p.key("Escape", 600)
+        ts = await text_state(p)
+        check(ts["shown"] and ts["value"].startswith("Колесо скрипит,"),
+              f"{p.name}: справку закрыли — поле снова видно, текст на месте («{ts['value'][:30]}»)")
+    n0 = len(p.fb)
+    await p.press("Send", wait=600)
+    t0 = time.time()
+    while time.time() - t0 < 8 and len(p.fb) == n0:
+        await p.pg.wait_for_timeout(200)
+    d = json.loads(p.fb[n0]["body"]) if len(p.fb) > n0 else {}
+    check(d.get("comment") == "Колесо скрипит, тормоз слабый",
+          f"{p.name}: набранное в поле страницы попало в замечание: «{d.get('comment')}»")
+    ts = await text_state(p)
+    check(ts is not None and not ts["shown"], f"{p.name}: окно закрыто — поле страницы спрятано")
+    await p.shot("phone_sent")
+    p.check_console()
+    await p.ctx.close()
 
 
 PLATE_STAGES = ["title", "hub", "guild_open", "job_flat_repair"]
