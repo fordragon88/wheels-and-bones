@@ -30,6 +30,8 @@ var _bak_mem: Variant = null           # тесты: копия прогресс
 
 
 var migrated: bool = false            # браузер: прогресс взят из pygame-версии (localStorage) в этом запуске
+var restored_prev: bool = false       # save.json был битый — прогресс восстановлен из save.prev.json (сообщение на титуле)
+const RESTORED_MSG := "Сохранение было повреждено — восстановлено из предыдущей копии."
 var gen: int = 0                      # браузер: поколение сохранения (см. merge_saves)
 var _base: Dictionary = {}            # браузер: что эта вкладка последний раз прочла/записала (для «своего нового»)
 var _replace: bool = false            # следующая запись заменяет прогресс (сброс/код/копия): gen + 1, без объединения
@@ -76,9 +78,20 @@ func load_file(path: String) -> void:
 			Settings.store_write("save.json.bad", text)
 		else:
 			DirAccess.copy_absolute(path, path + ".bad")
-		return
-	apply_dict(data)
-	_base = to_dict()
+		# Копия прежнего сохранения (пишется перед каждой записью) цела — прогресс из неё, игроку — сообщение
+		# (suggestions S2, 26.11). Её нет или она тоже битая — как раньше: пустой прогресс.
+		var prev_path := path.get_basename() + ".prev.json"
+		var prev := Settings.store_read("save.prev.json") if own 			else (FileAccess.get_file_as_string(prev_path) if FileAccess.file_exists(prev_path) else "")
+		var pd: Variant = Settings.parse_json(prev)
+		if not pd is Dictionary:
+			return
+		if own:
+			Settings.store_write("save.json", prev)
+		apply_dict(pd)
+		restored_prev = true
+	else:
+		apply_dict(data)
+	_snapshot_base()
 	_fresh.clear()
 
 
@@ -196,16 +209,24 @@ func _save_web() -> bool:
 	if old != "" and old != text:
 		Settings.store_write("save.prev.json", old)
 	var ok := Settings.store_write("save.json", text)
-	_base = to_dict()
+	_snapshot_base()
 	return ok
+
+
+## Что эта вкладка прочла/записала — глубокой копией: to_dict() отдаёт словари задания (done/errors/secs) по ссылке,
+## и пункт, отмеченный после записи, сразу «был» и в base — объединение после сброса в другой вкладке его теряло
+## (обзор 26.11, E1; web_smoke tabs).
+func _snapshot_base() -> void:
+	_base = to_dict().duplicate(true)
 
 
 ## Объединение сохранений двух вкладок (браузер). stored — хранимое сейчас, mine — своё в памяти, base — что эта
 ## вкладка прочла/записала в прошлый раз. Растут только: done, seat_done (объединение), garage (лучшие звёзды),
 ## exam_passed, seat_quiz_ok, tutorial_skipped, ending_seen (или). Задание по ссылке: тот же id — сделанные пункты
 ## объединяются (первая попытка — из хранимого), «active» — своё; другой id — своё; своего нет — хранимое.
-## gen: хранимое новее (сброс/код в другой вкладке) — к нему добавляется только своё новое (mine − base), задание —
-## хранимое; одинаковое — объединение целиком; своё новее — своё.
+## gen: хранимое новее (сброс/код в другой вкладке) — к нему добавляется только своё новое (mine − base): пункты
+## задания по ссылке с тем же id, которых не было в base, а если вкладка с прошлой записи открыла другую ссылку —
+## своё задание целиком (обзор 26.11, E1); одинаковое — объединение целиком; своё новее — своё.
 static func merge_saves(stored: Dictionary, mine: Dictionary, base: Dictionary, fresh: Dictionary = {}) -> Dictionary:
 	var sg: Variant = Settings.py_int(stored.get("gen"))
 	var mg: Variant = Settings.py_int(mine.get("gen"))
@@ -258,6 +279,25 @@ static func merge_saves(stored: Dictionary, mine: Dictionary, base: Dictionary, 
 			out["assign"] = a
 		else:
 			out["assign"] = (ma as Dictionary).duplicate(true)
+	elif s_gen > m_gen and ma is Dictionary:
+		var ba: Variant = base.get("assign")
+		var base_id: Variant = (ba as Dictionary).get("id") if ba is Dictionary else null
+		if ma.get("id") != base_id:
+			out["assign"] = (ma as Dictionary).duplicate(true)   # с прошлой записи вкладка открыла новую ссылку
+		elif sa is Dictionary and sa.get("id") == ma.get("id"):
+			var a: Dictionary = (sa as Dictionary).duplicate(true)
+			for k: String in ["done", "errors", "secs"]:
+				var sv: Variant = a.get(k)
+				var mv: Variant = ma.get(k)
+				var bv: Variant = (ba as Dictionary).get(k)
+				if sv is Dictionary and mv is Dictionary:
+					for kk: Variant in mv:
+						if not sv.has(kk) and not (bv is Dictionary and (bv as Dictionary).has(kk)):
+							sv[kk] = mv[kk]           # пункт, сделанный в этой вкладке после её прошлой записи
+			if Settings.py_bool(ma.get("active")) != Settings.py_bool((ba as Dictionary).get("active")):
+				a["active"] = ma.get("active")        # вошла в задание / вышла из него после прошлой записи
+			a["sent"] = Settings.py_bool(sa.get("sent")) or Settings.py_bool(ma.get("sent"))
+			out["assign"] = a
 	out["gen"] = s_gen
 	return out
 
@@ -282,7 +322,9 @@ static func _delta(mine: Dictionary, base: Dictionary, fresh: Dictionary = {}) -
 	for key: String in FLAGS:
 		d[key] = Settings.py_bool(mine.get(key)) and not Settings.py_bool(base.get(key))
 	for k: String in fresh:
-		if k.begins_with("seat:"):
+		if k.begins_with("flag:"):
+			d[k.trim_prefix("flag:")] = true      # флаг, поставленный заново (пересдал экзамен/зачёт после сброса)
+		elif k.begins_with("seat:"):
 			(d["seat_done"] as Array).append(k.trim_prefix("seat:"))
 		else:
 			(d["done"] as Array).append(k)
@@ -328,6 +370,13 @@ func mark_job(jid: String, stars: int) -> void:
 func mark_seat(cid: String) -> void:
 	seat_done[cid] = true
 	_fresh["seat:" + cid] = 1
+
+
+## Флаг прогресса заработан (экзамен сдан, зачёт посадки пройден) — «своё новое» и тогда, когда он уже стоял:
+## сброс в другой вкладке не должен отнять пересданное здесь (обзор 26.11, E1).
+func mark_flag(key: String) -> void:
+	set(key, true)
+	_fresh["flag:" + key] = 1
 
 
 func is_done(jid: String) -> bool:

@@ -221,6 +221,7 @@ func _run() -> void:
 	fx_line += "; " + await _touch()
 	fx_line += "; " + await _phone_check()
 	fx_line += "; " + await _review_kb()
+	fx_line += "; " + await _review_web()
 	# --- сценарий мышью: титул → мастерская → flat → осмотр → неверный → верный диагноз ---
 	SaveGame.reset()
 	await _flow_mouse()
@@ -245,6 +246,15 @@ func _review_kb() -> String:
 	add_child(rk)
 	var line: String = await rk.run(self)
 	rk.queue_free()
+	return line
+
+
+## Внешний обзор 26.11: браузер, сохранения, телефон, раскладка (tests/review_web_check.gd).
+func _review_web() -> String:
+	var rw: Node = (load("res://tests/review_web_check.gd") as GDScript).new()
+	add_child(rw)
+	var line: String = await rw.run(self)
+	rw.queue_free()
 	return line
 
 
@@ -2571,6 +2581,22 @@ func _only(what: String) -> void:
 			line = await _touch()
 		"review-kb":
 			line = await _review_kb()
+		"review-web":
+			line = await _review_web()
+		"instr-sizes":                       # обзор 26.11, E22: инструкция ремонта — было/стало по всем шагам
+			var rw: Node = (load("res://tests/review_web_check.gd") as GDScript).new()
+			add_child(rw)
+			var d: Dictionary = rw.instr_measure()
+			var pc: Node = (load("res://tests/phone_check.gd") as GDScript).new()
+			pc.write_out("instr_sizes.json", JSON.stringify(d, " ", false) + "
+")
+			for k: String in d:
+				print("INSTR %s: телефон %d → %d шагов (худший было %s, стало +%d; мельче 19 — %d шагов, кегль от %d), ПК %d → %d"
+					% [k, d[k]["phone_before"], d[k]["phone_after"], d[k]["phone_worst_before"], d[k]["phone_worst_after"],
+					d[k]["phone_shrunk"], d[k]["min_size"], d[k]["pc_before"], d[k]["pc_after"]])
+			line = "INSTR SIZES: %d сочетаний" % d.size()
+			rw.queue_free()
+			pc.free()
 		"phone":
 			line = await _phone_check()
 		"phone-measure":

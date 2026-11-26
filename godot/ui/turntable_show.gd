@@ -50,6 +50,8 @@ func _gui_input(e: InputEvent) -> void:
 	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
 		drag = e.pressed and not tt.is_empty()
 		_last = e.position
+		if drag:
+			_tick_yaw = yaw                      # после автоповорота первый сдвиг не щёлкает (setdefault в game.py), E29.8
 		accept_event()
 	elif e is InputEventMouseMotion and drag:
 		yaw += (e.position.x - _last.x) * 0.012

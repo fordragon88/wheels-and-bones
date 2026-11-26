@@ -498,6 +498,7 @@ func check_fit() -> void:
 	if solved:
 		var idx := SaveGame.seat_idx()
 		load_case(idx[(idx.find(case_i) + 1) % idx.size()] if case_i in idx else idx[0])
+		warn_page = 0                            # следующий клиент — с первой страницы «⚠» (как pick_case), E29.5
 		refresh()
 		return
 	var checks: Array = SeatLogic.seat_eval(c, cfg)[0]
@@ -554,7 +555,7 @@ func quiz_next() -> void:
 		say = mentor("pass" if ok else "nopass")
 		if ok:
 			if not SaveGame.assign_on():
-				SaveGame.seat_quiz_ok = true
+				SaveGame.mark_flag("seat_quiz_ok")
 				SaveGame.save()
 			Audio.sfx("fanfare")
 	refresh()

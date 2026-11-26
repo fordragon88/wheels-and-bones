@@ -128,7 +128,7 @@ func ambient(bg: String) -> void:
 	if _amb.playing:                          # старая гаснет 0,4 с
 		_amb_old.stream = _amb.stream
 		_amb_old.play(_amb.get_playback_position())
-		_amb_old_k = 1.0
+		_amb_old_k = _amb_k                   # гаснет от текущей громкости (быстрая смена сцены: 0,08 → 0,36 скачком, E16)
 	_amb.stop()
 	var key := "amb_" + bg.get_basename()
 	var st: AudioStreamWAV = _sfx.get(key) as AudioStreamWAV
@@ -211,6 +211,6 @@ func apply_volume() -> void:
 		if Web.on:
 			Web.music_volume(lvl)
 		_music.volume_db = linear_to_db(maxf(0.0001, lvl))
-		_music.stream_paused = lvl <= 0.0001 and _music.playing
+		_music.stream_paused = lvl <= 0.0001      # без «and playing»: пауза снимала playing — дёргалось каждый кадр (E16)
 		_amb.volume_db = linear_to_db(maxf(0.0001, amb_level() * _amb_k))
 		_amb_old.volume_db = linear_to_db(maxf(0.0001, amb_level() * _amb_old_k))

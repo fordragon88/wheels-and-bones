@@ -31,6 +31,14 @@ func _ready() -> void:
 	_amb.material = mat
 	_amb.draw.connect(_draw_ambient)
 	add_child(_amb)
+	Settings.changed.connect(_on_settings)
+
+
+## «Свечение», контрастный фон, «Без анимации» сменили, а экран не пересобирается (титры, «Примерка») — фон и
+## видимость частиц заново (раньше частицы оставались до смены экрана; обзор 26.11, E28.4).
+func _on_settings(key: String) -> void:
+	if key in ["glow", "contrast", "calm"]:
+		queue_redraw()
 
 
 func _process(dt: float) -> void:

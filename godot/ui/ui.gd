@@ -113,7 +113,7 @@ static func phone() -> bool:
 
 ## Включить/выключить телефонный режим (проверки): экраны и окна пересобираются, как при смене размера текста.
 static func set_phone(on: bool) -> void:
-	if (_phone == 1) == on:
+	if _phone >= 0 and (_phone == 1) == on:      # ещё не считали (−1) — выключение тоже применяется (E29.6)
 		return
 	_phone = 1 if on else 0
 	Settings.changed.emit("phone")

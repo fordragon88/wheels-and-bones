@@ -47,6 +47,14 @@ func start(tid: String, is_ok: bool, at: Vector2, part: String = "") -> void:
 		Audio.sfx("zap")
 
 
+## Погасить (шаг назад — инструмент прошлого шага не доигрывает на детали; game.py step_back: act = None).
+func stop() -> void:
+	if active:
+		active = false
+		queue_redraw()
+		_add.queue_redraw()
+
+
 func pre() -> float:
 	return float(_tm["windup"]) + float(_tm["strike"]) + float(_tm["hold"])
 

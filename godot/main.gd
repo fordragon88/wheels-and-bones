@@ -26,3 +26,5 @@ func _ready() -> void:
 	i = args.find("--screen")
 	Nav.go(args[i + 1] if i >= 0 and i + 1 < args.size() else "title")
 	Share.apply_link(Share.launch_query())     # ?jobs=…/?load=… (браузер) или --link (компьютер); без них — ничего
+	if SaveGame.restored_prev:                 # save.json был битый — прогресс из save.prev.json (suggestions S2)
+		Nav.flash(SaveGame.RESTORED_MSG, UI.AMBER, 8.0)

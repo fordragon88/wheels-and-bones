@@ -510,6 +510,7 @@ func touch_snap(p: Vector2, on: bool = UI.touch()) -> Vector2:
 		return p
 	var targets: Array = []
 	var block: Array = []
+	var corner: Variant = null
 	for n: Node in [scope] + scope.find_children("*", "Control", true, false):
 		var c := n as Control
 		if c == null or not c.is_visible_in_tree() or c.mouse_filter == Control.MOUSE_FILTER_IGNORE:
@@ -522,6 +523,12 @@ func touch_snap(p: Vector2, on: bool = UI.touch()) -> Vector2:
 				block.append(c)
 			else:
 				targets.append(c.get_global_rect())
+				# круглая кнопка (спица, GameButton.hit_circle): угол её квадрата — не мимо, а «почти попал»: в центр
+				# (обзор 26.11, E17 — 21 % квадрата 56×56 не нажимал ничего, а точка снаружи квадрата переносилась)
+				if corner == null and c.get("hit_circle") == true and c.get_global_rect().has_point(p) and not UI.hits(c, p):
+					corner = c.get_global_rect().get_center()
+	if corner != null:
+		return corner
 	if settings == null and scope != current:
 		for c: Node in current.get_children():
 			if c is BaseButton and (c as Control).is_visible_in_tree() and c.get_meta("touch_skip", false):

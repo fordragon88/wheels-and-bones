@@ -134,7 +134,9 @@ func stay_rect() -> Rect2:
 
 func _draw() -> void:
 	shown = false
-	if not active and not stay:
+	# «Без анимации», включённая во время или после проезда: слой пуст — экран показывает коляску (как game.py;
+	# раньше петля без кадра давала пустое место, а посреди проезда — полосы скорости и пыль без героя; обзор 26.11, E14)
+	if (not active and not stay) or Settings.calm():
 		return
 	shown = true
 	if loop_name != "":
@@ -143,13 +145,13 @@ func _draw() -> void:
 		var x: float = s[0]
 		var y: float = s[1]
 		var v: float = s[2]
-		if v > 0.35 and active:                       # линии скорости — пока едет быстро
+		var tex := Frames.loop_frame(loop_name, s[3], s[4])
+		if v > 0.35 and active and tex:               # линии скорости — пока едет быстро (и герой нарисован)
 			for i in 6:
 				var ly := y + sz.y * 0.3 + i * 26
 				var ln := (60 + 40 * BgLayer._h01(i, 3)) * v
 				var xe := x + sz.x * 0.08 - (20 * i) % 50
 				draw_line(Vector2(xe - ln, ly), Vector2(xe, ly), Color8(200, 200, 210), 2.0)
-		var tex := Frames.loop_frame(loop_name, s[3], s[4])
 		if tex:
 			draw_texture_rect(tex, UI.fit_rect(tex.get_size(), Rect2(roundf(x), y, sz.x, sz.y)), false)
 			if active:
@@ -202,13 +204,13 @@ func _draw() -> void:
 
 func _draw_add() -> void:
 	dust_shown = false
-	if not active or not Settings.glow:                # стоит после проезда — без пыли (как в game.py)
+	if not active or not Settings.glow_on():           # стоит после проезда — без пыли (как в game.py); «Без анимации» — тоже
 		return
 	dust_shown = true
 	if loop_name != "":
 		var s := _anim_state()
 		var sz := anim_size(loop_name)
-		var fl := float(_r.get("floor", 534))
+		var fl := floor_y()                          # Гильдия — пол 560 (RIDE_TECH_STOP), не 534 (обзор 26.11, E28.2)
 		for i in 4:
 			UI.draw_glow(_add, Vector2(float(s[0]) + sz.x * 0.3 - i * 30, fl - 6), 18, Color8(80, 70, 55), (0.7 - 0.15 * i) * float(s[2]))
 		return
