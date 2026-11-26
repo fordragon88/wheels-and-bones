@@ -208,6 +208,13 @@ func release(key: String) -> void:
 		if q[0] != key:
 			keep.append(q)
 	_queue = keep
+	# Браузер: адреса этого набора больше не считаются «в пути». Выкинутые из очереди страницы (net_drop) она уже не
+	# вернёт никогда — раньше они навсегда занимали места NET_INFLIGHT, и после нескольких уходов с подгружающейся
+	# коляски вставали все кадры (обзор 26.11, E4). Уже начатые закачки страница вернёт — `_pump_net` их выбросит
+	# (адреса нет в _net_inflight → net_take без набора).
+	for u: String in _net_inflight.keys():
+		if (_net_inflight[u] as Array)[0] == key:
+			_net_inflight.erase(u)
 	if key == "tt:" + _cur_tt:
 		_cur_tt = ""
 

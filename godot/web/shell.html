@@ -68,7 +68,7 @@ html, body, #canvas { overscroll-behavior: none; }
   // --- сеть: кадры поворота и петли (frames/…), музыка — файлами рядом с игрой. fetch в браузере идёт параллельно
   // и мимо игрового кадра; игра раз в кадр забирает готовое (next/take), декодирует WebP сама.
   var net = { want: [], active: 0, max: 6, done: [], bufs: {}, dims: {}, why: {}, ok: 0, fail: 0, bytes: 0, dec: 0,
-              decMs: 0, worker: null, mode: 'worker', bad: 0, badRun: 0, timeouts: 0 };
+              decMs: 0, worker: null, mode: 'worker', bad: 0, badRun: 0, timeouts: 0, inWorker: {} };
   // Запрос, который не ответил за NET_TIMEOUT мс (сервер «повис», мобильная сеть пропала без ошибки), прерывается
   // (AbortController) и считается сбоем этого файла — игра повторит его сама; иначе 6 зависших запросов занимали все
   // места загрузки до конца сеанса.
@@ -118,6 +118,7 @@ html, body, #canvas { overscroll-behavior: none; }
       net.worker = new Worker(URL.createObjectURL(new Blob(['(' + workerSrc + ')()'], { type: 'text/javascript' })));
       net.worker.onmessage = function (e) {
         var m = e.data;
+        delete net.inWorker[m.u];
         if (m.bad) {
           // Один битый файл — сбой файла (игра повторит, потом запасной вид), а не повод бросать фоновую распаковку.
           // Только если подряд не распаковались файлы с разными адресами (Worker не умеет WebP) — дальше игра сама.
@@ -130,7 +131,13 @@ html, body, #canvas { overscroll-behavior: none; }
         }
         net.done.push(m.u);
       };
-      net.worker.onerror = function () { net.worker = null; net.mode = 'godot'; };
+      // Worker упал: отправленные в него и не вернувшиеся адреса — сбой файла (игра повторит, распакует сама); иначе
+      // они навсегда оставались «в пути» у игры (обзор 26.11, E4)
+      net.worker.onerror = function () {
+        net.worker = null; net.mode = 'godot';
+        Object.keys(net.inWorker).forEach(function (u) { net.bufs[u] = null; net.why[u] = 'net'; net.fail++; net.done.push(u); });
+        net.inWorker = {};
+      };
     } else net.mode = 'godot';
   } catch (e) { net.worker = null; net.mode = 'godot'; }
   // WebP начинается с «RIFF….WEBP»: сайт с «мягкой 404» отдаёт 200 и страницу HTML — это сбой файла, а не кадр
@@ -153,6 +160,7 @@ html, body, #canvas { overscroll-behavior: none; }
         if (webp && !isWebp(b)) { var e = new Error('not webp'); e.bad = true; throw e; }
         net.ok++; net.bytes += b.byteLength;
         if (net.worker && net.mode === 'worker' && webp) {
+          net.inWorker[this] = 1;
           net.worker.postMessage({ u: this, buf: b }, [b]);
         } else {
           net.bufs[this] = b; net.done.push(this);

@@ -2119,6 +2119,46 @@ async def sc_netfail(b):
           f"(mode={st.get('net', {}).get('mode')}, битых {st.get('net', {}).get('bad')}, ERR_FILE_CORRUPT в консоли: {len(corrupt)})")
     await p.ctx.close()
 
+    # обзор 26.11, E4: уходим из задания, пока кадры коляски ещё качаются (медленная сеть), ×6 — у страницы в очереди
+    # остаются адреса, которые она выкидывает (wnbNet.drop); раньше игра считала их «в пути» навсегда, и после ~4 раз
+    # кадры следующей коляски (и петли) не запрашивались вовсе
+    slow = {"on": True}
+
+    async def slow_tt(r, path):
+        if slow["on"] and "/frames/turntable/" in path:
+            await asyncio.sleep(2.5)
+            try:
+                await r.continue_()
+            except Exception:
+                pass
+            return True
+        return False
+    p = await new_page(b, "net_flip", legacy=SKIP_SEED, hook=slow_tt)
+    p.allow += ["Frames: кадры", "at: push_warning", "net::"]
+    await p.boot()
+    await to_hub(p)
+    dropped = 0
+    for k in range(6):
+        jid = ("flat", "caster")[k % 2]
+        await p.press("Card_" + jid, wait=200)
+        st = await p.wait(lambda s: s.get("screen") == "job" and (s.get("net") or {}).get("queued", 0) > 0,
+                          f"задание {jid}: кадры коляски в очереди страницы", 15)
+        dropped += 1 if st else 0
+        await p.key("Escape", 150)
+        await p.key("Escape", 400)
+        await p.wait(lambda s: s.get("screen") == "hub", "в мастерскую", 10)
+    slow["on"] = False
+    await p.press("Card_brake", wait=1200)
+    st = await p.wait(lambda s: s.get("screen") == "job", "задание brake", 15)
+    key = next((k for k in (st.get("frames", {}).get("sets") or {}) if k.startswith("tt:")), "")
+    st = await p.wait(lambda s: key and (frames_of(s, key) or [0, 1])[0] == (frames_of(s, key) or [0, 1])[1],
+                      "кадры коляски после листания", 40, quiet=True) or await p.state()
+    check(dropped == 6 and bool(key) and (frames_of(st, key) or [0, 1])[0] == (frames_of(st, key) or [0, 1])[1],
+          f"net: листаем коляски во время загрузки ×6 (ушли с очередью у страницы {dropped} раз) — кадры следующей "
+          f"всё равно приходят ({key} {frames_of(st, key)}, в пути у игры {st.get('frames', {}).get('inflight')})")
+    p.check_console()
+    await p.ctx.close()
+
     p = await new_page(b, "net_offline", legacy=SKIP_SEED)
     p.allow += ["Frames: кадры", "at: push_warning", "net::", "Failed to load"]
     await p.boot()
