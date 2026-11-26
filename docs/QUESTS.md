@@ -9,7 +9,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 ### 1. Rear wheel puncture
 - **Client:** Martin (you)  
 - **Wheelchair:** Invacare 9000 (standard folding)  
-- **Symptom:** The rear wheel is flat: the chair “dips” its nose and rolls heavily. And it's a long way to the party.
+- **Symptom:** The rear wheel is flat: the chair pulls to one side and rolls heavily. And it's a long way to the party.
 
 **Inspection clues (what the player sees)**
 
@@ -645,7 +645,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 - *Valve* — The valve is intact, cap in place. Air isn't leaking through it; the tire just hasn't been pumped in a while.
 - *Rear wheel* — The wheel spins true and sits snugly on the axle.
 - *Wheel lock* — In the locked position the lock shoe barely touches the left tire. On the frame tube there's a light mark: the clamp has slipped back from its old spot.
-- *Frame bolts/nuts* — The two wheel-lock clamp bolts have worked loose (hint: the bolts have a six-sided hole in their heads).
+- *Frame bolts/nuts* — The two wheel-lock clamp bolts (3/16" hex) have worked loose.
 - *Anti-tipper* — The anti-tippers are down and latched, the little wheels are intact. They have nothing to do with the lock.
 - *Axle (QR)* — The quick-release axle is latched, the button is fully out, no play.
 - *Spokes* — The spokes are evenly tensioned, the wheel doesn't wobble.
@@ -1073,7 +1073,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Repair steps**
 
-1. Set the joystick to “off” with its power button, so the chair doesn't come to life when the breaker is reset. A dark screen proves nothing: the breaker is just cutting the power right now.  
+1. Set the joystick to “off” with its power button: the main breaker is only handled with the joystick off. A dark screen proves nothing: the breaker is just cutting the power right now.  
    *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Work on the main circuit breaker only with the joystick switched off.
 2. The chair spent the winter in a shed: look at the batteries and compare the shed temperature with the manual.  
@@ -1114,12 +1114,12 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 ### 16. After the library the chair crawls — Variant 1/2
 - **Client:** Count Draculescu  
 - **Wheelchair:** Quantum Q6 Edge 2.0 (mid-wheel drive, iLevel seat elevator)  
-- **Symptom:** The Count spent the night in his library: raising the seat to the top shelves, reclining to read. Now the chair "won't drive like before": it crawls, or won't move at all, and a restriction icon glows on the joystick. "The night is short, master. I must reach the cellar before dawn. For books."
+- **Symptom:** The Count spent the night in his library: raising the seat to the top shelves, reclining to read. Now the chair “won't drive like before”: it crawls, or won't move at all, and a restriction icon glows on the joystick. “The night is short, master. I must reach the cellar before dawn. For books.”
 
 **Inspection clues (what the player sees)**
 
 - *Seat elevator* — The seat sits three fingers above the bottom stop. Between the lift frame and the base: a thick leather-bound folio.
-- *Joystick (control box)* — Joystick on, no error codes. The YELLOW "reduced speed" icon is lit: the controller thinks the seat is elevated.
+- *Joystick (control box)* — Joystick on, no error codes. The YELLOW “reduced speed” icon is lit: the controller thinks the seat is elevated.
 - *Seat* — Cushion and backrest are fine, the backrest is nearly upright. Crumbs of old binding on the seat.
 - *Connectors/wiring* — The lift harness lies free, connectors tight, no green corrosion.
 - *Battery* — Battery gauge full: the Count charged it all day while he slept.
@@ -1127,7 +1127,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) The seat didn't reach the stop: a book under the lift — the controller sees "elevated"
+- ✅ (correct) The seat didn't reach the stop: a book under the lift — the controller sees “elevated”
 - ❌ Red drive lockout because of seat tilt — The icon is yellow, not red: driving is allowed, but at quarter speed.
 - ❌ The batteries ran down — the chair is saving power — The charge is full, and a flat battery would give a Q-Logic code, not a speed icon.
 
@@ -1143,11 +1143,11 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 3. Ask the Count to move to the armchair by the fireplace and switch the joystick off.  
    *Tool:* Hands and eyes → *Part:* Joystick (control box)  
    *After the step:* Nobody looks under the lift with a person in the seat and the power on.
-4. Look under the seat with a torch: the seat hasn't reached the stop, there is a folio under the lift frame.  
+4. Look under the seat with a flashlight: the seat hasn't reached the stop, there is a folio under the lift frame.  
    *Tool:* Hands and eyes → *Part:* Seat elevator  
-   *Hint:* Barty: "Yank the book out hard — the seat will drop by itself!" — no: fingers never go between the lift frame and the base. Raise the seat a little first.  
+   *Hint:* Barty: “Yank the book out hard — the seat will drop by itself!” — no: fingers never go between the lift frame and the base. Raise the seat a little first.  
    *After the step:* The lift is full of pinch points, even when still. Look with your eyes, hands outside.
-5. Switch the joystick on, select "elevate" with key 2 and push the joystick forward to raise the seat a hand's width.  
+5. Switch the joystick on, select “elevate” with key 2 and push the joystick forward to raise the seat a hand's width.  
    *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
    *After the step:* Joystick: forward is up, back is down. Raise it just enough for the folio to come out freely.
 6. Turn off the joystick.  
@@ -1156,28 +1156,28 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 7. Take the folio out from under the lift frame. Hands on the book only, not in the mechanism.  
    *Tool:* Hands and eyes → *Part:* Seat elevator (also accepted: Seat)  
    *After the step:* A heavy, five-hundred-year-old book. A separate word for the Count: nothing goes under the seat.
-8. Switch the joystick on, select "elevate" and hold the joystick back until the seat sits on the stop; once it stops — release at once.  
+8. Switch the joystick on, select “elevate” and hold the joystick back until the seat sits on the stop; once it stops — release at once.  
    *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Seat elevator)  
    *After the step:* Never run the lift motor more than a couple of seconds after the stop — it overheats and strains the mechanism. Yellow is off, the indicator is green — full speed: cellar and doorsteps allowed.
 9. Check the lift connectors and harness: tight, no corrosion, not pinched anywhere.  
    *Tool:* Hands and eyes → *Part:* Connectors/wiring (also accepted: Seat elevator)  
-   *After the step:* A pre-ride check from the manual. A cracked connector is a job for the service centre only.
+   *After the step:* A pre-ride check from the manual. A cracked connector is a job for the service center only.
 
 **Test:** The seat is on its stop, the icon is green. The Count rolls out of the workshop at full speed, cape billowing, the bat barely keeping up.  
 **What you learn:** A yellow icon is not a fault: the controller thinks the seat is elevated and holds quarter speed. First check whether the seat has reached its stop and whether something is under the lift. Remove the object after raising the seat a little and switching the power off, and never run the lift motor past the stop.  
-**Client says:** Draculescu: "The folio is intact and my speed is back. You are admitted as a reader of my library. Night hours."  
+**Client says:** Draculescu: “The folio is intact and my speed is back. You are admitted as a reader of my library. Night hours.”  
 
 ---
 
 ### 16. After the library the chair crawls — Variant 2/2
 - **Client:** Count Draculescu  
 - **Wheelchair:** Quantum Q6 Edge 2.0 (mid-wheel drive, iLevel seat elevator)  
-- **Symptom:** The Count spent the night in his library: raising the seat to the top shelves, reclining to read. Now the chair "won't drive like before": it crawls, or won't move at all, and a restriction icon glows on the joystick. "The night is short, master. I must reach the cellar before dawn. For books."
+- **Symptom:** The Count spent the night in his library: raising the seat to the top shelves, reclining to read. Now the chair “won't drive like before”: it crawls, or won't move at all, and a restriction icon glows on the joystick. “The night is short, master. I must reach the cellar before dawn. For books.”
 
 **Inspection clues (what the player sees)**
 
-- *Backrest (posts, upholstery)* — The backrest is reclined far back — some thirty degrees off vertical. The Count read lying down and "brought it back up by eye".
-- *Joystick (control box)* — Joystick on, no codes. The RED "full drive lockout" icon is lit: push the joystick forward and the chair won't budge.
+- *Backrest (posts, upholstery)* — The backrest is reclined far back — some thirty degrees off vertical. The Count read lying down and “brought it back up by eye”.
+- *Joystick (control box)* — Joystick on, no codes. The RED “full drive lockout” icon is lit: push the joystick forward and the chair won't budge.
 - *Seat elevator* — The seat is down on its stop. Nothing under the lift.
 - *Seat* — Seat tilt is nearly zero, the cushion is in place.
 - *Battery* — Battery gauge full.
@@ -1201,7 +1201,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 3. Look at the backrest: reclined well past vertical.  
    *Tool:* Hands and eyes → *Part:* Backrest (posts, upholstery)  
    *After the step:* More than 20° of recline and TRU-Balance 3 locks out driving. Tip-over protection.
-4. Select "recline" with key 2 and push the joystick forward to raise the backrest until the icon turns green.  
+4. Select “recline” with key 2 and push the joystick forward to raise the backrest until the icon turns green.  
    *Tool:* Hands and eyes → *Part:* Joystick (control box) (also accepted: Backrest (posts, upholstery))  
    *After the step:* The joystick drives the backrest actuator. Under 20° the lockout clears: the controller itself switches the red icon to green.
 5. Check the seat tilt: also under 20°?  
@@ -1209,18 +1209,18 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *After the step:* Tilt triggers the same lockout. Check both axes.
 6. Check the backrest harness and connectors: tight, no chafing.  
    *Tool:* Hands and eyes → *Part:* Connectors/wiring  
-   *After the step:* A check from the manual. A chafed harness is for the service centre only.
+   *After the step:* A check from the manual. A chafed harness is for the service center only.
 7. To test, raise the seat with the joystick — yellow icon; lower it to the stop — green.  
    *Tool:* Hands and eyes → *Part:* Seat elevator (also accepted: Joystick (control box))  
    *After the step:* Yellow is a slowdown, red is a ban. The Count must tell them apart himself.
 8. Tell the Count: reading reclined is fine, driving reclined is not. The lockout is never bypassed.  
    *Tool:* Hands and eyes → *Part:* Joystick (control box)  
-   *Hint:* Barty: "Have the service centre reprogram the lockout — then ride lying down!" — no: the manual forbids bypassing or reprogramming the inhibits.  
+   *Hint:* Barty: “Have the service center reprogram the lockout — then ride lying down!” — no: the manual forbids bypassing or reprogramming the inhibits.  
    *After the step:* Factory inhibits are never disabled or reprogrammed — they are tip-over protection.
 
 **Test:** The backrest is up, the icon is green. The Count pulls away, circles the workshop and bows ceremoniously — sitting upright.  
 **What you learn:** A red icon is a driving ban: seat tilt or recline beyond 20° (or recline beyond 125°) locks out both the lift and driving. Restore the posture and the controller goes green by itself. Yellow is different: the seat is elevated, we drive at quarter speed. The inhibits are never bypassed.  
-**Client says:** Draculescu: "Sitting upright, like in a portrait. Well, portraits are reading too. My thanks, master."  
+**Client says:** Draculescu: “Sitting upright, like in a portrait. Well, portraits are reading too. My thanks, master.”  
 
 ---
 
@@ -1231,7 +1231,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Inspection clues (what the player sees)**
 
-- *Wheel lock* — The lever is clicked shut, but the lock shoe barely touches the tire: the wheel now sits higher.
+- *Wheel lock* — The lever is clicked shut, but the lock shoe barely touches the tire: the wheel now sits lower relative to the frame.
 - *Axle (QR)* — The axle plate has been moved one hole lower than before — into holes 3 and 4, the 530 mm seat position. The seat is not parallel to the floor.
 - *Caster stem* — The front forks are still in the old, top hole A (the fork holes A, B, C run top to bottom) and sit at an angle instead of vertical to the floor.
 - *Caster (front)* — The casters are intact, but they wobble while moving because the fork is tilted.
@@ -1240,8 +1240,8 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 
 **Diagnosis options**
 
-- ✅ (correct) Wheels raised, but forks and locks were not
-- ❌ Worn lock shoes — replace the wheel locks — The wheel locks are fine, they just don't reach the tire: the wheel was moved higher, but the lock stayed where it was.
+- ✅ (correct) Seat raised, but the forks and locks weren't reset
+- ❌ Worn lock shoes — replace the wheel locks — The wheel locks are fine, they just don't reach the tire: the wheel was lowered relative to the frame, but the lock stayed where it was.
 - ❌ The cross-brace under the seat is loose — The cross-brace holds the frame firmly. The casters wobble because the fork is tilted.
 
 **Repair steps**
@@ -1253,7 +1253,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Hands and eyes → *Part:* Axle (QR) (also accepted: Caster stem)  
    *Mini-game:* meter  
    *After the step:* On the D100, height is changed by moving the wheels: each height has its own hole, both at the back and at the front.
-3. Firmly tighten the axle bushings (hint: they are shaped like hexagonal nuts).  
+3. Check that the axle bushings are tight (hint: they are shaped like hexagonal nuts).  
    *Tool:* Socket wrench → *Part:* Axle (QR)  
    *After the step:* The D100 manual says to check the bushings after moving the plate.
 4. Unscrew the caster fork bolt, move the front wheel to the bottom hole C (the fork holes A, B, C run top to bottom) and tighten (hint: the bolt has a six-sided head).  
@@ -1272,7 +1272,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *After the step:* The bolts are loosened so the lock can slide along its rail.
 8. Slide the wheel lock along the rail toward the wheel.  
    *Tool:* Hands and eyes → *Part:* Wheel lock  
-   *After the step:* The wheel is higher now — the lock has to catch up with the tire.
+   *After the step:* The wheel is lower now — the lock has to catch up with the tire.
 9. Tighten the wheel lock bolts (hint: the bolts have a six-sided hole in their head).  
    *Tool:* Hex key (Allen wrench) → *Part:* Wheel lock  
    *After the step:* The lock is in its new place; tighten the bolts so it doesn't slide.
@@ -1390,23 +1390,23 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 3. Pull out the grass and twigs around the motors and axles.  
    *Tool:* Brush/tweezers → *Part:* Axle (QR) (also accepted: Motor)  
    *After the step:* The manual says to check once a week that nothing is clogging the motors and axles.
-4. Measure the pressure in all four tires and ensure they match targets written on the tire sidewall.  
+4. Check the pressure in all four tires with a gauge.  
    *Tool:* Pressure gauge → *Part:* Tire  
    *After the step:* Uneven pressure pulls the wheelchair to one side.
 5. Inflate the left tires to the off-road pressure — the same as the right ones.  
    *Tool:* Pump → *Part:* Tire (also accepted: Valve)  
    *Mini-game:* pump  
    *After the step:* Off-road, lower pressure gives better grip. But all four tires must be the same.
-6. Tighten the nuts in the center of the wheels with a socket torque wrench.  
+6. Check the torque on the wheel nuts with a socket torque wrench.  
    *Tool:* Socket wrench → *Part:* Rim (also accepted: Axle (QR), Tire)  
    *Mini-game:* meter  
    *After the step:* Wheel nuts are tightened to the torque in the manual.
-7. Move the freewheel levers to the “drive” position.  
+7. Check that the freewheel levers are in the “drive” position.  
    *Tool:* Hands and eyes → *Part:* Freewheel lever  
    *After the step:* In freewheel mode there are no brakes.
 8. Switch the chair on with the joystick's power button and push the joystick gently: all the electric brakes should click.  
    *Tool:* Hands and eyes → *Part:* Joystick (control box)  
-   *After the step:* A weekly check from the manual (§7.17): on a level floor with a metre of clear space around.
+   *After the step:* A weekly check from the manual (§7.17): on a level floor with a meter of clear space around.
 
 **Test:** Leshy rolls out onto a forest path and drives straight, without drifting to the side. The motors hum evenly.  
 **What you learn:** Magic Mobility: if the wheelchair is stuck, don't push the joystick for more than a few seconds — the motor will overheat. Uneven tire pressure pulls the wheelchair to the side. Off-road, the pressure is lower, but the same in all tires. A power wheelchair does not go into water or swamps.  
@@ -1444,7 +1444,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Tool:* Hands and eyes → *Part:* Motor (also accepted: Rear wheel)  
    *After the step:* The wheel first, then the wall outlet. Both wheels must be switched off before charging.
 3. Push the wheelchair by its wheels into the shade, somewhere cool.  
-   *Tool:* Hands and eyes → *Part:* Rear wheel (also accepted: Frame, Tire)  
+   *Tool:* Hands and eyes → *Part:* Rear wheel (also accepted: Tire)  
    *Hint:* Barty: “Just wrap the wheels in Seneb's bandages — instant shade!”  
    *After the step:* Charge only at 0…40 °C, and don't leave the wheels in the sun or near heat sources.  
    *If wrong:* The wheelchair is rolled into the shade by hand.
@@ -1470,7 +1470,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 ### 21. Uphill, the circuit breaker trips
 - **Client:** Zmey Gorynych  
 - **Wheelchair:** Pride Jazzy 614 (mid-wheel drive)  
-- **Symptom:** Gorynych drives uphill to the castle — and the wheelchair freezes. A minute later it drives again, and on the next slope it stops again. The three heads argue about whose fault it is.
+- **Symptom:** Gorynych drives uphill to the castle — and the wheelchair freezes. The heads argue for a minute about whose fault it is, press the popped-out button — it drives, and on the next slope it stops again.
 
 **Inspection clues (what the player sees)**
 
@@ -1499,7 +1499,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *After the step:* The weight limit covers the rider and everything hanging on the wheelchair.  
    *If wrong:* The chest is removed by hand. And the wheelchair never carries passengers.
 3. Find the weight limit on the wheelchair's label and compare it with Gorynych's weight.  
-   *Tool:* Hands and eyes → *Part:* Frame (also accepted: Backrest (posts, upholstery), Battery, Joystick (control box), Seat)  
+   *Tool:* Hands and eyes → *Part:* Frame (also accepted: Backrest (posts, upholstery), Battery, Joystick (control box))  
    *Mini-game:* meter  
    *After the step:* Every wheelchair has its own weight limit. It's on the serial number label and in the specifications table.
 4. Inflate the drive tires to the pressure printed on the tire.  
@@ -1569,7 +1569,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *Order: free; must come after:* 8  
    *Hint:* Barty: “Click! I love that sound. Means nothing fell off.”
 
-**Test:** The wheel spins true in the stand; the indicator needle barely twitches.  
+**Test:** The wheel is back on the chair and spins true — in the stand the indicator needle barely twitched.  
 **What you learn:** A rim is trued by dial indicator in small steps: no more than 1/4 nipple turn per pass; the rim moves toward the flange being tightened. Tension is checked with a tension meter; runout tolerance is 1–2 mm.  
 **Client says:** Aelin: “A perfectly round wheel. The Guild will make a master of you, Martin.”  
 
@@ -1603,7 +1603,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *After the step:* Terminal bolts go in the magnetic tray later, not “somewhere on the workbench”.
 6. Press the yellow button on the main circuit breaker — the batteries are disconnected from the system  
    *Tool:* Hands and eyes  
-   *Order: free; must come after:* 4  
+   *Order: free; must come after:* 4, 1  
    **SAFETY step**  
    *After the step:* On the Edge 4 the breaker doubles as the battery isolation switch: the circuit is open before a wrench touches the terminals.
 7. Disconnect the NEGATIVE terminal — always first  
@@ -1790,7 +1790,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *After the step:* The flowchart assumes the batteries are charged. Check, don't take it on faith.
 3. Put both freewheel levers into drive mode (up)  
    *Tool:* Hands and eyes  
-   *Order: free; must come after:* 1  
+   *Order: free; must come after:* 1, 2  
    **SAFETY step**  
    *Hint:* Barty: “Yank the levers with your foot, it's faster!” — no: the manual forbids it — you'll bend the lever and the brake.  
    *After the step:* Drive mode — the motor brakes are engaged: the chair won't roll away.
@@ -1861,7 +1861,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 1. Turn off the power at the joystick  
    *Tool:* Hands and eyes  
    **SAFETY step**  
-   *Hint:* Brenna: "Rule one is the same as on the Edge 4: kill the power. Rule two: check that you did."  
+   *Hint:* Brenna: “Rule one is the same as on the Edge 4: kill the power. Rule two: check that you did.”  
    *After the step:* Work only on a powered-down wheelchair.
 2. Check that both freewheel levers are up — drive mode  
    *Tool:* Hands and eyes  
@@ -1869,6 +1869,7 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
    *After the step:* Levers up means the motor brakes are engaged: the chair won't roll off while you're in the compartment.
 3. Remove the shroud that covers the batteries  
    *Tool:* Hands and eyes  
+   *Order: free; must come after:* 1, 2  
    *Value from the manual:* Where are the batteries on the Q6 Edge 2.0? — ✅ Under the FRONT shroud: squeeze the release handles, lift up and away from the base; ❌ Under the rear shroud behind two yellow latches; ❌ Under the seat: take the seat off the base  
    *After the step:* No tools — release handles. But first find in the manual WHICH shroud.
 4. Disconnect the quick-release battery harness connectors  
@@ -1887,36 +1888,45 @@ Found a mistake? Note the quest number and step, what is wrong and how it should
 7. Lift the old batteries out of the tray: the front one first, then the rear  
    *Tool:* Hands and eyes  
    *Order: free; must come after:* 6  
-   *Hint:* Barty: "I'll hold it! ...No. Still no. Fine."  
+   *Hint:* Barty: “I'll hold it! ...No. Still no. Fine.”  
    *After the step:* The batteries weigh 17 kg each: lift from a squat and keep them upright.
-8. Pick the new pair from the Guild catalogue  
+8. Pick the new pair from the Guild catalog  
    *Tool:* Hands and eyes  
    *Order: free; must come after:* 7  
    *Value from the manual:* Which pair goes into the Q6 Edge 2.0? — ✅ Two new 12 V deep-cycle NF-22 AGM batteries — same type, capacity and age; ❌ One NF-22 AGM and one Group 24 gel — more capacity, more range!; ❌ One new NF-22 and last year's identical one (savings!)
-9. Set the batteries in the tray and connect the harness to the terminals per the diagram  
-   *Tool:* Crescent wrench  
+9. Set the batteries in the tray  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 8  
-   *Value from the manual:* How do the batteries sit in the Q6 Edge 2.0 tray? — ✅ Flat, terminals facing REARWARD: a front one and a rear one; ❌ Flat, terminals facing forward — closer to the front shroud, handier; ❌ On their side, terminals up — shorter wires that way  
-   *After the step:* Red wire to the red (+) post, black wire to the black (−) post. Tighten the fasteners.
-10. Join the quick-release harness connectors until they click  
-   *Tool:* Hands and eyes  
+   *Value from the manual:* How do the batteries sit in the Q6 Edge 2.0 tray? — ✅ Level on the bottom of the tray, terminals facing REARWARD: a front one and a rear one; ❌ Level on the bottom of the tray, terminals facing forward — closer to the front shroud, handier; ❌ On their side, terminals up — shorter wires that way  
+   *After the step:* Both batteries stand level on the bottom of the tray, terminals facing rearward.
+10. Connect the harness to the POSITIVE terminals first  
+   *Tool:* Crescent wrench  
    *Order: free; must come after:* 9  
-   *After the step:* Assembly mirrors disassembly: terminals per the diagram, then the harness connectors.
-11. Check the main breaker on the rear frame: button pushed in, not tripped  
-   *Tool:* Hands and eyes  
+   **SAFETY step**  
+   *After the step:* Red wire to the red (+) terminal. Reassembly mirrors removal: positive first, negative last.
+11. Connect the harness to the negative terminals  
+   *Tool:* Crescent wrench  
    *Order: free; must come after:* 10  
-   *After the step:* On the Q6 Edge 2.0 the breaker is a button on the rear frame. Tripped — rest a minute, then push it in.
-12. Refit the front shroud until the latches click  
+   *After the step:* Black wire to the black (−) terminal. Tighten the fasteners.
+12. Join the quick-release harness connectors until they click  
    *Tool:* Hands and eyes  
-   *Order: free; must come after:* 10, 11  
-   *After the step:* Without the shroud, dirt gets into the tray and hands reach for the terminals.
-13. Put the new pair on a full first charge  
-   *Tool:* Charger  
+   *Order: free; must come after:* 11  
+   *After the step:* Assembly mirrors disassembly: terminals per the diagram, then the harness connectors.
+13. Check the main breaker on the rear frame: button pushed in, not tripped  
+   *Tool:* Hands and eyes  
    *Order: free; must come after:* 12  
+   *After the step:* On the Q6 Edge 2.0 the breaker is a button on the rear frame. Tripped — rest a minute, then push it in.
+14. Refit the front shroud until the latches click  
+   *Tool:* Hands and eyes  
+   *Order: free; must come after:* 12, 13  
+   *After the step:* Without the shroud, dirt gets into the tray and hands reach for the terminals.
+15. Put the new pair on a full first charge  
+   *Tool:* Charger  
+   *Order: free; must come after:* 14  
    *After the step:* First charge: a full one, and only with the stock charger — it sets the pair's lifespan.
 
-**Test:** The joystick comes alive, the battery gauge is full. Brenna tugs the harness connectors — they hold. A nod.  
-**What you learn:** Different chair, different access: on the Q6 Edge 2.0 the batteries sit under the FRONT shroud on latches, the harness unplugs with quick-release connectors, the breaker is a button on the rear frame. The batteries lie flat with terminals rearward. The procedure is the same: a pair of one type and age, negative off first, positive on first, a full first charge.  
-**Client says:** Brenna: "Not from memory — from the manual. That is what a technician is."  
+**Test:** The joystick comes alive, the battery gauge is full. The harness connectors hold — Brenna checked them before the shroud went on. A nod.  
+**What you learn:** Different chair, different access: on the Q6 Edge 2.0 the batteries sit under the FRONT shroud on latches, the harness unplugs with quick-release connectors, the breaker is a button on the rear frame. The batteries stand level in the tray with terminals rearward. The procedure is the same: a pair of one type and age, negative off first, positive on first, a full first charge.  
+**Client says:** Brenna: “Not from memory — from the manual. That is what a technician is.”  
 
 ---

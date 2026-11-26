@@ -75,6 +75,26 @@ def web_loops():
     return out
 
 
+def web_versions():
+    """Метки версий файлов, которые браузер качает с сайта (не из пакета): {"anim": хэш, "turntable": хэш} — sha1
+    содержимого исходных кадров (выложенные ужимаются из них однозначно) и shrink-параметров. Игра добавляет
+    «?v=хэш» к адресу (game.web_ver): после выкладки с новыми кадрами браузер не берёт старые из кэша (E34.1)."""
+    import hashlib
+    out = {}
+    tt = os.path.join(ROOT, "assets", "turntable")
+    groups = {"anim": [os.path.join(ROOT, "assets", "anim", name, f"{i:02d}{ext}")
+                       for name, n in web_loops().items() for i in range(n) for ext in (".jpg", ".a.png")],
+              "turntable": [os.path.join(tt, n) for n in sorted(os.listdir(tt)) if n.endswith((".png", ".jpg"))]}
+    for key, files in groups.items():
+        h = hashlib.sha1(key.encode() + b" shrink_anim max_h=400")
+        for fp in files:
+            h.update(os.path.relpath(fp, ROOT).replace("\\", "/").encode())
+            with open(fp, "rb") as f:
+                h.update(f.read())
+        out[key] = h.hexdigest()[:10]
+    return out
+
+
 def shrink_anim(fp, out=None, max_h=400):
     """Кадр петли героя (JPEG + маска 560 px) для браузера: холсту 1920×1080 хватает 400 px, маске — половины (игра
     растягивает её до размера кадра, _load_split) и 32 уровней прозрачности — втрое легче. Меньшие кадры не
@@ -117,6 +137,8 @@ def stage():
     shutil.copytree(src, dst, ignore=ignore)
     with open(os.path.join(dst, "anim", "web_index.json"), "w", encoding="utf-8") as f:    # манифест: имя -> кадров
         json.dump(web_loops(), f, ensure_ascii=False, sort_keys=True)
+    with open(os.path.join(dst, "web_ver.json"), "w", encoding="utf-8") as f:   # метки ?v= для anim/ и turntable/
+        json.dump(web_versions(), f, sort_keys=True)                            # (game.web_ver, E34.1)
     # 3D-модели (*_ai.json, 12 МБ) не берём: без numpy в браузере их не отрисовать. В окне диагностики
     # коляску показывают кадры поворота (assets/turntable): игра скачивает их с сайта, когда коляска на экране
     # музыка: браузер надёжно играет .ogg

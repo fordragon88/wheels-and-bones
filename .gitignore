@@ -8,6 +8,9 @@ prof.out
 
 # Сохранения, настройки и журналы игрока
 save.json
+save.prev.json
+save.bak.json
+save.json.bad
 settings.json
 crash.log
 feedback.json

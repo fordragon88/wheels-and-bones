@@ -109,8 +109,7 @@
       "ghost_wrong": true,
       "wrongmsg": "Коляску откатывают в тень руками.",
       "alt": [
-        "tire",
-        "frame"
+        "tire"
       ]
     },
     {

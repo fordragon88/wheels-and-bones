@@ -113,6 +113,8 @@ if os.environ.get("SDL_VIDEODRIVER") == "dummy" or "--selftest" in sys.argv:
 FEEDBACK_KEY = "wnb-feedback-1"
 SAVE_PATH = os.path.join(DATA_DIR, "save.json")
 BAK_PATH = os.path.join(DATA_DIR, "save.bak.json")       # прогресс до загрузки кода/ссылки («Вернуть прежний прогресс»)
+PREV_PATH = os.path.join(DATA_DIR, "save.prev.json")     # прежний save.json перед каждой записью (как в Godot-версии):
+                                                         # из него восстанавливаемся, если save.json повреждён
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 FEEDBACK_PATH = os.path.join(DATA_DIR, "feedback.json")   # «Я не согласен»: замечания игроков к заданиям   # громкость и язык (не сбрасываются --reset)
 GUILD_REQ = 5                   # починенных колясок для доступа в Гильдию
@@ -416,7 +418,7 @@ class LFont:
         return getattr(self.f, name)
 
 
-FINGER = {"t": -10 ** 9, "id": None, "pos": None}   # последнее касание (палец), логические координаты
+FINGER = {"t": -10 ** 9, "id": None, "pos": None, "own_t": -10 ** 9}   # последнее касание (палец), логические координаты
 
 
 def _rot_scale(img, anchor, ang_bone, ang_out, s_along, s_across):
@@ -613,19 +615,25 @@ def finger_events(event, batch_has_finger=False):
         FINGER["t"] = t
         E = pygame.event.Event
         if event.type == pygame.FINGERDOWN:
-            if FINGER["id"] is not None and FINGER["id"] != event.finger_id:
-                return []                                   # второй палец — не щёлкает
-            FINGER["id"], FINGER["pos"] = event.finger_id, lp
+            # второй палец — не щёлкает; но если «свой» палец молчит дольше 1 с, его отпускание потеряно (E32) —
+            # иначе касания не работали бы до перезагрузки
+            if FINGER["id"] is not None and FINGER["id"] != event.finger_id and t - FINGER["own_t"] < 1000:
+                return []
+            FINGER["id"], FINGER["pos"], FINGER["own_t"] = event.finger_id, lp, t
             return [E(pygame.MOUSEMOTION, pos=lp, rel=(0, 0), buttons=(0, 0, 0), touch=True),
                     E(pygame.MOUSEBUTTONDOWN, pos=lp, button=1, touch=True)]
         if event.finger_id != FINGER["id"]:
             return []
+        FINGER["own_t"] = t
         old = FINGER["pos"] or lp
         FINGER["pos"] = lp
         if event.type == pygame.FINGERMOTION:
             return [E(pygame.MOUSEMOTION, pos=lp, rel=(lp[0] - old[0], lp[1] - old[1]), buttons=(1, 0, 0), touch=True)]
         FINGER["id"] = None
         return [E(pygame.MOUSEBUTTONUP, pos=lp, button=1, touch=True)]
+    if event.type == getattr(pygame, "WINDOWFOCUSLOST", -1):
+        FINGER["id"] = None                                 # окно потеряло фокус — отпускание пальца могло не прийти
+        return None
     if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION, pygame.MOUSEWHEEL):
         if getattr(event, "touch", False) or batch_has_finger or t - FINGER["t"] < 700:
             return []                                       # «мышь», сделанная из касания (браузер шлёт её ДО пальца)
@@ -1557,7 +1565,10 @@ def idle_place(art, size, name):
     key = ("idle", art, tuple(size), name, RS)
     if key not in _FIT:
         src = _src_size(f"anim/{name}/00.png") if anim_count(name) else None
-        _FIT[key] = place_exact(src, idle_inner(art, src), art, size) if src and _src_size(art) else None
+        p = place_exact(src, idle_inner(art, src), art, size) if src and _src_size(art) else None
+        if p is None:                       # E34.3: кадров ещё нет (браузер качает) — не запоминать, спросить потом
+            return None
+        _FIT[key] = p
     return _FIT[key]
 
 
@@ -2152,13 +2163,68 @@ def web_js(code):
         return None
 
 
+WEB_VER = {}                           # браузер: метки версий файлов на сайте (assets/web_ver.json пишет build_web.stage)
+
+
+def web_ver(u):
+    """Браузер (E34.1): адрес файла с меткой версии выкладки — «anim/…?v=хэш», «turntable/…?v=хэш»: после выкладки
+    браузер не берёт из кэша старые кадры (у архива игры такая метка уже есть — build_web.stamp_archives).
+    Метки нет (локальная проверка без файла) — адрес как есть."""
+    if "_" not in WEB_VER:
+        WEB_VER["_"] = True
+        try:
+            with open(os.path.join(ASSETS_DIR, "web_ver.json"), encoding="utf-8") as f:
+                WEB_VER.update({k: str(v) for k, v in json.load(f).items()})
+        except Exception:
+            pass
+    v = WEB_VER.get(u.split("/", 1)[0])
+    return f"{u}?v={v}" if v else u
+
+
+WEB_FIELD_KEYS = {"Enter": pygame.K_RETURN, "ArrowUp": pygame.K_UP, "ArrowDown": pygame.K_DOWN,
+                  "ArrowLeft": pygame.K_LEFT, "ArrowRight": pygame.K_RIGHT, "Tab": pygame.K_TAB, " ": pygame.K_SPACE}
+WEB_FETCH_TIMEOUT = 20000              # мс: файл не пришёл за это время — сбой (E34.2), будет повтор
+WEB_RETRY_PAUSE = 1500                 # мс: пауза перед повтором после сбоя (а не сразу же)
+
+
 def web_fetch(urls):
     """Браузер: скачать файлы с сайта (пути от страницы игры) в window.wnbTT — base64, '!' — не скачался.
-    Общий для кадров поворота колясок (Turntable) и петель проезда героев (AnimWeb)."""
-    web_js("(function(L){var T=window.wnbTT=window.wnbTT||{};L.forEach(function(u){if(u in T)return;"
-           "T[u]=null;fetch(u).then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then(function(b){"
-           "var a=new Uint8Array(b),s='';for(var i=0;i<a.length;i+=8192)s+=String.fromCharCode.apply(null,"
-           "a.subarray(i,i+8192));T[u]=btoa(s);}).catch(function(){T[u]='!';});});})(" + json.dumps(urls) + ")")
+    Общий для кадров поворота колясок (Turntable) и петель проезда героев (AnimWeb). Ключ в wnbTT — путь без
+    метки версии; запрос — с меткой (web_ver) и тайм-аутом WEB_FETCH_TIMEOUT."""
+    web_js("(function(L){var T=window.wnbTT=window.wnbTT||{};L.forEach(function(p){var u=p[0];if(u in T)return;"
+           "T[u]=null;var c=window.AbortController?new AbortController():null,tm=c?setTimeout(function(){c.abort();},"
+           + str(WEB_FETCH_TIMEOUT) + "):0;"
+           "fetch(p[1],c?{signal:c.signal}:{}).then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then("
+           "function(b){clearTimeout(tm);var a=new Uint8Array(b),s='';for(var i=0;i<a.length;i+=8192)"
+           "s+=String.fromCharCode.apply(null,a.subarray(i,i+8192));T[u]=btoa(s);}).catch(function(){"
+           "clearTimeout(tm);T[u]='!';});});})(" + json.dumps([[u, web_ver(u)] for u in urls]) + ")")
+
+
+def web_forget(urls):
+    """Браузер: убрать файлы из window.wnbTT (коляска ушла с экрана — недокачанное не держим)."""
+    web_js("(function(L){var T=window.wnbTT||{};L.forEach(function(u){delete T[u];});})(" + json.dumps(urls) + ")")
+
+
+class WebRetry:
+    """Повторы скачивания после сбоя — с паузой WEB_RETRY_PAUSE (E34.2), не больше трёх попыток на файл."""
+
+    def __init__(self, fetch):
+        self.fetch, self.tries, self.wait = fetch, {}, {}
+
+    def failed(self, u, now):
+        """Файл не пришёл: True — попытки кончились; иначе повтор через паузу."""
+        self.tries[u] = self.tries.get(u, 0) + 1
+        if self.tries[u] >= 3:
+            return True
+        self.wait[u] = now + WEB_RETRY_PAUSE
+        return False
+
+    def tick(self, now):
+        due = [u for u, t in self.wait.items() if now >= t]
+        for u in due:
+            del self.wait[u]
+        if due:
+            self.fetch(due)
 
 
 def web_take(urls, k=6):
@@ -2174,6 +2240,7 @@ def web_take(urls, k=6):
 
 
 ANIM_WEB = {}                          # браузер: имя петли -> AnimWeb (только герои, чьё задание открывали)
+ANIM_WEB_RETRY_MS = 60000              # петля не скачалась — новая попытка не раньше чем через минуту (новое открытие)
 
 
 def anim_web_index():
@@ -2202,8 +2269,10 @@ class AnimWeb:
         self.name, self.n = name, n
         self.urls = [f"anim/{name}/{i:02d}{ext}" for i in range(n) for ext in (".jpg", ".a.png")]
         self.part = os.path.join(ASSETS_DIR, "anim", "." + name + ".part")
-        self.saved, self.tries = set(), {}
+        self.saved = set()
+        self.retry = WebRetry(web_fetch)
         self.asked = self.ready = self.failed = False
+        self.failed_at = None                                 # когда сдались (повтор — при следующем открытии задания)
         self._poll = -1000
 
     def update(self):
@@ -2217,15 +2286,14 @@ class AnimWeb:
         if now - self._poll < 40:                             # забираем пришедшее не чаще раза за кадр
             return False
         self._poll = now
+        self.retry.tick(now)
         try:
             for u, data in web_take([u for u in self.urls if u not in self.saved]).items():
-                if data is None:                              # сбой сети — ещё попытка, после трёх — портрет
-                    self.tries[u] = self.tries.get(u, 0) + 1
-                    if self.tries[u] >= 3:
-                        self.failed = True
+                if data is None:                              # сбой сети — повтор через паузу, после трёх — портрет
+                    if self.retry.failed(u, now):
+                        self.failed, self.failed_at = True, now
                         print(f"[wnb] anim {self.name}: {u} failed", flush=True)
                         return False
-                    web_fetch([u])
                     continue
                 os.makedirs(self.part, exist_ok=True)
                 with open(os.path.join(self.part, u.rsplit("/", 1)[1]), "wb") as f:
@@ -2237,7 +2305,7 @@ class AnimWeb:
                 self.ready = True
         except Exception as e:                                # ФС браузера не дала записать — портрет
             print(f"[wnb] anim {self.name}: {e!r}", flush=True)
-            self.failed = True
+            self.failed, self.failed_at = True, pygame.time.get_ticks()
         return self.ready
 
 
@@ -2247,6 +2315,9 @@ def anim_web_want(name):
     if not n or calm():
         return
     ld = ANIM_WEB.get(name)
+    if ld is not None and ld.failed and ld.failed_at is not None \
+            and pygame.time.get_ticks() - ld.failed_at > ANIM_WEB_RETRY_MS:
+        ld = None                                             # сеть подвела давно — при новом открытии ещё раз (E34.2)
     if ld is None:
         ld = ANIM_WEB[name] = AnimWeb(name, n)
     ld.update()
@@ -2263,7 +2334,7 @@ def anim_web_ready(name):
 
 def web_restore():
     """Браузер: файлы сохранений живут в localStorage — перед стартом кладём их обратно в память."""
-    for path in (SAVE_PATH, SETTINGS_PATH, FEEDBACK_PATH, BAK_PATH):
+    for path in (SAVE_PATH, SETTINGS_PATH, FEEDBACK_PATH, BAK_PATH, PREV_PATH):
         text = web_js(f"localStorage.getItem({json.dumps('wnb:' + os.path.basename(path))})")
         if text:
             try:
@@ -2282,6 +2353,121 @@ def web_persist(path):
     except Exception:
         return
     web_js(f"localStorage.setItem({json.dumps('wnb:' + os.path.basename(path))}, {json.dumps(text)})")
+
+
+# ---- Две вкладки браузера с одной игрой (E30): объединение сохранений перед записью — как merge_saves в
+# godot/autoload/save_game.gd (поля и правила те же, сохранения взаимно читаемы). Растут только: done, seat_done
+# (объединение), garage (лучшие звёзды), флаги (или). «gen» — поколение сохранения: сброс, загрузка кода и «Вернуть
+# прежний прогресс» его увеличивают; вкладка, открытая до сброса, при записи берёт сброшенное + только своё новое.
+# На компьютере файл один на игру — без объединения и без «gen» (как в Godot).
+SAVE_FLAGS = ("exam_passed", "seat_quiz_ok", "tutorial_skipped", "ending_seen")
+SAVE_GROW = ("done", "garage", "seat_done") + SAVE_FLAGS
+
+
+def _save_int(v):
+    """Целое из сохранения (как Settings.py_int в Godot): int/целый float/строка-целое, иначе None."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float) and math.isfinite(v) and v == int(v):
+        return int(v)
+    if isinstance(v, str):
+        try:
+            return int(v.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _read_save(path):
+    """Словарь из файла сохранения или None (нет файла, не JSON, не словарь)."""
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        name = os.path.basename(path)              # консоль: прежняя строка для save.json, остальные — по-английски
+        print(f"[wnb] save.json не читается: {e!r}" if name == "save.json" else f"[wnb] {name} unreadable: {e!r}",
+              flush=True)
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _save_lst(d, key):
+    v = d.get(key, [])
+    return v if isinstance(v, list) else []
+
+
+def _save_delta(mine, base, fresh):
+    """Своё новое с прошлого чтения/записи: растущие поля mine, которых нет в base; fresh — пройденное с прошлой
+    записи, даже если оно уже было (переиграла задание, пройденное до сброса)."""
+    d = {}
+    for key in ("done", "seat_done"):
+        b = _save_lst(base, key)
+        d[key] = [x for x in _save_lst(mine, key) if x not in b]
+    bg = {e[0]: e[1] for e in _save_lst(base, "garage") if isinstance(e, list) and len(e) == 2}
+    d["garage"] = [e for e in _save_lst(mine, "garage") if isinstance(e, list) and len(e) == 2
+                   and (e[0] not in bg or int(e[1]) > int(bg[e[0]]))]
+    for key in SAVE_FLAGS:
+        d[key] = mine.get(key) is True and base.get(key) is not True
+    for k, v in fresh.items():
+        if k.startswith("seat:"):
+            d["seat_done"].append(k[5:])
+        else:
+            d["done"].append(k)
+            d["garage"].append([k, int(v)])
+    return d
+
+
+def merge_saves(stored, mine, base, fresh=None):
+    """stored — хранимое сейчас (другая вкладка могла записать), mine — своё в памяти, base — что эта вкладка прочла/
+    записала в прошлый раз. gen: хранимое новее — к нему только своё новое; одинаковое — объединение целиком; своё
+    новее — своё. Задание по ссылке: тот же id — пункты объединяются (первая попытка — из хранимого), «active» — своё."""
+    s_gen = _save_int(stored.get("gen")) or 0
+    m_gen = _save_int(mine.get("gen")) or 0
+    if s_gen < m_gen:
+        return json.loads(json.dumps(mine))
+    add = mine if s_gen == m_gen else _save_delta(mine, base, fresh or {})
+    out = json.loads(json.dumps(stored))
+    for k, v in mine.items():
+        if k not in SAVE_GROW + ("assign", "gen"):
+            out[k] = v
+    for key in ("done", "seat_done"):
+        u = []
+        for x in _save_lst(stored, key) + _save_lst(add, key):
+            if x not in u:
+                u.append(x)
+        out[key] = sorted(u, key=str)
+    garage, idx = [], {}
+    for e in _save_lst(stored, "garage") + _save_lst(add, "garage"):
+        if not (isinstance(e, list) and len(e) == 2):
+            continue
+        n = _save_int(e[1])
+        n = 1 if n is None else n
+        if e[0] in idx:
+            garage[idx[e[0]]][1] = max(int(garage[idx[e[0]]][1]), n)
+        else:
+            idx[e[0]] = len(garage)
+            garage.append([e[0], n])
+    out["garage"] = garage
+    for key in SAVE_FLAGS:
+        out[key] = stored.get(key) is True or add.get(key) is True
+    ma, sa = mine.get("assign"), stored.get("assign")
+    if s_gen == m_gen and isinstance(ma, dict):
+        if isinstance(sa, dict) and sa.get("id") == ma.get("id"):
+            a = json.loads(json.dumps(ma))
+            for k in ("done", "errors", "secs"):
+                sv, mv = sa.get(k), a.get(k)
+                if isinstance(sv, dict) and isinstance(mv, dict):
+                    mv.update(sv)                   # первая попытка — какая уже записана
+            a["sent"] = sa.get("sent") is True or a.get("sent") is True
+            out["assign"] = a
+        else:
+            out["assign"] = json.loads(json.dumps(ma))
+    out["gen"] = s_gen
+    return out
 
 
 TOUCH = {"on": False}                         # браузер на телефоне/планшете (палец вместо мыши)
@@ -2956,7 +3142,9 @@ def web_setup_share():
             'background:#15131c;color:#fff;padding:2px 8px;font-family:sans-serif;outline:none';
           ['keydown', 'keyup', 'keypress'].forEach(function(n){
             t.addEventListener(n, function(e){ e.stopPropagation();
-              if (n === 'keydown' && (e.key === 'Enter' || e.key === 'Escape')) { window.wnbFieldKey = e.key; e.preventDefault(); } }); });
+              if (n === 'keydown' && (e.key === 'Enter' || e.key === 'Escape' || (t.readOnly && !e.ctrlKey && !e.metaKey &&
+                  ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', ' '].indexOf(e.key) >= 0))) {
+                window.wnbFieldKey = e.key; e.preventDefault(); } }); });
           document.body.appendChild(t); }
         if (init !== null && init !== undefined) t.value = init;
         t.readOnly = !!ro; t.setAttribute('aria-label', label || 'Code');
@@ -3065,7 +3253,7 @@ def _update_rs():
     new_rs = rs_for(DISPLAY.get("res"), view.h)
     if new_rs != RS or DISPLAY.get("frame") is None:
         RS = new_rs
-        for c in (_img_cache, _font_cache, _AA_CACHE, _glow_cache, _tool_icon_cache, _anim_cache):
+        for c in (_img_cache, _font_cache, _AA_CACHE, _glow_cache, _tool_icon_cache, _anim_cache, _LESSON_ICON_CACHE):
             c.clear()
         DISPLAY["frame"] = Surf((WIDTH, HEIGHT))
         DISPLAY["rs_changed"] = True
@@ -4686,15 +4874,19 @@ class Turntable:
         self.art_matched = d.get("art_matched", False)     # рисунок коляски = кадр исходного ракурса (art_from_turntable)
         self.centers = {p: [tuple(c) for c in cs] for p, cs in d["centers"].items()}
         self.centers.update(PART_CENTER_FIX.get(art, {}))
-        self.frames, self.scaled, self.asked, self.failed, self.tries = {}, {}, False, False, {}
+        self.frames, self.scaled, self.asked, self.failed = {}, {}, False, False
+        self.retry = WebRetry(lambda us: self._fetch(us))
 
     def index(self, yaw):
         return int(round((yaw - self.yaw0) / (2 * math.pi / self.n))) % self.n
 
     def release(self):
         """Освободить кадры (коляска ушла с экрана); вернётся — подгрузятся снова (из кэша браузера)."""
-        if self.frames or self.scaled:
-            self.frames, self.scaled, self.asked, self.tries = {}, {}, False, {}
+        if self.frames or self.scaled or self.asked:
+            if IS_WEB and self.asked:                         # недокачанное в window.wnbTT не держим (E34.2)
+                web_forget([u for i in range(self.n) for u in self.files(i)])
+            self.frames, self.scaled, self.asked = {}, {}, False
+            self.retry = WebRetry(lambda us: self._fetch(us))
 
     def file(self, i):
         return f"{TT_DIR}/{self.name}_{i:02d}.{self.fmt}"
@@ -4736,14 +4928,12 @@ class Turntable:
         if now - getattr(self, "_poll", -1000) < 40:          # забираем пришедшее не чаще раза за кадр
             return False
         self._poll = now
+        self.retry.tick(now)
         got = web_take([u for i in range(self.n) if i not in self.frames for u in self.files(i) if u not in self._got])
         for u, v in got.items():
-            if v is None:                                     # сбой сети — ещё попытка, после трёх — рисунок
-                self.tries[u] = self.tries.get(u, 0) + 1
-                if self.tries[u] >= 3:
+            if v is None:                                     # сбой сети — повтор через паузу, после трёх — рисунок
+                if self.retry.failed(u, now):
                     self.failed = True
-                else:
-                    self._fetch([u])
                 continue
             self._got[u] = v
             i = int(u.rsplit("_", 1)[1][:2])                  # …_NN.png / _NN.jpg / _NN.a.png
@@ -5846,7 +6036,7 @@ CLIENT_TALK = {
     # === Туториал: своя коляска Мартина, прокол ===
     "flat": dict(
         intro=[
-            "Мартин: «Коляска клюёт носом и катится, как телега с камнями. Заднее колесо спустило.»",
+            "Мартин: «Коляску тянет вбок, и катится она, как телега с камнями. Заднее колесо спустило.»",
             "Барти: «Не грусти, Мартин! До вечеринки далеко, успеешь. Если ничего больше не отвалится.»",
         ],
         worry=[
@@ -6591,7 +6781,7 @@ CLIENT_TALK["t_battery_q6"] = dict(
         "Бренна: «По мануалу. Дальше.»",
         "Бренна: «Хм. Запомнила. Хорошо.»",
     ],
-    test=["Бренна: «Включай. Индикатор заряда — и на разъёмы посмотрю сама.»"],
+    test=["Бренна: «Включай. Смотрю индикатор заряда — разъёмы я проверила, пока кожух был снят.»"],
 )
 
 CLIENT_TALK.update({j["id"]: FOLK_TALK[j["id"]] for j in _FOLK_ON})
@@ -6762,9 +6952,17 @@ class Game:
         self.assign = None                # задание по ссылке (jobs=…, seat=…): свой прогресс, обычный не меняется
         self.share_ui = None              # окно кодов и ссылок (копировать, вставить, задание, итог)
         self._bak_mem = None              # headless: копия прогресса до загрузки кода (вместо save.bak.json)
+        self.gen = 0                      # браузер: поколение сохранения (merge_saves; как gen в Godot)
+        self._save_merge = IS_WEB         # объединять с хранимым перед записью (две вкладки); selftest включает сам
+        self._save_base = {}              # что эта копия игры последний раз прочла/записала («своё новое»)
+        self._save_fresh = {}             # пройдено с прошлой записи (и переигранное): id → звёзды, "seat:<id>" → 1
+        self._save_replace = False        # следующая запись заменяет прогресс (сброс/код/копия): gen + 1, без объединения
+        self._restored_prev = False       # save.json был повреждён — прогресс взят из save.prev.json (S2)
         if not headless:
             self.load_progress()
             self.load_settings()
+            if self._restored_prev:
+                self.flash("Сохранение было повреждено — восстановлено из предыдущей копии.", AMBER, 6)
 
     # ---------- утилиты ----------
     def flash(self, text, color=WHITE, secs=3.0, sticky=False):
@@ -7174,7 +7372,10 @@ class Game:
             return
         try:
             with _atomic_open(SETTINGS_PATH) as f:
-                json.dump({"volume": dict(VOL), "lang": LANG["code"], "fullscreen": DISPLAY["fullscreen"],
+                vol = {k: v for k, v in VOL.items() if not k.startswith("_")}
+                if "_mute_arg" in VOL:
+                    vol["on"] = VOL["_mute_arg"]              # --mute — только на этот запуск
+                json.dump({"volume": vol, "lang": LANG["code"], "fullscreen": DISPLAY["fullscreen"],
                            "glow": DISPLAY["glow"], "res": list(DISPLAY["res"]) if DISPLAY["res"] else None,
                            "gpu3d": not GL["off"], "a11y": dict(A11Y),
                            "web_quality": DISPLAY.get("web_quality", "auto"),
@@ -7186,24 +7387,32 @@ class Game:
 
     def load_progress(self, path=None):
         """path — другой файл (save.bak.json для «Вернуть прежний прогресс»); задание по ссылке — только из save.json."""
+        """Возврат: True — прогресс прочитан и применён; False — файла нет или он повреждён (прогресс не менялся)."""
         main = path is None
         path = SAVE_PATH if main else path
         if not os.path.exists(path):
-            return
-        try:
-            with open(path, "r", encoding="utf-8-sig") as f:
-                data = json.load(f)
-        except Exception as e:
-            data = None
-            print(f"[wnb] save.json не читается: {e!r}", flush=True)
+            return False
+        data = _read_save(path)
         if not isinstance(data, dict):
             try:                                    # битый файл — отложить копию, прежде чем перезаписать
                 with open(path, "rb") as f, open(path + ".bad", "wb") as g:
                     g.write(f.read())
             except Exception:
                 pass
-            return
+            if not main:
+                return False
+            data = _read_save(PREV_PATH)            # S2: цела предыдущая копия — восстановиться из неё
+            if not isinstance(data, dict):
+                return False
+            print("[wnb] save.json damaged - progress restored from save.prev.json", flush=True)
+            self._restored_prev = True
         self._apply_save_dict(data, main)
+        if main:
+            self._save_base = self._progress_dict()
+            self._save_fresh = {}
+            if self._restored_prev and not (self.headless or self.no_save):
+                self.save_progress()                # битый файл заменить восстановленным (копия битого — в .bad)
+        return True
 
     def _apply_save_dict(self, data, main=True):
         def lst(key):
@@ -7231,6 +7440,7 @@ class Game:
         self.ending_seen = data.get("ending_seen") is True
         if main:                                    # ключа "assign" нет у обычного игрока — задания нет
             self.assign = self._assign_state(data.get("assign"))
+            self.gen = max(0, _save_int(data.get("gen")) or 0)
 
     def _progress_dict(self):
         """Содержимое save.json (формат прежний; "assign" — только если открывали ссылку-задание)."""
@@ -7240,17 +7450,66 @@ class Game:
         if self.assign:
             d["assign"] = {k: self.assign[k] for k in ("id", "jobs", "seat", "from", "title", "done", "errors", "secs",
                                                        "active", "sent")}
+        if self._save_merge:
+            d["gen"] = self.gen
         return d
+
+    def _stored_save_text(self):
+        """Хранимое сейчас сохранение: в браузере — localStorage (его могла записать другая вкладка), иначе — файл."""
+        if IS_WEB:
+            return str(web_js("localStorage.getItem('wnb:save.json')") or "")
+        try:
+            with open(SAVE_PATH, encoding="utf-8-sig") as f:
+                return f.read()
+        except Exception:
+            return ""
+
+    def _merged_progress(self):
+        """Что записать (E30): своё, объединённое с хранимым (merge_saves); при сбросе/коде — своё с gen + 1.
+        Объединённое применяется и в памяти — прогресс другой вкладки виден и здесь."""
+        mine = self._progress_dict()
+        try:
+            stored = json.loads(self._stored_save_text())
+        except Exception:
+            stored = None
+        if self._save_replace or not isinstance(stored, dict):
+            out = mine
+            if self._save_replace:
+                sg = _save_int(stored.get("gen")) if isinstance(stored, dict) else None
+                out["gen"] = max(self.gen, sg or 0) + 1
+        else:
+            out = merge_saves(stored, mine, self._save_base, self._save_fresh)
+        self._save_replace = False
+        self._save_fresh = {}
+        if out != mine:
+            self._apply_save_dict(out)
+        self.gen = _save_int(out.get("gen")) or 0
+        return self._progress_dict()
 
     def save_progress(self):
         if self.headless or self.no_save:
             return
+        d = self._merged_progress() if self._save_merge else self._progress_dict()
+        text = json.dumps(d, ensure_ascii=False, indent=2)
+        try:
+            old = self._stored_save_text()          # прежнее цельное сохранение — в save.prev.json (S2: из него восстановимся)
+            try:
+                ok = isinstance(json.loads(old), dict)
+            except Exception:
+                ok = False
+            if ok and old.strip() != text.strip():
+                with _atomic_open(PREV_PATH) as f:
+                    f.write(old)
+                web_persist(PREV_PATH)
+        except Exception as e:
+            print(f"[wnb] save.prev.json not written: {e!r}", flush=True)
         try:
             with _atomic_open(SAVE_PATH) as f:
-                json.dump(self._progress_dict(), f, ensure_ascii=False, indent=2)
+                f.write(text)
         except Exception as e:
             print(f"[wnb] save.json не записан: {e!r}", flush=True)
             self.flash("Прогресс не сохранился: нет доступа к папке сохранений.", BAD, 4.0)
+        self._save_base = d
         web_persist(SAVE_PATH)
 
     # ---------- ссылки и коды: прогресс, задание по ссылке, итог (docs/SHARE_LINKS.md) ----------
@@ -7353,13 +7612,14 @@ class Game:
         return list(range(len(SEAT_CASES)))
 
     def has_backup(self):
-        return self._bak_mem is not None if self.headless else os.path.exists(BAK_PATH)
+        return self._bak_mem is not None if (self.headless or self.no_save) else os.path.exists(BAK_PATH)
 
     def backup_progress(self):
         """Копия прогресса перед заменой (save.bak.json + localStorage wnb:save.bak.json в браузере)."""
         d = self._progress_dict()
         d.pop("assign", None)
-        if self.headless:
+        d.pop("gen", None)
+        if self.headless or self.no_save:                    # --unlock (предпросмотр): копия только в памяти
             self._bak_mem = d
             return
         try:
@@ -7393,6 +7653,7 @@ class Game:
         if self.assign:
             self.assign["active"] = False                     # загрузили свой прогресс — обычная игра
         self._progress_reset_scene()
+        self._save_replace = True
         self.save_progress()
         snd("fanfare")
         self.flash("Прогресс загружен. Прежний можно вернуть: Настройки → Игра.", GOOD, 5)
@@ -7401,17 +7662,21 @@ class Game:
         """«Вернуть прежний прогресс»: копия до загрузки кода → текущий прогресс; копия удаляется."""
         if not self.has_backup():
             return
-        if self.headless:
+        if self.headless or self.no_save:
             d, self._bak_mem = self._bak_mem, None
             self._apply_save_dict(d, main=False)
         else:
-            self.load_progress(BAK_PATH)
+            if not self.load_progress(BAK_PATH):            # копия повреждена: прогресс прежний, копию не стираем
+                snd("ghost")
+                self.flash("Копия прежнего прогресса повреждена — прогресс не изменился.", BAD, 5)
+                return
             try:
                 os.remove(BAK_PATH)
             except Exception:
                 pass
             web_js("localStorage.removeItem('wnb:save.bak.json')")
         self._progress_reset_scene()
+        self._save_replace = True
         self.save_progress()
         snd("whoosh")
         self.flash("Прежний прогресс возвращён.", GOOD, 4)
@@ -7794,6 +8059,11 @@ class Game:
             self._share_enter()
         elif k == "Escape":
             self._share_action("no" if ui["mode"] == "confirm" else "close")
+        elif ro and k in WEB_FIELD_KEYS:        # E35.2: поле только для чтения — Enter/стрелки/Tab идут кнопкам окна
+            key = WEB_FIELD_KEYS[k]
+            self.handle_event(pygame.event.Event(pygame.KEYDOWN, key=key, mod=0, unicode=" " if k == " " else "",
+                                                 scancode=0))
+            self.handle_event(pygame.event.Event(pygame.KEYUP, key=key, mod=0, unicode="", scancode=0))
 
     def _draw_share_field(self, surf, r, text, ph=""):
         aa_rect(surf, (12, 12, 18), r, border_radius=8)
@@ -7840,13 +8110,15 @@ class Game:
         cw = (rect.w - 16 * (cols - 1)) // cols
         for i, (k, ok, err, secs) in enumerate(rows[:per * cols]):
             x, y = rect.x + (i // per) * (cw + 16), rect.y + (i % per) * 26
-            fit_text(surf, ("✔ " if ok else "○ ") + share_item_label(k), (x, y), cw - (150 if cols == 1 else 96), 15,
-                     GOOD if ok else GREY)
+            rs_ = f"ошибок {err} · {fmt_secs(secs)}" if ok else "не сделано"
+            rsz = (14 if cols == 1 else 13) if ok else 13
+            rw = font(rsz).size(tr(rs_))[0]               # E37.1: название не заходит под «ошибок … · время»
+            fit_text(surf, ("✔ " if ok else "○ ") + share_item_label(k), (x, y),
+                     min(cw - (150 if cols == 1 else 96), cw - rw - 10), 15, GOOD if ok else GREY)
             if ok:
-                draw_text(surf, f"ошибок {err} · {fmt_secs(secs)}", (x + cw, y + 1), 14 if cols == 1 else 13,
-                          WHITE if err == 0 else AMBER, right=True)
+                draw_text(surf, rs_, (x + cw, y + 1), rsz, WHITE if err == 0 else AMBER, right=True)
             else:
-                draw_text(surf, "не сделано", (x + cw, y + 1), 13, DIM, right=True)
+                draw_text(surf, rs_, (x + cw, y + 1), rsz, DIM, right=True)
 
     def _draw_share(self, surf):
         _cap_modal()
@@ -7879,7 +8151,8 @@ class Game:
                 img = f.render(s + ("…" if s != ui["text"] else ""), True, GREY)
                 surf.blit(img, (fr.x + 10, fr.centery - img.get_height() // 2))
                 if ui.get("ok") is False and ui.get("kind") == "code":
-                    draw_text(surf, "Перепиши код (заглавные и строчные буквы различаются):", (x, fr.bottom + 12), 14, GREY)
+                    draw_text_w(surf, "Перепиши код (заглавные и строчные буквы различаются):", (x, fr.bottom + 12), w,
+                                14, GREY)
                     self._draw_code_block(surf, pygame.Rect(x, fr.bottom + 36, w, 150), ui["text"])
                 y = p.bottom - 128
             ok = ui.get("ok")
@@ -7888,12 +8161,12 @@ class Game:
                    ("Не удалось скопировать — перепиши итог с экрана." if ui.get("kind") == "text" else
                     ("Не удалось скопировать — выдели строку выше и нажми Ctrl+C." if IS_WEB else
                      "Буфер обмена недоступен — перепиши или сфотографируй код."))))
-            draw_text(surf, st, (x, y), 16, GOOD if ok else (GREY if ok is None else AMBER), bold=True)
+            draw_text_w(surf, st, (x, y), w, 16, GOOD if ok else (GREY if ok is None else AMBER), bold=True)
             if ui.get("note"):
                 draw_wrapped(surf, ui["note"], (x, y + 26), w, 14, GREY, max_lines=2)
         elif mode == "paste":
             draw_text(surf, "ВСТАВИТЬ КОД", (x, p.y + 20), 22, CYAN, bold=True)
-            draw_text(surf, "Код прогресса, задания или результата — или ссылка с ним:", (x, p.y + 72), 15, WHITE)
+            draw_text_w(surf, "Код прогресса, задания или результата — или ссылка с ним:", (x, p.y + 72), w, 15, WHITE)
             self._draw_share_field(surf, self._share_field_rect(), "" if IS_WEB else ui["text"],
                                    "" if IS_WEB else "Ctrl+V — вставить")
             if ui.get("err"):
@@ -7912,14 +8185,14 @@ class Game:
             bottom = p.bottom - (138 if mode == "summary" else 80)
             self._draw_result_rows(surf, pygame.Rect(x, p.y + 86, w, bottom - p.y - 86 - 26), res)
             if mode == "summary":
-                draw_text(surf, "Код результата защищён: если поправить в нём цифры, игра его не примет.",
-                          (x, bottom - 22), 13, GREY)
+                draw_text_w(surf, "Код результата защищён: если поправить в нём цифры, игра его не примет.",
+                            (x, bottom - 22), w, 13, GREY)
             elif res.get("version"):
                 draw_text(surf, f"Версия игры: {res['version']}", (x, bottom - 22), 13, GREY)
         elif mode == "builder":
             draw_text(surf, "ССЫЛКА-ЗАДАНИЕ", (x, p.y + 16), 22, CYAN, bold=True)
-            draw_text(surf, "Отметь задания по порядку — ученик увидит только их, без обучения и замков.",
-                      (x, p.y + 52), 15, WHITE)
+            draw_text_w(surf, "Отметь задания по порядку — ученик увидит только их, без обучения и замков.",
+                        (x, p.y + 52), w, 15, WHITE)
             sel = ui["sel"]
             for k, r in self._share_pick_rects():
                 on = k in sel
@@ -7935,12 +8208,12 @@ class Game:
             seat_y = self._share_pick_rects()[len(JOBS)][1].y
             draw_text(surf, "Кабинет посадки (примерки):", (x, seat_y - 26), 15, WHITE, bold=True)
             fr = self._share_field_rect()
-            draw_text(surf, "От кого (можно не писать):", (x, fr.centery - 10), 15, WHITE)
+            draw_text_w(surf, "От кого (можно не писать):", (x, fr.centery - 10), fr.x - 8 - x, 15, WHITE)   # не на поле
             self._draw_share_field(surf, fr, "" if IS_WEB else ui.get("name", ""), "" if IS_WEB else "Имя учителя")
             n = len(sel)
             info = ui.get("err") or (f"Выбрано: {n}" if n else "Ничего не выбрано")
-            draw_text(surf, info, (fr.right + 24, fr.centery - 10), 15, BAD if ui.get("err") else (GOOD if n else GREY),
-                      bold=True)
+            draw_text_w(surf, info, (fr.right + 24, fr.centery - 10), p.right - 28 - (fr.right + 24), 15,
+                        BAD if ui.get("err") else (GOOD if n else GREY), bold=True)
         for k, r, lab, col in self._share_btn_rects():
             enabled = not (k == "send" and self.assign and self.assign.get("sent"))
             Button(r, lab, col).draw(surf, mouse, enabled=enabled)
@@ -8228,9 +8501,12 @@ class Game:
         self._start_action(tool_id, False, part=part_id)
         msg = step.get("wrongmsg", "")
         if not msg:
-            if tool_id != step["tool"] and part_id == step["part"]:
+            # E29.3: деталь из alt тоже «верная» (иначе при alt-детали с чужим инструментом — общее «Не то»)
+            part_ok = part_id == step["part"] or part_id in step.get("alt", ())
+            tool_ok = tool_id == step["tool"] or tool_id in step.get("alt_tools", ())
+            if not tool_ok and part_ok:
                 msg = f"Деталь верная, но инструмент не тот. Нужен: {TOOLS[step['tool']][0]}."
-            elif tool_id == step["tool"] and part_id != step["part"]:
+            elif tool_ok and not part_ok:
                 msg = f"Инструмент верный, но не та деталь. Цель: {PARTS[step['part']]}."
             else:
                 msg = "Не то. Перечитай шаг и подсказку."
@@ -8427,6 +8703,7 @@ class Game:
     # открытия задания (когда кадры в памяти) и снова по клику/тапу на портрет; кадр ложится так, что портрет
     # внутри кадра совпадает со статичным (то же место и масштаб), поля с волшебством выходят за бокс портрета.
     PORTRAIT_BOX = (24, 70, 150, 190)     # куда вписан портрет клиента (load_image, пропорции сохраняются)
+    INSTR_ROOM = 124                      # высота текста шага/теста (y 100): до кнопки «+» над коляской (226 + 4) − 6
     MAGIC_DELAY = 0.8                     # с после открытия задания до первого показа
     MAGIC_AUTO_SECS = 15.0                # кадры (браузер: скачались) позже — сам не играет, только по клику
     MAGIC_FADE = 0.25                     # плавный переход портрет <-> кадр в начале и в конце (H3 рисует героя
@@ -8529,8 +8806,9 @@ class Game:
                     kx, ky = src[0] / e["size"][0], src[1] / e["size"][1]   # ужатый кадр — пропорционально
                     fx, fy, fw, fh = e["portrait"]
                     p = place_exact(src, (fx * kx, fy * ky, fw * kx, fh * ky), art, box[2:])
-                _FIT[key] = p
-            p = _FIT[key]
+                if p is not None:           # E34.3: None (кадров ещё нет) не запоминаем
+                    _FIT[key] = p
+            p = _FIT.get(key)
             if p:
                 return p[0], round(box[0] * RS) + p[1], round(box[1] * RS) + p[2]
         return self._magic_layout(name, box)
@@ -8834,6 +9112,7 @@ class Game:
             self.assign_record(self.cur["id"], self.mistakes, self.t - getattr(self, "_job_t0", self.t))
         else:
             self.done.add(self.cur["id"])
+            self._save_fresh[self.cur["id"]] = max(stars, self._save_fresh.get(self.cur["id"], 0))
             old = next((i for i, g in enumerate(self.garage) if g[0] == self.cur["id"]), None)
             if old is None:
                 self.garage.append((self.cur["id"], stars))
@@ -9266,7 +9545,7 @@ class Game:
         if tab == "sound":
             names = {"master": "Общая громкость", "music": "Музыка", "sfx": "Эффекты", "amb": "Атмосфера сцен"}
             for k, r in self._vol_slider_rects():
-                add("Громкость", f"{tr(names[k])}: {int(VOL[k] * 100)}%", r, adj=lambda d, k=k: self._a11y_vol(k, d),
+                add("Громкость", f"{tr(names[k])}: {round(VOL[k] * 100)}%", r, adj=lambda d, k=k: self._a11y_vol(k, d),
                     key=("vol", k))
         elif tab == "access":
             for k, r in self._access_rects():
@@ -9788,7 +10067,8 @@ class Game:
         return ((self.scene, self.cur and self.cur["id"], self.phase, self.mini_pending is not None,
                  self.show_manual, self.spec_pending is not None, self.show_sound, self.dispute_ui is None,
                  self.v3d is None, self.kb["help"], sc.get("tab"), sc.get("case"), sc.get("lesson"),
-                 sc.get("quiz"), sc.get("quiz_done")),
+                 sc.get("quiz"), sc.get("quiz_done"),
+                 (self.share_ui or {}).get("mode"), getattr(self, "garage_open", None)),   # E35.1: окно кодов, карточка
                 (self.step_idx, len(self.done_steps), getattr(self, "intro_idx", 0), self.manual_page,
                  getattr(self, "settings_tab", "sound"), getattr(self, "hub_page", 0)))
 
@@ -9858,7 +10138,7 @@ class Game:
             fit_text(surf, v, (p.x + 28 + kw, y), p.right - 24 - (p.x + 28 + kw), sz, WHITE)
             y += step
         st = f"Озвучка: {'включена' if A11Y['on'] else 'выключена'} ({SPEECH.label()})"
-        draw_text(surf, st, (p.x + 28, p.bottom - 74), 15, GOOD if A11Y["on"] else GREY)
+        draw_text_w(surf, st, (p.x + 28, p.bottom - 74), p.w - 56, 15, GOOD if A11Y["on"] else GREY)   # не шире панели
         draw_text(surf, "Esc или F1 — закрыть", (p.x + 28, p.bottom - 44), 15, GREY)
 
     def handle_event(self, event):
@@ -10524,7 +10804,8 @@ class Game:
         if sk is not None and self.dispute_ui is None and not self.show_sound:
             Button(sk, "ПРОПУСТИТЬ ОБУЧЕНИЕ ▸", CYAN).draw(surf, mouse_pos())
         if self.dispute_ui is not None:
-            self._draw_dispute_panel(surf, mouse_pos())
+            with text_cap():                                  # E37.1: плотное окно — при 150 % текст как при 125 %
+                self._draw_dispute_panel(surf, mouse_pos())
         if self.show_sound:
             with text_cap():
                 self._draw_sound_panel(surf)
@@ -10532,7 +10813,8 @@ class Game:
             with text_cap():
                 self._draw_share(surf)
         if self.kb["help"]:
-            self._draw_help(surf)
+            with text_cap():                                  # E37.1: справка F1 — тоже плотное окно
+                self._draw_help(surf)
         self.a11y_frame(surf)
         if self._fade_from is not None:
             k = (self.t - self._fade_t0) / 0.35
@@ -10579,7 +10861,7 @@ class Game:
         aa_rect(surf, (30, 28, 40, int(150 + 90 * h)), r, border_radius=10)
         col = tuple(int(a + (b - a) * h) for a, b in zip(GHOST, AMBER))
         cx, cy = r.center
-        ang0 = self.t * 0.8 * h
+        ang0 = 0.0 if calm() else self.t * 0.8 * h          # E35.3: «Без анимации» — не крутится
         pts = []
         for i in range(16):                                  # 8 зубцов
             a_ = ang0 + i * math.pi / 8
@@ -10670,6 +10952,7 @@ class Game:
         self._talk_later = None
         self.cur = None
         self.exam_mode = False
+        self._save_replace = True                 # две вкладки: сброс не «воскресает» из другой (gen + 1)
         self.save_progress()
         self._reset_ask = False
         self.show_sound = False
@@ -10684,11 +10967,17 @@ class Game:
         self.say("Сбросить весь прогресс? Это нельзя отменить. Да или нет." if on else "Сброс отменён.", True)
 
     def _draw_game_tab(self, surf, p, mouse):
-        draw_text(surf, "Прогресс", (p.x + 32, p.y + 114), 19, WHITE, bold=True)
-        y = p.y + 142
-        for line in self.progress_summary():
-            draw_text(surf, line, (p.x + 32, y), 15, GREY)
-            y += 22
+        hr = draw_text(surf, "Прогресс", (p.x + 32, p.y + 114), 19, WHITE, bold=True)
+        lines = self.progress_summary()
+        y = max(p.y + 142, hr.bottom + 2)                # E37.1: строки прогресса — между заголовком и кнопками кодов,
+        room = min(r.y for _, r in self._share_set_rects()) - 4 - y    # шаг и кегль — пока помещаются (при 100 % —
+        step = min(22, room // len(lines))                               # прежние 22 и 15)
+        sz = 15
+        while sz > 11 and font(sz).get_height() > step:
+            sz -= 1
+        for line in lines:
+            draw_text_w(surf, line, (p.x + 32, y), p.w - 64, sz, GREY)
+            y += step
         for k, r in self._share_set_rects():
             Button(r, self.SHARE_SET_LABELS[k], PURPLE if k == "share_restore" else CYAN).draw(surf, mouse)
         if getattr(self, "_reset_ask", False):
@@ -10952,7 +11241,10 @@ class Game:
                 snd("tick")
                 return
         elif event.type == pygame.MOUSEMOTION and self._vol_drag:
-            self._set_vol_from_x(self._vol_drag, event.pos[0])
+            if not getattr(event, "buttons", (1,))[0]:      # E33.1: отпускание потеряно (Alt+Tab) — ползунок отпустить
+                self._vol_drag = None
+            else:
+                self._set_vol_from_x(self._vol_drag, event.pos[0])
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and self._vol_drag:
             if self._vol_drag in ("master", "sfx"):
                 snd("ok")                                   # услышать новую громкость
@@ -11128,7 +11420,7 @@ class Game:
                 h = _hover_amt(("vol", key), 1.0 if hov else 0.0)
                 aa_circle(surf, WHITE, (kx, track.centery), int(10 + 3 * h))
                 aa_circle(surf, DIM if muted else AMBER, (kx, track.centery), int(10 + 3 * h), 3)
-                draw_text(surf, f"{int(VOL[key] * 100)}%", (track.right + 56, track.y - 8), 16,
+                draw_text(surf, f"{round(VOL[key] * 100)}%", (track.right + 56, track.y - 8), 16,
                           GREY if muted else WHITE, right=True)
             Button(self._sound_mute_rect(), "ВКЛЮЧИТЬ ЗВУК" if not VOL["on"] else "БЕЗ ЗВУКА",
                    GOOD if not VOL["on"] else GREY).draw(surf, mouse)
@@ -11535,7 +11827,8 @@ class Game:
         c = SEAT_CASES[i]
         cfg = dict(c["start"])
         cfg.setdefault("tilt", 0)
-        self.seatc.update(case=i, cfg=cfg, solved=False, view=c.get("view", "side"), focus=None, fails=0, t0=self.t)
+        self.seatc.update(case=i, cfg=cfg, solved=False, view=c.get("view", "side"), focus=None, fails=0, t0=self.t,
+                          drag=None)
         if c.get("view"):                                   # перекос/поворот: сбоку не видно — Мортимер подсказывает
             self.seatc["say"] = SEAT_MENTOR["view_" + c["view"]]
         else:
@@ -11802,9 +12095,13 @@ class Game:
             for k, tr_ in self._seat_slider_rects():
                 if tr_.inflate(30, 30).collidepoint(event.pos):
                     sc["drag"] = k
+                    sc["focus"] = k                         # E37.3: потом можно двигать стрелками
                     self._seat_set_from_x(k, event.pos[0])
                     return True
         elif event.type == pygame.MOUSEMOTION and sc["drag"]:
+            if not getattr(event, "buttons", (1,))[0] or sc["drag"] not in SEAT_SLIDERS                     or sc["drag"] not in dict(self._seat_slider_rects()):
+                sc["drag"] = None                           # E33.1: отпускание потеряно или клиент сменился
+                return False
             self._seat_set_from_x(sc["drag"], event.pos[0])
             return True
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and sc["drag"]:
@@ -11818,11 +12115,17 @@ class Game:
             return True
         return False
 
+    @staticmethod
+    def _seat_les_has_err(i):
+        """У урока есть поза-ошибка — значит, есть и кнопка «ПОКАЗАТЬ НОРМУ» (рисуется и нажимается только тогда)."""
+        lpose = SEAT_LESSONS[i].get("pose") or {}
+        return any(k in lpose for k in ("p", "slide", "deep", "knee_up", "dangle", "front"))
+
     def click_seating(self, m):
         sc = self.seatc
         tg = [self._seat_back_rect()] + [r for _, r in self._seat_tab_rects()] + [r for _, r in self._seat_list_rects()]
-        if sc["tab"] in ("lessons", "fit"):
-            tg.append(self._seat_demo_toggle_rect())
+        if sc["tab"] == "fit" or (sc["tab"] == "lessons" and self._seat_les_has_err(sc["lesson"])):
+            tg.append(self._seat_demo_toggle_rect())             # E37.2: невидимая кнопка не притягивает касание
         if sc["tab"] == "quiz" and not sc["quiz_done"] and sc["picked"] is None:
             tg += [r for _, r in self._seat_quiz_rects()]
         if sc["tab"] == "fit" or (sc["tab"] == "quiz" and (sc["quiz_done"] or sc["picked"] is not None)):
@@ -11849,7 +12152,7 @@ class Game:
                 snd("tick")
                 return
         if sc["tab"] == "lessons":
-            if self._seat_demo_toggle_rect().collidepoint(m):
+            if self._seat_les_has_err(sc["lesson"]) and self._seat_demo_toggle_rect().collidepoint(m):
                 sc["demo_good"] = not sc.get("demo_good", False)
                 snd("ghost")
                 return
@@ -11865,9 +12168,6 @@ class Game:
                     return
                 snd("tick")
                 return
-            for k, r in self._seat_slider_rects():
-                if r.inflate(30, 30).collidepoint(m):
-                    sc["focus"] = k
             if self._seat_btn_rect().collidepoint(m):
                 case = SEAT_CASES[sc["case"]]
                 if sc["solved"]:
@@ -11889,6 +12189,7 @@ class Game:
                         self.assign_record(case["id"], sc.get("fails", 0), self.t - sc.get("t0", self.t))
                     else:
                         self.seat_done.add(case["id"])
+                        self._save_fresh["seat:" + case["id"]] = 1
                         self.save_progress()
                     snd("fanfare")
                     self.flash(case["fact"], GOOD, 6)
@@ -13195,7 +13496,21 @@ class Game:
         key = ("case", art, px)
         img = self._seat_icon_cache.get(key)
         if img is None:
-            src = load_image(art)
+            # E36: полноразмерный портрет в _img_cache не кладём (9 клиентов — до 44 МБ при RS 2): файл читается
+            # один раз, в кэше остаётся только значок size×size
+            src, path = None, asset_path(art)
+            if path:
+                try:
+                    ap = path[:-4] + ".a.png"
+                    src = (_load_split(path, ap) if path.endswith(".jpg") and os.path.exists(ap)
+                           else pygame.image.load(path)).convert_alpha()
+                except Exception:
+                    src = None
+            if src is None:                         # нет файла — запасной арт через load_image (и его не держим)
+                had = (art, None) in _img_cache
+                src = load_image(art)
+                if not had:
+                    _img_cache.pop((art, None), None)
             w, h = pygame.Surface.get_size(src)
             s = max(1, int(min(w, h) * 0.72))
             part = pygame.Surface((s, s), pygame.SRCALPHA)
@@ -13271,7 +13586,7 @@ class Game:
                     cw_ = font(14, True).size(tr(cap))[0] + 14
                     aa_rect(surf, (16, 12, 24, 215), (cv.right - 14 - cw_, cv.y + 46, cw_, 22), border_radius=5)
                     draw_text(surf, cap, (cv.right - 21, cv.y + 48), 14, AMBER, bold=True, right=True)
-            has_err_pose = any(k in lpose for k in ("p", "slide", "deep", "knee_up", "dangle", "front"))
+            has_err_pose = self._seat_les_has_err(sc["lesson"])
             if has_err_pose:
                 tbtn = self._seat_demo_toggle_rect()
                 Button(tbtn, "ПОЗА: НОРМА ✔" if demo_good else "ПОКАЗАТЬ НОРМУ ▶",
@@ -13417,15 +13732,21 @@ class Game:
                 if sc["picked"] is not None:
                     col = GOOD if ok else (BAD if i == sc["picked"] else DIM)
                 Button(r, "", col).draw(surf, mouse, enabled=sc["picked"] is None or i == sc["picked"] or ok)
-                ty = draw_wrapped(surf, text, (r.x + 14, r.y + 8), r.w - 28,   # 150 %: ответ в 3 строки — мельче,
-                                  fit_wrapped_size(text, r.w - 28, 15, r.h - 12, lo=11), WHITE)   # не за рамку
+                tsz = fit_wrapped_size(text, r.w - 28, 15, r.h - 12, lo=11)   # 150 %: ответ в 3 строки — мельче
+                if sc["picked"] == i and fb:                 # E37.1: под пояснение — хотя бы строка кеглем 11
+                    need = font(11).get_height() + 2
+                    th = len(wrap_lines(text, r.w - 28, tsz)) * (font(tsz).get_height() + 2)
+                    if r.y + 8 + th + need > r.bottom - 4:
+                        tsz = fit_wrapped_size(text, r.w - 28, tsz, r.h - 12 - need, lo=10)
+                ty = draw_wrapped(surf, text, (r.x + 14, r.y + 8), r.w - 28, tsz, WHITE)
                 if sc["picked"] == i and fb:                 # крупный текст: вариант в 2 строки — пояснение ниже
                     for fsz in (13, 12, 11):
                         flh = font(fsz).get_height() + 2
                         if ty + len(wrap_lines(fb, r.w - 28, fsz)) * flh <= r.bottom - 4:
                             break
-                    draw_wrapped(surf, fb, (r.x + 14, ty), r.w - 28, fsz, BAD,
-                                 max_lines=max(1, (r.bottom - 4 - ty) // flh))
+                    fl = (r.bottom - 4 - ty) // flh
+                    if fl >= 1:                              # не за рамку ответа
+                        draw_wrapped(surf, fb, (r.x + 14, ty), r.w - 28, fsz, BAD, max_lines=fl)
             if sc["picked"] is not None:
                 Button(self._seat_btn_rect(), "ДАЛЬШЕ ▶", AMBER).draw(surf, mouse)
 
@@ -13826,7 +14147,7 @@ class Game:
             i = min(tt.frames, key=lambda k: min(abs(k - i), tt.n - abs(k - i)))
         scale = fr.h / 1250.0 * zoom                              # логических пикселей на единицу модели
         ax, ay = fr.x + fr.w / 2, fr.y + fr.h * 0.54
-        key = ("tt", i, tuple(fr), round(zoom, 4))
+        key = ("tt", i, tuple(fr), round(zoom, 4), RS)            # RS: тень в пикселях экрана (E36)
         if s.get("sh_key") != key:                                # мягкая тень на полу (раз на кадр)
             loc = pygame.Rect(0, 0, fr.w, fr.h)
             yw = tt.yaw0 + i * 2 * math.pi / tt.n
@@ -13911,7 +14232,7 @@ class Game:
         zoom = tt.z0 * (1.12 if self.phase == "test" else 1.0)     # по центру место есть — крупнее
         scale = fr.h / 1250.0 * zoom
         ax, ay = fr.x + fr.w / 2, fr.y + fr.h * 0.54
-        key = (i, tuple(fr), round(zoom, 4))
+        key = (i, tuple(fr), round(zoom, 4), RS)                   # RS: после смены разрешения — заново (E36)
         if s.get("sh_key") != key:                                  # мягкая тень на полу (как в окне задания)
             loc = pygame.Rect(0, 0, fr.w, fr.h)
             yw = tt.yaw0 + i * 2 * math.pi / tt.n
@@ -14402,7 +14723,7 @@ class Game:
         # клиент слева (у героя с «волшебством» — пока оно играет, кадр петли поверх портрета)
         if not self._draw_magic(surf):            # Мартин (martin_idle) — «живой», без своего дыхания
             self._blit_portrait(surf, self.PORTRAIT_BOX)
-        draw_text(surf, job["client"], (24, 266), 16, WHITE, bold=True)
+        draw_text_w(surf, job["client"], (24, 266), 330, 16, WHITE, bold=True)   # E37.1: не на инструкцию шага (x 360)
         if self.ride_t0 is None:
             self._draw_client_bubble(surf)
 
@@ -14460,12 +14781,14 @@ class Game:
             Button(self._step_prev_rect(), "◂", CYAN).draw(surf, mouse, enabled=self.step_idx > 0)
             Button(self._step_skip_rect(), "ШАГ ▸", AMBER).draw(surf, mouse)
             step = job["steps"][self.step_idx]
-            draw_wrapped(surf, step["instr"], (360, 100), 560, 19, WHITE)   # итог прошлого шага — сверху и в «◂»
+            draw_wrapped(surf, step["instr"], (360, 100), 560,   # итог прошлого шага — сверху и в «◂»
+                         fit_wrapped_size(step["instr"], 560, 19, self.INSTR_ROOM), WHITE)   # E37.1: над «+»/коляской
             self._draw_parts(surf, mouse, "ДЕТАЛЬ")
             self._draw_tools(surf, mouse)
         elif self.phase == "test":
             draw_text(surf, "ТЕСТ-ДРАЙВ", (360, 70), 20, GOOD, bold=True)
-            draw_wrapped(surf, job["test"], (360, 100), 560, 19, WHITE)
+            draw_wrapped(surf, job["test"], (360, 100), 560, fit_wrapped_size(job["test"], 560, 19, self.INSTR_ROOM),
+                         WHITE)
             if self.ride_t0 is None:
                 if not self.ride_done and self.ride_anim():   # пока читают — подгрузить кадры петли проезда
                     anim_prefetch(self.ride_anim(), self._ride_anim_size(self.ride_anim()))
@@ -14676,7 +14999,7 @@ class Game:
                 ang = 7 * wsin(self.t * 5)
                 since = self.t - getattr(self, "_miss_t", -9)
                 if since < 0.45:
-                    ang += 22 * math.sin(since * 55) * (1 - since / 0.45)
+                    ang += 22 * wsin(since * 55) * (1 - since / 0.45)   # E35.3: в «Без анимации» не дёргается
             ic = tool_icon(tid, 38)
             ic = TF.rotozoom(ic, ang, enter * (1 + 0.16 * h))
             surf.blit(ic, ic.get_rect(center=r.center))
@@ -14720,10 +15043,11 @@ class Game:
             y = draw_wrapped(surf, hint, (info.x + 16, info.y + 12), info.w - 32, 15, GREY)
             if not tech and MANUAL_NOTES.get(self.cur["id"]):     # где сноски: значок книжки у детали
                 _draw_book_icon(surf, (info.x + 26, y + 16), 10, CYAN)
-                draw_wrapped(surf, "У деталей с книжкой есть сноска из мануала — коснись книжки; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа."
-                             if TOUCH["on"] else  # «наведи» на сенсоре не бывает
-                             "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа.",
-                             (info.x + 44, y + 7), info.w - 60, 14, CYAN)
+                note = ("У деталей с книжкой есть сноска из мануала — коснись книжки; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа."
+                        if TOUCH["on"] else  # «наведи» на сенсоре не бывает
+                        "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа.")
+                draw_wrapped(surf, note, (info.x + 44, y + 7), info.w - 60,   # E37.1: 150 % — мельче, не за карточку
+                             fit_wrapped_size(note, info.w - 60, 14, info.bottom - 4 - (y + 7), lo=9), CYAN)
 
     def _draw_tool_in_hand(self, surf, mouse):
         """Выбранный инструмент следует за курсором; верный шаг — вспышка у курсора."""
@@ -14977,7 +15301,7 @@ class Game:
 
     def _manual_text_size(self, page, width, height):
         """Наибольший шрифт (17→11), при котором вся страница мануала помещается в height."""
-        key = (page, width, height, LANG["code"], A11Y.get("text", 0))   # размер текста меняет метрики font()
+        key = (page, width, height, LANG["code"], A11Y.get("text", 0), bool(A11Y.get("font")))   # размер и шрифт меняют метрики
         cache = self.__dict__.setdefault("_manual_fit", {})
         if key not in cache:
             lines = self._manual_entry(page)[1]
@@ -15265,7 +15589,7 @@ class Game:
             draw_zap(surf, (WIDTH // 2 - 160, 300), k, size=2.2)
             draw_zap(surf, (WIDTH // 2 + 200, 330), min(1.0, k * 1.2), size=1.8)
         title = "ЭКЗАМЕН НЕ СДАН" if self.exam_mode else "ПРОВАЛ. РАЗБОР ОШИБКИ"
-        shake = int(14 * math.sin(self.st * 42) * max(0.0, 1 - self.st / 0.6))
+        shake = int(14 * wsin(self.st * 42) * max(0.0, 1 - self.st / 0.6))   # E35.3
         draw_text(surf, title, (WIDTH // 2 + shake, 120), 46, BAD, bold=True, center=True)
         card = pygame.Rect(WIDTH // 2 - 420, 190 + int(40 * (1 - appear(self.st, 0.2))), 840, 220)
         s = Surf(card.size, pygame.SRCALPHA)
@@ -15535,8 +15859,9 @@ class Game:
             y = draw_wrapped(surf, job["title"], (tx, y), tw, 12, GREY, max_lines=2)
             draw_text(surf, "★" * stars + "☆" * (3 - stars), (tx, y + 2), 16, AMBER)
             lh = font(11).get_height() + 2
-            left = max(1, (rect.bottom - 22 - (y + 24)) // lh)
-            draw_wrapped(surf, job["fact"], (tx, y + 24), tw, 11, GHOST, max_lines=left)
+            left = (rect.bottom - 22 - (y + 24)) // lh     # E37.1: места нет ни на строку — факт не рисуем (он в
+            if left >= 1:                                  # карточке «подробнее»), а не поверх «▸ подробнее»
+                draw_wrapped(surf, job["fact"], (tx, y + 24), tw, 11, GHOST, max_lines=left)
             draw_text(surf, "▸ " + tr("подробнее"), (rect.right - 10, rect.bottom - 18), 11, CYAN, right=True)
         pages = self._garage_pages()
         if pages > 1:
@@ -17340,6 +17665,101 @@ def run_selftest():
     finally:
         globals().update(keep)
         A11Y.update(a11y0); VOL.update(vol0); set_lang(lang0)
+    # внешняя проверка 26.11: две «вкладки» (E30), восстановление из save.prev.json (S2), битая копия (E31.2),
+    # --unlock без save.bak.json (E31.3) — во временной папке, файлы игрока не трогаем
+    tmp2 = tempfile.mkdtemp()
+    keep2 = {k: globals()[k] for k in ("SAVE_PATH", "PREV_PATH", "BAK_PATH", "SETTINGS_PATH", "FEEDBACK_PATH", "DATA_DIR")}
+    a11y0, vol0, lang0 = dict(A11Y), dict(VOL), LANG["code"]
+    try:
+        globals().update({k: os.path.join(tmp2, os.path.basename(v)) for k, v in keep2.items() if k != "DATA_DIR"},
+                         DATA_DIR=tmp2)
+
+        def _win(g_, jid, stars=3):                           # как finish_test: пройдено обычное задание
+            g_.done.add(jid)
+            g_.garage = [x for x in g_.garage if x[0] != jid] + [(jid, stars)]
+            g_._save_fresh[jid] = stars
+
+        def _file():
+            with open(SAVE_PATH, encoding="utf-8") as f:
+                return json.load(f)
+        ta, tb = Game(headless=False), Game(headless=False)   # две вкладки, открытые одновременно
+        for g_ in (ta, tb):
+            g_._save_merge = True                             # как в браузере (на компьютере объединения нет)
+        _win(ta, "flat"); _win(ta, "caster", 2); ta.save_progress()
+        _win(tb, "spokes"); tb.exam_passed = True; tb.save_progress()
+        f_ = _file()
+        if f_["done"] != ["caster", "flat", "spokes"] or not f_["exam_passed"] or f_.get("gen") != 0 \
+                or tb.done != {"flat", "caster", "spokes"}:
+            failures.append(f"две вкладки: прогресс первой затёрт второй: {f_}")
+        _win(ta, "caster", 3); ta.save_progress()             # переиграла лучше — звёзды растут
+        if dict(map(tuple, _file()["garage"])).get("caster") != 3:
+            failures.append("две вкладки: лучшая оценка в гараже потерялась")
+        ta.reset_progress()                                   # сброс в одной вкладке…
+        if _file()["done"] or _file().get("gen") != 1:
+            failures.append(f"две вкладки: сброс не записан с новым поколением: {_file()}")
+        _win(tb, "brake"); tb.save_progress()                 # …вторая (старая) не «воскрешает» прогресс
+        f_ = _file()
+        if f_["done"] != ["brake"] or f_["exam_passed"] or f_.get("gen") != 1:
+            failures.append(f"две вкладки: сброс «воскрес» из второй вкладки: {f_}")
+        # S2: save.json повреждён, save.prev.json цел — восстановиться и сказать об этом
+        with open(PREV_PATH, encoding="utf-8") as f:
+            prev = json.load(f)
+        with open(SAVE_PATH, "w", encoding="utf-8") as f:
+            f.write('{"done": ["flat"')
+        gp = Game(headless=False)
+        if gp.done != set(prev.get("done", [])) or not gp._restored_prev or \
+                gp.toast != "Сохранение было повреждено — восстановлено из предыдущей копии." \
+                or not os.path.exists(SAVE_PATH + ".bad") or _read_save(SAVE_PATH) is None:
+            failures.append(f"save.json повреждён: не восстановлен из save.prev.json ({gp.done}, {prev})")
+        for p_ in (SAVE_PATH, PREV_PATH):
+            with open(p_, "w", encoding="utf-8") as f:
+                f.write("{oops")
+        gq_ = Game(headless=False)                            # обе копии битые — пустой прогресс, без сообщения
+        if gq_.done or gq_._restored_prev:
+            failures.append("save.json и save.prev.json повреждены — прогресс не пустой")
+        # E31.2: битая копия «Вернуть прежний прогресс» — прогресс прежний, копия на месте, сообщение честное
+        gq_.done = {"flat"}
+        with open(BAK_PATH, "w", encoding="utf-8") as f:
+            f.write("[1, 2")
+        gq_.restore_backup()
+        if gq_.done != {"flat"} or not os.path.exists(BAK_PATH) or "повреждена" not in gq_.toast:
+            failures.append(f"битая save.bak.json: неверное «возвращён» ({gq_.toast})")
+        os.remove(BAK_PATH)
+        gq_.no_save = True                                    # E31.3: --unlock — копия только в памяти
+        gq_.backup_progress()
+        if os.path.exists(BAK_PATH) or gq_._bak_mem is None or not gq_.has_backup():
+            failures.append("--unlock: backup_progress записал save.bak.json")
+        # E35.1: чтец экрана говорит при открытии окна кодов и карточки Гаража
+        said = []
+        gq_.say = lambda text, *a, **k: said.append(text)
+        gq_.headless, gq_.scene = True, "hub"
+        gq_.a11y_frame(scr)
+        said.clear()
+        gq_.open_share("show", text="ABC")
+        gq_.a11y_frame(scr)
+        if not said:
+            failures.append("чтец экрана молчит при открытии окна кодов")
+        gq_.share_ui = None
+        gq_.scene, gq_.garage_open = "garage", None
+        gq_.a11y_frame(scr)
+        said.clear()
+        gq_.garage_open = 0
+        gq_.a11y_frame(scr)
+        if not said:
+            failures.append("чтец экрана молчит при открытии карточки Гаража")
+    except Exception as e:
+        import traceback
+        failures.append(f"две вкладки / save.prev.json: {type(e).__name__}: {e} {traceback.format_exc()[-300:]}")
+    finally:
+        globals().update(keep2)
+        A11Y.update(a11y0); VOL.update(vol0); set_lang(lang0)
+    # E32: отпускание пальца потерялось — через секунду новое касание всё равно работает
+    FINGER.update(id=777, own_t=pygame.time.get_ticks() - 5000, pos=None)
+    fe_ = finger_events(pygame.event.Event(pygame.FINGERDOWN, x=0.5, y=0.5, dx=0, dy=0, finger_id=5, touch_id=1,
+                                           pressure=1))
+    if not fe_ or FINGER["id"] != 5:
+        failures.append("потерянный FINGERUP: новые касания не принимаются")
+    FINGER.update(id=None, t=-10 ** 9, pos=None)
     ad0 = ASSETS_DIR                                           # запасной векторный арт (нет PNG) не падает
     try:
         globals()["ASSETS_DIR"] = tmp
@@ -17429,6 +17849,11 @@ def _loop_error(game, log):
         game.v3d = None
         game.show_manual = game.show_sound = False
         game.dispute_ui = None
+        game.share_ui = None                        # E33.2: окно кодов поверх мастерской/титула тоже закрыть
+        game.garage_open = None
+        if isinstance(game.seatc, dict):
+            game.seatc["drag"] = None               # E33.1: залипший ползунок посадки
+        game._vol_drag = None
         game.ride_t0 = None
         game.scene = "hub" if (len(_LOOP_ERR) <= 3 and game.tutorial_ok()) else "title"
         game.flash("Что-то пошло не так — вернулись назад. Прогресс сохранён.", BAD, 5)
@@ -17523,6 +17948,9 @@ async def main():
         _crash_log.flush()
     clock = pygame.time.Clock()
     game = Game()
+    if "--mute" in sys.argv:                              # E37.4: тишина целиком — и музыка, и тоны (в settings не пишется)
+        VOL["_mute_arg"] = VOL["on"]
+        VOL["on"] = False
     if _crash_log and A11Y["on"]:                         # какой голос у озвучки — тоже в журнал
         _crash_log.write(f"озвучка: {SPEECH.kind} {SPEECH.name}" + chr(10))
         _crash_log.flush()
