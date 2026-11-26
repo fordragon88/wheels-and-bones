@@ -3041,8 +3041,8 @@
  "Для 530 мм вилки должны стоять в нижнем отверстии C": "For 530 mm the forks must be in the bottom hole C",
  "Выкрути болт вилки и переставь переднее колесо в нижнее отверстие C (отверстия вилки A, B, C идут сверху вниз), затяни.": "Unscrew the caster fork bolt, move the front wheel to the bottom hole C (the fork holes A, B, C run top to bottom) and tighten (hint: the bolt has a six-sided head).",
  "Натяжение спиц проверяют пинг-тестом. Тянут до нужного натяжения и равномерно — перетянешь, и обод «восьмерит». Ослабший крепёж рамы подтягивают, пока не задребезжало всё остальное.": "Spoke tension is checked with a ping test. Tighten to the right tension and evenly — overtighten and the rim goes out of true. Loose frame fasteners get tightened before everything else starts rattling.",
- "Универсального рецепта вроде «90-90-90» (бёдра, колени и голеностопы — все под прямым углом) нет: решение — по осмотру и цели.": "There is no universal recipe like \"90-90-90\" (hips, knees and ankles all at right angles): the decision follows the assessment and the goal.",
- "Можно ли посадить всех по правилу «90-90-90» (бёдра, колени и голеностопы под 90°)?": "Can everyone be seated by the \"90-90-90\" rule (hips, knees and ankles at 90°)?",
+ "Универсального рецепта вроде «90-90-90» (бёдра, колени и голеностопы — все под прямым углом) нет: решение — по осмотру и цели.": "There is no universal recipe like “90-90-90” (hips, knees and ankles all at right angles): the decision follows the assessment and the goal.",
+ "Можно ли посадить всех по правилу «90-90-90» (бёдра, колени и голеностопы под 90°)?": "Can everyone be seated by the “90-90-90” rule (hips, knees and ankles at 90°)?",
  "СНОСКИ ИЗ МАНУАЛОВ": "MANUAL FOOTNOTES",
  "СНОСКИ МАНУАЛА": "MANUAL NOTES",
  "У деталей с книжкой есть сноска из мануала — наведи или кликни книжку; все сразу — кнопка «СНОСКИ МАНУАЛА» внизу справа.": "Parts with a book icon have a manual footnote — hover or click the icon; for all of them at once press MANUAL NOTES at the bottom right.",
@@ -3240,5 +3240,7 @@
  "Заднее колесо спустило: коляску тянет вбок, катится тяжело. До вечеринки далеко.": "The rear wheel is flat: the chair pulls to one side and rolls heavily. And it's a long way to the party.",
  "Мартин: «Коляску тянет вбок, и катится она, как телега с камнями. Заднее колесо спустило.»": "Martin: “The chair pulls to one side and rolls like a cart full of rocks. The rear tire is flat.”",
  "Горыныч едет в горку к замку — и коляска замирает. Головы минуту спорят, кто виноват, жмут выскочившую кнопку — едет, а на следующем подъёме опять встаёт.": "Gorynych drives uphill to the castle — and the wheelchair freezes. The heads argue for a minute about whose fault it is, press the popped-out button — it drives, and on the next slope it stops again.",
- "Колесо снова на коляске и крутится ровно — в станке стрелка индикатора почти не дышала.": "The wheel is back on the chair and spins true — in the stand the indicator needle barely twitched."
+ "Колесо снова на коляске и крутится ровно — в станке стрелка индикатора почти не дышала.": "The wheel is back on the chair and spins true — in the stand the indicator needle barely twitched.",
+ "Сохранение было повреждено — восстановлено из предыдущей копии.": "The save file was damaged — restored from the previous copy.",
+ "Копия прежнего прогресса повреждена — прогресс не изменился.": "The backup of your previous progress is damaged — your progress hasn't changed."
 }
