@@ -39,6 +39,10 @@ var _cover_cb: JavaScriptObject           # обратный вызов для �
 var _lang_sent: String = ""
 var _stage_cb: JavaScriptObject           # ?test=1: window.wnbStage(имя) — состояние снимка tests/shots.gd (замер)
 var _stager: Node
+var _clip_t: float = 0.0
+var _clip_seen: int = 0                   # номер последней записи в буфер (window.wnbClip.n), уже учтённой
+var _clip_key: String = ""                # поле страницы с кодом/ссылкой для ручного копирования (буфер недоступен)
+var _clip_dlg: int = 0
 
 
 func _ready() -> void:
@@ -277,11 +281,47 @@ func _process(dt: float) -> void:
 			var line := "[wnb] fps %.1f min10s %.0f max %.0f ms px %dx%d scene %s frames %s" % [fps, fps_min10, _worst_ms,
 				ws.x, ws.y, Nav.current_name, Frames.status_line()]
 			JavaScriptBridge.eval("console.log(%s)" % JSON.stringify(line), true)
+	if on:
+		_clip_check(dt)
 	if test:
 		_st_t += dt
 		if _st_t >= 0.25:
 			_st_t = 0.0
 			JavaScriptBridge.eval("window.wnbState = %s" % JSON.stringify(JSON.stringify(state())), true)
+
+
+## Окно «Скопировано ✔» открыто: браузер отказал в записи в буфер (рамка без allow="clipboard-write", запрет
+## браузера) и запасной путь страницы тоже (window.wnbClip.state == "fail", web/shell.html) — окно показывает «не
+## удалось» и код/ссылку целиком (ShareDialog: ok = false). Раз в 0,2 с, только пока такое окно открыто.
+func _clip_check(dt: float) -> void:
+	var dv: Variant = Share.dlg
+	var d: ShareDialog = dv as ShareDialog if is_instance_valid(dv) else null
+	var showing: bool = d != null and d.ui.get("mode", "") == "show"
+	if _clip_key != "" and not (showing and d.ui.get("ok") == false and d.get_instance_id() == _clip_dlg):
+		JavaScriptBridge.eval("wnbField.hideKey(%s)" % JSON.stringify(_clip_key), true)   # окно закрыто — поле убрать
+		_clip_key = ""
+	if not showing or d.ui.get("ok") != true:
+		return
+	_clip_t += dt
+	if _clip_t < 0.2:
+		return
+	_clip_t = 0.0
+	var s := str(JavaScriptBridge.eval("window.wnbClip ? wnbClip.n + ' ' + wnbClip.state : ''", true))
+	var p := s.split(" ")
+	if p.size() == 2 and int(p[0]) > _clip_seen and p[1] != "pending":
+		_clip_seen = int(p[0])
+		if p[1] == "fail":
+			d.ui["ok"] = false
+			d.queue_redraw()
+			# «выдели строку выше и нажми Ctrl+C»: строка — настоящее поле страницы (только чтение, выделено)
+			if str(d.ui.get("kind", "")) != "text":
+				var xf := d.get_viewport().get_final_transform() * d.get_global_transform_with_canvas()
+				var r := xf * d.field_rect()
+				_clip_key = "clipfail_%d" % d.get_instance_id()
+				_clip_dlg = d.get_instance_id()
+				JavaScriptBridge.eval("wnbField.showCopy(%s, %f, %f, %f, %f, %s, %f)" % [JSON.stringify(_clip_key),
+					r.position.x, r.position.y, r.size.x, r.size.y, JSON.stringify(str(d.ui.get("text", ""))),
+					float(UI.fs(15)) * xf.get_scale().y], true)
 
 
 # ---------------- состояние для проверки (?test=1) ----------------
@@ -296,6 +336,8 @@ func state() -> Dictionary:
 		"toast": Nav.toast.text if Nav.toast.active() else "", "speech": Speech.last(),
 		"help": Nav.help != null, "touch": UI.touch(), "phone": UI.phone(),
 		"share_dlg": Share.dlg.ui.get("mode", "") if Share.dlg != null else "",
+		"share_ok": Share.dlg.ui.get("ok") if Share.dlg != null else null,
+		"share_text": str(Share.dlg.ui.get("text", "")) if Share.dlg != null and Share.dlg.ui.get("mode", "") == "show" else "",
 		"settings": Nav.settings != null, "errors": Content.errors.size(), "migrated": SaveGame.migrated,
 		"fullscreen": DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN,
 		"text_k": Settings.a11y.get("text", 0), "speech_on": Settings.a11y.get("on", false),

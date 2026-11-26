@@ -9,6 +9,10 @@
   WNB_URL=https://…/godot/ python godot/tools/web_smoke.py --no-build --only boot,play,perf  — выложенный сайт
 
 Локальный сервер — на своём порту (WNB_PORT, по умолчанию 8061; не 8000/8188/8797), закрывается в конце.
+Сценарий embed — игра в рамке страницы WordPress (godot/web/wordpress_embed_godot.html и прежний wordpress_embed.html):
+страница-обёртка — на localhost:WNB_WRAP_PORT (по умолчанию 8065), другой сайт, чем 127.0.0.1 игры. WNB_EXPECT_MAIN=1 —
+сборка для основного сайта: ссылка из конструктора обязана вести на game.SHARE_BASE_URL. Счётчик посещений GoatCounter
+в тестах обрывается (route abort), проверяется только, что тег на месте и браузер его запросил.
 Firefox и WebKit — тоже без окна и без звука: у них нет --mute-audio, поэтому Firefox — с настройкой профиля
 media.volume_scale 0, а в обоих страница ещё до своих скриптов приглушает <audio> (muted при каждом play) и WebAudio
 (всё, что подключается к выходу AudioContext, идёт через усиление 0) — MUTE_JS.
@@ -45,6 +49,9 @@ SHOTS = os.path.join(GODOT, "tests", "web_shots", *([] if CHROMIUM else [BROWSER
 PORT = int(os.environ.get("WNB_PORT", "8061"))
 URL = os.environ.get("WNB_URL", f"http://127.0.0.1:{PORT}/")
 GPU_ARGS = ["--mute-audio", "--autoplay-policy=user-gesture-required", "--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist"]
+# счётчик посещений GoatCounter (build_web.add_counter): в тестах запросы к нему обрываются (route abort) — в сеть не
+# ходим и статистику владельца не трогаем; страница и игра от его отсутствия работать не перестают
+COUNTER_HOSTS = ("gc.zgo.at", "goatcounter.com")
 fails, notes, metrics = [], [], {}
 
 # Прогресс pygame-версии (localStorage «wnb:save.json» — тот же формат, что save.json)
@@ -144,6 +151,12 @@ class Page:
     def _console(self, m):
         t = m.text
         self.console.append(f"{m.type}: {t}"[:300])
+        try:
+            where = (m.location or {}).get("url", "")
+        except Exception:
+            where = ""
+        if any(h in t or h in where for h in COUNTER_HOSTS):
+            return                                    # счётчик посещений заглушён тестом (route abort) — его ошибка загрузки
         if m.type == "error" and not any(a in t for a in self.allow):
             self.errors.append(t[:300])
 
@@ -231,8 +244,10 @@ class Page:
 
 
 async def new_page(b, name, touch=False, mobile=False, w=1280, h=720, dpr=1.0, legacy=None, motion="no-preference",
-                   block_frames=False, legacy_raw=None, hook=None):
-    """hook(route, path) — свой ответ на запрос к игре (True — обработан): обрыв, 500, «висящий» ответ, мусор."""
+                   block_frames=False, legacy_raw=None, hook=None, hosts=(), perm_origins=(), cls=None):
+    """hook(route, path) — свой ответ на запрос к игре (True — обработан): обрыв, 500, «висящий» ответ, мусор.
+    hosts — ещё адреса (host:port), куда можно ходить (страница-обёртка сценария embed); perm_origins — им же права
+    на буфер обмена. Запросы к счётчику посещений обрываются и записываются в p.counter: [(адрес, адрес рамки)]."""
     opts = dict(viewport={"width": w, "height": h}, device_scale_factor=dpr, reduced_motion=motion)
     if mobile:
         opts.update(has_touch=True)
@@ -242,7 +257,8 @@ async def new_page(b, name, touch=False, mobile=False, w=1280, h=720, dpr=1.0, l
     u = urllib.parse.urlsplit(URL)
     perms = {"chromium": ["clipboard-read", "clipboard-write"], "webkit": ["clipboard-read"], "firefox": []}[BROWSER]
     if perms:
-        await ctx.grant_permissions(perms, origin=f"{u.scheme}://{u.netloc}")
+        for o in (f"{u.scheme}://{u.netloc}",) + tuple(perm_origins):
+            await ctx.grant_permissions(perms, origin=o)
     if not CHROMIUM:
         await ctx.add_init_script(MUTE_JS)
         await ctx.add_init_script(SCREEN_JS)
@@ -260,10 +276,17 @@ async def new_page(b, name, touch=False, mobile=False, w=1280, h=720, dpr=1.0, l
         await ctx.add_init_script("if (!sessionStorage.getItem('wnb-test-seeded')) {" + js +
                                   "sessionStorage.setItem('wnb-test-seeded', '1');}")
     host = urllib.parse.urlsplit(URL).netloc
+    counter = []
 
     async def route(r):
         u = urllib.parse.urlsplit(r.request.url)
-        if u.netloc != host:
+        if u.netloc != host and u.netloc not in hosts:
+            if any(u.netloc == h or u.netloc.endswith("." + h) for h in COUNTER_HOSTS):
+                try:
+                    fu = r.request.frame.url
+                except Exception:
+                    fu = ""
+                counter.append((r.request.url, fu))
             await r.abort()                            # наружу — ничего (таблица замечаний, счётчики)
         elif hook and await hook(r, u.path):
             pass
@@ -273,7 +296,8 @@ async def new_page(b, name, touch=False, mobile=False, w=1280, h=720, dpr=1.0, l
             await r.continue_()
     await ctx.route("**/*", route)
     pg = await ctx.new_page()
-    p = Page(ctx, pg, name, touch)
+    p = (cls or Page)(ctx, pg, name, touch)
+    p.counter = counter
     if block_frames:
         p.allow += ["404", "Frames: кадры", "at: push_warning"]   # ожидаемо: файл не найден, кадры — запасным видом
     return p
@@ -495,6 +519,7 @@ async def sc_boot(b):
     info(f"{p.name}: музыка на титуле: {mus} (страница активирована Playwright: {act})")
     c = await p.canvas()
     check(abs(c[2] - c[7]) < 2 and abs(c[3] - c[8]) < 2, f"{p.name}: холст на всё окно ({c[2]}×{c[3]} при {c[7]}×{c[8]})")
+    await counter_check(p)
     # ресайз окна: холст за окном, картинка 16:9 с полями
     await p.pg.set_viewport_size({"width": 900, "height": 800})
     await p.pg.wait_for_timeout(1200)
@@ -507,6 +532,43 @@ async def sc_boot(b):
     await p.pg.wait_for_timeout(800)
     p.check_console()
     await p.ctx.close()
+
+
+BUILD_INFO_JS = "fetch('build_info.json', {cache: 'no-store'}).then(r => r.ok ? r.json() : null).catch(() => null)"
+TAG_JS = """(() => { const s = document.getElementById('wnb-goatcounter');
+    return s ? [s.getAttribute('data-goatcounter'), s.getAttribute('data-goatcounter-settings'), s.getAttribute('src')] : null; })()"""
+
+
+async def counter_check(p, frame_prefix=None):
+    """Счётчик посещений: в index.html ровно тег pygame-версии (корневой build_web.goatcounter_tag — код сайта и
+    allow_frame), браузер попытался загрузить count.js (из рамки — если frame_prefix), тест оборвал запрос; игра
+    работает. Сборка --no-counter (build_info.json: counter "") — тега и запросов нет."""
+    bi = await p.pg.evaluate(BUILD_INFO_JS) or {}
+    code = bi.get("counter")
+    tag = await p.pg.evaluate(TAG_JS)
+    html = await p.pg.evaluate("fetch(location.pathname, {cache: 'no-store'}).then(r => r.text()).catch(() => '')")
+    if code is None:
+        info(f"{p.name}: build_info.json без поля counter (старая сборка?) — тег {tag}")
+        return
+    if not code:
+        check(tag is None and not p.counter, f"{p.name}: сборка без счётчика — тега нет, запросов к нему нет ({p.counter[:1]})")
+        return
+    want = build_web.counter_tag()
+    check(bool(want) and want in html, f"{p.name}: в index.html тег счётчика — тот же, что у pygame-версии "
+                                       f"(build_web.goatcounter_tag): {tag}")
+    check(bool(tag) and tag[0] == f"https://{code}.goatcounter.com/count" and '"allow_frame": true' in (tag[1] or ""),
+          f"{p.name}: счётчик {code}, allow_frame — считает и в рамке сайта")
+    for _ in range(30):
+        hits = [c for c in p.counter if frame_prefix is None or c[1].startswith(frame_prefix)]
+        if hits:
+            break
+        await p.pg.wait_for_timeout(100)
+    check(bool(hits), f"{p.name}: браузер запросил счётчик ({hits[0][0] if hits else 'нет запроса'}"
+                      f"{', из рамки ' + hits[0][1][:60] if hits and frame_prefix else ''}) — тест оборвал запрос, "
+                      f"в сеть не ушло")
+    st = await p.state()
+    check(bool(st.get("screen")) and st.get("errors", 0) == 0,
+          f"{p.name}: без ответа счётчика игра работает (экран {st.get('screen')})")
 
 
 def _changed(a, b):
@@ -1086,7 +1148,7 @@ async def orient(p, w, h, landscape, dpr=3):
             pass                                         # страница ещё не открыта (about:blank) — хватит init-скрипта
         await p.pg.wait_for_timeout(900)
         return
-    cdp = await p.ctx.new_cdp_session(p.pg)
+    cdp = await p.ctx.new_cdp_session(getattr(p, "top", None) or p.pg)   # embed: страница-обёртка
     await cdp.send("Emulation.setDeviceMetricsOverride", {
         "width": w, "height": h, "deviceScaleFactor": dpr, "mobile": True, "screenWidth": w, "screenHeight": h,
         "screenOrientation": {"type": "landscapePrimary" if landscape else "portraitPrimary",
@@ -2871,12 +2933,614 @@ async def sc_seatrough(b):
     check(len(rows) == 6, f"seatrough: Искра снята {len(rows)} раз из 6 → seat_rough/")
 
 
+# ---------------- игра в рамке чужого сайта (страница WordPress) ----------------
+# На сайте игроки открывают https://www.openassistivetech.org/wheels-and-bones/, где игра стоит в <iframe> (блок
+# wordpress_embed.html; для Godot-версии — godot/web/wordpress_embed_godot.html). Здесь та же страница-обёртка — из
+# настоящего файла блока, только адрес рамки заменён на проверяемую сборку (+ ?test=1, и «test» добавлен к
+# пробрасываемым параметрам — без него игра не отдаёт window.wnbState). Обёртка — на ДРУГОМ сайте: localhost:<порт>
+# против 127.0.0.1 игры (другой хост, а не только порт: браузеры делят хранилище рамки по сайту верхнего уровня, а
+# порт сайта не меняет). Ничего наружу: обёртка — свой маленький сервер.
+WRAP_PORT = int(os.environ.get("WNB_WRAP_PORT", "8065"))
+WRAP_NETLOC = f"localhost:{WRAP_PORT}"
+WRAP = f"http://{WRAP_NETLOC}/"
+EMBED_NEW = os.path.join(GODOT, "web", "wordpress_embed_godot.html")
+EMBED_OLD = os.path.join(os.path.dirname(GODOT), "wordpress_embed.html")
+EMBED_FWD = '["load","jobs","seat","from","title"]'
+GAME_PREFIX = URL.split("?")[0]
+
+
+def embed_block(src, allow=None):
+    """Блок WordPress из файла src: рамка → проверяемая сборка (?test=1), «test» пробрасывается; allow — заменить
+    атрибут allow рамки (проверка без clipboard-write)."""
+    block = open(src, encoding="utf-8").read()
+    m = re.search(r'(<iframe id="wnb-frame"[^>]*?\ssrc=")([^"]*)(")', block)
+    if not m or EMBED_FWD not in block:
+        raise SystemExit(f"{src}: не нашёл рамку wnb-frame или список пробрасываемых параметров")
+    block = block[:m.start(2)] + GAME_PREFIX + "?test=1" + block[m.end(2):]
+    block = block.replace(EMBED_FWD, EMBED_FWD[:-1] + ',"test"]', 1)
+    if allow is not None:
+        block, n = re.subn(r'(<iframe id="wnb-frame"[^>]*?\sallow=")([^"]*)(")', lambda q: q.group(1) + allow + q.group(3),
+                           block, 1)
+        if not n:
+            raise SystemExit(f"{src}: у рамки нет allow")
+    # страница «как на сайте»: шапка темы, отступы по краям; блок — как есть
+    return ("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Wheels &amp; Bones — embed test</title>"
+            "</head><body style=\"margin:0;font:16px/1.5 Georgia,serif;background:#fff;color:#222\">"
+            "<header style=\"height:64px;background:#2b3a4a;color:#fff;padding:12px 16px;box-sizing:border-box\">"
+            "Open Assistive Tech (test page)</header><div id=\"main\" style=\"padding:8px 16px\">"
+            + block + "</div></body></html>")
+
+
+def embed_allow(src):
+    m = re.search(r'<iframe id="wnb-frame"[^>]*?\sallow="([^"]*)"', open(src, encoding="utf-8").read())
+    return m.group(1) if m else ""
+
+
+def wrap_server(pages):
+    """Сервер страниц-обёрток: {путь: html}. Возврат: сервер (shutdown/server_close — в конце)."""
+    import http.server
+    import threading
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = pages.get(urllib.parse.urlsplit(self.path).path)
+            if body is None:
+                self.send_response(404)
+                self.end_headers()
+                return
+            raw = body.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", WRAP_PORT), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+class FramePg:
+    """Страница-обёртка, у которой evaluate/fill/press идут в рамку игры (остальное — мышь, касания, клавиатура,
+    снимки, перезагрузка — у страницы). Рамки ещё нет (до загрузки) — evaluate идёт в саму страницу."""
+
+    def __init__(self, page):
+        self._p = page
+
+    def frame(self):
+        return next((f for f in self._p.frames if f.url.startswith(GAME_PREFIX)), None)
+
+    async def _f(self):
+        for _ in range(100):
+            f = self.frame()
+            if f is not None:
+                return f
+            await self._p.wait_for_timeout(100)
+        raise RuntimeError("нет рамки игры на странице-обёртке")
+
+    async def evaluate(self, *a, **k):
+        f = self.frame()
+        return await (f or self._p).evaluate(*a, **k)
+
+    async def fill(self, *a, **k):
+        return await (await self._f()).fill(*a, **k)
+
+    async def press(self, *a, **k):
+        return await (await self._f()).press(*a, **k)
+
+    def __getattr__(self, n):
+        return getattr(self._p, n)
+
+
+class EmbedPage(Page):
+    """Игра в рамке страницы-обёртки: состояние и элементы — из рамки, клики/касания — по странице со сдвигом рамки."""
+    wrap_path = ""
+
+    def __init__(self, ctx, pg, name, touch=False):
+        super().__init__(ctx, pg, name, touch)
+        self.top = pg
+        self.pg = FramePg(pg)
+
+    async def state(self):
+        f = self.pg.frame()
+        if f is None:
+            return {}
+        try:
+            s = await asyncio.wait_for(f.evaluate("window.wnbState || ''"), 15)
+        except asyncio.TimeoutError:
+            raise
+        except Exception:                                 # рамка перезагружается (обёртку обновили) — ещё нет
+            return {}
+        return json.loads(s) if s else {}
+
+    async def frame_xy(self):
+        return await self.top.evaluate("(()=>{const r=document.getElementById('wnb-frame').getBoundingClientRect();"
+                                       "return [r.left, r.top, r.width, r.height, innerWidth, innerHeight]})()")
+
+    async def at(self, x, y):
+        fr = await self.frame_xy()
+        px, py = await super().at(x, y)
+        return fr[0] + px, fr[1] + py
+
+    async def into_view(self, block="center"):
+        await self.top.evaluate(f"document.getElementById('wnb-frame').scrollIntoView({{block: '{block}'}})")
+        await self.top.wait_for_timeout(300)
+
+    async def boot(self, query="", what="титул"):
+        t0 = time.time()
+        await self.top.goto(WRAP + self.wrap_path + "?test=1" + query)
+        st = await self.wait(lambda s: s.get("screen") in ("title", "hub", "intro", "job"), what, 90)
+        times = await self.pg.evaluate("JSON.stringify(window.wnbTimes || {})")
+        return st, time.time() - t0, json.loads(times or "{}")
+
+
+async def embed_page(b, name, path="", **kw):
+    p = await new_page(b, name, hosts=(WRAP_NETLOC,), perm_origins=(WRAP[:-1],), cls=EmbedPage, **kw)
+    p.wrap_path = path
+    return p
+
+
+async def frame_fit(p, what):
+    """Игровая картинка 16:9 (в рамке) целиком в окне страницы и во всю высоту окна или рамки."""
+    fr = await p.frame_xy()
+    g, c, st = await game_rect(p)
+    x, y, w, h = fr[0] + g[0], fr[1] + g[1], g[2], g[3]
+    vw, vh = fr[4], fr[5]
+    inside = x >= -1 and y >= -1 and x + w <= vw + 1 and y + h <= vh + 1
+    return check(inside, f"{p.name}: {what}: картинка игры {x:.0f},{y:.0f} {w:.0f}×{h:.0f} в окне {vw}×{vh} "
+                         f"(рамка {fr[0]:.0f},{fr[1]:.0f} {fr[2]:.0f}×{fr[3]:.0f})"), (x, y, w, h, vw, vh)
+
+
+GP_JS = """(() => { let pol = null, feat = null, call = '';
+  try { if (document.featurePolicy) { pol = document.featurePolicy.allowsFeature('gamepad');
+        feat = document.featurePolicy.features().includes('gamepad'); } } catch (e) { pol = 'err ' + e.name; }
+  try { const g = navigator.getGamepads ? navigator.getGamepads() : null; call = g === null ? 'нет getGamepads' : 'ok'; }
+  catch (e) { call = e.name + ': ' + String(e.message).slice(0, 80); }
+  return {policy: pol, known: feat, call: call}; })()"""
+
+
+async def gamepad_probe(p, label):
+    """Геймпад в рамке: разрешён ли (Permissions Policy «gamepad») и не бросает ли navigator.getGamepads()."""
+    r = await p.pg.evaluate(GP_JS)
+    info(f"{p.name}: геймпад в рамке ({label}): policy allowsFeature={r['policy']}, браузер знает «gamepad»={r['known']}, "
+         f"getGamepads() → {r['call']}")
+    metrics.setdefault("embed_gamepad", {})[label] = r
+    return r
+
+
+def py_share_link(picks, name, base):
+    """Ссылка-задание, как её делает game.py (конструктор: _builder_assign → share_link(assign_params)) для тех же
+    отметок и имени; base — адрес-основа (по умолчанию game.SHARE_BASE_URL). Возврат: (ссылка, SHARE_BASE_URL)."""
+    import subprocess
+    root = os.path.dirname(GODOT)
+    code = ("import json, os, sys\n"
+            "os.environ['SDL_VIDEODRIVER'] = 'dummy'; os.environ['SDL_AUDIODRIVER'] = 'dummy'\n"
+            f"sys.path.insert(0, {root!r}); os.chdir({root!r})\n"
+            "import pygame\npygame.init()\npygame.display.set_mode((1280, 720))\nimport game\n"
+            "a = json.loads(sys.argv[1])\n"
+            "x = game.assign_parse({'jobs': [k for k in a['p'] if not k.startswith('seat_')],"
+            " 'seat': [k for k in a['p'] if k.startswith('seat_')], 'from': a['n']})\n"
+            "base = a['b'] or game.SHARE_BASE_URL\n"
+            "sys.stdout.buffer.write(json.dumps([game.share_link(game.assign_params(x), base=base),"
+            " game.SHARE_BASE_URL]).encode('utf-8'))\n")
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy",
+               PYGAME_HIDE_SUPPORT_PROMPT="1")
+    r = subprocess.run([sys.executable, "-c", code, json.dumps({"p": picks, "n": name, "b": base})],
+                       capture_output=True, env=env, timeout=180)
+    out = [ln for ln in r.stdout.decode("utf-8", "replace").splitlines() if ln.startswith('["')]
+    if not out:
+        info("game.py не выдала ссылку: " + r.stderr.decode("utf-8", "replace")[-400:])
+    return json.loads(out[-1]) if out else ["", ""]
+
+
+async def builder_link(p, picks, name):
+    """Конструктор ссылки-задания в игре (Настройки → Игра → «Ссылка-задание»): отметки, имя, «Скопировать ссылку».
+    Возврат: (ссылка из окна, что ушло в navigator.clipboard.writeText, состояние буфера страницы)."""
+    await p.press("Gear", wait=600)
+    await p.press("Tab_game", wait=400)
+    await p.press("Share_build", wait=800)
+    st = await p.wait(lambda s: s.get("share_dlg") == "builder", "конструктор ссылки", 10)
+    for k in picks:
+        await p.press("Pick_" + k, wait=250)
+    await p.pg.fill("#wnb-field", name)
+    await p.pg.wait_for_timeout(500)
+    await p.press("Btn_make", wait=1200)
+    st = await p.wait(lambda s: s.get("share_dlg") == "show" and s.get("share_text"), "окно со ссылкой", 10)
+    clip = await p.pg.evaluate("[window.__clip || '', window.wnbClip ? wnbClip.state : '']")
+    return st.get("share_text", ""), clip[0], clip[1]
+
+
+async def close_dialogs(p):
+    for _ in range(4):
+        st = await p.state()
+        if not st.get("share_dlg") and not st.get("settings"):
+            return st
+        await p.key("Escape", 400)
+    return await p.state()
+
+
+async def sc_embed(b):
+    """Игра в рамке страницы WordPress (блок godot/web/wordpress_embed_godot.html и прежний wordpress_embed.html):
+    загрузка, перенос прогресса pygame (wnb:*) и своё сохранение (wnb-godot:*) именно в рамке, перезагрузка обёртки,
+    разделение хранилища, задание до итога, полный экран из обёртки и из игры, ссылка из конструктора = game.py,
+    ссылки-задания и ?load= с обёртки, буфер обмена без clipboard-write, геймпад, счётчик, телефон (альбом 780×360 и
+    книжная 360×780)."""
+    if not os.path.exists(EMBED_NEW):
+        check(False, f"embed: нет {EMBED_NEW}")
+        return
+    allow = embed_allow(EMBED_NEW)
+    noclip = "; ".join(x.strip() for x in allow.split(";") if x.strip() and x.strip() != "clipboard-write")
+    pages = {"/": embed_block(EMBED_NEW), "/old.html": embed_block(EMBED_OLD),
+             "/noclip.html": embed_block(EMBED_NEW, allow=noclip)}
+    srv = wrap_server(pages)
+    info(f"embed: обёртка {WRAP} (блок {os.path.basename(EMBED_NEW)}: allow=\"{allow}\"), игра {GAME_PREFIX}")
+    b2 = await partitioned_chromium(b) if CHROMIUM else (await partitioned_firefox(b) if BROWSER == "firefox" else None)
+    try:
+        await embed_desktop(b2 or b)
+        await embed_links(b2 or b)
+        await embed_clip(b2 or b, noclip)
+        await embed_old(b2 or b)
+        await embed_phone(b2 or b)
+    finally:
+        if b2:
+            await b2.close()
+        srv.shutdown()
+        srv.server_close()
+
+
+async def partitioned_firefox(b):
+    """Firefox, как у игроков: Total Cookie Protection (network.cookie.cookieBehavior = 5 — по умолчанию в Firefox)
+    делит хранилище рамки по сайту верхнего уровня; профиль Playwright ставит другое значение."""
+    b2 = await b.browser_type.launch(firefox_user_prefs={"media.volume_scale": "0.0", "media.autoplay.default": 1,
+                                                         "network.cookie.cookieBehavior": 5})
+    info("embed: Firefox с Total Cookie Protection (cookieBehavior 5, как у игроков)")
+    return b2
+
+
+async def partitioned_chromium(b):
+    """Chromium, как у игроков: хранилище рамки другого сайта отделено (Storage Partitioning). Playwright выключает
+    это в своём Chromium (--disable-features=…,ThirdPartyStoragePartitioning,… — список disabledFeatures в его
+    chromiumSwitches) — запускаем второй браузер, убрав ровно этот аргумент и передав тот же список без этой строки.
+    Не вышло — None (проверка идёт в обычном Chromium, хранилище рамки там общее)."""
+    import playwright
+    bundle = os.path.join(os.path.dirname(playwright.__file__), "driver", "package", "lib", "coreBundle.js")
+    try:
+        src = open(bundle, encoding="utf-8", errors="replace").read()
+        i = src.index('"ThirdPartyStoragePartitioning"')
+        feats = re.findall(r'"([A-Za-z0-9]+)"', src[src.rindex("[", 0, i):src.index("]", i)])
+    except (OSError, ValueError):
+        info("embed: список disabledFeatures Playwright не найден — хранилище рамки как в Playwright (общее)")
+        return None
+    arg = "--disable-features=" + ",".join(feats)
+    keep = [f for f in feats if f != "ThirdPartyStoragePartitioning"]
+    b2 = await b.browser_type.launch(args=GPU_ARGS + ["--disable-features=" + ",".join(keep)],
+                                     ignore_default_args=["--autoplay-policy=no-user-gesture-required", arg])
+    info("embed: Chromium с разделением хранилища рамки (как Chrome у игроков; Playwright его выключает)")
+    return b2
+
+
+EMBED_SAVE = {"done": ["caster"], "garage": [["caster", 2]], "exam_passed": False, "seat_done": [], "seat_quiz_ok": False,
+              "tutorial_skipped": True, "ending_seen": False}
+
+
+async def embed_desktop(b):
+    p = await embed_page(b, "embed", w=1280, h=900, legacy={"save.json": EMBED_SAVE, "settings.json": LEGACY_SETTINGS})
+    st, secs, _ = await p.boot()
+    await p.into_view()
+    check(st.get("screen") == "title", f"{p.name}: игра в рамке загрузилась до титула за {secs:.1f} с")
+    attrs = await p.top.evaluate("(()=>{const f=document.getElementById('wnb-frame');return [f.getAttribute('allow'),"
+                                 "f.hasAttribute('allowfullscreen'), f.src]})()")
+    info(f"{p.name}: рамка allow=\"{attrs[0]}\", allowfullscreen={attrs[1]}, src={attrs[2]}")
+    top_ok = await p.pg.evaluate("(() => { try { return window.top === window ? 'top' : 'frame:' + "
+                                 "(document.referrer || '').slice(0, 40); } catch (e) { return 'frame'; } })()")
+    check(str(top_ok).startswith("frame"), f"{p.name}: игра работает именно в рамке другого сайта ({top_ok})")
+    check(st.get("migrated") is True and st.get("done") == ["caster"],
+          f"{p.name}: в рамке прогресс pygame-версии (wnb:save.json) перенесён: migrated={st.get('migrated')}, "
+          f"done={st.get('done')}")
+    await counter_check(p, frame_prefix=GAME_PREFIX)
+    c = await p.canvas()
+    fr = await p.frame_xy()
+    check(abs(c[2] - fr[2]) < 2 and abs(c[3] - fr[3]) < 2 and abs(fr[3] - fr[2] * 9 / 16) < 2,
+          f"{p.name}: холст на всю рамку 16:9 ({c[2]:.0f}×{c[3]:.0f} в рамке {fr[2]:.0f}×{fr[3]:.0f})")
+    await p.shot("1_title")
+    await gamepad_probe(p, "новый блок")
+    fs_en = await p.pg.evaluate("document.fullscreenEnabled === true || document.webkitFullscreenEnabled === true")
+    check(fs_en, f"{p.name}: в рамке полный экран разрешён (allowfullscreen) — document.fullscreenEnabled={fs_en}")
+    # задание до итога, сохранение — в рамке
+    await to_hub(p)
+    await p.press("Card_flat", wait=800)
+    st = await play_job(p, "flat", "ride_martin")
+    check("flat" in st.get("done", []), f"{p.name}: задание пройдено в рамке ({st.get('done')})")
+    keys = await p.pg.evaluate("Object.keys(localStorage).filter(k => k.startsWith('wnb')).sort()")
+    check("wnb-godot:save.json" in keys and "wnb:save.json" in keys,
+          f"{p.name}: в хранилище рамки свои ключи wnb-godot:* и нетронутые wnb:* ({keys})")
+    old = await p.pg.evaluate("localStorage.getItem('wnb:save.json')")
+    check(bool(old) and json.loads(old) == EMBED_SAVE, f"{p.name}: сохранение pygame-версии в рамке не тронуто")
+    await p.pg.wait_for_timeout(800)
+    await p.top.reload()
+    st = await p.wait(lambda s: s.get("screen") == "title", "титул после перезагрузки обёртки", 90)
+    check(sorted(st.get("done", [])) == ["caster", "flat"] and st.get("migrated") is False,
+          f"{p.name}: перезагрузка страницы-обёртки — прогресс из рамки на месте, без повторного переноса "
+          f"({st.get('done')}, migrated={st.get('migrated')})")
+    # разделение хранилища: тот же адрес игры напрямую (верхний уровень, та же вкладка браузера)
+    q = await p.ctx.new_page()
+    await q.goto(GAME_PREFIX + "build_info.json")
+    direct = await q.evaluate("Object.keys(localStorage).filter(k => k.startsWith('wnb')).sort()")
+    await q.close()
+    part = "wnb-godot:save.json" not in direct
+    metrics["embed_partition"] = part
+    if BROWSER != "webkit":                           # Chrome и Firefox у игроков делят хранилище рамки по сайту
+        check(part, f"{p.name}: {BROWSER} — хранилище рамки отделено от прямого адреса (как у игроков)")
+    info(f"{p.name}: хранилище рамки {'ОТДЕЛЬНО' if part else 'ОБЩЕЕ'} от того же адреса, открытого напрямую "
+         f"(напрямую видны ключи {direct}) — {BROWSER}")
+    # полный экран: кнопка «Play fullscreen» обёртки (разворачивает #wnb-wrap) и из настроек игры (рамка)
+    await p.into_view()
+    btn = p.top.locator("button", has_text="Play fullscreen")
+    await btn.click()
+    await p.top.wait_for_timeout(1200)
+    fe = await p.top.evaluate("(document.fullscreenElement || document.webkitFullscreenElement || {}).id || ''")
+    if fe == "wnb-wrap":
+        ok, _ = await frame_fit(p, "«Play fullscreen» обёртки")
+        await p.shot("2_wrap_fullscreen")
+        ex = await p.top.evaluate("getComputedStyle(document.getElementById('wnb-exit')).display")
+        check(ex == "block", f"{p.name}: кнопка обёртки «Exit fullscreen» видна ({ex})")
+        st = await p.state()
+        await p.press("Gear", wait=600)                    # игра принимает клики и в развёрнутой обёртке
+        st = await p.wait(lambda s: s.get("settings"), "настройки в развёрнутой обёртке", 5)
+        check(bool(st), f"{p.name}: в развёрнутой обёртке клик доходит до игры")
+        await close_dialogs(p)
+        await p.top.evaluate("(async () => { try { await (document.exitFullscreen || document.webkitExitFullscreen)"
+                             ".call(document); } catch (e) {} })()")
+        await p.top.wait_for_timeout(800)
+    else:
+        info(f"{p.name}: «Play fullscreen» обёртки без окна браузера не развернул ({fe or 'ничего'}) — {BROWSER}")
+    await p.into_view()
+    await p.press("Gear", wait=600)
+    await p.press("Tab_graphics", wait=400)
+    await p.press("Fullscreen", wait=1200)
+    ffe = await p.pg.evaluate("!!(document.fullscreenElement || document.webkitFullscreenElement)")
+    st = await p.state()
+    info(f"{p.name}: полный экран из настроек игры в рамке: document.fullscreenElement рамки={ffe}, игра видит "
+         f"{st.get('fullscreen')}")
+    if CHROMIUM:
+        check(ffe, f"{p.name}: кнопка полного экрана игры в рамке разворачивает рамку (allowfullscreen)")
+    if ffe:
+        await p.top.wait_for_timeout(800)
+        await frame_fit(p, "полный экран из игры")
+        await p.shot("3_game_fullscreen")
+        await p.press("Fullscreen", wait=800)
+    await close_dialogs(p)
+    # ссылка из конструктора = game.py (для того же набора и той же основы ссылок)
+    bi = await p.pg.evaluate(BUILD_INFO_JS) or {}
+    base = bi.get("base_url", "")
+    picks, name = ["flat", "caster", "seat_elf"], "Анна П."
+    link, clip, cst = await builder_link(p, picks, name)
+    want, main_base = py_share_link(picks, name, base)
+    check(bool(link) and link == want, f"{p.name}: ссылка конструктора = game.py побуквенно: {link}"
+                                        + ("" if link == want else f" ≠ {want}"))
+    check(clip == link and cst in ("ok", "fallback"), f"{p.name}: ссылка ушла в буфер обмена из рамки "
+                                                      f"(writeText: {'та же' if clip == link else repr(clip[:40])}, {cst})")
+    is_main = base == main_base
+    info(f"{p.name}: основа ссылок сборки {base} — {'ОСНОВНОЙ адрес (game.SHARE_BASE_URL)' if is_main else 'не основной'}")
+    if os.environ.get("WNB_EXPECT_MAIN") == "1":
+        check(is_main and link.startswith(main_base), f"{p.name}: сборка для основного сайта — ссылки ведут на {main_base}")
+    await p.shot("4_builder_link")
+    await close_dialogs(p)
+    p.check_console()
+    await p.ctx.close()
+
+
+async def embed_links(b):
+    """Ссылка-задание и ?load= открыты на странице-обёртке: блок пробрасывает параметры в рамку, игра их видит."""
+    p = await embed_page(b, "embed_links", w=1280, h=900, legacy=SKIP_SEED)
+    st, _, _ = await p.boot("&jobs=flat,caster&from=" + urllib.parse.quote("Анна"))
+    await p.into_view()
+    src = await p.top.evaluate("document.getElementById('wnb-frame').src")
+    st = await p.wait(lambda s: s.get("assign"), "задание из ссылки обёртки", 15)
+    check(bool(st.get("assign")) and "jobs=flat" in src,
+          f"{p.name}: ?jobs=flat,caster&from=… страницы-обёртки дошли до игры (рамка {src[len(GAME_PREFIX):][:70]}, "
+          f"задание {st.get('assign')})")
+    await p.press("Start", wait=1200)
+    st = await p.wait(lambda s: s.get("screen") == "hub", "мастерская задания", 10)
+    names = [x[0] for x in st.get("buttons", [])]
+    check("Card_flat" in names and "Card_caster" in names and "Card_brake" not in names,
+          f"{p.name}: в мастерской только назначенные (flat, caster)")
+    await p.press("ExitAssign", wait=800)
+    await p.press("Gear", wait=600)
+    await p.press("Tab_game", wait=400)
+    await p.press("Share_code", wait=1000)
+    st = await p.wait(lambda s: s.get("share_dlg") == "show" and s.get("share_text"), "окно кода", 10)
+    code = st.get("share_text", "")
+    check(code.startswith("P."), f"{p.name}: код прогресса в рамке ({code[:20]}…)")
+    p.check_console()
+    await p.ctx.close()
+    if not code.startswith("P."):
+        return
+    q = await embed_page(b, "embed_load", w=1280, h=900)
+    st, _, _ = await q.boot("&load=" + urllib.parse.quote(code))
+    await q.into_view()
+    st = await q.wait(lambda s: s.get("share_dlg") == "confirm", "вопрос о прогрессе из ссылки обёртки", 15)
+    check(st.get("share_dlg") == "confirm", f"{q.name}: ?load= страницы-обёртки — вопрос «загрузить прогресс?»")
+    await title_ready(q)                                # до кнопок титула щелчки до игры не доходят
+    await q.pg.wait_for_timeout(800)
+    await q.shot("1_load_confirm")
+    await q.press("Btn_no", wait=800)
+    seen = await q.pg.evaluate("localStorage.getItem('wnb:load_seen')")
+    check(bool(seen) and code.endswith(seen), f"{q.name}: ответ запомнен в хранилище рамки (wnb:load_seen)")
+    await q.top.reload()
+    st = await q.wait(lambda s: s.get("screen") == "title", "титул после перезагрузки", 90)
+    await q.pg.wait_for_timeout(1500)
+    st = await q.state()
+    check(st.get("share_dlg") == "", f"{q.name}: после перезагрузки тот же ?load= больше не спрашивает (wnb:load_seen в рамке)")
+    q.check_console()
+    await q.ctx.close()
+
+
+async def embed_clip(b, allow):
+    """Блок без allow="clipboard-write": что видит игрок, нажав «Скопировать код»."""
+    p = await embed_page(b, "embed_noclip", "noclip.html", w=1280, h=900, legacy=SKIP_SEED)
+    p.allow += ["Setting OS clipboard is only possible",            # Godot пишет в консоль отказ браузера — ожидаемо
+                "The Clipboard API has been blocked because of a permissions policy"]
+    await p.boot()
+    await p.into_view()
+    await to_hub(p)
+    await p.press("Gear", wait=600)
+    await p.press("Tab_game", wait=400)
+    await p.press("Share_code", wait=1500)
+    st = await p.wait(lambda s: s.get("share_dlg") == "show" and s.get("share_text"), "окно кода", 10)
+    await p.pg.wait_for_timeout(1200)
+    st = await p.state()
+    r = await p.pg.evaluate("""(() => { const f = document.getElementById('wnb-field');
+        return {clip: window.wnbClip ? wnbClip.state : '', err: window.wnbClip ? wnbClip.err : '', raw: window.__clipErr || null,
+                field: f ? [getComputedStyle(f).display, f.readOnly, f.value, document.activeElement === f,
+                            f.selectionStart, f.selectionEnd] : null}; })()""")
+    code = st.get("share_text", "")
+    info(f"{p.name}: allow=\"{allow}\": writeText → {r['raw'] or 'принят'}; страница: {r['clip']} {r['err']}; "
+         f"окно ok={st.get('share_ok')}")
+    metrics["embed_noclip"] = r["clip"]
+    await p.shot("1_copy_without_clipboard_write")
+    if r["clip"] == "fail":
+        f = r["field"] or [None] * 6
+        check(st.get("share_ok") is False and f[0] == "block" and f[1] is True and f[2] == code,
+              f"{p.name}: буфер недоступен — окно «не удалось», код в поле страницы только для чтения "
+              f"(видно={f[0]}, только чтение={f[1]}, тот же код={f[2] == code}, выделен={f[4] == 0 and f[5] == len(code)})")
+        await p.key("Escape", 600)
+        gone = await p.pg.evaluate("(()=>{const f=document.getElementById('wnb-field');return f?getComputedStyle(f).display:'none'})()")
+        check(gone == "none", f"{p.name}: окно закрыто — поле с кодом убрано ({gone})")
+    else:
+        check(r["clip"] in ("ok", "fallback") and st.get("share_ok") is True,
+              f"{p.name}: без clipboard-write браузер всё равно скопировал ({r['clip']}) — окно «Скопировано ✔»")
+        if CHROMIUM and r["clip"] == "fallback":           # что реально в буфере (читает страница-обёртка — ей можно)
+            got = await p.top.evaluate("navigator.clipboard.readText().catch(e => 'ERR ' + e)")
+            check(got == code, f"{p.name}: запасной путь (execCommand copy) положил код в буфер: {got[:30]}…")
+    p.check_console()
+    await p.ctx.close()
+
+
+async def embed_old(b):
+    """Прежний блок wordpress_embed.html (если владелец ещё не перевставил новый): игра грузится, перенос, геймпад."""
+    p = await embed_page(b, "embed_old", "old.html", w=1280, h=900,
+                         legacy={"save.json": EMBED_SAVE})
+    st, _, _ = await p.boot()
+    await p.into_view()
+    check(st.get("screen") == "title" and st.get("migrated") is True,
+          f"{p.name}: в прежнем блоке Godot-сборка грузится, прогресс pygame перенесён ({st.get('screen')}, "
+          f"migrated={st.get('migrated')})")
+    await gamepad_probe(p, "прежний блок")
+    await to_hub(p)
+    await p.shot("1_hub")
+    p.check_console()
+    await p.ctx.close()
+
+
+async def embed_phone(b):
+    """Телефон: альбом 780×360 и книжная 360×780 (dpr 3, касания) — страница WordPress с рамкой 16:9 по ширине."""
+    # альбом: рамка по ширине страницы (780 − поля) выше экрана; первое касание — полный экран рамки
+    p = await embed_page(b, "embed_phone", touch=True, mobile=True, w=780, h=360, dpr=3, legacy=SKIP_SEED)
+    if not CHROMIUM:
+        await orient(p, 780, 360, True)
+    st, _, _ = await p.boot()
+    await p.top.evaluate("window.scrollTo(0, 0)")
+    await p.top.wait_for_timeout(500)
+    await p.shot("1_landscape_page_top")
+    await p.into_view("start")
+    await p.top.wait_for_timeout(1200)
+    fr = await p.frame_xy()
+    seen = max(0.0, min(fr[1] + fr[3], fr[5]) - max(fr[1], 0)) / max(1, fr[3])
+    info(f"{p.name}: рамка {fr[2]:.0f}×{fr[3]:.0f} при окне {fr[4]}×{fr[5]} — на экране {seen:.0%} рамки по высоте "
+         f"до полного экрана")
+    st = await p.state()
+    r = await rot_state(p)
+    check(st.get("touch") is True and st.get("phone") is True and not r["shown"],
+          f"{p.name}: в рамке — режим касаний и телефона, заслонки нет (альбом) (touch={st.get('touch')}, "
+          f"phone={st.get('phone')})")
+    full = await p.pg.evaluate("""(()=>{const b=document.getElementById('wnb-full');if(!b)return null;
+        const r=b.getBoundingClientRect();return [getComputedStyle(b).display, r.left, r.top, r.width, r.height, innerWidth, innerHeight]})()""")
+    if full:
+        check(full[0] != "none" and full[1] >= 0 and full[2] >= 0 and full[2] + full[4] <= full[6],
+              f"{p.name}: кнопка ⛶ рамки видна и внутри рамки ({full})")
+    await p.shot("2_landscape_frame")
+    await p.press("Start", None, 1500)                     # первое касание: полный экран рамки + «начать»
+    ffe = await p.pg.evaluate("!!(document.fullscreenElement || document.webkitFullscreenElement)")
+    info(f"{p.name}: после первого касания рамка в полном экране: {ffe}")
+    if CHROMIUM:
+        check(ffe, f"{p.name}: первое касание на телефоне разворачивает рамку на весь экран (allowfullscreen)")
+    st = await p.wait(lambda s: s.get("screen") == "hub", "касание «начать» в рамке → мастерская", 10)
+    check(bool(st), f"{p.name}: касание в рамке на телефоне доходит до игры")
+    await p.top.wait_for_timeout(1500)
+    if ffe:
+        await frame_fit(p, "телефон, полный экран рамки")
+    await p.shot("3_landscape_after_tap")
+    p.check_console()
+    await p.ctx.close()
+    # книжная: рамка 16:9 по ширине телефона (≈ 360×200) сама «альбомная» — заслонки в ней нет, игра идёт крошечной;
+    # первое касание разворачивает рамку на весь (книжный) экран — тогда заслонка «поверни телефон», игра на паузе;
+    # повернули — игра на весь экран
+    q = await embed_page(b, "embed_portrait", touch=True, mobile=True, w=360, h=780, dpr=3, legacy=SKIP_SEED)
+    await orient(q, 360, 780, False)
+    st, _, _ = await q.boot()
+    await q.into_view()
+    await q.top.wait_for_timeout(1500)
+    r = await rot_state(q)
+    fr = await q.frame_xy()
+    st = await q.state()
+    info(f"{q.name}: книжная: рамка {fr[2]:.0f}×{fr[3]:.0f} в окне {fr[4]}×{fr[5]}; заслонка в рамке={r['shown']}, "
+         f"игра на паузе={st.get('paused')}, телефонный режим={st.get('phone')}")
+    check(not r["shown"] and st.get("paused") is False and st.get("screen") == "title",
+          f"{q.name}: книжная — рамка 16:9 узкая, заслонки в ней нет, титул виден целиком (уменьшенным)")
+    await frame_fit(q, "книжная, игра в рамке до касания")
+    await q.shot("1_portrait_small_frame")
+    await q.tap_xy(640, 120)                             # касание по пустому месту титула: полный экран рамки
+    await q.top.wait_for_timeout(1500)
+    ffe = await q.pg.evaluate("!!(document.fullscreenElement || document.webkitFullscreenElement)")
+    r = await rot_state(q)
+    st = await q.state()
+    info(f"{q.name}: касание — рамка в полном экране: {ffe}; заслонка «{r['text']}» показана={r['shown']}")
+    if CHROMIUM:
+        check(ffe and r["shown"] and st.get("covered") is True and st.get("paused") is True,
+              f"{q.name}: первое касание — рамка на весь книжный экран, заслонка «поверни телефон», игра на паузе")
+    if r["shown"]:
+        box = await q.pg.evaluate("""(()=>{const o=document.getElementById('wnb-rotate'),m=o.querySelector('.m'),
+            a=m.getBoundingClientRect();return [innerWidth, innerHeight, a.top, a.bottom, a.left, a.right]})()""")
+        check(box[2] >= 0 and box[3] <= box[1] and box[4] >= 0 and box[5] <= box[0],
+              f"{q.name}: текст заслонки целиком на экране ({box})")
+    await q.shot("2_portrait_fullscreen_cover")
+    await orient(q, 780, 360, True)                      # (orient выходит из полного экрана — окно иначе не поменять)
+    st = await q.wait(lambda s: s.get("covered") is False, "поворот — заслонки нет", 10)
+    check(bool(st), f"{q.name}: телефон повернули — заслонки нет, игра идёт")
+    # на настоящем телефоне поворот полный экран не снимает; здесь orient его снял (иначе окно не поменять) — рамка
+    # снова на странице, игра в ней принимает касания
+    await q.into_view()
+    await q.shot("3_portrait_rotated")
+    st = await q.state()
+    if st.get("screen") == "title":                       # касание по титулу уже могло начать игру
+        await q.press("Start", None, 1200)
+        st = await q.wait(lambda s: s.get("screen") == "hub", "касание «начать» после поворота", 10)
+    else:
+        await q.press("Card_flat", None, 1200)
+        st = await q.wait(lambda s: s.get("screen") == "job", "касание карточки после поворота", 10)
+    check(bool(st), f"{q.name}: после поворота касание доходит до игры ({st.get('screen')})")
+    c = await q.canvas()
+    fr = await q.frame_xy()
+    check(abs(c[2] - fr[2]) < 2 and abs(c[3] - fr[3]) < 2,
+          f"{q.name}: рамка выше экрана ({fr[2]:.0f}×{fr[3]:.0f} при окне {fr[4]}×{fr[5]}) — холст на всю рамку "
+          f"({c[2]:.0f}×{c[3]:.0f}), не обрезан по экрану")
+    q.check_console()
+    await q.ctx.close()
+
+
 SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_migrate, "net404": sc_net404,
              "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "feedback": sc_feedback, "perf": sc_perf,
              "prof": sc_prof, "screens": sc_screens, "tabs": sc_tabs, "store": sc_store, "loader": sc_loader,
              "netfail": sc_netfail, "fsexit": sc_fsexit, "res": sc_resparam, "zoom": sc_zoom, "assign": sc_assign,
-             "pad": sc_pad, "bg": sc_bg, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "seatrough": sc_seatrough}
-TIMEOUT = {"screens": 5400, "phonetext": 7200,            # все экраны × 4 прохода — долго
+             "pad": sc_pad, "bg": sc_bg, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "seatrough": sc_seatrough,
+             "embed": sc_embed}
+TIMEOUT = {"screens": 5400, "phonetext": 7200, "embed": 1800,            # все экраны × 4 прохода — долго
            "bg": 2 * float(os.environ.get("WNB_BG_SECS", "70")) + 480}   # два раза «в фоне» + задание
 
 

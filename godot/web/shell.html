@@ -233,6 +233,39 @@ html, body, #canvas { overscroll-behavior: none; }
     state: function () { return mus.a ? ((mus.a.paused ? 'paused' : 'playing') + ' ' + mus.src) : 'none'; }
   };
 
+  // --- буфер обмена: Godot копирует через navigator.clipboard.writeText (DisplayServer.clipboard_set), ответ браузера
+  // игре не доходит. В рамке чужого сайта (страница WordPress) запись разрешена, только если у <iframe> есть
+  // allow="clipboard-write"; иначе (старый блок, Safari, запрет браузера) — отказ. Тогда — запасной путь
+  // document.execCommand('copy') через скрытое поле; не вышло и он — window.wnbClip.state = 'fail', и autoload/web.gd
+  // переводит окно «Скопировано ✔» в «не удалось» (код или ссылка показываются целиком — переписать).
+  var clip = window.wnbClip = { n: 0, state: '', err: '' };
+  function legacyCopy(t) {
+    var ok = false, a = document.activeElement, ta = document.createElement('textarea');
+    ta.value = t; ta.setAttribute('readonly', ''); ta.setAttribute('aria-hidden', 'true');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    try { ta.select(); ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove();
+    try { if (a && a.focus) a.focus(); } catch (e) {}
+    return !!ok;
+  }
+  try {
+    var cbd = navigator.clipboard;
+    if (cbd && cbd.writeText) {
+      var wt = cbd.writeText.bind(cbd);
+      cbd.writeText = function (t) {
+        var n = ++clip.n;
+        clip.state = 'pending'; clip.err = '';
+        return wt(t).then(function (r) { if (n === clip.n) clip.state = 'ok'; return r; }, function (e) {
+          var ok = legacyCopy(t);
+          if (n === clip.n) { clip.state = ok ? 'fallback' : 'fail'; clip.err = String((e && e.name) || e); }
+          if (ok) return undefined;
+          throw e;
+        });
+      };
+    }
+  } catch (e) {}
+
   // --- поле ввода кода поверх холста (окно «Вставить код» и имя в конструкторе ссылки): настоящее <input>, чтобы на
   // телефоне появлялась экранная клавиатура и работала вставка долгим нажатием. Игра рисует рамку, текст — здесь.
   var fld = { el: null, enter: 0, esc: 0, key: '', at: null };
@@ -274,10 +307,19 @@ html, body, #canvas { overscroll-behavior: none; }
       }
     },
     hide: function () {
-      if (fld.el) { fld.el.style.display = 'none'; fld.el.blur(); }
+      if (fld.el) { fld.el.style.display = 'none'; fld.el.blur(); fld.el.readOnly = false; fld.el.style.background = ''; }
       fld.key = '';
       var c = document.getElementById('canvas'); if (c) c.focus();
     },
+    // буфер обмена недоступен (autoload/web.gd _clip_check): код/ссылка — в поле только для чтения, выделено целиком
+    // (Ctrl+C или долгое нажатие); непрозрачный фон — под полем игра рисует обрезанную строку
+    showCopy: function (key, x, y, w, h, value, fontPx) {
+      window.wnbField.show(key, x, y, w, h, value, value.length + 1, '', fontPx);
+      var f = fld.el;
+      f.readOnly = true; f.style.background = '#0c0c12';
+      setTimeout(function () { try { f.focus(); f.select(); } catch (e) {} }, 0);
+    },
+    hideKey: function (key) { if (fld.key === key) window.wnbField.hide(); },
     // значение и счётчики Enter/Esc одним вызовом: JSON
     poll: function () {
       var r = JSON.stringify({ v: fld.el ? fld.el.value : '', enter: fld.enter, esc: fld.esc });
@@ -449,6 +491,7 @@ $GODOT_HEAD_INCLUDE
   'use strict';
   var c = document.getElementById('canvas'), probe = document.getElementById('wnb-vp');
   var touch = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  var framed = false; try { framed = window.parent !== window; } catch (e) { framed = true; }
   var cur = { w: 0, h: 0 };
   function orientName() {
     var o = screen.orientation && screen.orientation.type;
@@ -465,8 +508,11 @@ $GODOT_HEAD_INCLUDE
     }
     var vv = window.visualViewport;
     if (vv && vv.width > 0 && vv.height > 0 && !typing()) { w = Math.min(w, vv.width); h = Math.min(h, vv.height); }
+    // не больше экрана — только на странице самой игры или в полном экране: в рамке сайта (страница WordPress) её
+    // размер задаёт страница, и рамка 16:9 по ширине телефона бывает выше экрана (780×439 при 780×360) — иначе холст
+    // обрезался по экрану, а низ рамки пустовал
     var sw = screen.width, sh = screen.height;
-    if (touch && sw > 0 && sh > 0) {
+    if (touch && sw > 0 && sh > 0 && (!framed || document.fullscreenElement || document.webkitFullscreenElement)) {
       var lo = Math.min(sw, sh), hi = Math.max(sw, sh), o = orientName();
       var land = o ? o.indexOf('landscape') === 0 : w > h;
       if (land) { w = Math.min(w, hi); h = Math.min(h, lo); } else { w = Math.min(w, lo); h = Math.min(h, hi); }
