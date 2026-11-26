@@ -30,6 +30,8 @@ var _bak_mem: Variant = null           # тесты: копия прогресс
 
 
 var migrated: bool = false            # браузер: прогресс взят из pygame-версии (localStorage) в этом запуске
+var restored_prev: bool = false       # save.json был битый — прогресс восстановлен из save.prev.json (сообщение на титуле)
+const RESTORED_MSG := "Сохранение было повреждено — восстановлено из предыдущей копии."
 var gen: int = 0                      # браузер: поколение сохранения (см. merge_saves)
 var _base: Dictionary = {}            # браузер: что эта вкладка последний раз прочла/записала (для «своего нового»)
 var _replace: bool = false            # следующая запись заменяет прогресс (сброс/код/копия): gen + 1, без объединения
@@ -76,9 +78,20 @@ func load_file(path: String) -> void:
 			Settings.store_write("save.json.bad", text)
 		else:
 			DirAccess.copy_absolute(path, path + ".bad")
-		return
-	apply_dict(data)
-	_base = to_dict()
+		# Копия прежнего сохранения (пишется перед каждой записью) цела — прогресс из неё, игроку — сообщение
+		# (suggestions S2, 26.11). Её нет или она тоже битая — как раньше: пустой прогресс.
+		var prev_path := path.get_basename() + ".prev.json"
+		var prev := Settings.store_read("save.prev.json") if own 			else (FileAccess.get_file_as_string(prev_path) if FileAccess.file_exists(prev_path) else "")
+		var pd: Variant = Settings.parse_json(prev)
+		if not pd is Dictionary:
+			return
+		if own:
+			Settings.store_write("save.json", prev)
+		apply_dict(pd)
+		restored_prev = true
+	else:
+		apply_dict(data)
+	_snapshot_base()
 	_fresh.clear()
 
 
