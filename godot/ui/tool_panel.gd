@@ -231,7 +231,8 @@ func _draw_card() -> void:
 		var y := UI.draw_wrapped(_card, Loc.t(hint), Vector2(16, 12), info.size.x - 32, hs, UI.GREY)
 		if book:
 			BookIcon.draw_icon(_card, Vector2(26, y + 16), 10, UI.CYAN)
-			UI.draw_wrapped(_card, bt, Vector2(44, y + 7), info.size.x - 60, bs, UI.CYAN)
+			UI.draw_wrapped(_card, bt, Vector2(44, y + 7), info.size.x - 60,   # E37.1 (game.py): 150 % — мельче, не за карточку
+				UI.fit_wrapped_size(bt, info.size.x - 60, bs, info.size.y - 4 - (y + 7), 9), UI.CYAN)
 
 
 ## Телефон (21.11): название инструмента — справа от значка (18, при нехватке — мельче до 15); не влезает — во всю

@@ -186,6 +186,7 @@ func open_feedback(d: Dictionary, on_done: Callable = Callable()) -> void:
 		if on_done.is_valid():
 			on_done.call(sent, online))
 	_remember_focus(feedback)
+	_update_text_cap()                         # потолок 125 % — до _ready окна (там его раскладка)
 	overlay.get_node("Top").add_child(feedback)
 	overlay.get_node("Top").move_child(toast, -1)
 	sync_focus(null, false)                    # фокус ставит само окно (первая причина)
@@ -213,6 +214,7 @@ func toggle_help() -> void:
 	Speech.say(Loc.t("Клавиши.") + " " + " ".join(keys) + " " + Loc.t("Esc — закрыть справку."), true)
 	help = HelpOverlay.new()
 	_remember_focus(help)
+	_update_text_cap()
 	overlay.get_node("Top").add_child(help)
 	sync_focus()
 
@@ -329,9 +331,16 @@ func _process(dt: float) -> void:
 		_esc_t -= dt
 	if current != null:
 		toast.bounds = UI.phone_bounds(current.toast_bounds())
-	# потолок крупного текста 125 % (text_cap в game.py): плотные экраны, окно настроек, окно мини-игры
+	_update_text_cap()
+
+
+## Потолок крупного текста 125 % (text_cap в game.py): плотные экраны, окно настроек, окно мини-игры; окно замечания
+## и справка F1 — тоже плотные окна (E37.1 в game.py: _draw_dispute_panel и _draw_help внутри text_cap). Зовётся
+## каждый кадр и сразу при открытии окна замечания/справки — до их _ready (раскладка окна замечания считается там).
+func _update_text_cap() -> void:
 	var cap: float = current.text_cap() if current != null else 0.0
-	if settings != null or Share.dlg != null or (current != null and current.get("mini") != null):
+	if settings != null or Share.dlg != null or feedback != null or help != null \
+			or (current != null and current.get("mini") != null):
 		cap = 1.25
 	if cap != Settings.text_cap:              # подписи кнопок рисуются один раз — перерисовать всё новым размером
 		Settings.text_cap = cap

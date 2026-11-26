@@ -277,7 +277,7 @@ func _draw() -> void:
 				s += "…" if s != full else ""
 				UI.draw_text(self, s, Vector2(fr.position.x + 10, fr.get_center().y - floorf(UI.line_height(15) / 2)), 15, UI.GREY)
 				if ui.get("ok") == false and ui.get("kind") == "code":
-					UI.draw_text(self, Loc.t("Перепиши код (заглавные и строчные буквы различаются):"), Vector2(x, fr.end.y + 12), 14,
+					UI.draw_text_w(self, Loc.t("Перепиши код (заглавные и строчные буквы различаются):"), Vector2(x, fr.end.y + 12), w, 14,
 						UI.GREY)
 					_code_block(Rect2(x, fr.end.y + 36, w, 150), full)
 				y = p.end.y - 128
@@ -293,12 +293,12 @@ func _draw() -> void:
 					st = "Не удалось скопировать — выдели строку выше и нажми Ctrl+C."
 				else:
 					st = "Буфер обмена недоступен — перепиши или сфотографируй код."
-			UI.draw_text(self, Loc.t(st), Vector2(x, y), 16, UI.GOOD if ok == true else (UI.GREY if ok == null else UI.AMBER), true)
+			UI.draw_text_w(self, Loc.t(st), Vector2(x, y), w, 16, UI.GOOD if ok == true else (UI.GREY if ok == null else UI.AMBER), true)
 			if ui.get("note", "") != "":
 				UI.draw_wrapped(self, Loc.t(ui["note"]), Vector2(x, y + 26), w, 14, UI.GREY, false, 2, -1, 2)
 		"paste":
 			UI.draw_text(self, Loc.t("ВСТАВИТЬ КОД"), Vector2(x, p.position.y + 20), 22, UI.CYAN, true)
-			UI.draw_text(self, Loc.t("Код прогресса, задания или результата — или ссылка с ним:"), Vector2(x, p.position.y + 72), 15,
+			UI.draw_text_w(self, Loc.t("Код прогресса, задания или результата — или ссылка с ним:"), Vector2(x, p.position.y + 72), w, 15,
 				UI.WHITE)
 			var dy := 12 if UI.phone() else 0             # телефон: поле выше на 12
 			if ui.get("err", "") != "":
@@ -319,21 +319,22 @@ func _draw() -> void:
 			var bottom := p.end.y - ((150 if mode() == "summary" else 86) if UI.phone() else (138 if mode() == "summary" else 80))
 			_result_rows(Rect2(x, p.position.y + 86, w, bottom - p.position.y - 86 - 26), res)
 			if mode() == "summary":
-				UI.draw_text(self, Loc.t("Код результата защищён: если поправить в нём цифры, игра его не примет."),
-					Vector2(x, bottom - 22), 13, UI.GREY)
+				UI.draw_text_w(self, Loc.t("Код результата защищён: если поправить в нём цифры, игра его не примет."),
+					Vector2(x, bottom - 22), w, 13, UI.GREY)
 			elif str(res.get("version", "")) != "":
 				UI.draw_text(self, Loc.t("Версия игры: %s" % res["version"]), Vector2(x, bottom - 22), 13, UI.GREY)
 		"builder":
 			UI.draw_text(self, Loc.t("ССЫЛКА-ЗАДАНИЕ"), Vector2(x, p.position.y + 16), 22, UI.CYAN, true)
-			UI.draw_text(self, Loc.t("Отметь задания по порядку — ученик увидит только их, без обучения и замков."),
-				Vector2(x, p.position.y + 52), 15, UI.WHITE)
+			UI.draw_text_w(self, Loc.t("Отметь задания по порядку — ученик увидит только их, без обучения и замков."),
+				Vector2(x, p.position.y + 52), w, 15, UI.WHITE)
 			var seat_y: float = (pick_rects()[Share.job_ids().size()][1] as Rect2).position.y
 			UI.draw_text(self, Loc.t("Кабинет посадки (примерки):"), Vector2(x, seat_y - 26), 15, UI.WHITE, true)
 			var fr := field_rect()
-			UI.draw_text(self, Loc.t("От кого (можно не писать):"), Vector2(x, fr.get_center().y - 10), 15, UI.WHITE)
+			UI.draw_text_w(self, Loc.t("От кого (можно не писать):"), Vector2(x, fr.get_center().y - 10), fr.position.x - 8 - x, 15,
+				UI.WHITE)                                   # E37.1 (game.py): не на поле
 			var n: int = (ui.get("sel", []) as Array).size()
 			var info: String = ui.get("err", "") if ui.get("err", "") != "" else (Loc.t("Выбрано: %d" % n) if n else "Ничего не выбрано")
-			UI.draw_text(self, Loc.t(info), Vector2(fr.end.x + 24, fr.get_center().y - 10), 15,
+			UI.draw_text_w(self, Loc.t(info), Vector2(fr.end.x + 24, fr.get_center().y - 10), p.end.x - 28 - (fr.end.x + 24), 15,
 				UI.BAD if ui.get("err", "") != "" else (UI.GOOD if n else UI.GREY), true)
 
 
@@ -380,13 +381,13 @@ func _result_rows(r: Rect2, res: Dictionary) -> void:
 		var row: Array = rows[i]
 		var x := r.position.x + (i / per) * (cw + 16)
 		var y := r.position.y + (i % per) * 26
-		_fit(("✔ " if row[1] else "○ ") + Share.item_label(row[0]), Vector2(x, y), cw - (150 if cols == 1 else 96), 15,
-			UI.GOOD if row[1] else UI.GREY)
-		if row[1]:
-			UI.draw_text(self, Loc.t("ошибок %d · %s" % [int(row[2]), Share.fmt_secs(row[3])]), Vector2(x + cw, y + 1),
-				14 if cols == 1 else 13, UI.WHITE if int(row[2]) == 0 else UI.AMBER, false, 2)
-		else:
-			UI.draw_text(self, Loc.t("не сделано"), Vector2(x + cw, y + 1), 13, UI.DIM, false, 2)
+		var rs := Loc.t("ошибок %d · %s" % [int(row[2]), Share.fmt_secs(row[3])]) if row[1] else Loc.t("не сделано")
+		var rsz := (14 if cols == 1 else 13) if row[1] else 13
+		var rw := UI.text_width(rs, rsz)              # E37.1 (game.py): название не заходит под «ошибок … · время»
+		_fit(("✔ " if row[1] else "○ ") + Share.item_label(row[0]), Vector2(x, y),
+			minf(cw - (150 if cols == 1 else 96), cw - rw - 10), 15, UI.GOOD if row[1] else UI.GREY)
+		UI.draw_text(self, rs, Vector2(x + cw, y + 1), rsz,
+			(UI.WHITE if int(row[2]) == 0 else UI.AMBER) if row[1] else UI.DIM, false, 2)
 
 
 func _draw_pick(b: GameButton, r: Rect2) -> void:

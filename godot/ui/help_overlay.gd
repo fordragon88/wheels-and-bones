@@ -49,6 +49,6 @@ func _draw() -> void:
 		UI.draw_text(self, b[0], Vector2(P.position.x + 28 + kw, y + floorf((sz - int(b[1])) / 2.0)), b[1], UI.WHITE)
 		y += step
 	var on: bool = Settings.a11y.get("on", false)
-	UI.draw_text(self, Loc.t("Озвучка: %s (%s)" % ["включена" if on else "выключена", Speech.label()]),
-		Vector2(P.position.x + 28, P.end.y - 74), 15, UI.GOOD if on else UI.GREY)
+	UI.draw_text_w(self, Loc.t("Озвучка: %s (%s)" % ["включена" if on else "выключена", Speech.label()]),
+		Vector2(P.position.x + 28, P.end.y - 74), P.size.x - 56, 15, UI.GOOD if on else UI.GREY)   # E37.1: не шире панели
 	UI.draw_text(self, Loc.t("Esc или F1 — закрыть"), Vector2(P.position.x + 28, P.end.y - 44), 15, UI.GREY)

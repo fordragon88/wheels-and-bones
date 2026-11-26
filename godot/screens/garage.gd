@@ -196,8 +196,9 @@ func _draw_card(b: GameButton, r: Rect2) -> void:
 	y = UI.draw_wrapped(b, Loc.t(job.get("title", "")), Vector2(tx, y), tw, 12, UI.GREY, false, 2, -1, 2)
 	UI.draw_text(b, "★".repeat(stars) + "☆".repeat(3 - stars), Vector2(tx, y + 2), 16, UI.AMBER)
 	var lh := UI.line_height(11) + 2
-	var left := maxi(1, int((r.end.y - 22 - (y + 24)) / lh))
-	UI.draw_wrapped(b, Loc.t(_fact(job)), Vector2(tx, y + 24), tw, 11, UI.GHOST, false, 2, -1, left)
+	var left := floori((r.end.y - 22 - (y + 24)) / lh)   # E37.1 (game.py): места нет ни на строку — факт не рисуем (он
+	if left >= 1:                                         # в карточке «подробнее»), а не поверх «▸ подробнее»
+		UI.draw_wrapped(b, Loc.t(_fact(job)), Vector2(tx, y + 24), tw, 11, UI.GHOST, false, 2, -1, left)
 	UI.draw_text(b, "▸ " + Loc.t("подробнее"), Vector2(r.end.x - 10, r.end.y - 18), 11, UI.CYAN, false, 2)
 
 

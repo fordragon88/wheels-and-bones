@@ -235,17 +235,25 @@ func cur_step() -> Dictionary:
 ## Инструкция шага ремонта (от y 100 до верха коляски 226): ширина — на телефоне до «◂ ШАГ ▸» (408), иначе 560.
 ## Телефон: длинная инструкция при крупном тексте мельче (19 → 11), чтобы не заходить на коляску (обзор 26.11, E22;
 ## замер — «-- --test --only instr-sizes»). Что помещается кеглем 19 (в том числе всё при 100 %) — как было.
-## Компьютер — как game.py (наезд при 150 % там тот же — правится в обеих версиях).
+## Компьютер — как game.py после внешней проверки 26.11 (E37.1): fit_wrapped_size(text, 560, 19, INSTR_ROOM=124),
+## 124 = верх коляски 226 + 4 − 6 − начало текста 100 (до кнопки «+» над коляской), нижний кегль 10 (lo по умолчанию).
+## Тот же размер — у текста тест-драйва (на телефоне там шире: «◂ ШАГ ▸» нет, ширина 560).
 const INSTR_Y := 100.0
-const INSTR_ROOM := 226.0 - INSTR_Y
+const INSTR_ROOM := 226.0 - INSTR_Y           # телефон
+const INSTR_ROOM_PC := 124.0                  # компьютер (INSTR_ROOM в game.py)
 
 
 static func instr_width() -> float:
 	return PH_PREV.position.x - 12 - 360 if UI.phone() else 560.0
 
 
-static func instr_size(text: String) -> int:
-	return UI.fit_wrapped_size(text, instr_width(), 19, INSTR_ROOM, 11) if UI.phone() else 19
+static func instr_room() -> float:
+	return INSTR_ROOM if UI.phone() else INSTR_ROOM_PC
+
+
+## Кегль текста шага (width < 0 — ширина шага instr_width()) или теста (width 560): 19, пока помещается в instr_room().
+static func instr_size(text: String, width: float = -1.0) -> int:
+	return UI.fit_wrapped_size(text, instr_width() if width < 0 else width, 19, instr_room(), 11 if UI.phone() else 10)
 
 
 func chair_rect() -> Rect2:
@@ -1173,7 +1181,7 @@ func tick(dt: float) -> void:
 
 
 func _draw_deco() -> void:
-	UI.draw_text(_deco, Loc.t(job["client"]), Vector2(24, 266), 16, UI.WHITE, true)
+	UI.draw_text_w(_deco, Loc.t(job["client"]), Vector2(24, 266), 330, 16, UI.WHITE, true)   # E37.1: не на текст шага (x 360)
 	match phase:
 		"diagnose":
 			var cr := chair_rect()
@@ -1200,7 +1208,8 @@ func _draw_deco() -> void:
 			UI.draw_text(_deco, Loc.t("ДЕТАЛЬ"), Vector2(980, 70), 16, UI.AMBER, true)
 		"test":
 			UI.draw_text(_deco, Loc.t("ТЕСТ-ДРАЙВ"), Vector2(360, 70), 20, UI.GOOD, true)
-			UI.draw_wrapped(_deco, Loc.t(job.get("test", "")), Vector2(360, 100), 560, 19, UI.WHITE)
+			var test := Loc.t(job.get("test", ""))
+			UI.draw_wrapped(_deco, test, Vector2(360, INSTR_Y), 560, instr_size(test, 560), UI.WHITE)
 			if ride_done:                       # клиент в починенной коляске («живой» — своим слоем _after)
 				var tex: Texture2D = null if _after else Content.texture(job["client_art"])
 				if tex:

@@ -1460,8 +1460,13 @@ func _draw_option(b: GameButton, _lifted: Rect2) -> void:
 	var i := int(b.get_meta("i"))
 	var o: Array = quiz[quiz_i]["options"][i]
 	var ot := Loc.t(o[0])                      # 150 %: ответ в 3 строки — мельче, не за рамку
-	var ty := UI.draw_wrapped(b, ot, r.position + Vector2(14, 8), r.size.x - 28,
-		UI.fit_wrapped_size(ot, r.size.x - 28, 15, r.size.y - 12, 11), UI.WHITE)
+	var tsz := UI.fit_wrapped_size(ot, r.size.x - 28, 15, r.size.y - 12, 11)
+	if picked == i and str(o[2]) != "":         # E37.1 (game.py): под пояснение — хотя бы строка кеглем 11
+		var need := UI.line_height(11) + 2
+		var th := UI.wrap_lines(ot, r.size.x - 28, tsz).size() * (UI.line_height(tsz) + 2)
+		if r.position.y + 8 + th + need > r.end.y - 4:
+			tsz = UI.fit_wrapped_size(ot, r.size.x - 28, tsz, r.size.y - 12 - need, 10)
+	var ty := UI.draw_wrapped(b, ot, r.position + Vector2(14, 8), r.size.x - 28, tsz, UI.WHITE)
 	if picked == i and str(o[2]) != "":
 		var fb := Loc.t(o[2])
 		var fsz := 11
@@ -1471,8 +1476,9 @@ func _draw_option(b: GameButton, _lifted: Rect2) -> void:
 			flh = UI.line_height(s) + 2
 			if ty + UI.wrap_lines(fb, r.size.x - 28, s).size() * flh <= r.end.y - 4:
 				break
-		UI.draw_wrapped(b, fb, Vector2(r.position.x + 14, ty), r.size.x - 28, fsz, UI.BAD, false, 2, -1,
-			maxi(1, int((r.end.y - 4 - ty) / flh)))
+		var fl := floori((r.end.y - 4 - ty) / flh)
+		if fl >= 1:                              # не за рамку ответа (game.py)
+			UI.draw_wrapped(b, fb, Vector2(r.position.x + 14, ty), r.size.x - 28, fsz, UI.BAD, false, 2, -1, fl)
 
 
 ## Ползунок примерки: рамка = дорожка, расширенная на 15 px (как inflate(30, 30)); рисует экран.

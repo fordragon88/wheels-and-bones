@@ -481,12 +481,20 @@ func _draw() -> void:
 			UI.draw_wrapped(self, note, Vector2(x, y0 + UI.line_height(sz) + 2), tw, sz, UI.GREY, false, 2, -1,
 				maxi(1, int((P.end.y - 8 - y0) / (UI.line_height(sz) + 2)) - 1))
 		"game":
-			UI.draw_text(self, Loc.t("Прогресс"), Vector2(x, P.position.y + (150 if UI.phone() else 114)), 19, UI.WHITE, true)
-			var y := P.position.y + (178 if UI.phone() else 142)
-			for line in progress_summary():
-				UI.draw_text(self, line, Vector2(x, y), 15, UI.GREY)
-				y += 22
 			var ph := UI.phone()
+			var hr := UI.draw_text(self, Loc.t("Прогресс"), Vector2(x, P.position.y + (150 if ph else 114)), 19, UI.WHITE, true)
+			# E37.1 (_draw_game_tab в game.py): строки — между заголовком и кнопками кодов; шаг и кегль — пока
+			# помещаются (при 100 % — прежние 22 и 15), каждая не шире окна
+			var lines := progress_summary()
+			var y := maxf(P.position.y + (178 if ph else 142), hr.end.y + 2)
+			var room := P.position.y + (260 if ph else 212) - 4 - y           # верх первой кнопки кодов (sy[0] в _rebuild)
+			var step := minf(22, floorf(room / lines.size()))
+			var sz := 15
+			while sz > 11 and UI.line_height(sz) > step:
+				sz -= 1
+			for line in lines:
+				UI.draw_text_w(self, line, Vector2(x, y), P.size.x - 64, sz, UI.GREY)
+				y += step
 			if reset_ask:
 				UI.draw_text(self, Loc.t("Сбросить весь прогресс? Это нельзя отменить."), Vector2(x, P.position.y + (418 if ph else 318)),
 					16, UI.BAD, true)
