@@ -140,14 +140,37 @@ def main_head_clean():
     return git(MAIN_DIR, "rev-parse", "HEAD")
 
 
+def pygame_src():
+    """Где в web_deploy лежит pygame-сборка: до первого выпуска Godot — в корне, после — в classic/ (в корне тогда
+    index.html уже от Godot: брать его как pygame-страницу нельзя — classic/ стал бы копией Godot-страницы)."""
+    sub = os.path.join(MAIN_DIR, CLASSIC)
+    if os.path.exists(os.path.join(sub, "index.html")):
+        return sub
+    return MAIN_DIR
+
+
+def is_pygame_page(path):
+    """index.html pygame-сборки (pygbag): качает wheels_and_bones.apk; у Godot-страницы этого нет."""
+    try:
+        html = open(path, encoding="utf-8", errors="replace").read()
+    except OSError:
+        return False
+    return 'fopen("wheels_and_bones.apk' in html and "wnb-engine-" not in html
+
+
 def assemble(dest, base_url, legacy=True, classic_counter=True, keep=KEEP_ROOT):
     """Godot-сборка (godot/build/web, уже собрана) в корень dest, pygame из web_deploy — в classic/ (+ переходные
     файлы в корне). classic_counter=False — убрать счётчик посещений из classic/index.html (репетиция: pygame
     web_smoke его не глушит, а статистику владельца проверками не трогаем)."""
     head = main_head_clean()
-    missing = [n for n in PYGAME_FILES if not os.path.exists(os.path.join(MAIN_DIR, n))]
+    src = pygame_src()
+    missing = [n for n in PYGAME_FILES if not os.path.exists(os.path.join(src, n))]
     if missing:
-        raise SystemExit(f"в {MAIN_DIR} нет файлов pygame-сборки: {missing}")
+        raise SystemExit(f"в {src} нет файлов pygame-сборки: {missing}")
+    if not is_pygame_page(os.path.join(src, "index.html")):
+        raise SystemExit(f"{os.path.join(src, 'index.html')} — не страница pygame-сборки: не из чего собрать {CLASSIC}/")
+    if src != MAIN_DIR:
+        log(f"   на сайте уже Godot: pygame-версия берётся из {src}")
     if os.path.isdir(dest):
         shutil.rmtree(dest)
     os.makedirs(dest)
@@ -157,10 +180,10 @@ def assemble(dest, base_url, legacy=True, classic_counter=True, keep=KEEP_ROOT):
     clash = [n for n in PYGAME_FILES + KEEP_ROOT if n not in ("index.html", "splash.jpg") and os.path.exists(os.path.join(out, n))]
     if clash:
         raise SystemExit(f"имена Godot-сборки совпали с файлами pygame/сайта: {clash}")
-    if file_sha(os.path.join(out, "splash.jpg")) != file_sha(os.path.join(MAIN_DIR, "splash.jpg")):
+    if file_sha(os.path.join(out, "splash.jpg")) != file_sha(os.path.join(src, "splash.jpg")):
         log("   ! splash.jpg Godot и pygame различаются — в корне будет заставка Godot (старая страница покажет её)")
     for n in PYGAME_FILES:
-        copy_item(os.path.join(MAIN_DIR, n), os.path.join(dest, CLASSIC, n))
+        copy_item(os.path.join(src, n), os.path.join(dest, CLASSIC, n))
     if not classic_counter:
         ci = os.path.join(dest, CLASSIC, "index.html")
         html = open(ci, encoding="utf-8").read()
@@ -168,7 +191,7 @@ def assemble(dest, base_url, legacy=True, classic_counter=True, keep=KEEP_ROOT):
         open(ci, "w", encoding="utf-8", newline="").write(html2)
     if legacy:
         for n in LEGACY_ROOT:
-            copy_item(os.path.join(MAIN_DIR, n), os.path.join(dest, n))
+            copy_item(os.path.join(src, n), os.path.join(dest, n))
     for n in keep:
         if os.path.exists(os.path.join(MAIN_DIR, n)):
             copy_item(os.path.join(MAIN_DIR, n), os.path.join(dest, n))
@@ -218,6 +241,18 @@ def embed_claim():
     return int(m.group(1)) if m else None
 
 
+def code_dirty():
+    """Незакоммиченные правки в godot/ (кроме заметок .md) — сборка была бы не из того, что в истории."""
+    out = git(ROOT, "status", "--porcelain", "--", "godot")
+    return [ln[3:] for ln in out.splitlines() if not ln.rstrip().endswith(".md")]
+
+
+def code_changed_since(commit):
+    """Файлы godot/ (кроме .md), изменённые после сборки site_main: коммиты после commit и незакоммиченное."""
+    out = git(ROOT, "diff", "--name-only", commit, "HEAD", "--", "godot")
+    return sorted(set([ln for ln in out.splitlines() if ln and not ln.endswith(".md")] + code_dirty()))
+
+
 def cmd_stage(a):
     log(f"== stage: Godot для основного сайта, pygame из {MAIN_DIR}")
     info = godot_build(None)
@@ -230,7 +265,7 @@ def cmd_stage(a):
     manifest = {"time": time.strftime("%Y-%m-%d %H:%M"), "web_deploy_head": head, "base_url": info["base_url"],
                 "pack": info["pack"], "engine": info["engine"], "counter": info.get("counter"),
                 "legacy": not a.no_legacy, "files": len(files), "bytes": total,
-                "godot_commit": git(ROOT, "rev-parse", "--short", "HEAD")}
+                "godot_commit": git(ROOT, "rev-parse", "--short", "HEAD"), "dirty": code_dirty()}
     json.dump(manifest, open(MANIFEST, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     if not a.keep_build:
         restore_test_build()
@@ -389,9 +424,14 @@ def cmd_check(a):
     finally:
         srv.shutdown()
         srv.server_close()
-    log(f"\nRELEASE CHECK: {len(t.ok)} ok, {len(t.fail)} FAIL (site_main, локально {base})")
+    line = f"RELEASE CHECK: {len(t.ok)} ok, {len(t.fail)} FAIL"
+    log(f"\n{line} (site_main, локально {base})")
     for f in t.fail:
         log("   FAIL " + f)
+    man = json.load(open(MANIFEST, encoding="utf-8"))          # stage пишет манифест заново — итог check к нему привязан
+    man["check"] = {"ok": not t.fail and not a.godot_only, "time": time.strftime("%Y-%m-%d %H:%M"), "line": line,
+                    "godot_only": bool(a.godot_only)}
+    json.dump(man, open(MANIFEST, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     return 1 if t.fail else 0
 
 
@@ -546,6 +586,21 @@ def plan_deploy():
     return man, head, added, changed, removed, want, have, new
 
 
+def deploy_blockers(man):
+    """Почему выкладывать нельзя: проверка check не пройдена для этого дерева, или код изменился после stage."""
+    out = []
+    ck = man.get("check") or {}
+    if not ck.get("ok"):
+        out.append("нет пройденной проверки этого дерева (python godot/tools/release_web.py check): "
+                   + ck.get("line", "check не запускался") + (" — только Godot, без classic/" if ck.get("godot_only") else ""))
+    if man.get("dirty"):
+        out.append(f"site_main собран с незакоммиченными правками в godot/: {man['dirty'][:5]}")
+    ch = code_changed_since(man["godot_commit"])
+    if ch:
+        out.append(f"код в godot/ изменился после stage ({man['godot_commit']}): {ch[:5]}{' …' if len(ch) > 5 else ''}")
+    return out
+
+
 def print_plan(man, head, added, changed, removed, want, have, new):
     url = main_url()
     total = sum(want.values())
@@ -569,17 +624,26 @@ def print_plan(man, head, added, changed, removed, want, have, new):
 def cmd_deploy(a):
     if not (a.dry_run or a.owner_approved):
         log("deploy меняет ОСНОВНОЙ сайт. Только по команде владельца: --owner-approved; посмотреть план: --dry-run.\n")
-        print_plan(*plan_deploy())
+        plan = plan_deploy()
+        print_plan(*plan)
+        for b in deploy_blockers(plan[0]):
+            log("   ! " + b)
         return 2
     if a.owner_approved and not a.dry_run:
         log("== git pull web_deploy (свежий основной сайт)")
         git(MAIN_DIR, "pull", "-q", "--ff-only", capture=False)
     plan = plan_deploy()
     print_plan(*plan)
-    if a.dry_run:
-        log("\n--dry-run: ничего не изменено.")
-        return 0
     man, head = plan[0], plan[1]
+    blockers = deploy_blockers(man)
+    for b in blockers:
+        log("   ! " + b)
+    if a.dry_run:
+        log("\n--dry-run: ничего не изменено." + (" Выкладка сейчас откажется — сначала stage и check." if blockers else
+                                                  " Проверка check пройдена: " + man["check"]["time"] + "."))
+        return 0
+    if blockers:
+        raise SystemExit("выкладка остановлена, основной сайт не тронут: заново stage и check")
     log("\n== выкладка на основной сайт (--owner-approved)")
     mirror_into(SITE, MAIN_DIR)
     git(MAIN_DIR, "add", "-A")
@@ -589,7 +653,11 @@ def cmd_deploy(a):
     entries = json.load(open(RELEASE_LOG, encoding="utf-8")) if os.path.exists(RELEASE_LOG) else []
     entries.append({"time": time.strftime("%Y-%m-%d %H:%M"), "before": head, "after": new, "pack": man["pack"]})
     json.dump(entries, open(RELEASE_LOG, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-    git(MAIN_DIR, "push", "-q", capture=False)
+    try:
+        git(MAIN_DIR, "push", "-q", capture=False)
+    except SystemExit:
+        raise SystemExit(f"push не прошёл: сайт НЕ изменён, коммит {new[:8]} остался только в {MAIN_DIR}. Повторить "
+                         f"отправку: git -C {MAIN_DIR} push ; отменить: git -C {MAIN_DIR} reset --hard {head[:8]}")
     log(f"   push {new[:8]} (до выпуска было {head[:8]})")
     t = Tally()
     url = main_url()
