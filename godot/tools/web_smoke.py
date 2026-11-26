@@ -975,7 +975,10 @@ async def seat_phone(p):
         x, y, w, lo, hi = tr
         await p.tap_xy(x + w * (v - lo) / (hi - lo), y)
         await p.pg.wait_for_timeout(250)
-    st = await p.state()
+    # последнее касание под нагрузкой игра обрабатывает позже 250 мс: всегда «не вставал» именно последний ползунок
+    # (back_a 91 вместо 100) — ждём значение, а не читаем состояние сразу
+    st = await p.wait(lambda s: all(int(s.get("seat", {}).get("cfg", {}).get(k, -1)) == v for k, v in want.items()),
+                      "", 4, quiet=True) or await p.state()
     cfg = st.get("seat", {}).get("cfg", {})
     got = {k: int(cfg.get(k, -1)) for k in want}
     check(got == want, f"{p.name}: ползунки встали касанием на нужные значения ({got}, нужно {want})")
