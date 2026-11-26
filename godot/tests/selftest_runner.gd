@@ -222,6 +222,7 @@ func _run() -> void:
 	fx_line += "; " + await _phone_check()
 	fx_line += "; " + await _review_kb()
 	fx_line += "; " + await _review_web()
+	fx_line += "; " + await _review_port()
 	# --- сценарий мышью: титул → мастерская → flat → осмотр → неверный → верный диагноз ---
 	SaveGame.reset()
 	await _flow_mouse()
@@ -255,6 +256,15 @@ func _review_web() -> String:
 	add_child(rw)
 	var line: String = await rw.run(self)
 	rw.queue_free()
+	return line
+
+
+## Перенос правок game.py по внешней проверке 26.11 (tests/review_port_check.gd).
+func _review_port() -> String:
+	var rp: Node = (load("res://tests/review_port_check.gd") as GDScript).new()
+	add_child(rp)
+	var line: String = await rp.run(self)
+	rp.queue_free()
 	return line
 
 
@@ -2583,6 +2593,8 @@ func _only(what: String) -> void:
 			line = await _review_kb()
 		"review-web":
 			line = await _review_web()
+		"review-port":                       # перенос правок game.py 26.11 (tests/review_port_check.gd)
+			line = await _review_port()
 		"instr-sizes":                       # обзор 26.11, E22: инструкция ремонта — было/стало по всем шагам
 			var rw: Node = (load("res://tests/review_web_check.gd") as GDScript).new()
 			add_child(rw)
