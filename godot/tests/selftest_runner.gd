@@ -220,6 +220,7 @@ func _run() -> void:
 	var fx_line: String = await _fixes()
 	fx_line += "; " + await _touch()
 	fx_line += "; " + await _phone_check()
+	fx_line += "; " + await _review_kb()
 	# --- сценарий мышью: титул → мастерская → flat → осмотр → неверный → верный диагноз ---
 	SaveGame.reset()
 	await _flow_mouse()
@@ -235,6 +236,15 @@ func _fixes() -> String:
 	add_child(fx)
 	var line: String = await fx.run(self)
 	fx.queue_free()
+	return line
+
+
+## Внешняя проверка 26.11: клавиатура, окна, чтец экрана, ввод (tests/review_kb_check.gd).
+func _review_kb() -> String:
+	var rk: Node = (load("res://tests/review_kb_check.gd") as GDScript).new()
+	add_child(rk)
+	var line: String = await rk.run(self)
+	rk.queue_free()
 	return line
 
 
@@ -2559,6 +2569,8 @@ func _only(what: String) -> void:
 			line = await _fixes()
 		"touch":
 			line = await _touch()
+		"review-kb":
+			line = await _review_kb()
 		"phone":
 			line = await _phone_check()
 		"phone-measure":
