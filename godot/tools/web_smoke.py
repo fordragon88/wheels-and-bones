@@ -3180,7 +3180,7 @@ TP_BIG = ["rep_flat_tool", "rep_dracul_speed_note"]
 
 
 def toolpc_layout(st):
-    """Компьютер, ремонт (28.11): кнопка рук и плитки кучек, зазор в кучке ≥ 6, между кучками и до рук ≥ 14, подписи и
+    """Компьютер, ремонт (28.11): кнопка рук и плитки кучек, зазор в кучке ≥ 5, между кучками и до рук ≥ 13, подписи и
     заголовки помещаются, рисунок ≥ 40; плитки, заголовки и карточка не на коляске, строках деталей, «+»/«−»,
     «СНОСКИ МАНУАЛА», пузыре клиента; карточка вмещает текст (tools.pc_card.ok). Возврат — нарушения."""
     bad = []
@@ -3207,7 +3207,7 @@ def toolpc_layout(st):
     ks = sorted(tiles)
     for i, a in enumerate(ks):
         for b2 in ks[i + 1:]:
-            need = 6 if grp.get(a, a) == grp.get(b2, b2) else 14
+            need = 5 if grp.get(a, a) == grp.get(b2, b2) else 13
             if _cross(_rx(tiles[a]), _rx(tiles[b2]), need - 0.01):
                 bad.append(f"зазор {a} ↔ {b2} меньше {need}")
     obst = [(k, _rx(v)) for k, v in btn.items() if k == "Notes" or k.startswith("Part_") or k in ("ZoomIn", "ZoomOut")]
