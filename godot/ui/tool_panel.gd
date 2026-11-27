@@ -337,6 +337,8 @@ func _draw_tile(b: GameButton, _r: Rect2) -> void:
 			y += UI.px_height(px, bold) + 1
 		isz_big = minf(84.0 if hands else PH_ICON, lr.size.y - float(lay[3]) - (16 if hands else 8))
 		icon_c = Vector2(0, lr.position.y + (lr.size.y - float(lay[3])) / 2.0)
+	else:                                      # компьютер, Гильдия — как game.py
+		UI.draw_round_rect(b, lr, Color8(52, 48, 64, 235), UI.AMBER if active else UI.DIM.lerp(UI.GHOST, h), 3 if active else 2, 12)
 	b.draw_set_transform(Vector2.ZERO)
 	var ang := 0.0
 	if active:
