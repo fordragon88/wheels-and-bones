@@ -3152,6 +3152,8 @@ async def sc_toolbig(b):
             await p.wait(lambda q: q["frames"]["queue"] == 0 and q["frames"]["inflight"] == 0, "кадры", 6, quiet=True)
             await p.pg.wait_for_timeout(900)
             st = await p.state()
+            if st.get("screen") == "job":                  # пузырь клиента: [x, y, w, h], нет реплики — нули
+                info(f"{p.name} {s}: пузырь клиента {st.get('client_bubble')}")
             if tag == "after":
                 bad = toolbig_layout(st)
                 if st.get("screen") in ("job", "tech") and st.get("phase") == "repair":

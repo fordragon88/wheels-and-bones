@@ -204,6 +204,18 @@ static func repair_layout(scr: Node) -> PackedStringArray:
 			bad.append("плитка %s мельче 56: %s" % [tid, _fmt_r(tr)])
 		if tid != "hands" and not bool(tp.ph_label_fit(tid)[4]):
 			bad.append("подпись плитки %s не помещается: %s" % [tid, str(tp.ph_label_fit(tid)[1])])
+		if tid != "hands":                                  # рисунок — та же раскладка, что рисует плитку
+			var fit: Array = tp.ph_icon_fit(tid)
+			var u: Vector2 = ToolPanel.ph_icon_used(tid) * float(fit[0])
+			if float(fit[0]) < ToolPanel.PH_ICON_MIN:
+				bad.append("рисунок плитки %s мельче %d: %d" % [tid, ToolPanel.PH_ICON_MIN, fit[0]])
+			if u.y > float(fit[1]) + 0.01 or u.x > ToolPanel.PH_TW - 6 + 0.01:
+				bad.append("рисунок плитки %s (%d×%d) не в своём месте (%d в высоту)" % [tid, u.x, u.y, fit[1]])
+			for ang: float in [7.0, -7.0, 29.0]:                 # покачивание в руке и вздрагивание после ошибки
+				var kk: float = minf(1.08, tp.ph_icon_room_k(tid, float(fit[0]), ang))
+				var a := deg_to_rad(absf(ang))
+				if kk * (u.y * cos(a) + u.x * sin(a)) > float(fit[1]) + 0.01:
+					bad.append("рисунок плитки %s при повороте %d° выходит из места" % [tid, ang])
 		mine.append(["Tool_" + tid, tr.grow_individual(0, 6, 0, 0)])      # выбранная приподнята на 6
 	if not bool(tp.ph_hands_fit()[4]):
 		bad.append("подпись кнопки «Руки и глаза» не помещается: %s" % str(tp.ph_hands_fit()[1]))
@@ -236,7 +248,10 @@ static func repair_layout(scr: Node) -> PackedStringArray:
 	for m: Array in mine:                                   # полоса — не на плитках и заголовках
 		if m[0] != "Strip" and (m[1] as Rect2).intersection(mine[-1][1]).has_area():
 			bad.append("полоса пересекает %s" % m[0])
-	lay_info = "плиток %d, полоса %s, препятствий %d (%s), сноска %s" % [tp.tiles.size(), _fmt_r(sr), obst.size(),
+	var isz: Array = tp.tiles.keys().filter(func(x: String) -> bool: return x != "hands").map(
+		func(x: String) -> int: return int(tp.ph_icon_fit(x)[0]))
+	lay_info = "рисунки кучек %d…%d, плиток %d, полоса %s, препятствий %d (%s), сноска %s" % [isz.min(), isz.max(),
+		tp.tiles.size(), _fmt_r(sr), obst.size(),
 		", ".join(obst.map(func(x: Array) -> String: return str(x[0]))), _fmt_r(tp.note_rect())]
 	for m: Array in mine:
 		for ob: Array in obst:

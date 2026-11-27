@@ -27,7 +27,12 @@ const PH_ROWS_Y := [536.0, 636.0]
 const PH_HEAD_H := 13.0                     # полоса заголовка кучки: от y ряда − 6 (подъём выбранной) − 1 − 13
 const PH_TILE_MIX := 0.38                   # оттенок кучки в заливке плитки
 const PH_STRIP_BOTTOM := 514.0
-const PH_ICON := 50.0                       # рисунок в плитке кучки (с подписью в 2 строки — меньше, сколько влезет)
+const PH_ICON := 50.0                       # рисунок в плитке кучки (с подписью в 2 строки — сколько влезет, ≥ 46)
+const PH_ICON_MIN := 46.0                   # проверка phone_check: рисунок кучки не меньше
+const PH_ICON_TOP := 3.0                    # от верха плитки до места рисунка (рамка 2–3)
+const PH_ICON_GAP := 3.0                    # между местом рисунка и подписью
+const PH_LABEL_PAD := 2.0                   # под подписью до низа плитки
+static var _icon_used: Dictionary = {}
 const PH_TECH_ICON := 50.0                  # Гильдия: плитка 56, рисунок 50 (было 38)
 ## Кучки: [ключ, заголовок RU, EN, инструменты, цвет]; ряд 1 — первые две, ряд 2 — остальные.
 const PH_GROUPS := [
@@ -334,9 +339,14 @@ func _draw_tile(b: GameButton, _r: Rect2) -> void:
 			var w := UI.px_width(ln, px, bold)
 			UI.put_string(b, Vector2(roundf(-w / 2.0), roundf(y) + UI.font(bold).get_ascent(px)), ln, px,
 				(UI.AMBER if k == 0 else Color8(220, 200, 160)) if hands else UI.WHITE, bold)
-			y += UI.px_height(px, bold) + 1
-		isz_big = minf(84.0 if hands else PH_ICON, lr.size.y - float(lay[3]) - (16 if hands else 8))
-		icon_c = Vector2(0, lr.position.y + (lr.size.y - float(lay[3])) / 2.0)
+			y += (UI.px_height(px, bold) + 1) if hands else ph_label_step(px)
+		if hands:
+			isz_big = minf(84.0, lr.size.y - float(lay[3]) - 16)
+			icon_c = Vector2(0, lr.position.y + (lr.size.y - float(lay[3])) / 2.0)
+		else:                                  # место рисунка — между рамкой и подписью (ph_icon_fit)
+			var fit := ph_icon_fit(tid)
+			isz_big = fit[0]
+			icon_c = Vector2(0, lr.position.y + PH_ICON_TOP + float(fit[1]) / 2.0)
 	else:                                      # компьютер, Гильдия — как game.py
 		UI.draw_round_rect(b, lr, Color8(52, 48, 64, 235), UI.AMBER if active else UI.DIM.lerp(UI.GHOST, h), 3 if active else 2, 12)
 	b.draw_set_transform(Vector2.ZERO)
@@ -354,6 +364,8 @@ func _draw_tile(b: GameButton, _r: Rect2) -> void:
 		if big():
 			isz = isz_big
 		var k := enter * (1 + (0.16 if not UI.phone() else 0.08 if big() else 0.06) * h)
+		if big() and tid != "hands":           # крупнее при наведении и покачивание — не дальше места рисунка
+			k = enter * minf(1 + 0.08 * h, ph_icon_room_k(tid, isz, ang))
 		b.draw_set_transform(c + icon_c * enter, deg_to_rad(-ang), Vector2(k, k))
 		var fr := UI.fit_rect(tex.get_size(), Rect2(-isz / 2.0, -isz / 2.0, isz, isz))
 		b.draw_texture_rect(tex, fr, false)
@@ -406,7 +418,47 @@ func ph_label_fit(tid: String) -> Array:
 			ok = ok and UI.px_width(ln, px, true) <= w
 		if ok:
 			break
-	return [px, lines, px, lines.size() * (UI.px_height(px, true) + 1) + 4, ok]
+	return [px, lines, px, (lines.size() - 1) * ph_label_step(px) + UI.px_height(px, true) + PH_LABEL_PAD, ok]
+
+
+## Шаг строк подписи плитки: высота строки шрифта без 1 px (строки плотнее — рисунку больше места).
+static func ph_label_step(px: int) -> float:
+	return UI.px_height(px, true) - 1
+
+
+## Непрозрачная часть рисунка инструмента (доля стороны текстуры): [ширина, высота]; кэш.
+static func ph_icon_used(tid: String) -> Vector2:
+	if _icon_used.has(tid):
+		return _icon_used[tid]
+	var out := Vector2.ONE
+	var tex := Content.texture("tool_%s.png" % tid)
+	if tex:
+		var img := tex.get_image()
+		if img:
+			if img.is_compressed():
+				img.decompress()
+			var u := img.get_used_rect()
+			out = Vector2(u.size) / Vector2(img.get_size())
+	_icon_used[tid] = out
+	return out
+
+
+## Рисунок плитки кучки: [сторона рисунка, высота места под ним]. Место — от рамки (PH_ICON_TOP) до подписи с зазором
+## PH_ICON_GAP; сторона — наибольшая (до PH_ICON), при которой непрозрачная часть рисунка в покое помещается в место.
+func ph_icon_fit(tid: String) -> Array:
+	var room := PH_TH - float(ph_label_fit(tid)[3]) - PH_ICON_TOP - PH_ICON_GAP
+	var u := ph_icon_used(tid)
+	var isz := minf(PH_ICON, floorf(minf(room / maxf(u.y, 0.01), (PH_TW - 6) / maxf(u.x, 0.01))))
+	return [isz, room]
+
+
+## Наибольший множитель рисунка при повороте ang (градусы), чтобы непрозрачная часть не вышла из места рисунка.
+func ph_icon_room_k(tid: String, isz: float, ang: float) -> float:
+	var u := ph_icon_used(tid) * isz
+	var a := deg_to_rad(absf(ang))
+	var vh := u.y * cos(a) + u.x * sin(a)
+	var vw := u.x * cos(a) + u.y * sin(a)
+	return minf(float(ph_icon_fit(tid)[1]) / maxf(vh, 0.01), (PH_TW - 6) / maxf(vw, 0.01))
 
 
 ## Кнопка «Руки и глаза»: [px названия, строки (название, потом пояснение), px пояснения, высота блока, помещается ли].
