@@ -2716,6 +2716,184 @@ async def sc_bg(b):
     await p.ctx.close()
 
 
+# ---------------- музыка: выключение и громкость (iPhone, 27.11) ----------------
+
+# как iOS: HTMLMediaElement.volume из скрипта не задаётся — запись пропускается, чтение всегда 1
+IOS_VOLUME_JS = """
+(() => {
+  window.__volSets = 0;
+  Object.defineProperty(HTMLMediaElement.prototype, 'volume', { configurable: true,
+    get() { return 1; }, set(v) { window.__volSets++; } });
+})();
+"""
+# контекст, в который страница подключила <audio> (createMediaElementSource) — чтобы тест мог его приостановить
+MUS_CTX_JS = """
+(() => {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC || !AC.prototype.createMediaElementSource) return;
+  const f = AC.prototype.createMediaElementSource;
+  AC.prototype.createMediaElementSource = function () { window.__musCtx = this; return f.apply(this, arguments); };
+})();
+"""
+
+
+async def mus_info(p):
+    return json.loads(await p.pg.evaluate("wnbMusic.info()"))
+
+
+async def mus_wait(p, pred, secs=6.0):
+    """info() музыки, на котором pred истинно (или последнее за secs)."""
+    t0 = time.time()
+    m = await mus_info(p)
+    while time.time() - t0 < secs and not pred(m):
+        await p.pg.wait_for_timeout(150)
+        m = await mus_info(p)
+    return m
+
+
+async def mus_playing(p, secs=10.0):
+    t0 = time.time()
+    s = await p.pg.evaluate("wnbMusic.state()")
+    while time.time() - t0 < secs and not s.startswith("playing"):
+        await p.pg.wait_for_timeout(200)
+        s = await p.pg.evaluate("wnbMusic.state()")
+    return s
+
+
+async def mus_stage(p, kv):
+    await p.pg.evaluate("(n) => window.wnbStage(n)", "set:" + kv)
+    await p.pg.wait_for_timeout(400)
+
+
+async def music_run(b, label, query="", ios=False, expect="element"):
+    """Одна страница: жест → музыка играет; M выключает (muted, у пути gain — gain≈0) и включает; ползунки музыки и
+    общей в 0 → muted; уровень vol следует за настройкой (= Audio.music_level() игры); путь gain — скрыть и вернуть
+    вкладку, pagehide/pageshow: музыка снова играет, контекст running."""
+    p = await new_page(b, f"music_{label}", legacy=SKIP_SEED)
+    if ios:
+        await p.ctx.add_init_script(IOS_VOLUME_JS)
+    await p.ctx.add_init_script(MUS_CTX_JS)
+    await p.boot(query)
+    m0 = await mus_info(p)
+    info(f"{p.name}: до жеста: {m0}")
+    has_ac = await p.pg.evaluate("!!(window.AudioContext || window.webkitAudioContext)")
+    planned = expect                                        # что страница должна решить (want_gain) до жеста
+    if expect == "gain" and not has_ac:
+        # WebKit Playwright под Windows собран без WebAudio (нет AudioContext вовсе; в Safari он есть) — путь gain здесь
+        # не проверить; проверяется запасной путь: элемент играет напрямую, выключение — через muted
+        info(f"{p.name}: в этом браузере ({BROWSER}) нет AudioContext — путь gain не проверить, ждём запасной путь element")
+        expect = "element"
+    if ios:
+        check(m0["settable"] is False and m0["want_gain"] == (planned == "gain"),
+              f"{p.name}: страница сама поняла, что громкость не задаётся (settable={m0['settable']}, "
+              f"want_gain={m0['want_gain']})")
+    await to_hub(p)                                         # нажатия «Начать» — жесты игрока
+    s = await mus_playing(p)
+    check(s.startswith("playing"), f"{p.name}: после жеста музыка играет ({s[:60]})")
+    m = await mus_wait(p, lambda m: m["mode"] == expect and (expect != "gain" or m["ctx"] == "running"))
+    info(f"{p.name}: после жеста: {m}")
+    check(m["mode"] == expect, f"{p.name}: путь громкости {m['mode']} (ждали {expect})")
+    if not has_ac and m0["want_gain"]:
+        check(m["err"] == "no AudioContext", f"{p.name}: нет AudioContext — страница не упала, причина записана "
+                                             f"(err «{m['err']}»)")
+    if expect == "gain":
+        check(m["ctx"] == "running", f"{p.name}: AudioContext после жеста — {m['ctx']}")
+    check(m["muted"] is False and m["vol"] > 0, f"{p.name}: звук включён: muted={m['muted']}, vol={m['vol']}")
+
+    def level_ok(m):                                         # уровень дошёл туда, куда ведёт путь
+        if m["mode"] == "gain":
+            return m["gain"] is not None and abs(m["gain"] - m["vol"]) < 0.02
+        if m["settable"]:
+            return m["el_vol"] is not None and abs(m["el_vol"] - m["vol"]) < 0.002
+        return True                                         # iOS без gain: регулировки нет, только muted
+    m = await mus_wait(p, level_ok, 3)
+    check(level_ok(m), f"{p.name}: уровень дошёл до {m['mode']}: vol {m['vol']}, gain {m['gain']}, "
+                       f"volume элемента {m['el_vol']}")
+    # M — выключить звук
+    await p.pg.mouse.move(5, 5)
+    await p.key("m", 500)
+    st = await p.state()
+    m = await mus_wait(p, lambda m: m["muted"] and (m["mode"] != "gain" or (m["gain"] or 0) < 0.01), 3)
+    check(st.get("sound") is False and m["muted"] is True and m["vol"] == 0,
+          f"{p.name}: M — звук выключен: sound={st.get('sound')}, muted={m['muted']}, vol={m['vol']}")
+    if CHROMIUM:                                            # Firefox/WebKit: MUTE_JS держит элемент muted всегда
+        check(m["el_muted"] is True, f"{p.name}: у элемента <audio> muted={m['el_muted']}")
+    if m["mode"] == "gain":
+        check((m["gain"] or 0) < 0.01, f"{p.name}: выключено — gain {m['gain']} ≈ 0")
+    await p.key("m", 500)
+    m = await mus_wait(p, lambda m: not m["muted"] and level_ok(m) and (m["mode"] != "gain" or (m["gain"] or 0) > 0.01), 3)
+    st = await p.state()
+    check(st.get("sound") is True and m["muted"] is False and m["vol"] > 0,
+          f"{p.name}: M снова — звук включён: sound={st.get('sound')}, muted={m['muted']}, vol={m['vol']}")
+    if CHROMIUM:
+        check(m["el_muted"] is False, f"{p.name}: у элемента <audio> muted={m['el_muted']}")
+    if m["mode"] == "gain":
+        check((m["gain"] or 0) > 0.01 and level_ok(m), f"{p.name}: включено — gain {m['gain']} = vol {m['vol']}")
+    # ползунки: музыка, общая
+    for key in ("music", "master"):
+        await mus_stage(p, f"vol_{key}=0")
+        m = await mus_wait(p, lambda m: m["muted"], 3)
+        check(m["muted"] is True and m["vol"] == 0, f"{p.name}: ползунок «{key}» в 0 — muted={m['muted']}, vol={m['vol']}")
+        await mus_stage(p, f"vol_{key}=1")
+    lv = {}
+    for x in (0.6, 0.3):
+        await mus_stage(p, f"vol_music={x}")
+        m = await mus_wait(p, level_ok, 3)
+        st = await p.state()
+        lv[x] = (m["vol"], st.get("music_lvl", -1), m)
+    a, b2 = lv[0.6][0], lv[0.3][0]
+    check(not lv[0.3][2]["muted"] and abs(a - lv[0.6][1]) < 0.03 and abs(b2 - lv[0.3][1]) < 0.03 and a > 0
+          and 0.4 < b2 / a < 0.6 and level_ok(lv[0.3][2]),
+          f"{p.name}: уровень следует за ползунком музыки: 0,6 → vol {a} (игра {lv[0.6][1]}), 0,3 → vol {b2} "
+          f"(игра {lv[0.3][1]}), {lv[0.3][2]['mode']}: gain {lv[0.3][2]['gain']}, volume {lv[0.3][2]['el_vol']}")
+    if expect == "gain":
+        # вкладку скрыли и вернули (как sc_bg): на паузе, потом снова играет, контекст running
+        await p.pg.evaluate(HIDE_JS, True)
+        await p.pg.wait_for_timeout(400)
+        sh = await p.pg.evaluate("wnbMusic.state()")
+        await p.pg.evaluate(HIDE_JS, False)
+        s = await mus_playing(p, 5)
+        m = await mus_wait(p, lambda m: m["ctx"] == "running", 3)
+        check(sh.startswith("paused") and s.startswith("playing") and m["ctx"] == "running" and m["mode"] == "gain",
+              f"{p.name}: вкладка скрыта — {sh[:6]}, вернулась — {s[:7]}, контекст {m['ctx']}, путь {m['mode']}")
+        # pagehide (iOS: уход со страницы/блокировка без visibilitychange) — пауза; pageshow — снова играет
+        await p.pg.evaluate("window.dispatchEvent(new Event('pagehide'))")
+        await p.pg.wait_for_timeout(300)
+        sh = await p.pg.evaluate("wnbMusic.state()")
+        await p.pg.evaluate("window.dispatchEvent(new Event('pageshow'))")
+        s = await mus_playing(p, 5)
+        check(sh.startswith("paused") and s.startswith("playing"), f"{p.name}: pagehide — {sh[:6]}, pageshow — {s[:7]}")
+        # контекст музыки приостановлен (как iOS после звонка — «interrupted») — следующий жест поднимает его
+        await p.pg.evaluate("window.__musCtx && window.__musCtx.suspend()")
+        m1 = await mus_wait(p, lambda m: m["ctx"] != "running", 3)
+        btn = (await p.state()).get("buttons", [])          # жест — касание по пустому месту мастерской
+        xy = next(((x, y) for x, y in ((640, 30), (400, 30), (900, 30), (640, 700), (20, 400))
+                   if not any(b[1] - 20 <= x <= b[1] + b[3] + 20 and b[2] - 20 <= y <= b[2] + b[4] + 20 for b in btn)),
+                  (640, 30))
+        await p.tap_xy(*xy)
+        m2 = await mus_wait(p, lambda m: m["ctx"] == "running", 3)
+        s = await mus_playing(p, 3)
+        check(m1["ctx"] == "suspended" and m2["ctx"] == "running" and s.startswith("playing"),
+              f"{p.name}: контекст приостановили ({m1['ctx']}) — жест поднял его ({m2['ctx']}), музыка {s[:7]}")
+    if ios:
+        n = await p.pg.evaluate("window.__volSets")
+        info(f"{p.name}: попыток задать volume (iOS их пропускает): {n}")
+    await p.shot("hub")
+    p.check_console()
+    await p.ctx.close()
+
+
+async def sc_music(b):
+    """Музыка — элемент <audio> страницы; на iPhone volume из скрипта не задаётся (27.11: «музыка не выключается»).
+    Обычный путь, ?musgain=1 (через GainNode в любом браузере), ?musgain=0, эмуляция iOS (volume не задаётся) —
+    страница сама выбирает GainNode; эмуляция iOS с ?musgain=0 — остаётся только выключение через muted."""
+    await music_run(b, "plain")
+    await music_run(b, "gain", "&musgain=1", expect="gain")
+    await music_run(b, "nogain", "&musgain=0")
+    await music_run(b, "ios", ios=True, expect="gain")
+    await music_run(b, "ios_nogain", "&musgain=0", ios=True)
+
+
 # ---------------- телефонные пропорции при крупном тексте (блок 2, 21.11) ----------------
 
 def shot_stages():
@@ -3538,7 +3716,7 @@ SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_
              "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "feedback": sc_feedback, "perf": sc_perf,
              "prof": sc_prof, "screens": sc_screens, "tabs": sc_tabs, "store": sc_store, "loader": sc_loader,
              "netfail": sc_netfail, "fsexit": sc_fsexit, "res": sc_resparam, "zoom": sc_zoom, "assign": sc_assign,
-             "pad": sc_pad, "bg": sc_bg, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "seatrough": sc_seatrough,
+             "pad": sc_pad, "bg": sc_bg, "music": sc_music, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "seatrough": sc_seatrough,
              "embed": sc_embed}
 TIMEOUT = {"screens": 5400, "phonetext": 7200, "embed": 1800,            # все экраны × 4 прохода — долго
            "bg": 2 * float(os.environ.get("WNB_BG_SECS", "70")) + 480}   # два раза «в фоне» + задание

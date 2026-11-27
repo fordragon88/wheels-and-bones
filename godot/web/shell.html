@@ -211,26 +211,105 @@ html, body, #canvas { overscroll-behavior: none; }
   // --- музыка: элемент <audio> страницы. Браузер сам качает и декодирует поток (не в игровом кадре, без треска в
   // однопоточной сборке и без распаковки всей темы в память, как сделал бы режим Sample). Играть можно только после
   // жеста игрока: при каждом нажатии/клавише пробуем запустить, если игра хочет музыку.
-  var mus = { a: null, src: '', want: false, vol: 1 };
+  // Громкость (уровень от игры: общая × музыка × приглушение × смена темы, 0 — звук выключен):
+  //  • уровень ≈ 0 → muted (во всех браузерах; на iPhone это единственное, что точно слушается);
+  //  • iOS (Safari и все браузеры iPhone) не даёт задавать HTMLMediaElement.volume из скрипта — запись пропускается,
+  //    чтение всегда 1. Это определяется возможностью (не по User-Agent): новый Audio(), volume = 0.5, прочитать.
+  //    Тогда звук ведётся через WebAudio: элемент → GainNode → выход, уровень — в gain. Маршрут строится только
+  //    по жесту игрока и только когда AudioContext реально «running»; иначе элемент играет напрямую (без регулировки,
+  //    но выключение через muted работает) и попытка — при следующем жесте. После createMediaElementSource элемент
+  //    звучит только через контекст: при каждом жесте и при возврате вкладки — resume(), если он не «running»
+  //    (на iOS бывает «interrupted» после звонка/блокировки).
+  //  • ?musgain=1 — вести через GainNode в любом браузере (проверка этого пути), ?musgain=0 — никогда (запасной выход).
+  var mus = { a: null, src: '', want: false, vol: 1, muted: false, ctx: null, gain: null, node: null, building: false,
+              settable: true, err: '' };
+  var qg = /[?&]musgain=([01])(&|#|$)/.exec(location.search);
+  var GAIN = qg ? qg[1] : '';
+  try { var probeA = new Audio(); probeA.volume = 0.5; mus.settable = Math.abs(probeA.volume - 0.5) < 0.01; }
+  catch (e) { mus.settable = false; }
+  function wantGain() { return GAIN === '1' || (GAIN !== '0' && !mus.settable); }
   function el() {
-    if (!mus.a) { mus.a = new Audio(); mus.a.loop = true; mus.a.preload = 'auto'; }
+    if (!mus.a) { mus.a = new Audio(); mus.a.loop = true; mus.a.preload = 'auto'; applyVol(); }
     return mus.a;
+  }
+  function applyVol() {
+    var v = mus.vol, off = v <= 0.0001;
+    mus.muted = off;
+    var a = mus.a;
+    if (a) { try { if (a.muted !== off) a.muted = off; } catch (e) {} }
+    if (mus.gain) {
+      try {
+        var g = mus.gain.gain, t = mus.ctx.currentTime;
+        if (g.cancelAndHoldAtTime) g.cancelAndHoldAtTime(t);
+        else { var cur = g.value; g.cancelScheduledValues(t); g.setValueAtTime(cur, t); }
+        g.setTargetAtTime(v, t, 0.03);              // ~0,1 с до уровня — без щелчка
+      } catch (e) { try { mus.gain.gain.value = v; } catch (e2) {} }
+    } else if (a && mus.settable) {
+      try { a.volume = v; } catch (e) {}
+    }
+  }
+  // контекст поднять, если он «suspended»/«interrupted» (жест игрока, возврат вкладки)
+  function wake() {
+    var c = mus.ctx;
+    if (c && c.state !== 'running' && c.state !== 'closed') {
+      try { var p = c.resume(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    }
+  }
+  function build() {                                   // контекст уже «running»: элемент → усиление → выход
+    if (mus.gain || !mus.a || !mus.ctx || mus.ctx.state !== 'running') return;
+    try {
+      var c = mus.ctx, node = c.createMediaElementSource(mus.a), g = c.createGain();
+      g.gain.value = mus.vol;
+      node.connect(g); g.connect(c.destination);
+      mus.node = node; mus.gain = g;
+      try { mus.a.volume = 1; } catch (e) {}           // уровень теперь в gain (где volume задаётся — без двойного)
+      applyVol();
+    } catch (e) { mus.err = String((e && e.name) || e); }
+  }
+  // только из жеста игрока
+  function route() {
+    if (mus.gain || mus.building || !mus.a || !wantGain()) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) { mus.err = 'no AudioContext'; return; }
+    try {
+      if (!mus.ctx) mus.ctx = new AC();
+      if (mus.ctx.state === 'running') { build(); return; }
+      var p = mus.ctx.resume();
+      if (p && p.then) {
+        mus.building = true;
+        p.then(function () { mus.building = false; build(); },
+               function (e) { mus.building = false; mus.err = String((e && e.name) || e); });
+      }
+    } catch (e) { mus.building = false; mus.err = String((e && e.name) || e); }
   }
   function tryPlay() {
     if (mus.want && mus.a && mus.a.paused && !document.hidden) {
-      var p = mus.a.play();
-      if (p && p.catch) p.catch(function () {});
+      try { var p = mus.a.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
     }
   }
-  ['pointerdown', 'keydown', 'touchend', 'mousedown'].forEach(function (e) { document.addEventListener(e, tryPlay, true); });
+  function gesture() { wake(); try { route(); } catch (e) {} tryPlay(); }
+  function away() { if (mus.a) { try { mus.a.pause(); } catch (e) {} } }
+  ['pointerdown', 'keydown', 'touchend', 'mousedown'].forEach(function (e) { document.addEventListener(e, gesture, true); });
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { if (mus.a) mus.a.pause(); } else tryPlay();
+    if (document.hidden) away(); else { wake(); tryPlay(); }
   });
+  // iOS: при уходе со страницы и блокировке экрана visibilitychange приходит не всегда — пауза и на pagehide
+  window.addEventListener('pagehide', away);
+  window.addEventListener('pageshow', function () { if (!document.hidden) { wake(); tryPlay(); } });
   window.wnbMusic = {
     play: function (u) { var a = el(); if (mus.src !== u) { mus.src = u; a.src = u; } mus.want = true; tryPlay(); },
     stop: function () { mus.want = false; if (mus.a) mus.a.pause(); },
-    volume: function (v) { el().volume = Math.max(0, Math.min(1, v)); },
-    state: function () { return mus.a ? ((mus.a.paused ? 'paused' : 'playing') + ' ' + mus.src) : 'none'; }
+    volume: function (v) { mus.vol = Math.max(0, Math.min(1, +v || 0)); el(); applyVol(); },
+    state: function () { return mus.a ? ((mus.a.paused ? 'paused' : 'playing') + ' ' + mus.src) : 'none'; },
+    // проверка (web_smoke music): как сейчас ведётся громкость
+    info: function () {
+      var g = null, ev = null;
+      try { if (mus.gain) g = +mus.gain.gain.value.toFixed(4); } catch (e) {}
+      try { if (mus.a) ev = +mus.a.volume.toFixed(4); } catch (e) {}
+      return JSON.stringify({ mode: mus.gain ? 'gain' : 'element', want_gain: wantGain(), force: GAIN,
+        settable: mus.settable, muted: mus.muted, el_muted: mus.a ? !!mus.a.muted : null, vol: +mus.vol.toFixed(4),
+        el_vol: ev, gain: g, ctx: mus.ctx ? mus.ctx.state : '', err: mus.err });
+    }
   };
 
   // --- буфер обмена: Godot копирует через navigator.clipboard.writeText (DisplayServer.clipboard_set), ответ браузера

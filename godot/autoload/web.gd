@@ -116,6 +116,8 @@ func _on_stage(args: Array) -> void:
 				var sc: Node = Nav.current
 				if sc != null and "ride" in sc and sc.get("ride") is RideView:
 					(sc.get("ride") as RideView).visible = kv[1] == "1"
+			elif kv[0].begins_with("vol_"):       # web_smoke music: «set:vol_music=0.5» — ползунок громкости (master/music/…)
+				Settings.set_vol(kv[0].substr(4), float(kv[1]))
 			else:
 				Settings.set_a11y(kv[0], int(kv[1]) if kv[0] == "text" else kv[1] == "1")
 		JavaScriptBridge.eval("window.wnbStaged = %s" % JSON.stringify(name), true)
@@ -342,7 +344,7 @@ func state() -> Dictionary:
 		"fullscreen": DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN,
 		"text_k": Settings.a11y.get("text", 0), "speech_on": Settings.a11y.get("on", false),
 		"kb": str(A11y.kb_cur.name) if is_instance_valid(A11y.kb_cur) else "",
-		"music": Audio._cur_theme, "buttons": _buttons(), "hint": [], "covered": covered, "paused": get_tree().paused}
+		"music": Audio._cur_theme, "music_lvl": snappedf(Audio.music_level(), 0.0001), "buttons": _buttons(), "hint": [], "covered": covered, "paused": get_tree().paused}
 	# окно Godot (= буфер холста) и где в нём игровая картинка 1280×720 после растяжения (x, y, ш, в) — для проверки,
 	# что картинка целиком на экране (web_smoke stale)
 	var ws := DisplayServer.window_get_size()
