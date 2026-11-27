@@ -3060,8 +3060,10 @@ def _cross(a, b, gap=0.0):
 
 
 def toolbig_layout(st):
-    """Телефон, ремонт (27.11): плитки 86×86 (Гильдия — 56), полоса и плитки не на «СНОСКИ МАНУАЛА» (зазор 8), строках
-    деталей, «+»/«−», пузыре клиента, окне коляски; карточка сноски — не на плитках и коляске, не выше y 70.
+    """Телефон, ремонт (27.11): кнопка рук и плитки кучек не мельче 56 (Гильдия — 56×56), зазор в кучке ≥ 8, между
+    кучками и до рук ≥ 16, подписи и заголовки помещаются (tools.labels_bad, groups), плитки, заголовки и полоса не на
+    «СНОСКИ МАНУАЛА» (зазор 8), строках деталей, «+»/«−», пузыре клиента, окне коляски; карточка сноски — не на
+    плитках и коляске, не выше y 70.
     Возврат — список нарушений (по состоянию страницы window.wnbState, не по снимку)."""
     bad = []
     btn = {b_[0]: b_[1:5] for b_ in st.get("buttons", [])}
@@ -3076,9 +3078,24 @@ def toolbig_layout(st):
         return bad
     if len(tiles) != 20:
         bad.append(f"плиток {len(tiles)}, а не 20")
+    grp = {}
+    for g in tl.get("groups", []):
+        if not g[5]:
+            bad.append(f"заголовок кучки {g[0]} шире кучки")
     for k, v in tiles.items():
-        if round(v[2]) != 86 or round(v[3]) != 86:
-            bad.append(f"{k} не 86×86 ({v})")
+        if min(v[2], v[3]) < 56 - 0.01:
+            bad.append(f"{k} мельче 56 ({v})")
+        for g in tl.get("groups", []):
+            if g[1] <= v[0] and v[0] + v[2] <= g[1] + g[3] + 0.5 and g[2] <= v[1] and v[1] + v[3] <= g[2] + g[4] + 0.5:
+                grp[k] = g[0]
+    if tl.get("labels_bad"):
+        bad.append(f"подписи не помещаются: {tl['labels_bad']}")
+    ks = sorted(tiles)
+    for i, a in enumerate(ks):
+        for b2 in ks[i + 1:]:
+            need = 8 if grp.get(a, a) == grp.get(b2, b2) else 16
+            if _cross(_rx(tiles[a]), _rx(tiles[b2]), need - 0.01):
+                bad.append(f"зазор {a} ↔ {b2} меньше {need}")
     nb = btn.get("Notes")
     if nb and not (nb[0] >= 0 and nb[1] >= 0 and nb[0] + nb[2] <= 1280 and nb[1] + nb[3] <= 720):
         bad.append(f"«СНОСКИ МАНУАЛА» не целиком на экране ({nb})")
@@ -3088,7 +3105,8 @@ def toolbig_layout(st):
     box = (st.get("ride") or {}).get("box")
     if box:
         obst.append(("Chair", _rx(box)))
-    mine = [(k, _rx([v[0], v[1] - 6, v[2], v[3] + 6])) for k, v in tiles.items()] + [("Strip", _rx(tl["strip"]))]
+    mine = [(k, _rx([v[0], v[1] - 6, v[2], v[3] + 6])) for k, v in tiles.items()] + \
+        [("Head_" + g[0], _rx([g[1], g[2], g[3], 13])) for g in tl.get("groups", [])] + [("Strip", _rx(tl["strip"]))]
     for mk, mr in mine:
         for ok_, orr in obst:
             if _cross(mr, orr):

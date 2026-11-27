@@ -4,22 +4,49 @@ extends Control
 ## инструмент приподнят, в янтарной рамке и покачивается (после ошибки — вздрагивает); справа карточка: что за
 ## инструмент (наведённый важнее выбранного), сноска мануала к детали, подсказка обучения или общая подсказка.
 ## Плитки — кнопки (фокус, Enter, имя для чтеца экрана: название и подсказка инструмента).
-## Телефон (UI.phone(), 27.11): обычный ремонт — плитки 86 во всю ширину до колонки деталей, вместо карточки полоса над
-## ними, сноска — карточкой слева (_draw_big); Гильдия — плитки 56 с рисунком 50, карточка как была.
+## Телефон (UI.phone(), 27.11): обычный ремонт — слева крупная кнопка «Руки и глаза», правее кучки инструментов по
+## назначению (заголовок, оттенок, подпись под рисунком), над ними полоса с названием и описанием вместо карточки,
+## сноска — карточкой слева (_draw_big); Гильдия — плитки 56 с рисунком 50, карточка как была.
 
 signal tool_pressed(tid: String)
 
 const TILE := 50
 const GAP := 8
-# Телефон, обычный ремонт (27.11, вариант 3 владельца): плитки 86 через 94 (2 ряда по 10, x 24…956, левее колонки
-# деталей x 980, низ 712), рисунок 74; карточки справа нет — название и описание строкой (полоса) над плитками, низ полосы 520.
-# Сноска мануала — карточкой в левой колонке (на месте портрета и пузыря клиента), растёт вверх от низа полосы.
-const PH_TILE := 86
-const PH_STEP := 94
-const PH_TILES_Y := 532
-const PH_STRIP_BOTTOM := 520.0
-const PH_ICON := 74.0                       # рисунок в плитке 86 (текстуры 128×128)
+# Телефон, обычный ремонт (27.11, выбор владельца — эскиз tools/tool_choice_mock/C_sochetanie_ves_ekran.jpg):
+# «Руки и глаза» — кнопка 112×184 слева (x 24, y 530…714); правее, через 16, — кучки по назначению в 2 ряда (плитки
+# 71×78, внутри кучки зазор 8, между кучками 16; ряды y 536 и 636, низ 714), над кучкой заголовок (полоса 13 px) с
+# линией. Подписи и заголовки — в пикселях холста (не растут с настройкой «размер текста»: 11 → 10, до 2 строк).
+# Карточки справа нет — название и описание строкой (полоса) над всем этим, низ полосы 514. Порядок, кучки и подписи —
+# только здесь; на компьютере и в Гильдии — как game.py (порядок tools.json).
+const PH_HANDS := Rect2(24, 530, 112, 184)
+const PH_TW := 71.0
+const PH_TH := 78.0
+const PH_GAP_IN := 8.0
+const PH_GAP_GRP := 16.0
+const PH_ROWS_Y := [536.0, 636.0]
+const PH_HEAD_H := 13.0                     # полоса заголовка кучки: от y ряда − 6 (подъём выбранной) − 1 − 13
+const PH_TILE_MIX := 0.38                   # оттенок кучки в заливке плитки
+const PH_STRIP_BOTTOM := 514.0
+const PH_ICON := 50.0                       # рисунок в плитке кучки (с подписью в 2 строки — меньше, сколько влезет)
 const PH_TECH_ICON := 50.0                  # Гильдия: плитка 56, рисунок 50 (было 38)
+## Кучки: [ключ, заголовок RU, EN, инструменты, цвет]; ряд 1 — первые две, ряд 2 — остальные.
+const PH_GROUPS := [
+	["fast", "КРЕПЁЖ", "FASTENERS", ["allen", "socket", "wrench", "screw", "spoke_key"], Color8(96, 160, 225)],
+	["wheel", "КОЛЕСО И ШИНА", "WHEEL & TIRE", ["lever", "pump", "patch", "gauge"], Color8(40, 185, 140)],
+	["care", "ЧИСТКА И СМАЗКА", "CLEAN & LUBE", ["lube", "brush", "cloth", "bucket"], Color8(200, 130, 190)],
+	["meas", "ИЗМЕРЕНИЕ", "MEASURE", ["tape", "pencil", "tensiometer", "dial"], Color8(235, 150, 60)],
+	["elec", "ЭЛЕКТРИКА", "ELECTRICS", ["multimeter", "charger"], Color8(225, 100, 95)]]
+## Короткие подписи плиток [RU, EN] (полное название и описание — в полосе; tools.json не меняется).
+## «|» — где слово можно перенести с дефисом, если целиком не помещается и кеглем 10.
+const PH_LABEL := {"allen": ["Шести|гранник", "Hex key"], "socket": ["Торцевой ключ", "Socket wrench"],
+	"wrench": ["Разводной ключ", "Crescent wrench"], "screw": ["Отвёртка", "Screw|driver"],
+	"spoke_key": ["Спицевой ключ", "Spoke wrench"], "lever": ["Монтажка", "Tire lever"], "pump": ["Насос", "Pump"],
+	"patch": ["Заплатка", "Patch"], "gauge": ["Манометр", "Pressure gauge"], "lube": ["Смазка", "Lubricant"],
+	"brush": ["Щётка / пинцет", "Brush / tweezers"], "cloth": ["Тряпка", "Cloth"], "bucket": ["Таз с водой", "Bowl of water"],
+	"tape": ["Рулетка", "Tape measure"], "pencil": ["Карандаш", "Pencil"], "tensiometer": ["Тензио|метр", "Tension meter"],
+	"dial": ["Инди|катор", "Dial indi|cator"], "multimeter": ["Мульти|метр", "Multi|meter"], "charger": ["Зарядка", "Charger"]}
+## Кнопка «Руки и глаза»: название и пояснение [RU, EN] (строки пояснения — через «\n»).
+const PH_HANDS_TXT := [["Руки и глаза", "Hands & eyes"], ["смотреть · трогать\nнажать · снять-поставить", "look · touch\npress · refit"]]
 const PH_NOTE_W := 332.0                    # карточка сноски: x 24…356 (текст шага и коляска — правее x 360)
 const PH_NOTE_TOP := 70.0                   # выше — шапка экрана
 var job_screen: Node                       # экран задания: sel_tool, mistakes, tutor_want(), note_part_at()
@@ -51,10 +78,12 @@ func tile_rects() -> Dictionary:
 			for i in ids.size():
 				out[ids[i]] = Rect2(130 + i * 64, 648, 56, 56)
 			return out
-		var alp: Array = Content.tools.keys()
-		var perp := (alp.size() + 1) / 2
-		for i in alp.size():
-			out[alp[i]] = Rect2(24 + (i % perp) * PH_STEP, PH_TILES_Y + (i / perp) * PH_STEP, PH_TILE, PH_TILE)
+		out["hands"] = PH_HANDS                # обычный ремонт: «Руки и глаза» слева, потом кучки по рядам
+		for g: Array in ph_groups():
+			var ids_: Array = g[3]
+			var r: Rect2 = g[2]
+			for j in ids_.size():
+				out[ids_[j]] = Rect2(r.position.x + j * (PH_TW + PH_GAP_IN), r.end.y - PH_TH, PH_TW, PH_TH)
 		return out
 	if tech():                                 # Гильдия: один ряд из палитры задания
 		for i in ids.size():
@@ -78,14 +107,53 @@ static func ph_strip_top() -> float:
 	return PH_STRIP_BOTTOM - ph_strip_h()
 
 
-## Телефонная раскладка обычного ремонта (плитки 86, полоса), а не Гильдия и не компьютер.
+## Телефонная раскладка обычного ремонта (кнопка рук, кучки, полоса), а не Гильдия и не компьютер.
 func big() -> bool:
 	return UI.phone() and not tech()
 
 
+## Телефон, обычный ремонт: кучки — [ключ, заголовок на текущем языке, прямоугольник кучки (полоса заголовка и
+## плитки), инструменты, цвет]. Инструменты, которых нет ни в одной кучке (кроме рук), — последней кучкой без
+## заголовка во втором ряду (сейчас таких нет).
+func ph_groups() -> Array:
+	var en := Loc.code == "en"
+	var used := {"hands": true}
+	var defs: Array = []
+	for g: Array in PH_GROUPS:
+		var ids_: Array = (g[3] as Array).filter(func(x: String) -> bool: return Content.tools.has(x))
+		for x: String in ids_:
+			used[x] = true
+		defs.append([g[0], g[2] if en else g[1], ids_, g[4]])
+	var rest: Array = Content.tools.keys().filter(func(x: String) -> bool: return not used.has(x))
+	if not rest.is_empty():
+		defs.append(["other", "", rest, UI.DIM])
+	var out: Array = []
+	var x := PH_HANDS.end.x + PH_GAP_GRP
+	var row := 0
+	for k in defs.size():
+		if k == 2:                                 # второй ряд — с третьей кучки
+			row = 1
+			x = PH_HANDS.end.x + PH_GAP_GRP
+		var d: Array = defs[k]
+		var n: int = (d[2] as Array).size()
+		var gw := n * PH_TW + (n - 1) * PH_GAP_IN
+		var top: float = float(PH_ROWS_Y[row]) - 6 - 1 - PH_HEAD_H
+		out.append([d[0], d[1], Rect2(x, top, gw, float(PH_ROWS_Y[row]) + PH_TH - top), d[2], d[3]])
+		x += gw + PH_GAP_GRP
+	return out
+
+
+## Кучка инструмента (ph_groups) или [] — для подписи чтеца и оттенка плитки.
+func ph_group_of(tid: String) -> Array:
+	for g: Array in ph_groups():
+		if tid in (g[3] as Array):
+			return g
+	return []
+
+
 func info_rect() -> Rect2:
 	if big():                                  # полоса над плитками во всю их ширину
-		return Rect2(24, ph_strip_top(), PH_STEP * 9 + PH_TILE, ph_strip_h())
+		return Rect2(24, ph_strip_top(), 932, ph_strip_h())
 	var right := 0.0
 	var top := 1e9
 	var bottom := 0.0
@@ -113,7 +181,7 @@ func _ready() -> void:
 		b.plain = true
 		b.set_meta("tid", tid)
 		b.set_meta("i", i)
-		b.accessibility_name = Loc.t(Content.tools[tid]["name"]) + ". " + Loc.t(Content.tools[tid]["hint"])
+		b.accessibility_name = _a11y_name(tid, "")
 		b.on_draw = _draw_tile
 		b.redraw_sig = _tile_sig.bind(b)
 		b.pressed.connect(func() -> void: tool_pressed.emit(tid))
@@ -131,6 +199,13 @@ func _ready() -> void:
 		add_child(b)
 		tiles[tid] = b
 		i += 1
+	if big():                                  # заголовки кучек (над плитками, под полосой)
+		var heads := Control.new()
+		heads.name = "Groups"
+		heads.size = size
+		heads.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		heads.draw.connect(_draw_heads.bind(heads))
+		add_child(heads)
 
 
 func hovered_tool() -> String:
@@ -210,9 +285,19 @@ func _tile_sig(b: GameButton) -> Array:
 func update_a11y(sel: String) -> void:
 	for tid: String in tiles:
 		var b: GameButton = tiles[tid]
-		b.accessibility_name = Loc.t(Content.tools[tid]["name"]) + (", " + Loc.t("в руке") if tid == sel else "") + \
-			". " + Loc.t(Content.tools[tid]["hint"])
+		b.accessibility_name = _a11y_name(tid, sel)
 		b.set_meta("a11y_group", "Инструменты")
+
+
+## «Насос, в руке. Накачать камеру…»; телефон, обычный ремонт — ещё кучка: «Насос. Колесо и шина. …».
+func _a11y_name(tid: String, sel: String) -> String:
+	var nm := Loc.t(Content.tools[tid]["name"]) + (", " + Loc.t("в руке") if tid == sel else "")
+	if big():
+		var g := ph_group_of(tid)
+		if not g.is_empty() and str(g[1]) != "":
+			var head := str(g[1])
+			nm += ". " + head.substr(0, 1) + head.substr(1).to_lower()
+	return nm + ". " + Loc.t(Content.tools[tid]["hint"])
 
 
 func _draw_tile(b: GameButton, _r: Rect2) -> void:
@@ -229,7 +314,29 @@ func _draw_tile(b: GameButton, _r: Rect2) -> void:
 	var c := r.get_center()
 	b.draw_set_transform(c, 0.0, Vector2(enter, enter))
 	var lr := Rect2(-r.size / 2.0, r.size)
-	UI.draw_round_rect(b, lr, Color8(52, 48, 64, 235), UI.AMBER if active else UI.DIM.lerp(UI.GHOST, h), 3 if active else 2, 12)
+	var icon_c := Vector2.ZERO                 # середина рисунка от середины плитки
+	var isz_big := 0.0
+	if big():                                  # телефон: оттенок кучки, подпись под рисунком; руки — своя кнопка
+		var hands := tid == "hands"
+		var grp := ph_group_of(tid)
+		var gc: Color = UI.AMBER if hands else (grp[4] if not grp.is_empty() else UI.DIM)
+		var fill := Color8(64, 52, 30) if hands else Color8(52, 48, 64).lerp(gc, PH_TILE_MIX)
+		fill.a = 240.0 / 255.0 if hands else 235.0 / 255.0
+		var edge := UI.AMBER if active else (Color8(150, 120, 60) if hands else UI.DIM.lerp(gc, 0.6)).lerp(UI.GHOST, h)
+		UI.draw_round_rect(b, lr, fill, edge, 3 if active else 2, 14 if hands else 11)
+		var lay := ph_hands_fit() if hands else ph_label_fit(tid)
+		var y: float = lr.end.y - float(lay[3])
+		var lines_: PackedStringArray = lay[1]
+		for k in lines_.size():
+			var ln: String = lines_[k]
+			var px: int = lay[0] if (not hands or k == 0) else lay[2]
+			var bold := not hands or k == 0
+			var w := UI.px_width(ln, px, bold)
+			UI.put_string(b, Vector2(roundf(-w / 2.0), roundf(y) + UI.font(bold).get_ascent(px)), ln, px,
+				(UI.AMBER if k == 0 else Color8(220, 200, 160)) if hands else UI.WHITE, bold)
+			y += UI.px_height(px, bold) + 1
+		isz_big = minf(84.0 if hands else PH_ICON, lr.size.y - float(lay[3]) - (16 if hands else 8))
+		icon_c = Vector2(0, lr.position.y + (lr.size.y - float(lay[3])) / 2.0)
 	b.draw_set_transform(Vector2.ZERO)
 	var ang := 0.0
 	if active:
@@ -242,14 +349,133 @@ func _draw_tile(b: GameButton, _r: Rect2) -> void:
 		var isz := 38.0                          # телефон: 74 в плитке 86 (крупнее при наведении — меньше: не за плитку),
 		if UI.phone():                           # Гильдия — 50 в плитке 56
 			isz = PH_TECH_ICON if tech() else PH_ICON
+		if big():
+			isz = isz_big
 		var k := enter * (1 + (0.16 if not UI.phone() else 0.08 if big() else 0.06) * h)
-		b.draw_set_transform(c, deg_to_rad(-ang), Vector2(k, k))
+		b.draw_set_transform(c + icon_c * enter, deg_to_rad(-ang), Vector2(k, k))
 		var fr := UI.fit_rect(tex.get_size(), Rect2(-isz / 2.0, -isz / 2.0, isz, isz))
 		b.draw_texture_rect(tex, fr, false)
 		b.draw_set_transform(Vector2.ZERO)
 	var want: Array = job_screen.tutor_want()
 	if not want.is_empty() and want[0] == "tool" and tid == job_screen.tutor_step()["tool"] and enter >= 1:
 		TutorRing.draw_rect_ring(b, r, t)
+
+
+## Строки по словам шириной w пикселей шрифта px; « / » остаётся на первой строке («Щётка /» + «пинцет»); «|» в
+## слове — перенос с дефисом (только cut = true и если слово целиком в строку не помещается).
+static func _px_wrap(text: String, w: float, px: int, bold: bool, cut: bool = false) -> PackedStringArray:
+	var out: PackedStringArray = []
+	var cur := ""
+	for word in text.replace(" / ", "\u00a0/ ").split(" "):
+		var wd := word.replace("\u00a0", " ")
+		var whole := wd.replace("|", "")
+		var test := (cur + " " + whole).strip_edges()
+		if UI.px_width(test, px, bold) <= w:
+			cur = test
+			continue
+		if cur != "":
+			out.append(cur)
+			cur = ""
+		if cut and "|" in wd and UI.px_width(whole, px, bold) > w:
+			var parts := wd.split("|")
+			out.append(parts[0] + "-")
+			cur = "".join(parts.slice(1))
+		else:
+			cur = whole
+	if cur != "":
+		out.append(cur)
+	return out
+
+
+## Подпись плитки кучки: [px, строки, px, высота блока подписи, помещается ли]; жирный 11 → 10, до 2 строк, без «…»
+## (не помещается и при 10 — строки как есть, «помещается» = false: это ловят проверки).
+func ph_label_fit(tid: String) -> Array:
+	var lab: Array = PH_LABEL.get(tid, [Content.tools[tid]["name"], Loc.t(Content.tools[tid]["name"])])
+	var text: String = lab[1] if Loc.code == "en" else lab[0]
+	var w := PH_TW - 6
+	var lines: PackedStringArray = []
+	var px := 11
+	var ok := false
+	for v: Array in [[11, false], [10, false], [11, true], [10, true]]:   # сперва без переноса с дефисом
+		px = v[0]
+		lines = _px_wrap(text, w, px, true, v[1])
+		ok = lines.size() <= 2
+		for ln in lines:
+			ok = ok and UI.px_width(ln, px, true) <= w
+		if ok:
+			break
+	return [px, lines, px, lines.size() * (UI.px_height(px, true) + 1) + 4, ok]
+
+
+## Кнопка «Руки и глаза»: [px названия, строки (название, потом пояснение), px пояснения, высота блока, помещается ли].
+func ph_hands_fit() -> Array:
+	var en := Loc.code == "en"
+	var title: String = PH_HANDS_TXT[0][1 if en else 0]
+	var w := PH_HANDS.size.x - 10
+	var tp := 13
+	while tp > 11 and UI.px_width(title, tp, true) > w:
+		tp -= 1
+	var ok := UI.px_width(title, tp, true) <= w
+	var lines: PackedStringArray = [title]
+	var hp := 11
+	var sub: PackedStringArray = []
+	for p_: int in [11, 10]:
+		hp = p_
+		sub = []
+		for part: String in (PH_HANDS_TXT[1][1 if en else 0] as String).split("\n"):
+			sub.append_array(_dot_wrap(part, w, hp))
+		var fits := true
+		for ln in sub:
+			fits = fits and UI.px_width(ln, hp, false) <= w
+		if fits:
+			break
+	for ln in sub:
+		ok = ok and UI.px_width(ln, hp, false) <= w
+	lines.append_array(sub)
+	var hh := UI.px_height(tp, true) + 3 + sub.size() * (UI.px_height(hp, false) + 1) + 6
+	return [tp, lines, hp, hh, ok]
+
+
+## Пояснение кнопки рук: пункты через « · » по строкам; не помещается — пункт с новой строки (без «·» на краю).
+static func _dot_wrap(text: String, w: float, px: int) -> PackedStringArray:
+	var out: PackedStringArray = []
+	var cur := ""
+	for item in text.split(" · "):
+		var test := item if cur == "" else cur + " · " + item
+		if cur == "" or UI.px_width(test, px, false) <= w:
+			cur = test
+		else:
+			out.append(cur)
+			cur = item
+	if cur != "":
+		out.append(cur)
+	return out
+
+
+## Заголовок кучки: [px, помещается ли] — жирный 11 → 10 в ширину кучки.
+static func ph_head_fit(text: String, w: float) -> Array:
+	var px := 11
+	while px > 10 and UI.px_width(text, px, true) > w:
+		px -= 1
+	return [px, UI.px_width(text, px, true) <= w]
+
+
+## Заголовки кучек: жирный в цвет кучки (светлее), правее — тонкая линия до конца кучки.
+func _draw_heads(ci: Control) -> void:
+	for g: Array in ph_groups():
+		var head: String = g[1]
+		if head == "":
+			continue
+		var r: Rect2 = g[2]
+		var col: Color = (g[4] as Color).lerp(Color.WHITE, 0.25)
+		var f := ph_head_fit(head, r.size.x)
+		var px: int = f[0]
+		var y := r.position.y + floorf((PH_HEAD_H - UI.px_height(px, true)) / 2.0)
+		UI.put_string(ci, Vector2(r.position.x + 1, y + UI.font(true).get_ascent(px)), head, px, col, true)
+		var hw := UI.px_width(head, px, true)
+		if r.size.x > hw + 24:
+			var ly := r.position.y + floorf(PH_HEAD_H / 2.0) + 1
+			ci.draw_line(Vector2(r.position.x + hw + 8, ly), Vector2(r.end.x - 2, ly), Color(col, 0.6), 2.0)
 
 
 func _draw_card() -> void:

@@ -394,6 +394,20 @@ func state() -> Dictionary:
 			var nr := tp.note_rect()
 			d["tools"] = {"big": tp.big(), "strip": [sr.position.x, sr.position.y, sr.size.x, sr.size.y],
 				"note": [nr.position.x, nr.position.y, nr.size.x, nr.size.y], "note_pid": tp.note_pid()}
+			if tp.big():                        # кучки: [ключ, x, y, w, h, заголовок помещается]; подписи, что не влезли
+				var gs: Array = []
+				var lb: Array = []
+				for g: Array in tp.ph_groups():
+					var grc: Rect2 = g[2]
+					gs.append([g[0], grc.position.x, grc.position.y, grc.size.x, grc.size.y,
+						str(g[1]) == "" or bool(ToolPanel.ph_head_fit(str(g[1]), grc.size.x)[1])])
+					for x: String in g[3]:
+						if not bool(tp.ph_label_fit(x)[4]):
+							lb.append(x)
+				if not bool(tp.ph_hands_fit()[4]):
+					lb.append("hands")
+				d["tools"]["groups"] = gs
+				d["tools"]["labels_bad"] = lb
 		var cbv: Variant = scr.get("_client_bubble") if "_client_bubble" in scr else null
 		if cbv is SpeechBubble and (cbv as SpeechBubble).visible:
 			var cb: Rect2 = (cbv as SpeechBubble).client_rect()

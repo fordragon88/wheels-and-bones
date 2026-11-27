@@ -156,7 +156,8 @@ static func analyze(state: String, ts: Array) -> Dictionary:
 	return {"small": small, "small_ex": small_ex, "over": over, "close": close}
 
 
-## Телефон, обычный ремонт (27.11, плитки 86): плитки 86×86 и полоса над ними не пересекают и не ближе 8 к кнопке
+## Телефон, обычный ремонт (27.11): кнопка рук и плитки кучек (по tile_rects(), ≥ 56, зазор в кучке 8, между кучками 16,
+## подписи и заголовки помещаются), заголовки кучек и полоса над ними не пересекают и не ближе 8 к кнопке
 ## «СНОСКИ МАНУАЛА», строкам деталей (с книжками), колонке Барти, кружкам деталей, «+»/«−», пузырю клиента, окну
 ## коляски; текст шага — над коляской; открытая сноска — не на плитках, полосе, коляске и кружке своей детали.
 ## Возврат — список нарушений (пусто — всё на месте).
@@ -191,14 +192,50 @@ static func repair_layout(scr: Node) -> PackedStringArray:
 	var mc: Rect2 = scr._mentor.col
 	if mc.has_area():
 		obst.append(["MentorCol", Rect2(mc.position + o, mc.size)])
-	var mine: Array = []                                    # плитки и полоса
+	var mine: Array = []                                    # плитки (с кнопкой рук), заголовки кучек и полоса
+	var want_r := tp.tile_rects()
+	var trs: Dictionary = {}
 	for tid: String in tp.tiles:
 		var tr: Rect2 = (tp.tiles[tid] as Control).get_global_rect()
-		if absf(tr.size.x - ToolPanel.PH_TILE) > 0.5 or absf(tr.size.y - ToolPanel.PH_TILE) > 0.5:
-			bad.append("плитка %s не 86×86: %s" % [tid, _fmt_r(tr)])
+		trs[tid] = tr
+		if not want_r.has(tid) or not tr.is_equal_approx(Rect2(want_r[tid].position + o, want_r[tid].size)):
+			bad.append("плитка %s не на своём месте tile_rects(): %s" % [tid, _fmt_r(tr)])
+		if minf(tr.size.x, tr.size.y) < UI.PHONE_MIN - 0.01:
+			bad.append("плитка %s мельче 56: %s" % [tid, _fmt_r(tr)])
+		if tid != "hands" and not bool(tp.ph_label_fit(tid)[4]):
+			bad.append("подпись плитки %s не помещается: %s" % [tid, str(tp.ph_label_fit(tid)[1])])
 		mine.append(["Tool_" + tid, tr.grow_individual(0, 6, 0, 0)])      # выбранная приподнята на 6
+	if not bool(tp.ph_hands_fit()[4]):
+		bad.append("подпись кнопки «Руки и глаза» не помещается: %s" % str(tp.ph_hands_fit()[1]))
+	var gid: Dictionary = {}                                # инструмент → кучка («hands» — своя)
+	for g: Array in tp.ph_groups():
+		var gr: Rect2 = g[2]
+		var hr := Rect2(gr.position + o, Vector2(gr.size.x, ToolPanel.PH_HEAD_H))
+		mine.append(["Head_" + str(g[0]), hr])
+		if str(g[1]) != "" and not bool(ToolPanel.ph_head_fit(str(g[1]), gr.size.x)[1]):
+			bad.append("заголовок кучки %s шире кучки" % g[0])
+		for x: String in g[3]:
+			gid[x] = g[0]
+			if trs.has(x) and trs[x].grow_individual(0, 6, 0, 0).intersection(hr).has_area():
+				bad.append("плитка %s (поднятая) заходит на заголовок своей кучки" % x)
+	var ks: Array = trs.keys()
+	for i in ks.size():                                     # зазоры: в кучке ≥ 8, между кучками и до рук ≥ 16
+		for j in range(i + 1, ks.size()):
+			var a: Rect2 = trs[ks[i]]
+			var b: Rect2 = trs[ks[j]]
+			var need: float = UI.PHONE_GAP if gid.get(ks[i], "hands") == gid.get(ks[j], "hands") else 16.0
+			if a.grow(need / 2.0 - 0.01).intersection(b.grow(need / 2.0 - 0.01)).has_area():
+				bad.append("зазор %s ↔ %s меньше %d" % [ks[i], ks[j], need])
+	for m: Array in mine:                                   # заголовки — не на плитках чужих кучек
+		if str(m[0]).begins_with("Head_"):
+			for tid: String in trs:
+				if (trs[tid] as Rect2).grow_individual(0, 6, 0, 0).intersection(m[1]).has_area():
+					bad.append("%s заходит на плитку %s" % [m[0], tid])
 	var sr := tp.info_rect()
 	mine.append(["Strip", Rect2(sr.position + o, sr.size)])
+	for m: Array in mine:                                   # полоса — не на плитках и заголовках
+		if m[0] != "Strip" and (m[1] as Rect2).intersection(mine[-1][1]).has_area():
+			bad.append("полоса пересекает %s" % m[0])
 	lay_info = "плиток %d, полоса %s, препятствий %d (%s), сноска %s" % [tp.tiles.size(), _fmt_r(sr), obst.size(),
 		", ".join(obst.map(func(x: Array) -> String: return str(x[0]))), _fmt_r(tp.note_rect())]
 	for m: Array in mine:
@@ -323,7 +360,7 @@ static func summary(on: bool, d: Dictionary) -> String:
 	var t: Dictionary = d["tot"]
 	return "PHONE TARGETS (%s): состояний %d, целей %d, мельче 56: %d (исключений %d), пересечений: %d, зазор < 8: %d%s" % [
 		"телефон" if on else "выкл", d["per"].size(), t["n"], t["small"], t["small_ex"], t["over"], t["close"],
-		"; раскладка ремонта (плитки 86, полоса, сноска): нарушений %d" % t["layout"] if on else ""]
+		"; раскладка ремонта (рук, кучки, полоса, сноска): нарушений %d" % t["layout"] if on else ""]
 
 
 static func write_out(fname: String, text: String) -> void:
