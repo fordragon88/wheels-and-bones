@@ -422,9 +422,10 @@ static func pc_repair_layout(scr: Node) -> PackedStringArray:
 	return bad
 
 
-## Значок «без звука» (28.11, отзыв с iPhone: лежал на флажке): при выключенном звуке его прямоугольник
-## (IconButton.mute_rect) не пересекает ни одну кнопку шапки (верх 56) и текст названия/бренда шапки
-## (TopBar.text_rects) — на всех ключевых экранах, RU/EN, обычный вид и телефон. Возврат: [проверено, нарушения].
+## Кнопка звука (28.11: значок «без звука» лежал на флажке; теперь выключатель, как M, всегда в шапке): при включённом
+## и выключенном звуке её прямоугольник не пересекает ни одну кнопку шапки (верх 56; телефон — и зазор ≥ 8) и текст
+## названия/бренда шапки (TopBar.text_rects), на телефоне цель ≥ 56 — на всех ключевых экранах, RU/EN, ПК и телефон.
+## На первом экране каждого прохода — нажатие (сигнал pressed) выключает и включает звук. Возврат: [проверено, нарушения].
 func mute_check(runner: Node) -> Array:
 	R = runner
 	_ensure_stager()
@@ -440,6 +441,7 @@ func mute_check(runner: Node) -> Array:
 		UI.set_phone(ph)
 		for lang: String in ["ru", "en"]:
 			SaveGame.reset()
+			var pressed_ok := false
 			for name: String in ["title"] + KEY_STATES:
 				SaveGame.tutorial_skipped = true
 				Settings.lang = lang
@@ -448,34 +450,47 @@ func mute_check(runner: Node) -> Array:
 				await _stager.stage(sname)
 				Settings.lang = lang
 				Loc.code = lang
-				Settings.vol["on"] = false
-				Settings.changed.emit("vol")
-				await R._frames(2)
-				var scr: Node = Nav.current
-				var gear: IconButton = null
-				for c: Node in scr.find_children("Gear", "IconButton", true, false):
-					gear = c
-				if gear == null or not gear.is_visible_in_tree():
-					_stager.unstage(sname)
-					continue
-				n += 1
-				var mr: Rect2 = gear.mute_rect()
-				mr.position += (gear.get_parent() as CanvasItem).get_global_transform().origin
-				for c: Node in scr.find_children("*", "BaseButton", true, false):
-					var b := c as Control
-					if b == gear or not b.is_visible_in_tree() or (b as BaseButton).disabled:
+				for off: bool in [true, false]:
+					Settings.vol["on"] = not off
+					Settings.vol["master"] = 0.8
+					Settings.changed.emit("vol")
+					await R._frames(2)
+					var scr: Node = Nav.current
+					var so: IconButton = null
+					for c: Node in scr.find_children("Sound", "IconButton", true, false):
+						so = c
+					if so == null or not so.is_visible_in_tree():
 						continue
-					var br := b.get_global_rect()
-					if br.position.y < 56 and br.intersects(mr):
-						bad.append("%s %s %s: значок «без звука» %s на кнопке %s %s" % ["телефон" if ph else "ПК", lang, name,
-							_fmt_r(mr), b.name, _fmt_r(br)])
-				for c: Node in scr.find_children("TopBar", "TopBar", true, false):
-					var tb := c as TopBar
-					for tr: Rect2 in tb.text_rects:
-						var g := Rect2(tr.position + tb.get_global_transform().origin, tr.size)
-						if g.intersects(mr):
-							bad.append("%s %s %s: значок «без звука» %s на тексте шапки %s" % ["телефон" if ph else "ПК", lang,
-								name, _fmt_r(mr), _fmt_r(g)])
+					n += 1
+					var tag := "%s %s %s (%s)" % ["телефон" if ph else "ПК", lang, name, "выкл" if off else "вкл"]
+					var mr: Rect2 = so.get_global_rect()
+					if ph and minf(mr.size.x, mr.size.y) < UI.PHONE_MIN - 0.01:
+						bad.append("%s: кнопка звука мельче 56: %s" % [tag, _fmt_r(mr)])
+					for c: Node in scr.find_children("*", "BaseButton", true, false):
+						var b := c as Control
+						if b == so or not b.is_visible_in_tree() or (b as BaseButton).disabled:
+							continue
+						var br := b.get_global_rect()
+						if br.position.y < 56 and br.grow((UI.PHONE_GAP if ph else 0.0) - 0.01).intersects(mr):
+							bad.append("%s: кнопка звука %s на/вплотную к кнопке %s %s" % [tag, _fmt_r(mr), b.name, _fmt_r(br)])
+					for c: Node in scr.find_children("TopBar", "TopBar", true, false):
+						var tb := c as TopBar
+						for tr: Rect2 in tb.text_rects:
+							var g := Rect2(tr.position + tb.get_global_transform().origin, tr.size)
+							if g.intersects(mr):
+								bad.append("%s: кнопка звука %s на тексте шапки %s" % [tag, _fmt_r(mr), _fmt_r(g)])
+					if not pressed_ok and not off:                 # нажатие = M: выключить и включить
+						so.pressed.emit()
+						var m1 := IconButton.muted()
+						so.pressed.emit()
+						var m2 := IconButton.muted()
+						Settings.vol["master"] = 0.0             # выключено общей громкостью — нажатие включает
+						Settings.changed.emit("vol")
+						so.pressed.emit()
+						var m3 := IconButton.muted()
+						if not (m1 and not m2 and not m3):
+							bad.append("%s: нажатие кнопки звука: выкл %s, вкл %s, из «общая 0» %s" % [tag, m1, not m2, not m3])
+						pressed_ok = true
 				_stager.unstage(sname)
 	Engine.time_scale = 1.0
 	if Share.dlg != null:                          # окна от состояний — закрыть (дальше идут проверки фокуса)
@@ -640,6 +655,7 @@ func run(runner: Node) -> String:
 	var ref_path := "res://tests/phone_off_ref.json"
 	var n_off := 0
 	var n_diff := 0
+	var n_sound := 0
 	if not FileAccess.file_exists(ref_path):
 		R.err("нет tests/phone_off_ref.json (… --only phone-ref)")
 	else:
@@ -649,11 +665,15 @@ func run(runner: Node) -> String:
 			if key.begins_with("ru "):
 				states.append(key.substr(3))
 		var off := await measure(runner, states, ["ru"], false)
+		n_sound = 0
 		for key: String in ref:
 			if not off["rects"].has(key):
 				continue
 			n_off += 1
-			if _norm(off["rects"][key]) != _norm(ref[key]):
+			var rows_now: Array = (off["rects"][key] as Array).filter(func(r: Array) -> bool: return r[0] != "Sound")
+			if rows_now.size() != (off["rects"][key] as Array).size():
+				n_sound += 1                      # кнопка звука в шапке (28.11) — новая цель; остальные — как в эталоне
+			if _norm(rows_now) != _norm(ref[key]):
 				n_diff += 1
 				R.err("телефон выключен, %s: цели не как были\n  было  %s\n  стало %s" % [key, JSON.stringify(ref[key]),
 					JSON.stringify(off["rects"][key])])
@@ -673,7 +693,8 @@ func run(runner: Node) -> String:
 				"; ".join(pc["layout"][key])])
 	Settings.a11y["text"] = text0
 	UI.clear_font_cache()
-	return summary(true, on) + "; ремонт при тексте 125/150 %%: состояний %d, нарушений раскладки %d" % [n_big, n_lay] + 		"; компьютер, ремонт с кучками (100/125/150 %%, RU/EN): состояний %d, нарушений %d" % [n_pc, n_pc_lay] + 		"; выключен: %d состояний как эталон (расхождений %d)" % [n_off, n_diff]
+	return summary(true, on) + "; ремонт при тексте 125/150 %%: состояний %d, нарушений раскладки %d" % [n_big, n_lay] + 		"; компьютер, ремонт с кучками (100/125/150 %%, RU/EN): состояний %d, нарушений %d" % [n_pc, n_pc_lay] + 		"; выключен: %d состояний как эталон (расхождений %d; с новой кнопкой звука, без неё как было — %d)" % [n_off, n_diff,
+		n_sound]
 
 
 ## Кегли текста Кабинета посадки (seating.gd text_sizes): каждый урок, клиент, вопрос — при RU/EN, 100/112/125/150 %,

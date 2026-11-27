@@ -602,12 +602,12 @@ func _e15_speech() -> void:
 func _e26_e27_settings() -> void:
 	Nav.go("hub")
 	await _frames(2)
-	var g := Nav.current.get_node("Gear") as Control
+	var g := Nav.current.get_node("Sound") as Control      # 28.11: состояние звука — у кнопки звука, не у шестерёнки
 	var n0 := str(g.accessibility_name)
 	await _key(KEY_M)
 	await _frames(1)
 	if str(g.accessibility_name) == n0:
-		_fail("E26: после M имя шестерёнки для чтеца прежнее: «%s»" % n0)
+		_fail("E26: после M имя кнопки звука для чтеца прежнее: «%s»" % n0)
 	await _key(KEY_M)
 	await _frames(1)
 	Nav.open_settings()

@@ -228,7 +228,7 @@ func _run() -> void:
 	SaveGame.reset()
 	await _flow_mouse()
 	await _flow_keyboard()
-	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; Коды и ссылки: кодов game.py прочитано %d (P/J/R, те же данные), битых отвергнуто %d, ссылок и разборов = game.py %d, своих кодов и ссылок для check_share.py %d; прогресс: копировать → сбросить → вставить → тот же, «вернуть прежний»; %s; «продолжить / обычная игра»; итог в таблицу = game.py (в сеть — ничего); Озвучка: %d/%d сводок, подписей фокуса и фраз клавиш = game.py (RU/EN; известное — инструменты в порядке кучек: %d), в тестах голос не звучит; %s; %s; %s; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, sh[0], sh[1], sh[2], share_out.size(), sh_line, sp_res[0], sp_res[1], speech_tools_known, sw_line, pad_line, ride_line, n_gd, n_audit,
+	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; Коды и ссылки: кодов game.py прочитано %d (P/J/R, те же данные), битых отвергнуто %d, ссылок и разборов = game.py %d, своих кодов и ссылок для check_share.py %d; прогресс: копировать → сбросить → вставить → тот же, «вернуть прежний»; %s; «продолжить / обычная игра»; итог в таблицу = game.py (в сеть — ничего); Озвучка: %d/%d сводок, подписей фокуса и фраз клавиш = game.py (RU/EN; известное — инструменты в порядке кучек: %d, кнопка звука: %d), в тестах голос не звучит; %s; %s; %s; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, sh[0], sh[1], sh[2], share_out.size(), sh_line, sp_res[0], sp_res[1], speech_tools_known, speech_sound_known, sw_line, pad_line, ride_line, n_gd, n_audit,
 		"" if _drawn > 0 else " (без окна _draw не вызывается — проверены строки данных и обработчиков)"] + "; " + fx_line,
 		n_jobs, n_var, n_tech)
 
@@ -280,7 +280,7 @@ func _phone_check() -> String:
 
 ## Замер целей по всем состояниям kb_order_ref (--phone 0|1, --langs ru,en) → tests/out/phone_targets_<0|1>.txt;
 ## ref — эталон «выключен» tests/phone_off_ref.json.
-## Значок «без звука» не на кнопках и тексте шапки (phone_check.mute_check).
+## Кнопка звука: не на кнопках и тексте шапки, нажатие = M (phone_check.mute_check).
 func _mute_check() -> String:
 	var pc: Node = (load("res://tests/phone_check.gd") as GDScript).new()
 	add_child(pc)
@@ -288,7 +288,7 @@ func _mute_check() -> String:
 	pc.queue_free()
 	for b: String in r[1]:
 		err(b)
-	return "ЗНАЧОК «БЕЗ ЗВУКА»: экранов %d (RU/EN, ПК и телефон), на кнопках и тексте шапки — %d" % [r[0], r[1].size()]
+	return "КНОПКА ЗВУКА: проверено %d (экраны × вкл/выкл, RU/EN, ПК и телефон), нарушений — %d" % [r[0], r[1].size()]
 
 
 func _phone_measure(ref: bool) -> String:
@@ -2391,6 +2391,13 @@ func _speech_ref() -> Array:
 				total += 1
 				var gi: Dictionary = _by_group(g[2])
 				var wi: Dictionary = _by_group(w["items"])
+				if gi.has("Меню"):                     # известное (28.11): кнопка звука в шапке — в game.py её нет
+					var mn: Array = (gi["Меню"] as Array).filter(func(x: String) -> bool: return not x in KB_SOUND)
+					if mn.size() != (gi["Меню"] as Array).size():
+						speech_sound_known += 1
+						gi["Меню"] = mn
+						if mn.is_empty() and not wi.has("Меню"):
+							gi.erase("Меню")
 				if gi.has("Инструменты") and wi.has("Инструменты"):   # известное (28.11): порядок кучками, к подписи — кучка
 					var gn: Array = (gi["Инструменты"] as Array).map(func(x: String) -> String: return _kb_norm("Инструменты", x))
 					var a1 := gn.duplicate()
@@ -2584,8 +2591,8 @@ func _only(what: String) -> void:
 	match what:
 		"speech":
 			var sp: Array = await _speech_ref()
-			line = "озвучка: %d/%d (известное: инструменты в порядке кучек и с кучкой в подписи — %d)" % [sp[0], sp[1],
-				speech_tools_known]
+			line = "озвучка: %d/%d (известное: инструменты в порядке кучек и с кучкой в подписи — %d, кнопка звука в «Меню» — %d)" % [
+				sp[0], sp[1], speech_tools_known, speech_sound_known]
 		"switch":
 			line = await _flow_switch(["flat:0", "brake:0", "spokes:0"], ["truing"])
 		"switch-full":
@@ -3302,6 +3309,7 @@ func _kb_order_ref(langs: Array) -> String:
 	var n_lab := 0
 	var n_known := 0
 	var n_tools := 0                         # известное (28.11): порядок инструментов на ПК — кнопка рук и кучки
+	var n_sound := 0                         # известное (28.11): кнопка звука в шапке (в game.py — только картинка)
 	var report: PackedStringArray = []
 	for lang: String in langs:
 		SaveGame.reset()                         # каждый язык эталона — свой процесс game.py с нуля
@@ -3320,6 +3328,10 @@ func _kb_order_ref(langs: Array) -> String:
 			await _frames(2)
 			var want: Array = ref[lang][name]
 			var got: Array = kb_rows()
+			var n_snd := got.size()                  # известное (28.11): кнопка звука в шапке — в game.py её нет
+			got = got.filter(func(r: Array) -> bool: return not (r[0] == "Меню" and str(r[1]) in KB_SOUND))
+			n_snd -= got.size()
+			n_sound += n_snd
 			var cmp: Array = _kb_cmp(want, got)
 			n_states += 1
 			n_items += want.size()
@@ -3351,8 +3363,8 @@ func _kb_order_ref(langs: Array) -> String:
 ".join(report) + "
 ")
 	f.close()
-	var line := "KB ORDER: %d состояний, %d пунктов, расхождений %d (из них известных %d, в том числе порядок инструментов в кучках %d; подписей «Кнопки» не как в game.py: %d)" % [
-		n_states, n_items, n_bad, n_known, n_tools, n_lab]
+	var line := "KB ORDER: %d состояний, %d пунктов, расхождений %d (из них известных %d, в том числе порядок инструментов в кучках %d; подписей «Кнопки» не как в game.py: %d; известное — кнопка звука в шапке: %d пунктов)" % [
+		n_states, n_items, n_bad, n_known, n_tools, n_lab, n_sound]
 	print(line)
 	if n_bad > n_known:
 		err(line + " — tests/out/kb_order_diff.txt")
@@ -3368,6 +3380,8 @@ func kb_rows() -> Array:
 
 
 const KB_SHUFFLED := ["Диагноз", "Выводы", "Варианты"]
+## Кнопка звука в шапке (28.11, владелец; в game.py — только картинка «без звука»): пункт «Меню» рядом с шестерёнкой.
+const KB_SOUND := ["Звук включён. Выключить", "Звук выключен. Включить", "Sound is on. Turn off", "Sound is off. Turn on"]
 ## Намеренное отличие от game.py (28.11, решение владельца): в ремонте инструменты идут в видимом порядке — кнопка
 ## «Руки и глаза», потом кучки по назначению (tool_panel.gd PH_GROUPS), а к подписи добавлена кучка. Сверяется набором:
 ## те же инструменты с теми же подписями (без названия кучки); пункты не на своём месте — известные (n_tools).
@@ -3443,6 +3457,7 @@ func _kb_cmp(want: Array, got: Array) -> Array:
 # ======================= прохождение одними клавишами (art_tests/keyboard_playthrough.py) =======================
 
 var kb_presses: int = 0
+var speech_sound_known: int = 0          # озвучка фокуса: состояний с кнопкой звука в «Меню» (известное, 28.11)
 var speech_tools_known: int = 0          # озвучка фокуса: состояний, где инструменты в порядке кучек (известное, 28.11)
 
 

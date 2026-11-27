@@ -2885,6 +2885,7 @@ async def music_run(b, label, query="", ios=False, expect="element"):
 
 async def sc_music(b):
     """Музыка — элемент <audio> страницы; на iPhone volume из скрипта не задаётся (27.11: «музыка не выключается»).
+    Плюс ?musgain=2 (28.11) — дорожка через AudioBufferSourceNode → GainNode (music_buf_run).
     Обычный путь, ?musgain=1 (через GainNode в любом браузере), ?musgain=0, эмуляция iOS (volume не задаётся) —
     страница сама выбирает GainNode; эмуляция iOS с ?musgain=0 — остаётся только выключение через muted."""
     await music_run(b, "plain")
@@ -2892,6 +2893,7 @@ async def sc_music(b):
     await music_run(b, "nogain", "&musgain=0")
     await music_run(b, "ios", ios=True, expect="gain")
     await music_run(b, "ios_nogain", "&musgain=0", ios=True)
+    await music_buf_run(b)                                # ?musgain=2 (28.11): без <audio>, AudioBufferSourceNode
 
 
 # ---------------- телефонные пропорции при крупном тексте (блок 2, 21.11) ----------------
@@ -3283,6 +3285,293 @@ async def sc_toolpc(b):
     p.check_console()
     await p.ctx.close()
     check(n > 0, f"toolpc: снимков {n} → toolpc/ ({tag}); сверено состояний ремонта {n_lay}")
+
+
+# ---------------- отзыв с iPhone (28.11): плашка ?diag=1, правило телефона, значок «без звука», громкость ----------------
+
+def env_js(ua, sw, sh, coarse, any_coarse, fine, mtp):
+    """Подмена окружения до скриптов страницы: User-Agent, экран, медиа-запросы pointer/any-pointer, maxTouchPoints."""
+    return """
+(() => {
+  const UA = %s, SW = %d, SH = %d, Q = {'(pointer: coarse)': %s, '(any-pointer: coarse)': %s, '(pointer: fine)': %s,
+    '(any-pointer: fine)': %s, '(hover: hover)': %s, '(any-hover: hover)': %s};
+  try { Object.defineProperty(Navigator.prototype, 'userAgent', { configurable: true, get() { return UA; } }); } catch (e) {}
+  try { Object.defineProperty(Navigator.prototype, 'maxTouchPoints', { configurable: true, get() { return %d; } }); } catch (e) {}
+  for (const [k, v] of [['width', SW], ['height', SH], ['availWidth', SW], ['availHeight', SH]])
+    try { Object.defineProperty(Screen.prototype, k, { configurable: true, get() { return v; } }); } catch (e) {}
+  const mm = window.matchMedia.bind(window);
+  window.matchMedia = function (q) {
+    const k = String(q).trim();
+    if (k in Q) { const r = mm(q); return { matches: Q[k], media: k, onchange: null, addListener() {}, removeListener() {},
+      addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false; } }; }
+    return mm(q);
+  };
+})();
+""" % (json.dumps(ua), sw, sh, *["true" if x else "false" for x in (coarse, any_coarse, fine, not coarse and fine,
+                                                                        fine, fine)], mtp)
+
+
+IPHONE_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+             "CriOS/131.0.6778.73 Mobile/15E148 Safari/604.1")
+LAPTOP_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 "
+             "Safari/537.36")
+
+
+async def sc_diag(b):
+    """?diag=1 — плашка для снимка с телефона: есть и заполнена (устройство, окно, медиа-запросы, решения страницы и игры,
+    ввод, музыка, контексты, Settings.vol, сборка); без ?diag=1 её нет. Снимок — web_shots/diag/."""
+    out = os.path.join(SHOTS, "diag")
+    os.makedirs(out, exist_ok=True)
+    p = await new_page(b, "diag_off", legacy=SKIP_SEED)
+    await p.boot()
+    await title_ready(p)
+    n = await p.pg.evaluate("document.querySelectorAll('#wnb-diagbox').length")
+    check(n == 0, f"{p.name}: без ?diag=1 плашки нет ({n})")
+    p.check_console()
+    await p.ctx.close()
+    p = await new_page(b, "diag_on", legacy=SKIP_SEED, touch=True, mobile=True, w=780, h=360, dpr=3)
+    p.allow.append("ERR_NO_BUFFER_SPACE")
+    if CHROMIUM:
+        await orient(p, 780, 360, True, 3)
+    await p.boot("&diag=1")
+    await title_ready(p)
+    await to_hub(p)
+    await p.pg.wait_for_timeout(1500)
+    t = await p.pg.evaluate("(document.getElementById('wnb-diagbox') || {}).textContent || ''")
+    info(f"{p.name}: плашка:\n" + t)
+    need = ["screen ", "dpr ", "pointer ", "any-pointer", "страница: phone", "игра: touch 1 phone 1", "ввод: последний",
+            "музыка {", "routes", "Settings.vol {", "сборка "]
+    miss = [k for k in need if k not in t]
+    check(not miss, f"{p.name}: плашка заполнена (нет: {miss})")
+    await p.pg.screenshot(path=os.path.join(out, f"diag_{BROWSER}.png"), timeout=20000)
+    p.check_console()
+    await p.ctx.close()
+
+
+async def sc_envphone(b):
+    """Правило телефона (wnbEnv): «iPhone, у которого pointer: coarse не совпал» (coarse → false, maxTouchPoints 5,
+    экран 390×844, UA iPhone CriOS) — телефонный режим и касания включены; «ноутбук с сенсорным экраном» (pointer fine,
+    any-pointer coarse, maxTouchPoints 10, экран 1920×1080) — выключены, подписи мышиные; Android-телефон как был."""
+    cases = [("iphone_nocoarse", env_js(IPHONE_UA, 390, 844, False, False, False, 5), dict(touch=True, w=844, h=390, dpr=3),
+              True, True),
+             ("laptop_touch", env_js(LAPTOP_UA, 1920, 1080, False, True, True, 10), dict(touch=True, w=1280, h=720),
+              False, False),
+             ("android", None, dict(touch=True, mobile=True, w=780, h=360, dpr=3), True, True)]
+    for name, js, kw, ph, tch in cases:
+        p = await new_page(b, f"env_{name}", legacy=SKIP_SEED, **kw)
+        p.allow.append("ERR_NO_BUFFER_SPACE")
+        if js:
+            await p.ctx.add_init_script(js)
+        if kw.get("mobile") and CHROMIUM:
+            await orient(p, kw["w"], kw["h"], True, kw["dpr"])
+        await p.boot()
+        await title_ready(p)
+        st = await p.state()
+        env = await p.pg.evaluate("JSON.stringify(window.wnbEnv)")
+        check(st.get("phone") is ph and st.get("touch") is tch,
+              f"{p.name}: телефон {st.get('phone')} (ждали {ph}), касания {st.get('touch')} (ждали {tch}); wnbEnv {env}")
+        p.check_console()
+        await p.ctx.close()
+
+
+async def sc_muteicon(b):
+    """Кнопка звука (28.11: значок «без звука» лежал на флажке; теперь выключатель, как M, всегда в шапке) — снимки
+    правой части шапки: титул, мастерская, Гильдия, задание; звук включён и выключен; компьютер (и с наведением на
+    кнопку — подсказка) и телефон, RU/EN → web_shots/mute_icon/. Нажатие кнопки выключает и включает звук.
+    Геометрию на всех экранах проверяет selftest --only mute."""
+    from PIL import Image
+    out = os.path.join(SHOTS, "mute_icon")
+    os.makedirs(out, exist_ok=True)
+    n = 0
+    for view, kw in (("pc", dict(w=1280, h=720)), ("phone", dict(touch=True, mobile=True, w=780, h=360, dpr=3))):
+        for lang in ("ru", "en"):
+            p = await new_page(b, f"mute_{view}_{lang}", legacy=SKIP_SEED, **kw)
+            p.allow.append("ERR_NO_BUFFER_SPACE")
+            if kw.get("mobile") and CHROMIUM:
+                await orient(p, kw["w"], kw["h"], True, kw["dpr"])
+            await p.boot(f"&phone={1 if view == 'phone' else 0}")
+            await title_ready(p)
+            await set_stage(p, f"set:lang={lang}")
+            for s in ("title_en" if lang == "en" else "title", "hub", "guild_open", "job_flat_repair"):
+                if not await set_stage(p, s):
+                    check(False, f"{p.name}: состояние {s} не встало")
+                    continue
+                for state, mv in (("on", "0.8"), ("off", "0")):
+                    await set_stage(p, f"set:vol_master={mv}")
+                    await p.pg.mouse.move(2, 360)
+                    shots = [("", None)]
+                    if view == "pc" and s == "hub":
+                        bt = [x for x in (await p.state()).get("buttons", []) if x[0] == "Sound"]
+                        if bt:
+                            shots.append(("_hover", await p.at(bt[0][1] + bt[0][3] / 2, bt[0][2] + bt[0][4] / 2)))
+                    for suf, xy in shots:
+                        if xy:
+                            await p.pg.mouse.move(*xy)
+                        await p.pg.wait_for_timeout(700)
+                        g, c, _ = await game_rect(p)
+                        k = kw.get("dpr", 1)
+                        path = os.path.join(out, f"{view}_{lang}_{s}_{state}{suf}.png")
+                        await p.pg.screenshot(path=path, timeout=20000)
+                        im = Image.open(path)
+                        im.crop([round(v * k) for v in (g[0] + g[2] * 0.5, g[1], g[0] + g[2], g[1] + g[3] * 0.14)]).save(path)
+                        n += 1
+            # нажатие кнопки звука (мышь/касание) = M: выключить, включить
+            await set_stage(p, "hub")
+            await set_stage(p, "set:vol_master=0.8")
+            st0 = await p.state()
+            await p.press("Sound", wait=500)
+            st1 = await p.state()
+            await p.press("Sound", wait=500)
+            st2 = await p.state()
+            check(st0.get("sound") is True and st1.get("sound") is False and st2.get("sound") is True,
+                  f"{p.name}: кнопка звука: {st0.get('sound')} → {st1.get('sound')} → {st2.get('sound')}")
+            p.check_console()
+            await p.ctx.close()
+    check(n > 0, f"muteicon: снимков шапки {n} → mute_icon/")
+
+
+async def touch_drag(p, x0, y0, x1, y1, steps=12):
+    """Перетаскивание касанием (CDP Input.dispatchTouchEvent; координаты страницы)."""
+    cdp = await p.ctx.new_cdp_session(p.pg)
+    await cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x0, "y": y0}]})
+    for i in range(1, steps + 1):
+        await cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [
+            {"x": x0 + (x1 - x0) * i / steps, "y": y0 + (y1 - y0) * i / steps}]})
+        await p.pg.wait_for_timeout(30)
+    await cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+    await cdp.detach()
+
+
+# Chromium: всё, что движок Godot (и музыка через WebAudio) подаёт на выход, проходит через AnalyserNode — уровень
+# звука эффектов меряется по сигналу, а не по коду (--mute-audio глушит только вывод в систему).
+LEVEL_JS = """
+(() => {
+  const conn = AudioNode.prototype.connect, ans = window.__an = [];
+  AudioNode.prototype.connect = function (dst, ...rest) {
+    if (typeof AudioDestinationNode !== 'undefined' && dst instanceof AudioDestinationNode && !this.__probe) {
+      let a = dst.__an;
+      if (!a) { a = dst.context.createAnalyser(); a.fftSize = 2048; a.__probe = true; conn.call(a, dst); dst.__an = a; ans.push(a); }
+      return conn.call(this, a, ...rest);
+    }
+    return conn.call(this, dst, ...rest);
+  };
+  let nconn = 0, ndst = 0;
+  const conn2 = AudioNode.prototype.connect;
+  AudioNode.prototype.connect = function (dst, ...rest) { nconn++; if (typeof AudioDestinationNode !== 'undefined' &&
+    dst instanceof AudioDestinationNode) ndst++; return conn2.call(this, dst, ...rest); };
+  window.__anInfo = () => 'connect ' + nconn + ', на выход ' + ndst + ', анализаторов ' + ans.length + ' (' +
+    ans.map(a => a.context.state + ' ' + a.context.sampleRate + ' t=' + a.context.currentTime.toFixed(2)).join(', ') + ')' +
+    ', пик за всё время ' + window.__peakAll.toFixed(4);
+  window.__peak = 0; window.__peakAll = 0;
+  const buf = new Float32Array(2048);
+  setInterval(() => { for (const a of ans) { a.getFloatTimeDomainData(buf); for (const v of buf) { const x = Math.abs(v);
+    if (x > window.__peak) window.__peak = x; if (x > window.__peakAll) window.__peakAll = x; } } }, 20);
+})();
+"""
+
+
+async def sfx_peak(p, x, y, x_to):
+    """Перетащить ползунок эффектов касанием до x_to и отпустить (по отпусканию игра играет «ok» новой громкостью) —
+    пиковый уровень сигнала движка за 0,8 с."""
+    await p.pg.evaluate("window.__peak = 0")
+    await touch_drag(p, x, y, x_to, y)
+    await p.pg.wait_for_timeout(800)
+    return await p.pg.evaluate("window.__peak")
+
+
+async def sc_volslide(b):
+    """Ползунки громкости касанием (обычный вид и телефон): перетаскивание меняет значение (Settings.vol); громкость
+    эффектов измерена по сигналу движка (Chromium): ползунок эффектов 0,9 и 0,25 — пик звука «ok» во столько же раз
+    меньше. Музыка и фон — в 0, чтобы слышать только эффект."""
+    for view, kw in (("normal", dict(touch=True, mobile=True, w=1280, h=720)),     # касания, обычная раскладка (?phone=0)
+                     ("phone", dict(touch=True, mobile=True, w=780, h=360, dpr=3))):
+        p = await new_page(b, f"vol_{view}", legacy=SKIP_SEED, **kw)
+        p.allow.append("ERR_NO_BUFFER_SPACE")
+        if CHROMIUM:
+            await p.ctx.add_init_script(LEVEL_JS)
+        if view == "phone" and CHROMIUM:
+            await orient(p, kw["w"], kw["h"], True, kw["dpr"])
+        await p.boot(f"&phone={1 if view == 'phone' else 0}")
+        await title_ready(p)
+        await to_hub(p)
+        for x in ("set:vol_music=0", "set:vol_amb=0", "settings_sound"):
+            await set_stage(p, x)
+        await p.pg.wait_for_timeout(800)
+        st = await p.state()
+        sl = {s[0]: s for s in st.get("vol_sliders", [])}
+        if "Vol_sfx" not in sl:
+            check(False, f"{p.name}: ползунков громкости нет в состоянии ({list(sl)})")
+            await p.ctx.close()
+            continue
+        s = sl["Vol_sfx"]
+        y = s[2] + s[4] / 2
+        xa, py = await p.at(s[1] + 12 + (s[3] - 24) * 0.9, y)
+        xb, _ = await p.at(s[1] + 12 + (s[3] - 24) * 0.25, y)
+        x0, _ = await p.at(s[1] + 12 + (s[3] - 24) * 0.6, y)
+        pk_hi = await sfx_peak(p, x0, py, xa)
+        st1 = await p.state()
+        pk_lo = await sfx_peak(p, xa, py, xb)
+        st2 = await p.state()
+        v1, v2 = st1.get("vol", {}).get("sfx"), st2.get("vol", {}).get("sfx")
+        check(v1 is not None and v2 is not None and v1 > 0.75 and v2 < 0.4,
+              f"{p.name}: ползунок эффектов касанием — {v1} → {v2} (Settings.vol)")
+        if CHROMIUM:
+            ratio = (pk_lo / pk_hi) if pk_hi else None
+            info(f"{p.name}: пик эффекта «ok»: при {v1} — {pk_hi:.4f}, при {v2} — {pk_lo:.4f}, отношение {ratio}")
+            an = await p.pg.evaluate("window.__anInfo ? __anInfo() : '-'")
+            info(f"{p.name}: {an}")
+            if pk_hi > 0.001:                               # сигнал движка виден — громкость должна дойти
+                check(ratio is not None and abs(ratio - v2 / v1) < 0.12,
+                      f"{p.name}: громкость эффекта дошла до звука: пик {pk_hi:.4f} → {pk_lo:.4f} (отношение "
+                      f"{(ratio or 0):.2f}, по ползунку {v2 / v1:.2f})")
+            else:                                           # 28.11: в Chromium без окна сигнал движка на выходе — нули
+                info(f"{p.name}: сигнал движка Godot на выходе не виден (нули при идущих часах контекста) — громкость "
+                     f"эффектов здесь по звуку не измерить")
+        p.check_console()
+        await p.ctx.close()
+
+
+async def music_buf_run(b):
+    """?musgain=2 — музыка без <audio>: fetch → decodeAudioData → AudioBufferSourceNode → GainNode. После жеста играет
+    (mode buffer, контекст running, одна дорожка), уровень в gain следует за ползунком, M — gain 0, смена темы — играет
+    новая (старая остановлена), pagehide/pageshow — пауза и снова играет."""
+    p = await new_page(b, "music_buffer", legacy=SKIP_SEED)
+    await p.boot("&musgain=2")
+    has_ac = await p.pg.evaluate("!!(window.AudioContext || window.webkitAudioContext)")
+    if not has_ac:
+        info(f"{p.name}: нет AudioContext ({BROWSER}) — способ buffer не проверить")
+        await p.ctx.close()
+        return
+    await to_hub(p)
+    m = await mus_wait(p, lambda m: m.get("mode") == "buffer" and m.get("playing") and m.get("ctx") == "running", 10)
+    info(f"{p.name}: {m}")
+    check(m.get("mode") == "buffer" and m.get("playing") and m.get("dur", 0) > 5,
+          f"{p.name}: дорожка скачана и играет (mode {m.get('mode')}, {m.get('state')}, {m.get('dur')} с, ctx {m.get('ctx')})")
+    src0 = m.get("src", "")
+    for x in (0.6, 0.3):
+        await mus_stage(p, f"vol_music={x}")
+        m = await mus_wait(p, lambda m: m.get("gain") is not None and abs(m["gain"] - m["vol"]) < 0.02, 3)
+        st = await p.state()
+        check(abs(m["vol"] - st.get("music_lvl", -1)) < 0.03 and abs(m["gain"] - m["vol"]) < 0.02,
+              f"{p.name}: ползунок музыки {x}: vol {m['vol']} (игра {st.get('music_lvl')}), gain {m['gain']}")
+    await p.pg.mouse.move(5, 5)
+    await p.key("m", 500)
+    m = await mus_wait(p, lambda m: (m.get("gain") or 0) < 0.01, 3)
+    check((m.get("gain") or 0) < 0.01, f"{p.name}: M — gain {m.get('gain')}")
+    await p.key("m", 500)
+    await set_stage(p, "guild_open")                      # другая тема — другая дорожка
+    m = await mus_wait(p, lambda m: m.get("src") != src0 and m.get("playing"), 10)
+    check(m.get("src") != src0 and m.get("playing") and m.get("state") == "playing",
+          f"{p.name}: смена темы — играет новая дорожка ({src0.split('/')[-1]} → {str(m.get('src')).split('/')[-1]}, "
+          f"{m.get('state')})")
+    await p.pg.evaluate("window.dispatchEvent(new Event('pagehide'))")
+    await p.pg.wait_for_timeout(300)
+    sh = await p.pg.evaluate("wnbMusic.state()")
+    await p.pg.evaluate("window.dispatchEvent(new Event('pageshow'))")
+    s = await mus_playing(p, 5)
+    check(sh.startswith("paused") and s.startswith("playing"), f"{p.name}: pagehide — {sh[:6]}, pageshow — {s[:7]}")
+    p.check_console()
+    await p.ctx.close()
 
 
 async def sc_seatrough(b):
@@ -3958,7 +4247,7 @@ SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_
              "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "feedback": sc_feedback, "perf": sc_perf,
              "prof": sc_prof, "screens": sc_screens, "tabs": sc_tabs, "store": sc_store, "loader": sc_loader,
              "netfail": sc_netfail, "fsexit": sc_fsexit, "res": sc_resparam, "zoom": sc_zoom, "assign": sc_assign,
-             "pad": sc_pad, "bg": sc_bg, "music": sc_music, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "toolbig": sc_toolbig, "toolpc": sc_toolpc, "seatrough": sc_seatrough,
+             "pad": sc_pad, "bg": sc_bg, "music": sc_music, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "toolbig": sc_toolbig, "toolpc": sc_toolpc, "diag": sc_diag, "envphone": sc_envphone, "muteicon": sc_muteicon, "volslide": sc_volslide, "seatrough": sc_seatrough,
              "embed": sc_embed}
 TIMEOUT = {"screens": 5400, "phonetext": 7200, "embed": 1800,            # все экраны × 4 прохода — долго
            "bg": 2 * float(os.environ.get("WNB_BG_SECS", "70")) + 480}   # два раза «в фоне» + задание

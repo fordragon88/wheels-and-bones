@@ -409,6 +409,15 @@ func state() -> Dictionary:
 				"tracks": tr, "warn_total": ts.get("warn_total", 0), "warn_shown": ts.get("warn_shown", 0),
 				"warn_n": ts.get("warn_n", ""), "warn_page": scr.warn_page, "warn_pages": ts.get("warn_pages", 1),
 				"warn_size": ts.get("warn", 0), "warn_block": [wr.position.x, wr.position.y, wr.size.x, wr.size.y]}
+		if Nav.settings != null:               # ползунки громкости (web_smoke volslide, 28.11): [имя, x, y, w, h, значение]
+			var vs: Array = []
+			for c: Node in Nav.settings.find_children("Vol_*", "", true, false):
+				var cc := c as Control
+				if cc and cc.is_visible_in_tree():
+					var r := cc.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, cc.size)
+					vs.append([str(cc.name), r.position.x, r.position.y, r.size.x, r.size.y, snappedf(float(cc.get("value")), 0.001)])
+			d["vol_sliders"] = vs
+			d["vol"] = Settings.vol
 		var tv: Variant = scr.get("tools") if "tools" in scr else null
 		if tv is ToolPanel:                     # ремонт (web_smoke toolbig, 27.11): полоса инструмента и карточка сноски
 			var tp: ToolPanel = tv
