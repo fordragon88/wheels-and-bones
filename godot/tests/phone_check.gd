@@ -10,6 +10,7 @@ extends Node
 
 var R: Node
 var _stager: Node
+static var lay_info := ""                    # repair_layout: что сверено в последний раз (для строки отчёта)
 
 ## Осознанно мельче 56 / вплотную: «имя цели» (или «состояние:имя»; * в конце — начало имени) → причина.
 const EXCEPT := {
@@ -29,7 +30,13 @@ const KEY_STATES := ["title", "intro_1", "ending", "credits", "guild_open", "gui
 	"seat_fit_dryad", "seat_fit_dryad_side", "seat_fit_owl", "seat_fit_orc", "seat_quiz_q1", "seat_quiz_wrong", "seat_quiz_pass", "scan_seat",
 	"exam_ticket", "hub", "job_flat_diagnose", "job_flat_inspected", "job_joystick_inspected", "job_flat_repair",
 	"result_lift", "garage", "garage_open", "mini_pump", "mini_gap", "mini_ping", "mini_meter", "settings_sound", "settings_graphics", "settings_access", "settings_game",
-	"feedback_general", "feedback_dispute", "share_paste", "share_confirm", "hub_assign", "share_summary", "share_builder"]
+	"feedback_general", "feedback_dispute", "share_paste", "share_confirm", "hub_assign", "share_summary", "share_builder",
+	"rep_flat_tool", "rep_flat_none", "rep_flat_tutor", "rep_dracul_speed_note", "rep_aeroz_lock_tool", "rep_aeroz_lock_note",
+	"rep_cross6_back_note", "rep_f5_charge_tool"]          # ремонт на телефоне: плитки 86, полоса, сноска (27.11)
+
+## Ремонт на телефоне — ещё и при тексте 125/150 % (RU и EN): плитки, полоса, сноска (27.11).
+const REP_STATES := ["rep_flat_tool", "rep_flat_none", "rep_flat_tutor", "rep_dracul_speed_note", "rep_aeroz_lock_tool",
+	"rep_aeroz_lock_note", "rep_cross6_back_note", "rep_f5_charge_tool", "job_flat_diagnose", "mini_pump"]
 
 
 func _ensure_stager() -> void:
@@ -149,6 +156,78 @@ static func analyze(state: String, ts: Array) -> Dictionary:
 	return {"small": small, "small_ex": small_ex, "over": over, "close": close}
 
 
+## Телефон, обычный ремонт (27.11, плитки 86): плитки 86×86 и полоса над ними не пересекают и не ближе 8 к кнопке
+## «СНОСКИ МАНУАЛА», строкам деталей (с книжками), колонке Барти, кружкам деталей, «+»/«−», пузырю клиента, окну
+## коляски; текст шага — над коляской; открытая сноска — не на плитках, полосе, коляске и кружке своей детали.
+## Возврат — список нарушений (пусто — всё на месте).
+static func repair_layout(scr: Node) -> PackedStringArray:
+	var bad: PackedStringArray = []
+	lay_info = ""
+	if scr == null or scr.get("phase") != "repair" or scr.get("tools") == null or scr.get("mini") != null:
+		return bad
+	var tp: ToolPanel = scr.tools
+	if not tp.big():
+		return bad
+	var o: Vector2 = scr.get_global_transform().origin
+	var obst: Array = []                                    # [имя, прямоугольник экрана]
+	var nb: Control = scr.get_node_or_null("Notes")
+	if nb:
+		obst.append(["Notes", nb.get_global_rect()])
+	for b: Control in scr._part_btns:
+		obst.append([str(b.name), b.get_global_rect()])
+	for zn: String in ["ZoomIn", "ZoomOut"]:
+		var z: Control = scr.get_node_or_null(zn)
+		if z and z.visible:
+			obst.append([zn, z.get_global_rect()])
+	var cr: Rect2 = scr.chair.get_global_rect()
+	if scr.chair.visible:
+		obst.append(["Chair", cr])
+		for sp: Array in scr.chair.spots():
+			var c: Vector2 = Vector2(sp[1], sp[2]) + scr.chair.get_parent().global_position
+			obst.append(["Spot_" + str(sp[0]), Rect2(c - Vector2(sp[3], sp[3]), Vector2(sp[3], sp[3]) * 2.0)])
+	var cb: Rect2 = scr._client_bubble.client_rect()
+	if cb.has_area() and scr._client_bubble.visible:
+		obst.append(["ClientBubble", Rect2(cb.position + o, cb.size)])
+	var mc: Rect2 = scr._mentor.col
+	if mc.has_area():
+		obst.append(["MentorCol", Rect2(mc.position + o, mc.size)])
+	var mine: Array = []                                    # плитки и полоса
+	for tid: String in tp.tiles:
+		var tr: Rect2 = (tp.tiles[tid] as Control).get_global_rect()
+		if absf(tr.size.x - ToolPanel.PH_TILE) > 0.5 or absf(tr.size.y - ToolPanel.PH_TILE) > 0.5:
+			bad.append("плитка %s не 86×86: %s" % [tid, _fmt_r(tr)])
+		mine.append(["Tool_" + tid, tr.grow_individual(0, 6, 0, 0)])      # выбранная приподнята на 6
+	var sr := tp.info_rect()
+	mine.append(["Strip", Rect2(sr.position + o, sr.size)])
+	lay_info = "плиток %d, полоса %s, препятствий %d (%s), сноска %s" % [tp.tiles.size(), _fmt_r(sr), obst.size(),
+		", ".join(obst.map(func(x: Array) -> String: return str(x[0]))), _fmt_r(tp.note_rect())]
+	for m: Array in mine:
+		for ob: Array in obst:
+			var a: Rect2 = m[1]
+			var b: Rect2 = ob[1]
+			if a.intersection(b).has_area():
+				bad.append("%s пересекает %s (%s / %s)" % [m[0], ob[0], _fmt_r(a), _fmt_r(b)])
+			elif a.grow(UI.PHONE_GAP - 0.01).intersection(b).has_area() and not str(ob[0]).begins_with("Spot_"):
+				bad.append("%s ближе 8 к %s (%s / %s)" % [m[0], ob[0], _fmt_r(a), _fmt_r(b)])
+	var instr := Loc.t(scr.cur_step().get("instr", ""))
+	var js: GDScript = scr.get_script()
+	var sz: int = js.instr_size(instr, -1, scr.ph_instr_room())
+	var end_y: float = js.INSTR_Y + js.instr_h(instr, sz) + o.y
+	if scr.chair.visible and end_y > cr.position.y:
+		bad.append("текст шага (низ %d) заходит на коляску (верх %d)" % [end_y, cr.position.y])
+	var nr := tp.note_rect()
+	if nr.has_area():
+		nr.position += o
+		var pid: String = tp.note_pid()
+		for m: Array in mine.slice(0, mine.size() - 1) + [["Chair", cr]] + obst.filter(
+				func(x: Array) -> bool: return x[0] in ["ZoomIn", "ZoomOut", "Notes", "Spot_" + pid] or str(x[0]).begins_with("Part_")):
+			if nr.intersection(m[1]).has_area():
+				bad.append("сноска %s пересекает %s (%s / %s)" % [pid, m[0], _fmt_r(nr), _fmt_r(m[1])])
+		if nr.position.y < ToolPanel.PH_NOTE_TOP - 0.5:
+			bad.append("сноска %s выше y 70: %s" % [pid, _fmt_r(nr)])
+	return bad
+
+
 static func _fmt_r(r: Rect2) -> String:
 	return "%d,%d %d×%d" % [roundi(r.position.x), roundi(r.position.y), roundi(r.size.x), roundi(r.size.y)]
 
@@ -178,7 +257,8 @@ func measure(runner: Node, states: Array, langs: Array, on: bool) -> Dictionary:
 	await R._frames(2)
 	var lines: PackedStringArray = []
 	var per: Dictionary = {}
-	var tot := {"n": 0, "small": 0, "small_ex": 0, "over": 0, "close": 0}
+	var tot := {"n": 0, "small": 0, "small_ex": 0, "over": 0, "close": 0, "layout": 0}
+	var lay: Dictionary = {}                     # телефон, ремонт: нарушения раскладки плиток/полосы/сноски
 	var rects: Dictionary = {}
 	for lang: String in langs:
 		SaveGame.reset()
@@ -219,6 +299,15 @@ func measure(runner: Node, states: Array, langs: Array, on: bool) -> Dictionary:
 				lines.append("  X пересечение: %s ↔ %s" % o)
 			for o: Array in an["close"]:
 				lines.append("  ~ зазор < 8: %s ↔ %s" % o)
+			if on:
+				var lb := repair_layout(Nav.current)
+				if lay_info != "":
+					lines.append("  L раскладка ремонта сверена: " + lay_info)
+				if not lb.is_empty():
+					lay[key] = lb
+					tot["layout"] += lb.size()
+					for x: String in lb:
+						lines.append("  L раскладка ремонта: " + x)
 			_stager.unstage(sname)
 	Engine.time_scale = 1.0
 	Loc.code = lang0
@@ -227,13 +316,14 @@ func measure(runner: Node, states: Array, langs: Array, on: bool) -> Dictionary:
 	UI._touch = t0
 	UI._phone = p0
 	Settings.changed.emit("phone")
-	return {"lines": lines, "per": per, "tot": tot, "rects": rects}
+	return {"lines": lines, "per": per, "tot": tot, "rects": rects, "layout": lay}
 
 
 static func summary(on: bool, d: Dictionary) -> String:
 	var t: Dictionary = d["tot"]
-	return "PHONE TARGETS (%s): состояний %d, целей %d, мельче 56: %d (исключений %d), пересечений: %d, зазор < 8: %d" % [
-		"телефон" if on else "выкл", d["per"].size(), t["n"], t["small"], t["small_ex"], t["over"], t["close"]]
+	return "PHONE TARGETS (%s): состояний %d, целей %d, мельче 56: %d (исключений %d), пересечений: %d, зазор < 8: %d%s" % [
+		"телефон" if on else "выкл", d["per"].size(), t["n"], t["small"], t["small_ex"], t["over"], t["close"],
+		"; раскладка ремонта (плитки 86, полоса, сноска): нарушений %d" % t["layout"] if on else ""]
 
 
 static func write_out(fname: String, text: String) -> void:
@@ -254,6 +344,29 @@ func run(runner: Node) -> String:
 		var p: Dictionary = on["per"][key]
 		if p["small"] > 0 or p["over"] > 0:
 			R.err("телефон %s: мельче 56 — %d, пересечений — %d (tests/out/phone_targets_1.txt)" % [key, p["small"], p["over"]])
+	for key: String in on["layout"]:
+		R.err("телефон %s, раскладка ремонта: %s" % [key, "; ".join(on["layout"][key])])
+	var text0: int = Settings.a11y.get("text", 0)          # ремонт при тексте 125 и 150 %, RU и EN
+	var n_big := 0
+	var n_lay := 0
+	for tx: int in [2, 3]:
+		Settings.a11y["text"] = tx
+		UI.clear_font_cache()
+		var bg := await measure(runner, REP_STATES, ["ru", "en"], true)
+		write_out("phone_targets_1_text%d.txt" % tx, "
+".join(bg["lines"]) + "
+")
+		n_big += bg["per"].size()
+		n_lay += int(bg["tot"]["layout"])
+		for key: String in bg["per"]:
+			var p: Dictionary = bg["per"][key]
+			if p["small"] > 0 or p["over"] > 0:
+				R.err("телефон, текст %d %%, %s: мельче 56 — %d, пересечений — %d" % [[100, 112, 125, 150][tx], key, p["small"], p["over"]])
+		for key: String in bg["layout"]:
+			R.err("телефон, текст %d %%, %s, раскладка ремонта: %s" % [[100, 112, 125, 150][tx], key,
+				"; ".join(bg["layout"][key])])
+	Settings.a11y["text"] = text0
+	UI.clear_font_cache()
 	var ref_path := "res://tests/phone_off_ref.json"
 	var n_off := 0
 	var n_diff := 0
@@ -274,7 +387,7 @@ func run(runner: Node) -> String:
 				n_diff += 1
 				R.err("телефон выключен, %s: цели не как были\n  было  %s\n  стало %s" % [key, JSON.stringify(ref[key]),
 					JSON.stringify(off["rects"][key])])
-	return summary(true, on) + "; выключен: %d состояний как эталон (расхождений %d)" % [n_off, n_diff]
+	return summary(true, on) + "; ремонт при тексте 125/150 %%: состояний %d, нарушений раскладки %d" % [n_big, n_lay] + 		"; выключен: %d состояний как эталон (расхождений %d)" % [n_off, n_diff]
 
 
 ## Кегли текста Кабинета посадки (seating.gd text_sizes): каждый урок, клиент, вопрос — при RU/EN, 100/112/125/150 %,

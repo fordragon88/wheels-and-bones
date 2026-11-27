@@ -44,7 +44,8 @@ func _shot(name: String) -> void:
 	var img := get_viewport().get_texture().get_image()
 	if img.get_size() != Vector2i(1280, 720) and not "--native" in OS.get_cmdline_user_args():
 		img.resize(1280, 720, Image.INTERPOLATE_LANCZOS)
-	var pre := ("calm_" if Settings.calm() else "") + ("big_" if int(Settings.a11y.get("text", 0)) == 3 else "")
+	var pre := ("calm_" if Settings.calm() else "") + ("big_" if int(Settings.a11y.get("text", 0)) == 3 else "") + \
+		("phone_" if "--phone" in OS.get_cmdline_user_args() else "")
 	img.save_png(out_dir.path_join(pre + name + ".png"))
 	print("shot ", name, " ", Nav.current_name)
 
@@ -466,6 +467,9 @@ func _run() -> void:
 	Frames.want_loop(str(Content.consts.get("idle", {}).get("loops", {}).get("martin.png", "")))   # «живой» Мартин
 	if "--big" in args:
 		Settings.a11y["text"] = 3
+	if "--phone" in args:                     # телефонный режим (касания и раскладка UI.phone()), файлы phone_<имя>.png
+		UI._touch = 1
+		UI.set_phone(true)
 	Settings.lang = "ru"
 	Loc.code = "ru"
 	get_viewport().gui_disable_input = true
@@ -657,6 +661,27 @@ func stage(name: String) -> void:
 		Frames.want_loop("barty_wave")
 		Frames.flush()
 		await _wait(3.0)
+	elif name.begins_with("rep_"):           # ремонт задания: rep_<задание>_tool|none|tutor|note (web_smoke toolbig, 27.11)
+		var mode := name.get_slice("_", name.get_slice_count("_") - 1)
+		var jid := name.trim_prefix("rep_").trim_suffix("_" + mode)
+		if mode == "tutor":                  # обучение — первое задание ещё не пройдено
+			SaveGame.done.erase(jid)
+		else:
+			SaveGame.done[jid] = true
+		var scr: Node = await _to_repair(jid)
+		scr.sel_tool = ""
+		if mode in ["tool", "note"]:
+			scr.select_tool(scr.cur_step()["tool"])
+		if mode == "note":                   # самая длинная сноска задания (текст на текущем языке)
+			var best := ""
+			for pid: String in Content.manual_notes.get(jid, {}):
+				if best == "" or Loc.t(Content.manual_notes[jid][pid]["text"]).length() > \
+						Loc.t(Content.manual_notes[jid][best]["text"]).length():
+					best = pid
+			scr.note_pin = best
+		Nav.toast.timer = 0.0
+		await _wait(1.0)
+		Nav.toast.timer = 0.0
 	elif name.begins_with("job_"):
 		var jid := name.trim_prefix("job_").trim_suffix("_diagnose").trim_suffix("_inspected")
 		Nav.go("job", {"job": jid, "variant": 0})

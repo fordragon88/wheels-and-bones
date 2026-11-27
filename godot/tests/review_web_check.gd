@@ -252,6 +252,8 @@ func _set_text(lang: String, t: int, easy: bool) -> void:
 
 
 ## Сколько шагов заходит на коляску (верх 226): было (кегль 19) → стало (job.gd instr_size), телефон и компьютер.
+## Телефон с 27.11: «стало» — кегль по высоте текста этого задания (job.gd ph_room_for) и верх его коляски
+## (ph_chair_rect); chair_h_min — наименьшая высота окна коляски в ремонте.
 ## Отдельно — «-- --test --only instr-sizes» (→ tests/out/instr_sizes.json).
 func instr_measure() -> Dictionary:
 	var keep := [Settings.lang, Loc.code, Settings.a11y.get("text", 0), Settings.a11y.get("font", false), Settings.text_cap,
@@ -261,7 +263,7 @@ func instr_measure() -> Dictionary:
 	for job: Dictionary in Content.jobs:
 		for c: Dictionary in Content.cases(job):
 			for st: Dictionary in c.get("steps", []):
-				steps.append([str(c["id"]) + ":" + str(c.get("_variant", "-")), str(st["instr"])])
+				steps.append([str(c["id"]) + ":" + str(c.get("_variant", "-")), str(st["instr"]), c.get("steps", [])])
 	var out := {}
 	var JobScr: GDScript = load("res://screens/job.gd")
 	for cb: Array in COMBOS:
@@ -278,23 +280,41 @@ func instr_measure() -> Dictionary:
 			var wid := ""
 			var min_sz := 19
 			var shrunk := 0
+			var sizes: Array = []                    # кегль каждого шага по порядку (сверка до/после правок раскладки)
+			var rooms: Dictionary = {}               # телефон (27.11): высота текста шага по заданию → верх коляски
+			var chair_min := 9999.0
+			var chair_small := 0                     # заданий (с вариантами), где коляска ниже 88 % прежних 322
 			for s: Array in steps:
 				var tx := Loc.t(s[1])
+				var room := -1.0
+				var top := 226.0
+				if ph:
+					if not rooms.has(s[0]):
+						rooms[s[0]] = JobScr.ph_room_for(s[2])
+						chair_small += 1 if JobScr.ph_chair_rect(rooms[s[0]]).size.y < 0.88 * 322.0 else 0
+					room = rooms[s[0]]
+					var cr: Rect2 = JobScr.ph_chair_rect(room)
+					top = cr.position.y
+					chair_min = minf(chair_min, cr.size.y)
 				for pass_i in 2:
-					var sz: int = 19 if pass_i == 0 else JobScr.instr_size(tx)
+					var sz: int = 19 if pass_i == 0 else JobScr.instr_size(tx, -1, room)
 					var end_y: float = JobScr.INSTR_Y + UI.wrap_lines(tx, w, sz).size() * (UI.line_height(sz) + 2) - 2
+					if pass_i == 1 and ph:
+						end_y = JobScr.INSTR_Y + JobScr.instr_h(tx, sz)
 					if pass_i == 1:
 						min_sz = mini(min_sz, sz)
 						shrunk += 1 if sz < 19 else 0
-					if end_y > 226.0:
+						sizes.append(sz)
+					var lim := 226.0 if pass_i == 0 else top
+					if end_y > lim:
 						if pass_i == 0:
 							n0 += 1
-							if end_y - 226.0 > worst0:
-								worst0 = end_y - 226.0
+							if end_y - lim > worst0:
+								worst0 = end_y - lim
 								wid = s[0]
 						else:
 							n1 += 1
-							worst1 = maxf(worst1, end_y - 226.0)
+							worst1 = maxf(worst1, end_y - lim)
 			var tag := "phone" if ph else "pc"
 			row[tag + "_before"] = n0
 			row[tag + "_after"] = n1
@@ -303,6 +323,9 @@ func instr_measure() -> Dictionary:
 			if ph:
 				row["min_size"] = min_sz
 				row["phone_shrunk"] = shrunk
+				row["phone_sizes"] = sizes
+				row["chair_h_min"] = int(chair_min)
+				row["chair_small"] = "%d из %d" % [chair_small, rooms.size()]
 		out["%s %d%s" % [cb[0], [100, 112, 125, 150][cb[1]], " easy" if cb[2] else ""]] = row
 	Settings.lang = keep[0]
 	Loc.code = keep[1]

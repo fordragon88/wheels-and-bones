@@ -96,6 +96,8 @@ var _dispute_btn: GameButton
 var _rows_sig: Array = []                # от чего зависят строки деталей и диагнозы (перерисовка только при смене)
 var _deco_sig: Array = []
 var _bar_sig: Array = []
+var _ph_room_key: Array = []
+var _ph_room := 0.0
 
 
 func _ready() -> void:
@@ -252,13 +254,80 @@ static func instr_room() -> float:
 
 
 ## Кегль текста шага (width < 0 — ширина шага instr_width()) или теста (width 560): 19, пока помещается в instr_room().
-static func instr_size(text: String, width: float = -1.0) -> int:
+## Телефон, текст шага (width < 0): строки «буквой Г» (instr_lines), высота — room (по умолчанию прежняя 126).
+static func instr_size(text: String, width: float = -1.0, room: float = -1.0) -> int:
+	if UI.phone() and width < 0:
+		var rm := INSTR_ROOM if room < 0 else room
+		var sz := 19
+		while sz > 11 and instr_h(text, sz) > rm:
+			sz -= 1
+		return sz
 	return UI.fit_wrapped_size(text, instr_width() if width < 0 else width, 19, instr_room(), 11 if UI.phone() else 10)
+
+
+## Телефон (27.11, плитки 86): текст шага «буквой Г» — строки, что начинаются выше низа «◂ ШАГ ▸» (+4), шириной до
+## них (408), остальные — до колонки деталей (PH_INSTR_W2): тот же текст ниже, коляска поднимается, кегль не мельче.
+const PH_INSTR_W2 := 964.0 - 360.0
+
+
+static func instr_lines(text: String, sz: int) -> PackedStringArray:
+	var nar := UI.wrap_lines(text, instr_width(), sz)
+	if not UI.phone():
+		return nar
+	var lh := UI.line_height(sz) + 2
+	var k := 0
+	while INSTR_Y + k * lh < PH_PREV.end.y + 4:
+		k += 1
+	if nar.size() <= k:
+		return nar
+	var at := 0
+	for i in k:
+		var f := text.find(nar[i], at)
+		if f < 0:
+			return nar
+		at = f + nar[i].length()
+	var out := nar.slice(0, k)
+	out.append_array(UI.wrap_lines(text.substr(at).strip_edges(), PH_INSTR_W2, sz))
+	return out
+
+
+## Высота текста шага кеглем sz (как fit_wrapped_size: строки × (высота + 2) − 2).
+static func instr_h(text: String, sz: int) -> float:
+	return instr_lines(text, sz).size() * (UI.line_height(sz) + 2) - 2
+
+
+## Телефон: высота текста шага, нужная этому заданию, — наибольшая по его шагам высота «буквой Г» при ПРЕЖНЕМ кегле
+## (fit_wrapped_size(…, 408, 19, 126, 11), как до 27.11). Значит, ни один шаг не мельче, чем был; коляска — сразу под ней.
+func ph_instr_room() -> float:
+	var key := [job.get("id"), job.get("_variant"), Settings.a11y.get("text", 0), Settings.easy_font(), Loc.code]
+	if key == _ph_room_key:
+		return _ph_room
+	_ph_room_key = key
+	_ph_room = ph_room_for(steps())
+	return _ph_room
+
+
+static func ph_room_for(steps_: Array) -> float:
+	var m := 0.0
+	for st: Dictionary in steps_:
+		var tx := Loc.t(st.get("instr", ""))
+		m = maxf(m, instr_h(tx, UI.fit_wrapped_size(tx, instr_width(), 19, INSTR_ROOM, 11)))
+	return ceilf(m)
+
+
+## Телефон, ремонт: окно коляски при высоте текста шага room (не выше 322; низ — над полосой инструмента).
+static func ph_chair_rect(room: float) -> Rect2:
+	var bottom := ToolPanel.ph_strip_top() - 8
+	var h := minf(322.0, bottom - (INSTR_Y + room + 4))
+	var w := int(h * 380 / 300)
+	return Rect2(CHAIR_CX - int(w / 2.0), bottom - h, w, h)
 
 
 func chair_rect() -> Rect2:
 	var top: float
 	var h: float
+	if UI.phone() and phase == "repair":      # телефон: под текстом шага, над полосой инструмента (зазор 8), не выше 322
+		return ph_chair_rect(ph_instr_room())
 	if phase == "diagnose":
 		var lines := UI.wrap_lines(Loc.t(job["symptom"]), 560, 17).size()
 		top = 100 + lines * (UI.line_height(17) + 2) + 8
@@ -350,6 +419,8 @@ func build() -> void:
 		add_child(_after)
 	_client_bubble = SpeechBubble.make(SpeechBubble.Kind.CLIENT)
 	_client_bubble.bottom = (548.0 if UI.phone() else 572.0) if phase == "diagnose" else 548.0
+	if UI.phone() and phase == "repair":                     # телефон: над полосой инструмента (плитки 86, 27.11)
+		_client_bubble.bottom = ToolPanel.ph_strip_top() - 8
 	_client_bubble.say(client_line)
 	_client_bubble.t0 = client_t - t + _client_bubble.t      # пересборка экрана — пузырь не выпрыгивает заново
 	add_child(_client_bubble)
@@ -1161,7 +1232,7 @@ func tick(dt: float) -> void:
 	if bs != _bar_sig:
 		_bar_sig = bs
 		_bar.queue_redraw()
-	_client_bubble.visible = not riding
+	_client_bubble.visible = not riding and not (tools != null and tools.note_rect().has_area())   # телефон: сноска слева
 	_mentor.visible = not riding
 	action.visible = not riding
 	if _mentor.say(ghost_text()) and _mentor.shown():
@@ -1205,7 +1276,14 @@ func _draw_deco() -> void:
 				UI.AMBER, true)
 			_draw_step_dots(n, Vector2(hdr.end.x + 22, hdr.get_center().y), prev_rect().position.x - 18)
 			var instr := Loc.t(cur_step().get("instr", ""))
-			UI.draw_wrapped(_deco, instr, Vector2(360, INSTR_Y), instr_width(), instr_size(instr), UI.WHITE)
+			if UI.phone():                       # телефон: «буквой Г» под «◂ ШАГ ▸», высота — до коляски этого задания
+				var sz := instr_size(instr, -1, ph_instr_room())
+				var y := INSTR_Y
+				for ln in instr_lines(instr, sz):
+					UI.draw_text(_deco, ln, Vector2(360, y), sz, UI.WHITE)
+					y += UI.line_height(sz) + 2
+			else:
+				UI.draw_wrapped(_deco, instr, Vector2(360, INSTR_Y), instr_width(), instr_size(instr), UI.WHITE)
 			UI.draw_text(_deco, Loc.t("ДЕТАЛЬ"), Vector2(980, 70), 16, UI.AMBER, true)
 		"test":
 			UI.draw_text(_deco, Loc.t("ТЕСТ-ДРАЙВ"), Vector2(360, 70), 20, UI.GOOD, true)

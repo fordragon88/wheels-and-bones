@@ -387,6 +387,17 @@ func state() -> Dictionary:
 				"tracks": tr, "warn_total": ts.get("warn_total", 0), "warn_shown": ts.get("warn_shown", 0),
 				"warn_n": ts.get("warn_n", ""), "warn_page": scr.warn_page, "warn_pages": ts.get("warn_pages", 1),
 				"warn_size": ts.get("warn", 0), "warn_block": [wr.position.x, wr.position.y, wr.size.x, wr.size.y]}
+		var tv: Variant = scr.get("tools") if "tools" in scr else null
+		if tv is ToolPanel:                     # ремонт (web_smoke toolbig, 27.11): полоса инструмента и карточка сноски
+			var tp: ToolPanel = tv
+			var sr := tp.info_rect()
+			var nr := tp.note_rect()
+			d["tools"] = {"big": tp.big(), "strip": [sr.position.x, sr.position.y, sr.size.x, sr.size.y],
+				"note": [nr.position.x, nr.position.y, nr.size.x, nr.size.y], "note_pid": tp.note_pid()}
+		var cbv: Variant = scr.get("_client_bubble") if "_client_bubble" in scr else null
+		if cbv is SpeechBubble and (cbv as SpeechBubble).visible:
+			var cb: Rect2 = (cbv as SpeechBubble).client_rect()
+			d["client_bubble"] = [cb.position.x, cb.position.y, cb.size.x, cb.size.y]
 		var mg: Variant = scr.get("mini") if "mini" in scr else null
 		if mg is MiniGame:
 			d["mini"] = {"kind": mg.kind, "value": mg.value, "cfg": mg.cfg}

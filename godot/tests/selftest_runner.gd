@@ -2603,9 +2603,10 @@ func _only(what: String) -> void:
 			pc.write_out("instr_sizes.json", JSON.stringify(d, " ", false) + "
 ")
 			for k: String in d:
-				print("INSTR %s: телефон %d → %d шагов (худший было %s, стало +%d; мельче 19 — %d шагов, кегль от %d), ПК %d → %d"
+				print("INSTR %s: телефон %d → %d шагов (худший было %s, стало +%d; мельче 19 — %d шагов, кегль от %d; коляска от %d, ниже 283 — %s), ПК %d → %d"
 					% [k, d[k]["phone_before"], d[k]["phone_after"], d[k]["phone_worst_before"], d[k]["phone_worst_after"],
-					d[k]["phone_shrunk"], d[k]["min_size"], d[k]["pc_before"], d[k]["pc_after"]])
+					d[k]["phone_shrunk"], d[k]["min_size"], d[k]["chair_h_min"], d[k]["chair_small"], d[k]["pc_before"],
+					d[k]["pc_after"]])
 			line = "INSTR SIZES: %d сочетаний" % d.size()
 			rw.queue_free()
 			pc.free()

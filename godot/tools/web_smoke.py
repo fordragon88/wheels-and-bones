@@ -3043,6 +3043,117 @@ async def sc_phonebig(b):
     check(n > 0, f"phonebig: снимков {n} → {os.path.relpath(out, SHOTS)}/")
 
 
+TB_STAGES = ["rep_flat_tool", "rep_flat_none", "rep_flat_tutor", "rep_dracul_speed_note", "job_flat_diagnose",
+             "rep_aeroz_lock_tool", "rep_f5_charge_tool", "tech_ops_t_battery", "tech_ops", "mini_pump",
+             "ride_done_tilly", "result_lift"]
+TB_BIG = ["rep_flat_tool", "rep_dracul_speed_note", "rep_aeroz_lock_tool", "tech_ops_t_battery"]
+
+
+def _rx(r):
+    """[x, y, w, h] → (x0, y0, x1, y1)."""
+    return (r[0], r[1], r[0] + r[2], r[1] + r[3])
+
+
+def _cross(a, b, gap=0.0):
+    """Прямоугольники (x0, y0, x1, y1) пересекаются (gap > 0 — или ближе gap)."""
+    return a[0] < b[2] + gap and b[0] < a[2] + gap and a[1] < b[3] + gap and b[1] < a[3] + gap
+
+
+def toolbig_layout(st):
+    """Телефон, ремонт (27.11): плитки 86×86 (Гильдия — 56), полоса и плитки не на «СНОСКИ МАНУАЛА» (зазор 8), строках
+    деталей, «+»/«−», пузыре клиента, окне коляски; карточка сноски — не на плитках и коляске, не выше y 70.
+    Возврат — список нарушений (по состоянию страницы window.wnbState, не по снимку)."""
+    bad = []
+    btn = {b_[0]: b_[1:5] for b_ in st.get("buttons", [])}
+    tiles = {k: v for k, v in btn.items() if k.startswith("Tool_")}
+    if st.get("screen") == "tech" and st.get("phase") == "repair":
+        for k, v in tiles.items():
+            if round(v[2]) != 56 or round(v[3]) != 56:
+                bad.append(f"Гильдия: {k} не 56×56 ({v})")
+        return bad
+    tl = st.get("tools") or {}
+    if st.get("screen") != "job" or st.get("phase") != "repair" or not tl.get("big"):
+        return bad
+    if len(tiles) != 20:
+        bad.append(f"плиток {len(tiles)}, а не 20")
+    for k, v in tiles.items():
+        if round(v[2]) != 86 or round(v[3]) != 86:
+            bad.append(f"{k} не 86×86 ({v})")
+    nb = btn.get("Notes")
+    if nb and not (nb[0] >= 0 and nb[1] >= 0 and nb[0] + nb[2] <= 1280 and nb[1] + nb[3] <= 720):
+        bad.append(f"«СНОСКИ МАНУАЛА» не целиком на экране ({nb})")
+    obst = [(k, _rx(v)) for k, v in btn.items() if k == "Notes" or k.startswith("Part_") or k in ("ZoomIn", "ZoomOut")]
+    if st.get("client_bubble") and st["client_bubble"][2] > 0:
+        obst.append(("ClientBubble", _rx(st["client_bubble"])))
+    box = (st.get("ride") or {}).get("box")
+    if box:
+        obst.append(("Chair", _rx(box)))
+    mine = [(k, _rx([v[0], v[1] - 6, v[2], v[3] + 6])) for k, v in tiles.items()] + [("Strip", _rx(tl["strip"]))]
+    for mk, mr in mine:
+        for ok_, orr in obst:
+            if _cross(mr, orr):
+                bad.append(f"{mk} пересекает {ok_}")
+            elif _cross(mr, orr, 8 - 0.01):
+                bad.append(f"{mk} ближе 8 к {ok_}")
+    note = tl.get("note") or [0, 0, 0, 0]
+    if note[2] > 0:
+        nr = _rx(note)
+        for mk, mr in mine[:-1] + [o for o in obst if o[0] in ("Chair", "Notes", "ZoomIn", "ZoomOut")
+                                   or o[0].startswith("Part_")]:
+            if _cross(nr, mr):
+                bad.append(f"сноска пересекает {mk}")
+        if nr[1] < 70 - 0.5:
+            bad.append(f"сноска выше y 70 ({note})")
+    return bad
+
+
+async def sc_toolbig(b):
+    """Телефон, экран ремонта (27.11, вариант 3 владельца): плитки 86 во всю ширину, полоса над ними, сноска карточкой
+    слева, коляска выше; Гильдия — плитки 56 с рисунком 50. Телефон 780×360 dpr 3 → tests/web_shots/toolbig/
+    <язык>[150]_<состояние>_<WNB_TB_TAG: after>.png; в каждом состоянии ремонта — сверка раскладки по window.wnbState
+    (toolbig_layout). WNB_TB_TAG=before — снимки «до» со сборки прежнего кода (раскладку не сверять)."""
+    tag = os.environ.get("WNB_TB_TAG") or "after"
+    out = os.path.join(SHOTS, "toolbig")
+    os.makedirs(out, exist_ok=True)
+    n = 0
+    n_lay = 0
+    for lang, text in (("en", 0), ("ru", 0), ("ru", 3), ("en", 3)):
+        p = await new_page(b, f"tb_{lang}{text}", legacy=SKIP_SEED, touch=True, mobile=True, w=780, h=360, dpr=3)
+        p.allow.append("ERR_NO_BUFFER_SPACE")
+        await orient(p, 780, 360, True, 3)
+        await p.boot("&phone=1")
+        await title_ready(p)
+        for x in (f"set:lang={lang}", f"set:text={text}"):
+            await set_stage(p, x)
+        st = await p.state()
+        check(st.get("phone") is True, f"{p.name}: телефонный режим ({st.get('phone')})")
+        for s in (TB_STAGES if text == 0 else TB_BIG):
+            if not await set_stage(p, s):
+                check(False, f"{p.name}: состояние {s} не встало")
+                continue
+            await p.wait(lambda q: q["frames"]["queue"] == 0 and q["frames"]["inflight"] == 0, "кадры", 6, quiet=True)
+            await p.pg.wait_for_timeout(900)
+            st = await p.state()
+            if tag == "after":
+                bad = toolbig_layout(st)
+                if st.get("screen") in ("job", "tech") and st.get("phase") == "repair":
+                    n_lay += 1
+                    check(not bad, f"{p.name} {s}: раскладка ремонта" + (": " + "; ".join(bad[:6]) if bad else
+                          f" (плиток {sum(1 for b_ in st.get('buttons', []) if b_[0].startswith('Tool_'))})"))
+                if s.endswith("_note"):
+                    nt = (st.get("tools") or {}).get("note") or [0, 0, 0, 0]
+                    check(nt[2] > 0, f"{p.name} {s}: сноска открыта ({nt})")
+            name = f"{lang}{'' if text == 0 else 150}_{s}_{tag}.png"
+            try:
+                await p.pg.screenshot(path=os.path.join(out, name), timeout=20000)
+                n += 1
+            except Exception as e:
+                info(f"{p.name}: снимок {s} не снят ({type(e).__name__})")
+        p.check_console()
+        await p.ctx.close()
+    check(n > 0, f"toolbig: снимков {n} → toolbig/ ({tag}); сверено состояний ремонта {n_lay}")
+
+
 async def sc_seatrough(b):
     """Кабинет посадки, «шероховатости» (25.11) — снимки для владельца в tests/web_shots/seat_rough/: телефон 780×360
     dpr 3 — примерка Искры в начале (все «⚠» видны сразу или листанием касанием по блоку; страницы — «…_page2»), RU/EN
@@ -3716,7 +3827,7 @@ SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_
              "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "feedback": sc_feedback, "perf": sc_perf,
              "prof": sc_prof, "screens": sc_screens, "tabs": sc_tabs, "store": sc_store, "loader": sc_loader,
              "netfail": sc_netfail, "fsexit": sc_fsexit, "res": sc_resparam, "zoom": sc_zoom, "assign": sc_assign,
-             "pad": sc_pad, "bg": sc_bg, "music": sc_music, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "seatrough": sc_seatrough,
+             "pad": sc_pad, "bg": sc_bg, "music": sc_music, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "toolbig": sc_toolbig, "seatrough": sc_seatrough,
              "embed": sc_embed}
 TIMEOUT = {"screens": 5400, "phonetext": 7200, "embed": 1800,            # все экраны × 4 прохода — долго
            "bg": 2 * float(os.environ.get("WNB_BG_SECS", "70")) + 480}   # два раза «в фоне» + задание

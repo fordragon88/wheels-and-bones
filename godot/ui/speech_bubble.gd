@@ -117,23 +117,46 @@ func _draw() -> void:
 		_draw_mentor()
 
 
-func _draw_client() -> void:
+## Пузырь клиента: [имя, текст, кегль, высота, строк не больше (0 — все)]; кегль 15 → 13 (телефон — до 11, потом
+## строк — сколько влезет до bottom).
+func client_fit() -> Array:
 	var tl := Loc.t(line)
 	var colon := tl.find(":")
 	var nm := tl.substr(0, colon).strip_edges() if colon >= 0 else ""
 	var text := tl.substr(colon + 1).strip_edges() if colon >= 0 else tl
-	var w := 300.0
 	var tw := 272.0
 	var sz := 13
 	var lines: PackedStringArray = []
 	var lh := 0.0
-	for s: int in [15, 14, 13]:
+	for s: int in ([15, 14, 13, 12, 11] if UI.phone() else [15, 14, 13]):
 		sz = s
 		lines = UI.wrap_lines(text, tw, s)
 		lh = UI.line_height(s) + 2
 		if 34 + lines.size() * lh + 12 <= bottom - 296:
 			break
-	var h := 34 + lines.size() * lh + 12
+	var max_n := 0
+	if UI.phone() and 34 + lines.size() * lh + 12 > bottom - 296:
+		max_n = maxi(1, int((bottom - 296 - 46) / lh))
+		lines = lines.slice(0, max_n)
+	return [nm, text, sz, 34 + lines.size() * lh + 12, max_n]
+
+
+## Пузырь клиента на экране (с хвостиком от y 284) — для проверок раскладки; нет реплики — пустой.
+func client_rect() -> Rect2:
+	if kind != Kind.CLIENT or not shown():
+		return Rect2()
+	return Rect2(18, 284, 300, 296 + float(client_fit()[3]) - 284)
+
+
+func _draw_client() -> void:
+	var fit := client_fit()
+	var nm: String = fit[0]
+	var text: String = fit[1]
+	var sz: int = fit[2]
+	var h: float = fit[3]
+	var max_n: int = fit[4]
+	var w := 300.0
+	var tw := 272.0
 	var k := UI.ease_back((t - t0) / 0.35)
 	if k <= 0.01:
 		return
@@ -145,7 +168,7 @@ func _draw_client() -> void:
 	var box := Rect2(-w / 2, -h / 2, w, h)
 	UI.draw_round_rect(self, box, Color8(44, 36, 28, 235), UI.AMBER, 2, 12)
 	UI.draw_text(self, nm, box.position + Vector2(14, 9), 14, UI.AMBER, true)
-	UI.draw_wrapped(self, text, box.position + Vector2(14, 32), tw, sz, Color8(240, 232, 214), false, 2, typed(text, 80))
+	UI.draw_wrapped(self, text, box.position + Vector2(14, 32), tw, sz, Color8(240, 232, 214), false, 2, typed(text, 80), max_n)
 	draw_set_transform(Vector2.ZERO)
 
 
