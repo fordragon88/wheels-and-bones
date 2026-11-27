@@ -422,6 +422,80 @@ static func pc_repair_layout(scr: Node) -> PackedStringArray:
 	return bad
 
 
+## Значок «без звука» (28.11, отзыв с iPhone: лежал на флажке): при выключенном звуке его прямоугольник
+## (IconButton.mute_rect) не пересекает ни одну кнопку шапки (верх 56) и текст названия/бренда шапки
+## (TopBar.text_rects) — на всех ключевых экранах, RU/EN, обычный вид и телефон. Возврат: [проверено, нарушения].
+func mute_check(runner: Node) -> Array:
+	R = runner
+	_ensure_stager()
+	var t0: int = UI._touch
+	var p0: int = UI._phone
+	var vol0: Dictionary = Settings.vol.duplicate()
+	var lang0 := Loc.code
+	var n := 0
+	var bad: PackedStringArray = []
+	Engine.time_scale = 25.0
+	for ph: bool in [false, true]:
+		UI._touch = 1 if ph else 0
+		UI.set_phone(ph)
+		for lang: String in ["ru", "en"]:
+			SaveGame.reset()
+			for name: String in ["title"] + KEY_STATES:
+				SaveGame.tutorial_skipped = true
+				Settings.lang = lang
+				Loc.code = lang
+				var sname: String = "title_en" if lang == "en" and name == "title" else name
+				await _stager.stage(sname)
+				Settings.lang = lang
+				Loc.code = lang
+				Settings.vol["on"] = false
+				Settings.changed.emit("vol")
+				await R._frames(2)
+				var scr: Node = Nav.current
+				var gear: IconButton = null
+				for c: Node in scr.find_children("Gear", "IconButton", true, false):
+					gear = c
+				if gear == null or not gear.is_visible_in_tree():
+					_stager.unstage(sname)
+					continue
+				n += 1
+				var mr: Rect2 = gear.mute_rect()
+				mr.position += (gear.get_parent() as CanvasItem).get_global_transform().origin
+				for c: Node in scr.find_children("*", "BaseButton", true, false):
+					var b := c as Control
+					if b == gear or not b.is_visible_in_tree() or (b as BaseButton).disabled:
+						continue
+					var br := b.get_global_rect()
+					if br.position.y < 56 and br.intersects(mr):
+						bad.append("%s %s %s: значок «без звука» %s на кнопке %s %s" % ["телефон" if ph else "ПК", lang, name,
+							_fmt_r(mr), b.name, _fmt_r(br)])
+				for c: Node in scr.find_children("TopBar", "TopBar", true, false):
+					var tb := c as TopBar
+					for tr: Rect2 in tb.text_rects:
+						var g := Rect2(tr.position + tb.get_global_transform().origin, tr.size)
+						if g.intersects(mr):
+							bad.append("%s %s %s: значок «без звука» %s на тексте шапки %s" % ["телефон" if ph else "ПК", lang,
+								name, _fmt_r(mr), _fmt_r(g)])
+				_stager.unstage(sname)
+	Engine.time_scale = 1.0
+	if Share.dlg != null:                          # окна от состояний — закрыть (дальше идут проверки фокуса)
+		Share._close_dlg()
+	if Nav.settings != null:
+		Nav.close_settings()
+	if Nav.feedback != null:
+		Nav.feedback.close()
+	if Nav.help != null:
+		Nav.toggle_help()
+	Settings.vol = vol0
+	Settings.changed.emit("vol")
+	Loc.code = lang0
+	Settings.lang = lang0
+	UI._touch = t0
+	UI._phone = p0
+	Settings.changed.emit("phone")
+	return [n, bad]
+
+
 static func _fmt_r(r: Rect2) -> String:
 	return "%d,%d %d×%d" % [roundi(r.position.x), roundi(r.position.y), roundi(r.size.x), roundi(r.size.y)]
 

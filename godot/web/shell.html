@@ -67,6 +67,118 @@ html, body, #canvas { overscroll-behavior: none; }
 @media (max-height: 480px) { #wnb-load { padding-bottom: 3vh; } #wnb-load .t { margin-bottom: 4px; } }
 </style>
 <script>
+// --- окружение (28.11, отзыв с iPhone: телефонный режим не включился): ОДНО правило для страницы и игры (ui.gd
+// touch()/phone() берут его отсюда). Маленький экран — меньшая сторона экрана < 600 CSS px. Телефон — маленький экран
+// И (pointer: coarse ИЛИ any-pointer: coarse ИЛИ maxTouchPoints > 0 ИЛИ User-Agent Android … Mobile) — или User-Agent
+// iPhone/iPod сам по себе. Касания (подписи «коснись», запас пальца) — pointer: coarse ИЛИ телефон. Ноутбук с сенсорным
+// экраном (pointer: fine, экран ≥ 600) — мышиный, как был. ?phone=1|0 — главнее (телефонный режим и касания).
+(function () {
+  function mm(q) { try { return !!(window.matchMedia && matchMedia(q).matches); } catch (e) { return false; } }
+  var ua = navigator.userAgent || '';
+  var e = {
+    ua: ua, iphone: /iPhone|iPod/.test(ua), ipad: /iPad/.test(ua) || (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1),
+    android: /Android/.test(ua), mobileUA: /iPhone|iPod/.test(ua) || (/Android/.test(ua) && /Mobile/.test(ua)),
+    coarse: mm('(pointer: coarse)'), fine: mm('(pointer: fine)'), anyCoarse: mm('(any-pointer: coarse)'),
+    anyFine: mm('(any-pointer: fine)'), hover: mm('(hover: hover)'), anyHover: mm('(any-hover: hover)'),
+    mtp: navigator.maxTouchPoints || 0, sw: screen.width, sh: screen.height, force: ''
+  };
+  e.small = Math.min(e.sw, e.sh) < 600;
+  e.phone = (/iPhone|iPod/.test(ua)) || (e.small && (e.coarse || e.anyCoarse || e.mtp > 0 || e.mobileUA));
+  e.touch = e.coarse || e.phone;
+  var why = [];
+  if (e.iphone) why.push('UA iPhone');
+  if (e.small) why.push('экран<600');
+  if (e.coarse) why.push('pointer:coarse');
+  if (e.anyCoarse) why.push('any-pointer:coarse');
+  if (e.mtp > 0) why.push('touchPoints ' + e.mtp);
+  if (e.mobileUA && !e.iphone) why.push('UA mobile');
+  try {
+    var q = new URLSearchParams(location.search).get('phone');
+    if (q === '1' || q === '0') { e.force = q; e.phone = q === '1'; e.touch = e.coarse || e.phone; why.push('?phone=' + q); }
+  } catch (err) {}
+  e.why = why.join(', ') || '—';
+  window.wnbEnv = e;
+})();
+
+// --- ?diag=1 (28.11): плашка для снимка с телефона — устройство, окно, медиа-запросы, решения игры, последний ввод,
+// звук (музыка страницы и звук движка), версия. Без ?diag=1 ничего не делается. Касание по плашке — свернуть/развернуть.
+(function () {
+  if (!/[?&]diag=1(&|#|$)/.test(location.search)) return;
+  var inp = { touch: 0, mouse: 0, pointer: 0, last: '-', lastPT: '-' };
+  window.wnbInput = inp;
+  document.addEventListener('pointerdown', function (ev) { inp.pointer++; inp.last = 'pointerdown'; inp.lastPT = ev.pointerType || '?'; }, true);
+  document.addEventListener('touchstart', function () { inp.touch++; inp.last = 'touchstart'; }, true);
+  document.addEventListener('mousedown', function () { inp.mouse++; inp.last = 'mousedown'; }, true);
+  // контексты звука (движок Godot и музыка страницы): учёт созданных AudioContext — только при ?diag=1
+  var ctxs = window.wnbCtxs = [];
+  ['AudioContext', 'webkitAudioContext'].forEach(function (k) {
+    var O = window[k];
+    if (!O) return;
+    var W = function (o) { var c = o === undefined ? new O() : new O(o); ctxs.push(c); return c; };
+    W.prototype = O.prototype;
+    try { window[k] = W; } catch (err) {}
+  });
+  function short(ua) {
+    var dev = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' :
+      /Macintosh/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Win' : /Linux/.test(ua) ? 'Linux' : '?';
+    var br = /CriOS\/(\d+)/.exec(ua) ? 'CriOS ' + /CriOS\/(\d+)/.exec(ua)[1] : /FxiOS\/(\d+)/.exec(ua) ? 'FxiOS' :
+      /EdgA?\/(\d+)/.exec(ua) ? 'Edge' : /Firefox\/(\d+)/.exec(ua) ? 'Firefox ' + /Firefox\/(\d+)/.exec(ua)[1] :
+      /Chrome\/(\d+)/.exec(ua) ? 'Chrome ' + /Chrome\/(\d+)/.exec(ua)[1] :
+      /Version\/([\d.]+).*Safari/.exec(ua) ? 'Safari ' + /Version\/([\d.]+)/.exec(ua)[1] : '?';
+    var os = /OS (\d+)_(\d+)/.exec(ua);
+    return dev + (os ? ' iOS ' + os[1] + '.' + os[2] : '') + ' · ' + br;
+  }
+  function yn(b) { return b ? '1' : '0'; }
+  var box = null, small = false;
+  function lines() {
+    var e = window.wnbEnv || {}, vv = window.visualViewport, g = window.wnbGame || {};
+    var o = (screen.orientation && screen.orientation.type) || (typeof window.orientation === 'number' ? 'o' + window.orientation : '-');
+    var framed = false; try { framed = window.parent !== window; } catch (err) { framed = true; }
+    var fsAv = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+    var fsOn = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    var mi = '';
+    try { mi = window.wnbMusic ? window.wnbMusic.info() : ''; } catch (err) { mi = 'err ' + err; }
+    var cx = ctxs.map(function (c, i) {
+      return '#' + i + ' ' + c.state + ' ' + c.sampleRate + (c === (window.wnbMusicCtx && window.wnbMusicCtx()) ? ' (музыка)' : '');
+    }).join(', ') || '-';
+    var L = [
+      short(navigator.userAgent || '') + ' · platform ' + (navigator.platform || '-') + ' · touchPoints ' + (navigator.maxTouchPoints || 0),
+      'screen ' + screen.width + '×' + screen.height + ' · dpr ' + (window.devicePixelRatio || 1) + ' · inner ' +
+        innerWidth + '×' + innerHeight + ' · vv ' + (vv ? Math.round(vv.width) + '×' + Math.round(vv.height) : '-') +
+        ' · ' + o + ' · рамка ' + yn(framed) + ' · fs ' + yn(fsAv) + '/' + yn(fsOn),
+      'pointer ' + (e.coarse ? 'coarse' : e.fine ? 'fine' : 'none') + ' · any-pointer ' + (e.anyCoarse ? 'coarse' : '') +
+        (e.anyFine ? (e.anyCoarse ? '+' : '') + 'fine' : '') + ' · hover ' + yn(e.hover) + ' · any-hover ' + yn(e.anyHover),
+      'страница: phone ' + yn(e.phone) + ' touch ' + yn(e.touch) + ' (' + e.why + ') · игра: touch ' +
+        (g.touch === undefined ? '?' : yn(g.touch)) + ' phone ' + (g.phone === undefined ? '?' : yn(g.phone)) +
+        (g.why ? ' (' + g.why + ')' : ''),
+      'ввод: последний ' + inp.last + ' (' + inp.lastPT + ') · touch ' + inp.touch + ' mouse ' + inp.mouse + ' pointer ' + inp.pointer,
+      'музыка ' + mi,
+      'контексты ' + cx + (g.sfx ? ' · эффекты ' + g.sfx : ''),
+      'Settings.vol ' + (g.vol ? JSON.stringify(g.vol) : '?') + (g.bus ? ' · шины ' + g.bus : ''),
+      'сборка ' + (window.wnbBuild || '?') + (g.ver ? ' · ' + g.ver : '')
+    ];
+    return L.join('\n');
+  }
+  function tick() {
+    if (!box) {
+      if (!document.body) return;
+      box = document.createElement('div'); box.id = 'wnb-diagbox';
+      box.setAttribute('aria-hidden', 'true');
+      box.style.cssText = 'position:fixed;left:0;bottom:0;max-width:100%;z-index:10002;background:rgba(0,0,0,.72);' +
+        'color:#9f9;font:9px/1.2 Consolas,"DejaVu Sans Mono",monospace;white-space:pre-wrap;word-break:break-all;' +
+        'padding:2px 4px;pointer-events:auto;touch-action:manipulation;max-height:60%;overflow:hidden';
+      box.addEventListener('click', function (ev) { small = !small; ev.stopPropagation(); tick(); });
+      box.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); }, true);
+      document.body.appendChild(box);
+    }
+    var t = small ? 'diag ▸ (касание — развернуть)' : lines();
+    if (box.textContent !== t) box.textContent = t;
+  }
+  window.wnbDiagText = lines;
+  setInterval(tick, 500);
+})();
+</script>
+<script>
 // Помощники для игры. Всё, что игра зовёт из GDScript (autoload/web.gd, frames.gd, audio.gd, share_dialog.gd).
 (function () {
   'use strict';
@@ -222,9 +334,60 @@ html, body, #canvas { overscroll-behavior: none; }
   //    (на iOS бывает «interrupted» после звонка/блокировки).
   //  • ?musgain=1 — вести через GainNode в любом браузере (проверка этого пути), ?musgain=0 — никогда (запасной выход).
   var mus = { a: null, src: '', want: false, vol: 1, muted: false, ctx: null, gain: null, node: null, building: false,
-              settable: true, err: '' };
-  var qg = /[?&]musgain=([01])(&|#|$)/.exec(location.search);
+              settable: true, err: '', routes: 0, route_state: '', built_at: '' };
+  //  • ?musgain=2 (28.11, отзыв с iPhone: ползунок музыки «не работает») — третий способ без <audio>: дорожка
+  //    скачивается (fetch → decodeAudioData) и играет AudioBufferSourceNode (loop) → GainNode → выход; громкость и
+  //    тишина — в gain. В памяти — только текущая дорожка; пока новая декодируется, старая уже остановлена.
+  var qg = /[?&]musgain=([012])(&|#|$)/.exec(location.search);
   var GAIN = qg ? qg[1] : '';
+  var BUF = GAIN === '2';
+  var bf = { ctx: null, gain: null, node: null, url: '', buffer: null, token: 0, state: 'none', dur: 0 };
+  function bufCtx() {
+    if (bf.ctx) return bf.ctx;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) { mus.err = 'no AudioContext'; return null; }
+    try {
+      bf.ctx = new AC();
+      bf.gain = bf.ctx.createGain();
+      bf.gain.gain.value = mus.vol;
+      bf.gain.connect(bf.ctx.destination);
+      bf.ctx.onstatechange = function () { if (bf.ctx.state === 'running') bufStart(); };
+    } catch (e) { mus.err = String((e && e.name) || e); }
+    return bf.ctx;
+  }
+  function bufStop() {
+    if (bf.node) { try { bf.node.stop(); } catch (e) {} try { bf.node.disconnect(); } catch (e) {} bf.node = null; }
+  }
+  function bufStart() {                                // дорожка есть, игра хочет музыку, вкладка видна, контекст жив
+    if (bf.node || !bf.buffer || !mus.want || document.hidden || !bf.ctx) { if (bf.buffer && !bf.node) bf.state = 'pending'; return; }
+    if (bf.ctx.state !== 'running') { bf.state = 'pending (' + bf.ctx.state + ')'; return; }
+    try {
+      var n = bf.ctx.createBufferSource();
+      n.buffer = bf.buffer; n.loop = true; n.connect(bf.gain); n.start(0);
+      bf.node = n; bf.state = 'playing';
+    } catch (e) { mus.err = String((e && e.name) || e); }
+  }
+  function bufPlay(u) {
+    if (!bufCtx()) return;
+    if (bf.url === u) { bufStart(); return; }
+    bufStop();
+    bf.buffer = null; bf.url = u; bf.dur = 0; bf.state = 'loading';
+    var tk = ++bf.token;
+    fetch(u).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+      .then(function (ab) {
+        if (tk !== bf.token) return null;
+        return new Promise(function (res, rej) {            // Safari: decodeAudioData — и с обратным вызовом
+          var p = bf.ctx.decodeAudioData(ab, res, rej);
+          if (p && p.then) p.then(res, rej);
+        });
+      })
+      .then(function (b) {
+        if (!b || tk !== bf.token) return;
+        bf.buffer = b; bf.dur = b.duration; bf.state = 'decoded';
+        bufStart();
+      })
+      .catch(function (e) { if (tk === bf.token) { bf.state = 'error'; mus.err = String((e && (e.message || e.name)) || e); } });
+  }
   try { var probeA = new Audio(); probeA.volume = 0.5; mus.settable = Math.abs(probeA.volume - 0.5) < 0.01; }
   catch (e) { mus.settable = false; }
   function wantGain() { return GAIN === '1' || (GAIN !== '0' && !mus.settable); }
@@ -247,9 +410,18 @@ html, body, #canvas { overscroll-behavior: none; }
     } else if (a && mus.settable) {
       try { a.volume = v; } catch (e) {}
     }
+    if (bf.gain) {
+      try {
+        var bg = bf.gain.gain, bt = bf.ctx.currentTime;
+        bg.cancelScheduledValues(bt); bg.setValueAtTime(bg.value, bt); bg.setTargetAtTime(v, bt, 0.03);
+      } catch (e) { try { bf.gain.gain.value = v; } catch (e2) {} }
+    }
   }
   // контекст поднять, если он «suspended»/«interrupted» (жест игрока, возврат вкладки)
   function wake() {
+    if (bf.ctx && bf.ctx.state !== 'running' && bf.ctx.state !== 'closed') {
+      try { var bp = bf.ctx.resume(); if (bp && bp.then) bp.then(bufStart, function () {}); } catch (e) {}
+    }
     var c = mus.ctx;
     if (c && c.state !== 'running' && c.state !== 'closed') {
       try { var p = c.resume(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
@@ -261,7 +433,7 @@ html, body, #canvas { overscroll-behavior: none; }
       var c = mus.ctx, node = c.createMediaElementSource(mus.a), g = c.createGain();
       g.gain.value = mus.vol;
       node.connect(g); g.connect(c.destination);
-      mus.node = node; mus.gain = g;
+      mus.node = node; mus.gain = g; mus.built_at = 'route ' + mus.routes;
       try { mus.a.volume = 1; } catch (e) {}           // уровень теперь в gain (где volume задаётся — без двойного)
       applyVol();
     } catch (e) { mus.err = String((e && e.name) || e); }
@@ -272,7 +444,13 @@ html, body, #canvas { overscroll-behavior: none; }
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) { mus.err = 'no AudioContext'; return; }
     try {
-      if (!mus.ctx) mus.ctx = new AC();
+      if (!mus.ctx) {
+        mus.ctx = new AC();
+        // 28.11: контекст поднялся позже (iOS: resume() по жесту, «interrupted» → «running») — собрать маршрут тогда
+        mus.ctx.onstatechange = function () { if (mus.ctx.state === 'running' && !mus.gain && mus.a) build(); };
+      }
+      mus.routes++;
+      mus.route_state = mus.ctx.state;
       if (mus.ctx.state === 'running') { build(); return; }
       var p = mus.ctx.resume();
       if (p && p.then) {
@@ -283,12 +461,16 @@ html, body, #canvas { overscroll-behavior: none; }
     } catch (e) { mus.building = false; mus.err = String((e && e.name) || e); }
   }
   function tryPlay() {
+    if (BUF) { bufStart(); return; }
     if (mus.want && mus.a && mus.a.paused && !document.hidden) {
       try { var p = mus.a.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
     }
   }
   function gesture() { wake(); try { route(); } catch (e) {} tryPlay(); }
-  function away() { if (mus.a) { try { mus.a.pause(); } catch (e) {} } }
+  function away() {
+    if (mus.a) { try { mus.a.pause(); } catch (e) {} }
+    if (bf.node) { bufStop(); bf.state = 'paused'; }   // с начала дорожки при возврате (как элемент после паузы — почти)
+  }
   ['pointerdown', 'keydown', 'touchend', 'mousedown'].forEach(function (e) { document.addEventListener(e, gesture, true); });
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) away(); else { wake(); tryPlay(); }
@@ -297,20 +479,35 @@ html, body, #canvas { overscroll-behavior: none; }
   window.addEventListener('pagehide', away);
   window.addEventListener('pageshow', function () { if (!document.hidden) { wake(); tryPlay(); } });
   window.wnbMusic = {
-    play: function (u) { var a = el(); if (mus.src !== u) { mus.src = u; a.src = u; } mus.want = true; tryPlay(); },
-    stop: function () { mus.want = false; if (mus.a) mus.a.pause(); },
-    volume: function (v) { mus.vol = Math.max(0, Math.min(1, +v || 0)); el(); applyVol(); },
-    state: function () { return mus.a ? ((mus.a.paused ? 'paused' : 'playing') + ' ' + mus.src) : 'none'; },
+    play: function (u) {
+      mus.want = true;
+      if (BUF) { mus.src = u; bufPlay(u); return; }
+      var a = el(); if (mus.src !== u) { mus.src = u; a.src = u; } tryPlay();
+    },
+    stop: function () { mus.want = false; if (mus.a) mus.a.pause(); if (bf.node) { bufStop(); bf.state = 'stopped'; } },
+    volume: function (v) { mus.vol = Math.max(0, Math.min(1, +v || 0)); if (!BUF) el(); applyVol(); },
+    state: function () {
+      if (BUF) return (bf.node ? 'playing' : 'paused') + ' ' + mus.src;
+      return mus.a ? ((mus.a.paused ? 'paused' : 'playing') + ' ' + mus.src) : 'none';
+    },
     // проверка (web_smoke music): как сейчас ведётся громкость
     info: function () {
       var g = null, ev = null;
+      if (BUF) {
+        try { if (bf.gain) g = +bf.gain.gain.value.toFixed(4); } catch (e) {}
+        return JSON.stringify({ mode: 'buffer', force: GAIN, vol: +mus.vol.toFixed(4), gain: g, state: bf.state,
+          dur: +(bf.dur || 0).toFixed(1), ctx: bf.ctx ? bf.ctx.state : '', err: mus.err, src: mus.src,
+          playing: !!bf.node });
+      }
       try { if (mus.gain) g = +mus.gain.gain.value.toFixed(4); } catch (e) {}
       try { if (mus.a) ev = +mus.a.volume.toFixed(4); } catch (e) {}
       return JSON.stringify({ mode: mus.gain ? 'gain' : 'element', want_gain: wantGain(), force: GAIN,
         settable: mus.settable, muted: mus.muted, el_muted: mus.a ? !!mus.a.muted : null, vol: +mus.vol.toFixed(4),
-        el_vol: ev, gain: g, ctx: mus.ctx ? mus.ctx.state : '', err: mus.err });
+        el_vol: ev, gain: g, ctx: mus.ctx ? mus.ctx.state : '', err: mus.err, routes: mus.routes,
+        route_state: mus.route_state, built: mus.built_at, playing: mus.a ? !mus.a.paused : false });
     }
   };
+  window.wnbMusicCtx = function () { return BUF ? bf.ctx : mus.ctx; };
 
   // --- буфер обмена: Godot копирует через navigator.clipboard.writeText (DisplayServer.clipboard_set), ответ браузера
   // игре не доходит. В рамке чужого сайта (страница WordPress) запись разрешена, только если у <iframe> есть
@@ -381,7 +578,7 @@ html, body, #canvas { overscroll-behavior: none; }
       place();
       if (fld.key !== key) {
         fld.key = key; f.value = value || ''; fld.enter = 0; fld.esc = 0;
-        var coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+        var coarse = window.wnbEnv ? window.wnbEnv.touch : (window.matchMedia && matchMedia('(pointer: coarse)').matches);
         if (!coarse) setTimeout(function () { f.focus(); }, 0);   // на телефоне клавиатуру открывает касание
       }
     },
@@ -569,7 +766,7 @@ $GODOT_HEAD_INCLUDE
 (function () {
   'use strict';
   var c = document.getElementById('canvas'), probe = document.getElementById('wnb-vp');
-  var touch = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  var touch = window.wnbEnv ? window.wnbEnv.touch : !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
   var framed = false; try { framed = window.parent !== window; } catch (e) { framed = true; }
   var cur = { w: 0, h: 0 };
   function orientName() {
@@ -699,7 +896,7 @@ $GODOT_HEAD_INCLUDE
   'use strict';
   var T = window.wnbT;
   var de = document.documentElement;
-  var touch = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  var touch = window.wnbEnv ? window.wnbEnv.touch : !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
   var isFs = function () { return !!(document.fullscreenElement || document.webkitFullscreenElement); };
   var canFs = !!(de.requestFullscreen || de.webkitRequestFullscreen);
   var inFrame = false; try { inFrame = window.parent !== window; } catch (e) { inFrame = true; }
@@ -825,6 +1022,7 @@ $GODOT_HEAD_INCLUDE
 <script src="$GODOT_URL"></script>
 <script>
 const GODOT_CONFIG = $GODOT_CONFIG;
+try { window.wnbBuild = String(GODOT_CONFIG.mainPack || GODOT_CONFIG.executable || ''); } catch (e) {}
 const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
 // Файл движка (wnb-engine-<хэш>.js) не загрузился — старая index.html из кеша ссылается на движок, которого после
 // выкладки уже нет: Engine не определён. Раньше здесь падал весь скрипт (ReferenceError) — вечная заставка без

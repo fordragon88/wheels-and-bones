@@ -77,7 +77,8 @@ static func touch() -> bool:
 	if _touch < 0:
 		_touch = 0
 		if OS.has_feature("web"):
-			var r: Variant = JavaScriptBridge.eval("(window.matchMedia && matchMedia('(pointer: coarse)').matches) ? 'y' : 'n'", true)
+			var r: Variant = JavaScriptBridge.eval("(window.wnbEnv ? window.wnbEnv.touch : (window.matchMedia && " \
+				+ "matchMedia('(pointer: coarse)').matches)) ? 'y' : 'n'", true)   # 28.11: общее правило страницы (shell.html)
 			_touch = 1 if str(r) == "y" else 0
 		elif OS.has_feature("mobile"):
 			_touch = 1
@@ -89,6 +90,8 @@ const PHONE_MIN := 56                     # телефонный режим: ц�
 const PHONE_GAP := 8                      # и зазор между соседними целями
 
 
+## 28.11 (отзыв с iPhone): в браузере — window.wnbEnv страницы (shell.html): маленький экран И (pointer/any-pointer
+## coarse, maxTouchPoints, UA Android Mobile) или UA iPhone; ниже — запасной путь, если wnbEnv нет.
 ## Телефонный режим (21.11, владелец: «цели для пальца крупнее»): сенсорный экран (touch()) И маленький экран —
 ## в браузере `(pointer: coarse)` и меньшая сторона экрана < 600 CSS px (телефон; планшет — нет). Считается один раз
 ## при старте. Принудительно: адрес `?phone=1|0`, web_smoke `set:phone=1|0`, самопроверка — set_phone(). Вне
@@ -99,7 +102,8 @@ static func phone() -> bool:
 		if "--phone" in OS.get_cmdline_user_args():      # компьютер, снимки: «-- --phone»
 			_phone = 1
 		elif OS.has_feature("web"):
-			var r: Variant = JavaScriptBridge.eval("(function(){try{var q=new URLSearchParams(location.search).get('phone');" \
+			var r: Variant = JavaScriptBridge.eval("(function(){if(window.wnbEnv)return window.wnbEnv.phone?'y':'n';" \
+				+ "try{var q=new URLSearchParams(location.search).get('phone');" \
 				+ "if(q==='1')return 'y';if(q==='0')return 'n';}catch(e){}" \
 				+ "var c=!!(window.matchMedia&&matchMedia('(pointer: coarse)').matches);" \
 				+ "return (c&&Math.min(screen.width,screen.height)<600)?'y':'n';})()", true)

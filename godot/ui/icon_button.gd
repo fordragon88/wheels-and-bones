@@ -49,6 +49,29 @@ static func make_icon(k: Kind) -> IconButton:
 	return b
 
 
+## Звук выключен (M или громкость общая 0) — у шестерёнки значок перечёркнутого динамика.
+static func muted() -> bool:
+	return not Settings.vol.get("on", true) or float(Settings.vol.get("master", 1.0)) <= 0.001
+
+
+## Значок «без звука» (у шестерёнки, координаты родителя): 20×22. Без кнопки языка — между флажком и шестерёнкой
+## (там место есть); с языком (титул, мастерская, Гильдия, гараж) — левее флажка (на титуле — левее языка) с зазором
+## 6 (телефон 8): в game.py он лежит на W−124 — на флажке (28.11, отзыв с iPhone).
+func mute_rect() -> Rect2:
+	var cy := position.y + size.y / 2.0
+	var cx := position.x - 20.0
+	if get_meta("lang_left", false):
+		var anchor: float = (UI.W - (192.0 if UI.phone() else 154.0)) if get_meta("flag", false) 			else (UI.W - (128.0 if UI.phone() else 104.0))
+		cx = anchor - (8.0 if UI.phone() else 6.0) - 9.0
+	return Rect2(cx - 11, cy - 11, 20, 22)
+
+
+## Левый край значка «без звука» на экранах с языком — правее него шапке писать нельзя (TopBar.right_edge).
+static func mute_left(flag: bool) -> float:
+	var anchor: float = (UI.W - (192.0 if UI.phone() else 154.0)) if flag else (UI.W - (128.0 if UI.phone() else 104.0))
+	return anchor - (8.0 if UI.phone() else 6.0) - 20.0
+
+
 func _on_settings(key: String) -> void:
 	if key == "vol":
 		update_a11y()
@@ -99,8 +122,8 @@ func _draw() -> void:
 			draw_colored_polygon(pts, col)
 			draw_circle(c, 9 * gk, col, true, -1.0, true)
 			draw_circle(c, 4 * gk, Color8(30, 28, 40), true, -1.0, true)
-			if not Settings.vol.get("on", true) or float(Settings.vol.get("master", 1.0)) <= 0.001:
-				var s := Vector2(-20 - ((68 if UI.phone() else 54) if get_meta("lang_left", false) else 0), size.y / 2.0)
+			if muted():
+				var s := mute_rect().get_center() - position
 				draw_rect(Rect2(s + Vector2(-9, -4), Vector2(6, 8)), UI.GHOST)
 				draw_colored_polygon(PackedVector2Array([s + Vector2(-3, -4), s + Vector2(4, -10), s + Vector2(4, 10),
 					s + Vector2(-3, 4)]), UI.GHOST)

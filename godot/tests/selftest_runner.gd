@@ -220,6 +220,7 @@ func _run() -> void:
 	var fx_line: String = await _fixes()
 	fx_line += "; " + await _touch()
 	fx_line += "; " + await _phone_check()
+	fx_line += "; " + await _mute_check()
 	fx_line += "; " + await _review_kb()
 	fx_line += "; " + await _review_web()
 	fx_line += "; " + await _review_port()
@@ -279,6 +280,17 @@ func _phone_check() -> String:
 
 ## Замер целей по всем состояниям kb_order_ref (--phone 0|1, --langs ru,en) → tests/out/phone_targets_<0|1>.txt;
 ## ref — эталон «выключен» tests/phone_off_ref.json.
+## Значок «без звука» не на кнопках и тексте шапки (phone_check.mute_check).
+func _mute_check() -> String:
+	var pc: Node = (load("res://tests/phone_check.gd") as GDScript).new()
+	add_child(pc)
+	var r: Array = await pc.mute_check(self)
+	pc.queue_free()
+	for b: String in r[1]:
+		err(b)
+	return "ЗНАЧОК «БЕЗ ЗВУКА»: экранов %d (RU/EN, ПК и телефон), на кнопках и тексте шапки — %d" % [r[0], r[1].size()]
+
+
 func _phone_measure(ref: bool) -> String:
 	var args := OS.get_cmdline_user_args()
 	var on := not ref
@@ -2623,6 +2635,8 @@ func _only(what: String) -> void:
 			pc.free()
 		"phone":
 			line = await _phone_check()
+		"mute":
+			line = await _mute_check()
 		"phone-measure":
 			line = await _phone_measure(false)
 		"phone-ref":

@@ -8,6 +8,7 @@ var sub: String = ""
 var brand: bool = true                    # «КОЛЁСА И КОСТИ» справа (нет — когда место занято кнопкой)
 var right_edge: float = UI.W - 170        # правый край заголовка/бренда
 var left: float = 56                      # после «◂ назад» (8 + 38 + 10)
+var text_rects: Array[Rect2] = []         # где нарисованы название, вторая строка и бренд (проверка значка «без звука»)
 
 
 static func make(title_ru: String, sub_ru: String = "", back: bool = true) -> TopBar:
@@ -32,9 +33,10 @@ func _draw() -> void:
 	draw_rect(Rect2(0, 0, UI.W, 54), UI.BAR)
 	draw_line(Vector2(0, 54.5), Vector2(UI.W, 54.5), UI.AMBER, 1.0)
 	var right := right_edge
+	text_rects.clear()
 	if brand:
 		var b := Loc.t("КОЛЁСА И КОСТИ")
-		UI.draw_text(self, b, Vector2(right, 16), 18, UI.GHOST, true, 2)
+		text_rects.append(UI.draw_text(self, b, Vector2(right, 16), 18, UI.GHOST, true, 2))
 		right -= UI.text_width(b, 18, true) + 16
 	var x0 := left
 	var tt := Loc.t(title)
@@ -58,4 +60,4 @@ func _draw() -> void:
 func _fit(text: String, pos: Vector2, width: float, size: int, color: Color, bold: bool) -> void:
 	var f: Array = UI.fit_text(text, width, size, bold)
 	var sz: int = f[1]
-	UI.draw_text(self, f[0], Vector2(pos.x, pos.y + floorf((size - sz) / 2.0)), sz, color, bold)
+	text_rects.append(UI.draw_text(self, f[0], Vector2(pos.x, pos.y + floorf((size - sz) / 2.0)), sz, color, bold))

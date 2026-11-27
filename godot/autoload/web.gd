@@ -17,6 +17,8 @@ var on: bool = false
 var params: Dictionary = {}              # параметры адреса страницы: имя → значение (последнее)
 var test: bool = false                   # ?test=1 — состояние для автопроверки
 var fps_on: bool = false                 # ?fps=1 / --fps — плашка кадров/с
+var diag_on: bool = false                # ?diag=1 — сведения для плашки страницы (window.wnbGame, раз в 0,5 с)
+var _diag_t := 0.0
 var prof_on: bool = false                # ?prof=1 (+ ?test=1/?fps=1) / --prof — профилировка кадра
 var covered: bool = false                # заслонка страницы закрывает игру (книжная ориентация телефона)
 var cfg: Dictionary = {}                 # game_consts.json → web: {frames_v, music_v, music_ext} (пишет build_web.py)
@@ -54,6 +56,7 @@ func _ready() -> void:
 		params = parse_query(str(JavaScriptBridge.eval("window.location.search || ''", true)))
 	test = on and flag("test")
 	fps_on = flag("fps") or OS.get_cmdline_user_args().has("--fps")
+	diag_on = flag("diag")
 	prof_on = (flag("prof") and (test or fps_on)) or OS.get_cmdline_user_args().has("--prof")
 	if prof_on:
 		add_child(Prof.new())
@@ -283,6 +286,11 @@ func _process(dt: float) -> void:
 			var line := "[wnb] fps %.1f min10s %.0f max %.0f ms px %dx%d scene %s frames %s" % [fps, fps_min10, _worst_ms,
 				ws.x, ws.y, Nav.current_name, Frames.status_line()]
 			JavaScriptBridge.eval("console.log(%s)" % JSON.stringify(line), true)
+	if on and diag_on:
+		_diag_t += dt
+		if _diag_t >= 0.5:
+			_diag_t = 0.0
+			JavaScriptBridge.eval("window.wnbGame = %s" % JSON.stringify(diag_info()), true)
 	if on:
 		_clip_check(dt)
 	if test:
@@ -290,6 +298,20 @@ func _process(dt: float) -> void:
 		if _st_t >= 0.25:
 			_st_t = 0.0
 			JavaScriptBridge.eval("window.wnbState = %s" % JSON.stringify(JSON.stringify(state())), true)
+
+
+## ?diag=1 (28.11, отзыв с iPhone): что решила игра (касания/телефон), громкость из настроек, последний эффект и
+## его volume_db, способ воспроизведения звука в веб-сборке, громкость шин, версия.
+func diag_info() -> Dictionary:
+	var bus: PackedStringArray = []
+	for i in AudioServer.bus_count:
+		bus.append("%s %.1fdB%s" % [AudioServer.get_bus_name(i), AudioServer.get_bus_volume_db(i),
+			" mute" if AudioServer.is_bus_mute(i) else ""])
+	return {"touch": UI.touch(), "phone": UI.phone(), "why": "wnbEnv" if str(JavaScriptBridge.eval(
+		"window.wnbEnv ? 'y' : 'n'", true)) == "y" else "pointer:coarse", "vol": Settings.vol,
+		"sfx": "%s %.1fdB (playback %s, микшер %d Гц)" % [Audio.last_sfx[0], Audio.last_sfx[1],
+		str(ProjectSettings.get_setting("audio/general/default_playback_type.web", "?")), AudioServer.get_mix_rate()],
+		"bus": ", ".join(bus), "ver": str(ProjectSettings.get_setting("application/config/version", ""))}
 
 
 ## Окно «Скопировано ✔» открыто: браузер отказал в записи в буфер (рамка без allow="clipboard-write", запрет

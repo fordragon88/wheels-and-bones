@@ -77,6 +77,9 @@ func _ready() -> void:
 	apply_volume()
 
 
+var last_sfx: Array = ["", 0.0]          # ?diag=1: последний эффект и его volume_db (дошла ли громкость)
+
+
 func has_sfx(name: String) -> bool:
 	return _sfx.has(name)
 
@@ -94,6 +97,7 @@ func sfx(name: String) -> void:
 	_next = (_next + 1) % POOL
 	p.stream = s
 	p.volume_db = linear_to_db(maxf(0.0001, float(Settings.vol["master"]) * float(Settings.vol["sfx"])))
+	last_sfx = [name, snappedf(p.volume_db, 0.1)]
 	p.play()
 
 
