@@ -10,7 +10,8 @@ extends Node
 
 var R: Node
 var _stager: Node
-static var lay_info := ""                    # repair_layout: что сверено в последний раз (для строки отчёта)
+static var lay_info := ""
+static var lines_pc_labels := ""             # pc_repair_layout: подписи плиток (кегль и строки) — в отчёт                    # repair_layout: что сверено в последний раз (для строки отчёта)
 
 ## Осознанно мельче 56 / вплотную: «имя цели» (или «состояние:имя»; * в конце — начало имени) → причина.
 const EXCEPT := {
@@ -400,6 +401,19 @@ static func pc_repair_layout(scr: Node) -> PackedStringArray:
 		var top: float = ToolPanel.PC_CARD.end.y - hh + o.y
 		if hh > ToolPanel.PC_CARD.size.y + 0.5 and top < mc.position.y + o.y - 0.5 and mc.has_area():
 			bad.append("карточка %s выше колонки Барти" % str(w))
+	var labs: PackedStringArray = []                       # подписи: кегль и строки («-» на конце — перенос)
+	for tid: String in tp.tiles:
+		if tid != "hands":
+			var lf: Array = tp.ph_label_fit(tid)
+			var cut := ""
+			for ln: String in lf[1]:
+				if ln.ends_with("-"):                          # перенос: ширина слова целиком кеглем 9 и место
+					var word: String = (ToolPanel.PH_LABEL[tid][1 if Loc.code == "en" else 0] as String).replace("|", "")
+					for wd: String in word.split(" "):
+						if wd.begins_with(ln.trim_suffix("-")):
+							cut = " (целиком кеглем 9 — %.1f из %.1f)" % [UI.px_width(wd, 9, true), ToolPanel.geo()["tw"] - 6]
+			labs.append("%s %d %s%s" % [tid, lf[0], "/".join(lf[1]), cut])
+	lines_pc_labels = ", ".join(labs)
 	lay_info = "ПК: плиток %d, рисунки %d…%d, карточка %s, вариантов карточки %d (выше 156 — %d), препятствий %d" % [
 		tp.tiles.size(), tp.tiles.keys().filter(func(x: String) -> bool: return x != "hands").map(
 		func(x: String) -> int: return int(tp.ph_icon_fit(x)[0])).min(), tp.tiles.keys().filter(
@@ -483,6 +497,8 @@ func measure(runner: Node, states: Array, langs: Array, on: bool) -> Dictionary:
 				var lb := repair_layout(Nav.current) if on else pc_repair_layout(Nav.current)
 				if lay_info != "":
 					lines.append("  L раскладка ремонта сверена: " + lay_info)
+					if not on and lines_pc_labels != "":
+						lines.append("  L подписи плиток: " + lines_pc_labels)
 				if not lb.is_empty():
 					lay[key] = lb
 					tot["layout"] += lb.size()
