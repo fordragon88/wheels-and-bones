@@ -1233,7 +1233,7 @@ func tick(dt: float) -> void:
 		_bar_sig = bs
 		_bar.queue_redraw()
 	_client_bubble.visible = not riding and not (tools != null and tools.note_rect().has_area())   # телефон: сноска слева
-	_mentor.visible = not riding
+	_mentor.visible = not riding and not (tools != null and tools.pc_hides_mentor())   # компьютер: карточка выросла
 	action.visible = not riding
 	if _mentor.say(ghost_text()) and _mentor.shown():
 		Audio.sfx("ghost")

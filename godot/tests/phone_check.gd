@@ -280,6 +280,134 @@ static func repair_layout(scr: Node) -> PackedStringArray:
 	return bad
 
 
+## Компьютер, обычный ремонт (28.11): кнопка рук и плитки кучек — по tile_rects(), зазор в кучке ≥ 6, между кучками и до
+## рук ≥ 14, подписи и заголовки помещаются, рисунок ≥ 40 (ph_icon_fit), заголовки не под поднятой плиткой; плитки,
+## заголовки и карточка не задевают коляску (окно), кружки деталей, «+»/«−», строки деталей, колонку Барти, пузырь
+## клиента, «СНОСКИ МАНУАЛА» (карточка обтекает её углом); карточка вмещает текст (pc_card) — для каждого инструмента
+## (в руке и наведённого), каждой сноски задания, подсказки обучения и общей, и кегль не мельче прежней карточки
+## 642×108 (pc_old_*). Возврат — нарушения.
+static func pc_repair_layout(scr: Node) -> PackedStringArray:
+	var bad: PackedStringArray = []
+	lay_info = ""
+	if scr == null or scr.get("phase") != "repair" or scr.get("tools") == null or scr.get("mini") != null:
+		return bad
+	var tp: ToolPanel = scr.tools
+	if not tp.grouped() or UI.phone():
+		return bad
+	var g_ := ToolPanel.geo()
+	var o: Vector2 = scr.get_global_transform().origin
+	var obst: Array = []
+	var nb: Control = scr.get_node_or_null("Notes")
+	for b: Control in scr._part_btns:
+		obst.append([str(b.name), b.get_global_rect()])
+	for zn: String in ["ZoomIn", "ZoomOut"]:
+		var z: Control = scr.get_node_or_null(zn)
+		if z and z.visible:
+			obst.append([zn, z.get_global_rect()])
+	var cr: Rect2 = scr.chair.get_global_rect()
+	if scr.chair.visible:
+		obst.append(["Chair", cr])
+		for sp: Array in scr.chair.spots():
+			var c: Vector2 = Vector2(sp[1], sp[2]) + scr.chair.get_parent().global_position
+			obst.append(["Spot_" + str(sp[0]), Rect2(c - Vector2(sp[3], sp[3]), Vector2(sp[3], sp[3]) * 2.0)])
+	var cb: Rect2 = scr._client_bubble.client_rect()
+	if cb.has_area() and scr._client_bubble.visible:
+		obst.append(["ClientBubble", Rect2(cb.position + o, cb.size)])
+	var mc: Rect2 = scr._mentor.col
+	if mc.has_area() and not tp.pc_hides_mentor():       # карточка выросла — пузырь Барти скрыт
+		obst.append(["MentorCol", Rect2(mc.position + o, mc.size)])
+	var card := Rect2(tp.info_rect().position + o, tp.info_rect().size)
+	var want_r := tp.tile_rects()
+	var trs: Dictionary = {}
+	var mine: Array = []
+	for tid: String in tp.tiles:
+		var tr: Rect2 = (tp.tiles[tid] as Control).get_global_rect()
+		trs[tid] = tr
+		if not want_r.has(tid) or not tr.is_equal_approx(Rect2(want_r[tid].position + o, want_r[tid].size)):
+			bad.append("плитка %s не на своём месте tile_rects(): %s" % [tid, _fmt_r(tr)])
+		if tid == "hands":
+			if not bool(tp.ph_hands_fit()[4]):
+				bad.append("подпись кнопки «Руки и глаза» не помещается: %s" % str(tp.ph_hands_fit()[1]))
+		else:
+			if not bool(tp.ph_label_fit(tid)[4]):
+				bad.append("подпись плитки %s не помещается: %s" % [tid, str(tp.ph_label_fit(tid)[1])])
+			var fit: Array = tp.ph_icon_fit(tid)
+			if float(fit[0]) < float(g_["icon_min"]):
+				bad.append("рисунок плитки %s мельче %d: %d" % [tid, g_["icon_min"], fit[0]])
+			var u: Vector2 = ToolPanel.ph_icon_used(tid) * float(fit[0])
+			for ang: float in [0.0, 7.0, 29.0]:
+				var kk: float = minf(1.0 + float(g_["grow"]) if ang != 0.0 else 1.0, tp.ph_icon_room_k(tid, float(fit[0]), ang))
+				var a := deg_to_rad(ang)
+				if kk * (u.y * cos(a) + u.x * sin(a)) > float(fit[1]) + 0.01:
+					bad.append("рисунок плитки %s при повороте %d° выходит из места" % [tid, ang])
+		mine.append(["Tool_" + tid, tr.grow_individual(0, 6, 0, 0)])
+	var gid: Dictionary = {}
+	for g: Array in tp.ph_groups():
+		var gr: Rect2 = g[2]
+		var hr := Rect2(gr.position + o, Vector2(gr.size.x, float(g_["head_h"])))
+		mine.append(["Head_" + str(g[0]), hr])
+		if str(g[1]) != "" and not bool(ToolPanel.ph_head_fit(str(g[1]), gr.size.x)[1]):
+			bad.append("заголовок кучки %s не помещается" % g[0])
+		for x: String in g[3]:
+			gid[x] = g[0]
+	var ks: Array = trs.keys()
+	for i in ks.size():
+		for j in range(i + 1, ks.size()):
+			var a: Rect2 = trs[ks[i]]
+			var b: Rect2 = trs[ks[j]]
+			var need: float = float(g_["gin"]) if gid.get(ks[i], "hands") == gid.get(ks[j], "hands") else float(g_["ggrp"])
+			if a.grow(need / 2.0 - 0.01).intersection(b.grow(need / 2.0 - 0.01)).has_area():
+				bad.append("зазор %s ↔ %s меньше %d" % [ks[i], ks[j], need])
+	for m: Array in mine:
+		if str(m[0]).begins_with("Head_"):
+			for tid: String in trs:
+				if (trs[tid] as Rect2).grow_individual(0, 6, 0, 0).intersection(m[1]).has_area():
+					bad.append("%s заходит на плитку %s" % [m[0], tid])
+	mine.append(["Card", card])
+	if nb:
+		obst.append(["Notes", nb.get_global_rect()])
+	for m: Array in mine:
+		for ob: Array in obst:
+			if (m[1] as Rect2).intersection(ob[1]).has_area():
+				if m[0] == "Card" and ob[0] == "Notes":       # кнопка — в вырезе карточки: текст её обтекает
+					var cn: Vector2 = tp.pc_corner() + card.position
+					if tp.pc_corner() == Vector2.ZERO or ob[1].position.x < cn.x or ob[1].position.y < cn.y:
+						bad.append("карточка заходит на «СНОСКИ МАНУАЛА»")
+					continue
+				bad.append("%s пересекает %s (%s / %s)" % [m[0], ob[0], _fmt_r(m[1]), _fmt_r(ob[1])])
+		if m[0] != "Card" and (m[1] as Rect2).intersection(card).has_area():
+			bad.append("%s пересекает карточку" % m[0])
+	# карточка: всё содержимое помещается и не мельче прежней карточки 642×108 (высота — по содержимому, pc_need_h)
+	var job: Dictionary = scr.job
+	var n_tool := 0
+	var grown := 0
+	var whats: Array = [["hint"]]
+	for tid: String in Content.tools:
+		for in_hand: bool in [true, false]:
+			whats.append(["tool", tid, in_hand])
+	for pid: String in Content.manual_notes.get(job["id"], {}):
+		whats.append(["note", pid])
+	if tp.job_screen.tutor_step().size() > 0:
+		whats.append(["tutor"])
+	for w: Array in whats:
+		var hh: float = tp.pc_need_h(w)
+		var d: Dictionary = tp.pc_card_lay(w, hh)
+		n_tool += 1
+		if hh > ToolPanel.PC_CARD.size.y + 0.5:
+			grown += 1
+		if not bool(d["ok"]) or not bool(d["ge_old"]):
+			bad.append("карточка: %s — %s (высота %d из %d)" % [str(w), str(d), hh, tp.pc_max_h()])
+		var top: float = ToolPanel.PC_CARD.end.y - hh + o.y
+		if hh > ToolPanel.PC_CARD.size.y + 0.5 and top < mc.position.y + o.y - 0.5 and mc.has_area():
+			bad.append("карточка %s выше колонки Барти" % str(w))
+	lay_info = "ПК: плиток %d, рисунки %d…%d, карточка %s, вариантов карточки %d (выше 156 — %d), препятствий %d" % [
+		tp.tiles.size(), tp.tiles.keys().filter(func(x: String) -> bool: return x != "hands").map(
+		func(x: String) -> int: return int(tp.ph_icon_fit(x)[0])).min(), tp.tiles.keys().filter(
+		func(x: String) -> bool: return x != "hands").map(func(x: String) -> int: return int(tp.ph_icon_fit(x)[0])).max(),
+		_fmt_r(card), n_tool, grown, obst.size()]
+	return bad
+
+
 static func _fmt_r(r: Rect2) -> String:
 	return "%d,%d %d×%d" % [roundi(r.position.x), roundi(r.position.y), roundi(r.size.x), roundi(r.size.y)]
 
@@ -351,8 +479,8 @@ func measure(runner: Node, states: Array, langs: Array, on: bool) -> Dictionary:
 				lines.append("  X пересечение: %s ↔ %s" % o)
 			for o: Array in an["close"]:
 				lines.append("  ~ зазор < 8: %s ↔ %s" % o)
-			if on:
-				var lb := repair_layout(Nav.current)
+			if true:
+				var lb := repair_layout(Nav.current) if on else pc_repair_layout(Nav.current)
 				if lay_info != "":
 					lines.append("  L раскладка ремонта сверена: " + lay_info)
 				if not lb.is_empty():
@@ -439,7 +567,23 @@ func run(runner: Node) -> String:
 				n_diff += 1
 				R.err("телефон выключен, %s: цели не как были\n  было  %s\n  стало %s" % [key, JSON.stringify(ref[key]),
 					JSON.stringify(off["rects"][key])])
-	return summary(true, on) + "; ремонт при тексте 125/150 %%: состояний %d, нарушений раскладки %d" % [n_big, n_lay] + 		"; выключен: %d состояний как эталон (расхождений %d)" % [n_off, n_diff]
+	var n_pc := 0                                          # компьютер (28.11): ремонт с кучками при 100/125/150 %, RU и EN
+	var n_pc_lay := 0
+	for tx: int in [0, 2, 3]:
+		Settings.a11y["text"] = tx
+		UI.clear_font_cache()
+		var pc := await measure(runner, REP_STATES, ["ru", "en"], false)
+		write_out("pc_repair_text%d.txt" % tx, "
+".join(pc["lines"]) + "
+")
+		n_pc += pc["per"].size()
+		n_pc_lay += int(pc["tot"]["layout"])
+		for key: String in pc["layout"]:
+			R.err("компьютер, текст %d %%, %s, раскладка ремонта: %s" % [[100, 112, 125, 150][tx], key,
+				"; ".join(pc["layout"][key])])
+	Settings.a11y["text"] = text0
+	UI.clear_font_cache()
+	return summary(true, on) + "; ремонт при тексте 125/150 %%: состояний %d, нарушений раскладки %d" % [n_big, n_lay] + 		"; компьютер, ремонт с кучками (100/125/150 %%, RU/EN): состояний %d, нарушений %d" % [n_pc, n_pc_lay] + 		"; выключен: %d состояний как эталон (расхождений %d)" % [n_off, n_diff]
 
 
 ## Кегли текста Кабинета посадки (seating.gd text_sizes): каждый урок, клиент, вопрос — при RU/EN, 100/112/125/150 %,

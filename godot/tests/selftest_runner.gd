@@ -227,7 +227,7 @@ func _run() -> void:
 	SaveGame.reset()
 	await _flow_mouse()
 	await _flow_keyboard()
-	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; Коды и ссылки: кодов game.py прочитано %d (P/J/R, те же данные), битых отвергнуто %d, ссылок и разборов = game.py %d, своих кодов и ссылок для check_share.py %d; прогресс: копировать → сбросить → вставить → тот же, «вернуть прежний»; %s; «продолжить / обычная игра»; итог в таблицу = game.py (в сеть — ничего); Озвучка: %d/%d сводок, подписей фокуса и фраз клавиш = game.py (RU/EN), в тестах голос не звучит; %s; %s; %s; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, sh[0], sh[1], sh[2], share_out.size(), sh_line, sp_res[0], sp_res[1], sw_line, pad_line, ride_line, n_gd, n_audit,
+	_finish("бот прошёл %d/%d вариантов (%d шагов, как в pygame); событиями мыши и клавиатуры — %s; вступление и «пропустить», гараж, вечеринка, титры, справка F1, настройки, замечания (%d запросов = game.py, в сеть — ничего); Гильдия: %d/6 про-заданий в двух порядках, %d провалов по безопасности = game.py, спеки, экзамен (сдача, лимит, пересдача), мышью и клавиатурой; Кабинет посадки: %d случаев × сетка (%d положений ползунков) = game.py, позы уроков и зачёта (%d кадров перехода) = game.py, %s, сохранение, замечание = game.py; Коды и ссылки: кодов game.py прочитано %d (P/J/R, те же данные), битых отвергнуто %d, ссылок и разборов = game.py %d, своих кодов и ссылок для check_share.py %d; прогресс: копировать → сбросить → вставить → тот же, «вернуть прежний»; %s; «продолжить / обычная игра»; итог в таблицу = game.py (в сеть — ничего); Озвучка: %d/%d сводок, подписей фокуса и фраз клавиш = game.py (RU/EN; известное — инструменты в порядке кучек: %d), в тестах голос не звучит; %s; %s; %s; %d .gd, кадры поворота у всех 21 коляски, перевод: %d строк%s" % [bot[0], n_var, bot[1], ", ".join(ev_jobs), Feedback.captured.size(), gbot[0], gbot[1], seat_n[0], seat_n[1], seat_n[2], seat_line, sh[0], sh[1], sh[2], share_out.size(), sh_line, sp_res[0], sp_res[1], speech_tools_known, sw_line, pad_line, ride_line, n_gd, n_audit,
 		"" if _drawn > 0 else " (без окна _draw не вызывается — проверены строки данных и обработчиков)"] + "; " + fx_line,
 		n_jobs, n_var, n_tech)
 
@@ -2379,6 +2379,16 @@ func _speech_ref() -> Array:
 				total += 1
 				var gi: Dictionary = _by_group(g[2])
 				var wi: Dictionary = _by_group(w["items"])
+				if gi.has("Инструменты") and wi.has("Инструменты"):   # известное (28.11): порядок кучками, к подписи — кучка
+					var gn: Array = (gi["Инструменты"] as Array).map(func(x: String) -> String: return _kb_norm("Инструменты", x))
+					var a1 := gn.duplicate()
+					var a2 := (wi["Инструменты"] as Array).duplicate()
+					a1.sort()
+					a2.sort()
+					if a1 == a2:
+						if gi["Инструменты"] != wi["Инструменты"]:
+							speech_tools_known += 1
+						gi["Инструменты"] = wi["Инструменты"]
 				var bad_g: Array = []
 				for grp: String in gi:
 					if not wi.has(grp) or gi[grp] != wi[grp]:
@@ -2562,7 +2572,8 @@ func _only(what: String) -> void:
 	match what:
 		"speech":
 			var sp: Array = await _speech_ref()
-			line = "озвучка: %d/%d" % sp
+			line = "озвучка: %d/%d (известное: инструменты в порядке кучек и с кучкой в подписи — %d)" % [sp[0], sp[1],
+				speech_tools_known]
 		"switch":
 			line = await _flow_switch(["flat:0", "brake:0", "spokes:0"], ["truing"])
 		"switch-full":
@@ -3276,6 +3287,7 @@ func _kb_order_ref(langs: Array) -> String:
 	var n_bad := 0
 	var n_lab := 0
 	var n_known := 0
+	var n_tools := 0                         # известное (28.11): порядок инструментов на ПК — кнопка рук и кучки
 	var report: PackedStringArray = []
 	for lang: String in langs:
 		SaveGame.reset()                         # каждый язык эталона — свой процесс game.py с нуля
@@ -3297,13 +3309,16 @@ func _kb_order_ref(langs: Array) -> String:
 			var cmp: Array = _kb_cmp(want, got)
 			n_states += 1
 			n_items += want.size()
-			n_bad += cmp[0]
+			n_bad += cmp[0] + cmp[2]
 			n_lab += cmp[1]
+			n_tools += cmp[2]
+			n_known += cmp[2]
 			if KB_KNOWN.has(name):
 				n_known += cmp[0]
-			if cmp[0] > 0 or cmp[1] > 0:
-				report.append("== %s %s: расхождений %d, подписей «Кнопки» %d%s" % [lang, name, cmp[0], cmp[1],
-					(" — известное: " + KB_KNOWN[name]) if KB_KNOWN.has(name) else ""])
+			if cmp[0] > 0 or cmp[1] > 0 or cmp[2] > 0:
+				report.append("== %s %s: расхождений %d, подписей «Кнопки» %d%s%s" % [lang, name, cmp[0] + cmp[2], cmp[1],
+					(" — известное: " + KB_KNOWN[name]) if KB_KNOWN.has(name) else "",
+					(" — известное: порядок инструментов (%d) — " % cmp[2] + KB_TOOLS_ORDER) if cmp[2] > 0 else ""])
 				for i in maxi(want.size(), got.size()):
 					var w: Array = want[i] if i < want.size() else ["—", "", ""]
 					var g: Array = got[i] if i < got.size() else ["—", ""]
@@ -3322,8 +3337,8 @@ func _kb_order_ref(langs: Array) -> String:
 ".join(report) + "
 ")
 	f.close()
-	var line := "KB ORDER: %d состояний, %d пунктов, расхождений %d (из них известных %d; подписей «Кнопки» не как в game.py: %d)" % [
-		n_states, n_items, n_bad, n_known, n_lab]
+	var line := "KB ORDER: %d состояний, %d пунктов, расхождений %d (из них известных %d, в том числе порядок инструментов в кучках %d; подписей «Кнопки» не как в game.py: %d)" % [
+		n_states, n_items, n_bad, n_known, n_tools, n_lab]
 	print(line)
 	if n_bad > n_known:
 		err(line + " — tests/out/kb_order_diff.txt")
@@ -3339,6 +3354,10 @@ func kb_rows() -> Array:
 
 
 const KB_SHUFFLED := ["Диагноз", "Выводы", "Варианты"]
+## Намеренное отличие от game.py (28.11, решение владельца): в ремонте инструменты идут в видимом порядке — кнопка
+## «Руки и глаза», потом кучки по назначению (tool_panel.gd PH_GROUPS), а к подписи добавлена кучка. Сверяется набором:
+## те же инструменты с теми же подписями (без названия кучки); пункты не на своём месте — известные (n_tools).
+const KB_TOOLS_ORDER := "кнопка рук и кучки по назначению вместо порядка tools.json (28.11, владелец), набор и подписи совпадают"
 ## Расхождения, которые не от порядка обхода (описаны в PORT_PLAN, шаг 4): в счёт идут, ошибкой не считаются.
 const KB_KNOWN := {
 	"help": "справка F1 в game.py — один пункт «Закрыть справку» (Enter/Esc), в Godot у окна справки пунктов нет: Esc/Enter/F1 закрывают так же",
@@ -3347,6 +3366,11 @@ const KB_KNOWN := {
 
 
 static func _kb_norm(g: String, l: String) -> String:
+	if g == "Инструменты":                   # «Насос. Колесо и шина. …» → «Насос. …» (кучка — только в Godot, 28.11)
+		for grp: Array in ToolPanel.PH_GROUPS:
+			for h: String in [str(grp[1]), str(grp[2])]:
+				l = l.replace(". " + h.substr(0, 1) + h.substr(1).to_lower() + ".", ".")
+		return l
 	if g == "Диагноз":
 		return RegEx.create_from_string("^[^:]+ [0-9]+: ").sub(l, "")
 	if g == "Поле":                            # коды Godot и game.py — разные строки (zlib), смысл тот же
@@ -3359,14 +3383,24 @@ func _kb_same(w: Array, g: Array) -> bool:
 
 
 ## [расхождений (группа не та / подпись особого пункта не та / лишний или недостающий пункт), подписей «Кнопки»].
+## Третье — пункты «Инструменты» не на своём месте при том же наборе (известное: KB_TOOLS_ORDER).
 func _kb_cmp(want: Array, got: Array) -> Array:
 	var bad := absi(want.size() - got.size())
 	var lab := 0
+	var tools_moved := 0
 	var diag_w: Array = []
 	var diag_g: Array = []
+	var tw: Array = []
+	var tg: Array = []
 	for i in mini(want.size(), got.size()):
 		var w: Array = want[i]
 		var g: Array = got[i]
+		if w[0] == "Инструменты" and g[0] == "Инструменты":
+			tw.append(_kb_norm(w[0], w[1]))
+			tg.append(_kb_norm(g[0], g[1]))
+			if tw[-1] != tg[-1]:
+				tools_moved += 1
+			continue
 		if w[0] != g[0]:
 			bad += 1
 		elif w[0] in KB_SHUFFLED:               # варианты перемешаны (shuffle_answers) — сверяем набором
@@ -3382,12 +3416,20 @@ func _kb_cmp(want: Array, got: Array) -> Array:
 	for i in diag_w.size():
 		if diag_w[i] != diag_g[i]:
 			bad += 1
-	return [bad, lab]
+	var tws := tw.duplicate()
+	var tgs := tg.duplicate()
+	tws.sort()
+	tgs.sort()
+	if tws != tgs:                           # набор инструментов или подпись не та — настоящее расхождение
+		bad += tools_moved
+		tools_moved = 0
+	return [bad, lab, tools_moved]
 
 
 # ======================= прохождение одними клавишами (art_tests/keyboard_playthrough.py) =======================
 
 var kb_presses: int = 0
+var speech_tools_known: int = 0          # озвучка фокуса: состояний, где инструменты в порядке кучек (известное, 28.11)
 
 
 ## Фокус клавиатуры на пункт c: в режиме «arrows» — только стрелкой ↓ по списку (как незрячий игрок, слушающий

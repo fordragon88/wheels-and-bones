@@ -394,7 +394,13 @@ func state() -> Dictionary:
 			var nr := tp.note_rect()
 			d["tools"] = {"big": tp.big(), "strip": [sr.position.x, sr.position.y, sr.size.x, sr.size.y],
 				"note": [nr.position.x, nr.position.y, nr.size.x, nr.size.y], "note_pid": tp.note_pid()}
-			if tp.big():                        # кучки: [ключ, x, y, w, h, заголовок помещается]; подписи, что не влезли
+			d["tools"]["grouped"] = tp.grouped()
+			d["tools"]["card"] = [tp.info_rect().position.x, tp.info_rect().position.y, tp.info_rect().size.x, tp.info_rect().size.y]
+			if tp.grouped() and not UI.phone():    # компьютер (28.11): что в карточке, помещается ли, рисунки кучек
+				d["tools"]["pc_card"] = tp.pc_card()
+				d["tools"]["icons"] = tp.tiles.keys().filter(func(x: String) -> bool: return x != "hands").map(
+					func(x: String) -> int: return int(tp.ph_icon_fit(x)[0]))
+			if tp.grouped():                    # кучки: [ключ, x, y, w, h, заголовок помещается]; подписи, что не влезли
 				var gs: Array = []
 				var lb: Array = []
 				for g: Array in tp.ph_groups():
