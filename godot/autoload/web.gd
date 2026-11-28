@@ -121,6 +121,8 @@ func _on_stage(args: Array) -> void:
 					(sc.get("ride") as RideView).visible = kv[1] == "1"
 			elif kv[0].begins_with("vol_"):       # web_smoke music: «set:vol_music=0.5» — ползунок громкости (master/music/…)
 				Settings.set_vol(kv[0].substr(4), float(kv[1]))
+			elif kv[0] == "sfx":              # web_smoke sfxout (28.11): «set:sfx=ping» — запустить эффект (замер на выходе)
+				Audio.sfx(kv[1])
 			else:
 				Settings.set_a11y(kv[0], int(kv[1]) if kv[0] == "text" else kv[1] == "1")
 		JavaScriptBridge.eval("window.wnbStaged = %s" % JSON.stringify(name), true)

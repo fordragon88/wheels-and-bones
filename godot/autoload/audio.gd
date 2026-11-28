@@ -41,24 +41,31 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	if OS.has_feature("web"):
 		_silent = str(JavaScriptBridge.eval("typeof (window.AudioContext || window.webkitAudioContext)", true)) == "undefined"
-	for b: String in ["Music", "Sfx"]:
-		if AudioServer.get_bus_index(b) < 0:
-			AudioServer.add_bus()
-			AudioServer.set_bus_name(AudioServer.bus_count - 1, b)
-			AudioServer.set_bus_send(AudioServer.bus_count - 1, "Master")
+	# 28.11: в браузере шины на лету НЕ добавлять. Godot 4.7.2 (режим Sample): AudioServer.add_bus() без позиции → в
+	# JS add_sample_bus(-1) → Bus.addAt(-1) → move(id, -1) → splice(-2, …): новая шина встаёт В НАЧАЛО (шина 0), Master
+	# становится 1, и set_bus_send переподключает выход Master ко входу новой шины, а та шлёт в Master — кольцо без
+	# DelayNode, Web Audio его глушит: эффекты в браузере молчали с первого среза. Громкость и так — volume_db плеера.
+	var web := OS.has_feature("web")
+	var sfx_bus := "Master" if web else "Sfx"
+	if not web:
+		for b: String in ["Music", "Sfx"]:
+			if AudioServer.get_bus_index(b) < 0:
+				AudioServer.add_bus()
+				AudioServer.set_bus_name(AudioServer.bus_count - 1, b)
+				AudioServer.set_bus_send(AudioServer.bus_count - 1, "Master")
 	for i in POOL:
 		var p := AudioStreamPlayer.new()
-		p.bus = "Sfx"
+		p.bus = sfx_bus
 		add_child(p)
 		_players.append(p)
 	_music = AudioStreamPlayer.new()
-	_music.bus = "Music"
+	_music.bus = "Master" if web else "Music"
 	add_child(_music)
 	_amb = AudioStreamPlayer.new()
-	_amb.bus = "Sfx"
+	_amb.bus = sfx_bus
 	add_child(_amb)
 	_amb_old = AudioStreamPlayer.new()
-	_amb_old.bus = "Sfx"
+	_amb_old.bus = sfx_bus
 	add_child(_amb_old)
 	var m: Dictionary = Content.consts.get("music", {})
 	_full = float(m.get("full", _full))
@@ -131,7 +138,7 @@ func ambient(bg: String) -> void:
 	if bg == _amb_name:
 		return
 	_amb_name = bg
-	if _amb.playing:                          # старая гаснет 0,4 с
+	if _amb.playing and not OS.has_feature("web"):   # старая гаснет 0,4 с (браузер — см. _set_db: сразу стоп)
 		_amb_old.stream = _amb.stream
 		_amb_old.play(_amb.get_playback_position())
 		_amb_old_k = _amb_k                   # гаснет от текущей громкости (быстрая смена сцены: 0,08 → 0,36 скачком, E16)
@@ -145,8 +152,8 @@ func ambient(bg: String) -> void:
 		st.loop_begin = 0
 		st.loop_end = int(st.get_length() * st.mix_rate)
 	_amb.stream = st
-	_amb_k = 0.0
-	_amb.volume_db = -80.0
+	_amb_k = 1.0 if OS.has_feature("web") else 0.0   # браузер: без вступления (см. _set_db)
+	_amb.volume_db = linear_to_db(maxf(0.0001, amb_level() * _amb_k))
 	_amb.play()
 
 
@@ -216,7 +223,15 @@ func apply_volume() -> void:
 		var lvl := music_level()
 		if Web.on:
 			Web.music_volume(lvl)
-		_music.volume_db = linear_to_db(maxf(0.0001, lvl))
+		_set_db(_music, linear_to_db(maxf(0.0001, lvl)))
 		_music.stream_paused = lvl <= 0.0001      # без «and playing»: пауза снимала playing — дёргалось каждый кадр (E16)
-		_amb.volume_db = linear_to_db(maxf(0.0001, amb_level() * _amb_k))
-		_amb_old.volume_db = linear_to_db(maxf(0.0001, amb_level() * _amb_old_k))
+		_set_db(_amb, linear_to_db(maxf(0.0001, amb_level() * _amb_k)))
+		_set_db(_amb_old, linear_to_db(maxf(0.0001, amb_level() * _amb_old_k)))
+
+
+## Громкость плеера — только если она изменилась (28.11): в браузере (режим Sample, Godot 4.7.2) каждая установка
+## volume_db играющему звуку запускает буфер заново (замер: фоновая петля 7,9 с — start() каждые ~20 мс во время
+## вступления). Поэтому и вступление/угасание фоновой петли в браузере не делаем.
+static func _set_db(p: AudioStreamPlayer, db: float) -> void:
+	if absf(p.volume_db - db) > 0.01:
+		p.volume_db = db

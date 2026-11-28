@@ -126,6 +126,27 @@ html, body, #canvas { overscroll-behavior: none; }
     });
     return;
   }
+  // выход звука движка (28.11: эффекты молчали из-за кольца шин): анализатор на всём, что идёт в выход, пик за 2 с
+  var outp = window.wnbOut = { an: [], peak: 0, hist: [] };
+  try {
+    var oconn = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function (dst) {
+      try {
+        if (dst && typeof AudioDestinationNode !== 'undefined' && dst instanceof AudioDestinationNode && !this.__wnbTap) {
+          this.__wnbTap = true;
+          var a = dst.context.createAnalyser(); a.fftSize = 1024; oconn.call(this, a); outp.an.push(a);
+        }
+      } catch (err) {}
+      return oconn.apply(this, arguments);
+    };
+    var obuf = new Float32Array(1024);
+    setInterval(function () {
+      var m = 0;
+      outp.an.forEach(function (a) { a.getFloatTimeDomainData(obuf); for (var i = 0; i < obuf.length; i++) { var v = Math.abs(obuf[i]); if (v > m) m = v; } });
+      outp.hist.push(m); if (outp.hist.length > 40) outp.hist.shift();
+      outp.peak = Math.max.apply(null, outp.hist);
+    }, 50);
+  } catch (err) {}
   var inp = { touch: 0, mouse: 0, pointer: 0, last: '-', lastPT: '-' };
   window.wnbInput = inp;
   document.addEventListener('pointerdown', function (ev) { inp.pointer++; inp.last = 'pointerdown'; inp.lastPT = ev.pointerType || '?'; }, true);
@@ -182,7 +203,8 @@ html, body, #canvas { overscroll-behavior: none; }
         ((window.wnbEnv && window.wnbEnv.session && window.wnbEnv.session.err) ? ' (ошибка ' + window.wnbEnv.session.err + ')' : '') +
         ' · тихий элемент ' + (window.wnbSilent ? window.wnbSilent() : '-') +
         (ctxs.some(function (c) { return c.state !== 'running'; }) ? ' · ВНИМАНИЕ: контекст не running' : ''),
-      'эффекты: ' + (g.sfx || '?'),
+      'эффекты: ' + (g.sfx || '?') + ' · выход звука: пик ' + outp.peak.toFixed(3) + ' за последние 2 с (Web Audio: эффекты' +
+        (window.wnbMusic && /buffer|gain/.test(window.wnbMusic.info()) ? ' и музыка' : '') + ')',
       'Settings.vol ' + (g.vol ? JSON.stringify(g.vol) : '?') + (g.bus ? ' · шины ' + g.bus : ''),
       'сборка ' + (window.wnbBuild || '?') + (g.ver ? ' · ' + g.ver : '')
     ];

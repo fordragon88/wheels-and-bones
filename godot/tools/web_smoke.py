@@ -3495,6 +3495,107 @@ async def sfx_peak(p, x, y, x_to):
     return await p.pg.evaluate("window.__peak")
 
 
+SFX_JS = """
+(() => {
+  const S = window.__sfx = { starts: [], active: 0, maxActive: 0 };
+  const st = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function () {
+    S.starts.push(this.buffer ? +this.buffer.duration.toFixed(2) : 0);
+    S.active++; if (S.active > S.maxActive) S.maxActive = S.active;
+    this.addEventListener('ended', () => { S.active--; });
+    return st.apply(this, arguments);
+  };
+})();
+"""
+
+
+async def sc_sfxout(b):
+    """Эффекты на ВЫХОДЕ движка (28.11: в браузере не звучал ни один эффект — кольцо шин из AudioServer.add_bus() на
+    лету). Анализатор на всём, что идёт в AudioDestinationNode (LEVEL_JS): после жеста эффект даёт пик > 0,01; звук
+    выключен (M) — пик ≈ 0; ползунок эффектов 0,9 → 0,3 — пик втрое ниже, общий 0,8 → 0,4 — вдвое; мини-игра спиц:
+    звонкая (ping) и глухая (dull) спица слышны; насос — слышен; фоновая петля не запускается заново каждый кадр
+    (одновременно играющих источников мало). Таблица уровней при настройках по умолчанию — в отчёт (info)."""
+    if not CHROMIUM:
+        skip_cdp("sfxout")
+        return
+    p = await new_page(b, "sfxout", legacy=SKIP_SEED)
+    await p.ctx.add_init_script(LEVEL_JS)
+    await p.ctx.add_init_script(SFX_JS)
+    await p.boot()
+    if not await p.pg.evaluate("!!(window.AudioContext || window.webkitAudioContext)"):
+        skip_part("sfxout", "нет Web Audio")
+        await p.ctx.close()
+        return
+    await to_hub(p)
+    await p.pg.wait_for_timeout(800)
+
+    async def peak(name=None, ms=700, press=None):
+        await p.pg.evaluate("window.__peak = 0; window.__sfx.starts = []")
+        if name:
+            await set_stage(p, f"set:sfx={name}")
+        if press:
+            await p.press(press, wait=50)
+        await p.pg.wait_for_timeout(ms)
+        return await p.pg.evaluate("window.__peak"), await p.pg.evaluate("window.__sfx.starts.slice()")
+
+    # фоновая петля: одновременно играющих и запусков за 3 с
+    await p.pg.evaluate("window.__sfx.maxActive = window.__sfx.active; window.__sfx.starts = []")
+    pk_amb, st_amb = await peak(ms=3000)
+    act = await p.pg.evaluate("window.__sfx.maxActive")
+    check(len(st_amb) <= 2 and act <= 4, f"{p.name}: фоновая петля за 3 с: запусков {len(st_amb)} {st_amb}, "
+                                         f"одновременно играет не больше {act} (пик {pk_amb:.3f})")
+    for x in ("set:vol_amb=0",):
+        await set_stage(p, x)
+    await p.pg.wait_for_timeout(500)
+    levels = {}
+    for nm in ("tick", "ok", "bad", "hover", "inspect", "hiss", "ping", "dull", "fanfare"):
+        pk, st = await peak(nm, 1300 if nm in ("ping", "dull", "fanfare") else 700)
+        levels[nm] = (round(pk, 3), st[:3])
+    info(f"{p.name}: пик на выходе при настройках по умолчанию (общая 0,8 × эффекты 0,9; фон 0,45 — пик фона "
+         f"{pk_amb:.3f}): " + ", ".join(f"{k} {v[0]}" for k, v in levels.items()))
+    m = await mus_info(p)
+    info(f"{p.name}: музыка — элементом, vol {m.get('vol')}")
+    check(levels["tick"][0] > 0.01, f"{p.name}: эффект «tick» слышен на выходе: пик {levels['tick'][0]}")
+    clip = [k for k, v in levels.items() if v[0] > 0.9]
+    check(not clip, f"{p.name}: на выходе нет клиппинга (пик > 0,9): {clip}")
+    # звук выключен
+    await p.pg.mouse.move(5, 5)
+    await p.key("m", 300)
+    pk_off, _ = await peak("tick")
+    await p.key("m", 300)
+    check(pk_off < 0.001, f"{p.name}: звук выключен (M) — пик {pk_off:.4f}")
+    # ползунки
+    await set_stage(p, "set:vol_sfx=0.9")
+    a, _ = await peak("ok")
+    await set_stage(p, "set:vol_sfx=0.3")
+    b2, _ = await peak("ok")
+    r = b2 / a if a else 0
+    check(a > 0.01 and abs(r - 1 / 3) < 0.08, f"{p.name}: ползунок эффектов 0,9 → 0,3: пик {a:.3f} → {b2:.3f} "
+                                             f"(отношение {r:.2f}, ждали 0,33)")
+    await set_stage(p, "set:vol_sfx=0.9")
+    await set_stage(p, "set:vol_master=0.8")
+    a, _ = await peak("ok")
+    await set_stage(p, "set:vol_master=0.4")
+    b2, _ = await peak("ok")
+    r = b2 / a if a else 0
+    check(a > 0.01 and abs(r - 0.5) < 0.08, f"{p.name}: общая громкость 0,8 → 0,4: пик {a:.3f} → {b2:.3f} "
+                                           f"(отношение {r:.2f}, ждали 0,5)")
+    await set_stage(p, "set:vol_master=0.8")
+    # мини-игра спиц Тилли: звонкая и глухая спица
+    if await set_stage(p, "mini_ping"):
+        await p.pg.wait_for_timeout(600)
+        pk_p, st_p = await peak(press="Spoke_2", ms=1300)
+        pk_d, st_d = await peak(press="Spoke_5", ms=1300)
+        check(pk_p > 0.01 and pk_d > 0.01, f"{p.name}: спицы — звонкая (ping): пик {pk_p:.3f}, буферы {st_p}; "
+                                           f"глухая (dull): пик {pk_d:.3f}, буферы {st_d}")
+    if await set_stage(p, "mini_pump"):
+        await p.pg.wait_for_timeout(600)
+        pk_h, st_h = await peak(press="Pump", ms=900)
+        check(pk_h > 0.01, f"{p.name}: насос — пик {pk_h:.3f}, буферы {st_h}")
+    p.check_console()
+    await p.ctx.close()
+
+
 async def sc_volslide(b):
     if not CHROMIUM:                                      # перетаскивание касанием — через CDP
         skip_cdp("volslide")
@@ -4381,7 +4482,7 @@ SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_
              "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "feedback": sc_feedback, "perf": sc_perf,
              "prof": sc_prof, "screens": sc_screens, "tabs": sc_tabs, "store": sc_store, "loader": sc_loader,
              "netfail": sc_netfail, "fsexit": sc_fsexit, "res": sc_resparam, "zoom": sc_zoom, "assign": sc_assign,
-             "pad": sc_pad, "bg": sc_bg, "music": sc_music, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "toolbig": sc_toolbig, "toolpc": sc_toolpc, "toast": sc_toast, "diag": sc_diag, "envphone": sc_envphone, "muteicon": sc_muteicon, "volslide": sc_volslide, "seatrough": sc_seatrough,
+             "pad": sc_pad, "bg": sc_bg, "music": sc_music, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "toolbig": sc_toolbig, "toolpc": sc_toolpc, "toast": sc_toast, "sfxout": sc_sfxout, "diag": sc_diag, "envphone": sc_envphone, "muteicon": sc_muteicon, "volslide": sc_volslide, "seatrough": sc_seatrough,
              "embed": sc_embed}
 TIMEOUT = {"screens": 5400, "phonetext": 7200, "embed": 1800,            # все экраны × 4 прохода — долго
            "bg": 2 * float(os.environ.get("WNB_BG_SECS", "70")) + 480}   # два раза «в фоне» + задание
