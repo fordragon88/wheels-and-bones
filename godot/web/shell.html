@@ -97,13 +97,35 @@ html, body, #canvas { overscroll-behavior: none; }
     if (q === '1' || q === '0') { e.force = q; e.phone = q === '1'; e.touch = e.coarse || e.phone; why.push('?phone=' + q); }
   } catch (err) {}
   e.why = why.join(', ') || '—';
+  // iOS (iPhone, iPod, iPad, iPad «как компьютер»: Macintosh + касания): громкость <audio> из скрипта не задаётся,
+  // Web Audio по умолчанию («auto» → «ambient») глушится переключателем «Без звука» (29.11, снимки ?diag=1 с iPhone)
+  e.ios = /iPhone|iPod|iPad/.test(ua) || (/Macintosh/.test(ua) && e.mtp > 1);
+  // Audio Session API (WebKit: Safari/iOS 16.4+, «subset of the AudioSession Web API»; w3c.github.io/audio-session):
+  // type «playback» — сессия воспроизведения (как у видео и музыки), не «ambient». Только на iOS.
+  e.session = { has: !!navigator.audioSession, set: '', err: '' };
+  if (e.ios && navigator.audioSession) {
+    try { navigator.audioSession.type = 'playback'; e.session.set = String(navigator.audioSession.type); }
+    catch (err) { e.session.err = String((err && err.name) || err); }
+  }
   window.wnbEnv = e;
 })();
 
 // --- ?diag=1 (28.11): плашка для снимка с телефона — устройство, окно, медиа-запросы, решения игры, последний ввод,
 // звук (музыка страницы и звук движка), версия. Без ?diag=1 ничего не делается. Касание по плашке — свернуть/развернуть.
 (function () {
-  if (!/[?&]diag=1(&|#|$)/.test(location.search)) return;
+  var DIAG = /[?&]diag=1(&|#|$)/.test(location.search);
+  if (!DIAG && !(window.wnbEnv && window.wnbEnv.ios)) return;
+  if (!DIAG) {                                       // iOS без плашки: только учёт контекстов (wakeAll в музыке)
+    var cl = window.wnbCtxs = [];
+    ['AudioContext', 'webkitAudioContext'].forEach(function (k) {
+      var O = window[k];
+      if (!O) return;
+      var W = function (o) { var c = o === undefined ? new O() : new O(o); cl.push(c); return c; };
+      W.prototype = O.prototype;
+      try { window[k] = W; } catch (err) {}
+    });
+    return;
+  }
   var inp = { touch: 0, mouse: 0, pointer: 0, last: '-', lastPT: '-' };
   window.wnbInput = inp;
   document.addEventListener('pointerdown', function (ev) { inp.pointer++; inp.last = 'pointerdown'; inp.lastPT = ev.pointerType || '?'; }, true);
@@ -153,7 +175,14 @@ html, body, #canvas { overscroll-behavior: none; }
         (g.why ? ' (' + g.why + ')' : ''),
       'ввод: последний ' + inp.last + ' (' + inp.lastPT + ') · touch ' + inp.touch + ' mouse ' + inp.mouse + ' pointer ' + inp.pointer,
       'музыка ' + mi,
-      'контексты ' + cx + (g.sfx ? ' · эффекты ' + g.sfx : ''),
+      'беззвучный режим iPhone: ' + (window.wnbSessionPath ? window.wnbSessionPath() : '?'),
+      'звук: ' + (g.vol && (g.vol.on === false || g.vol.master <= 0.001) ? 'выключен в игре' : 'включён в игре') +
+        ' · контексты ' + cx + ' · audioSession ' + (navigator.audioSession ? (navigator.audioSession.type || '?') +
+        (navigator.audioSession.state ? '/' + navigator.audioSession.state : '') : 'нет') +
+        ((window.wnbEnv && window.wnbEnv.session && window.wnbEnv.session.err) ? ' (ошибка ' + window.wnbEnv.session.err + ')' : '') +
+        ' · тихий элемент ' + (window.wnbSilent ? window.wnbSilent() : '-') +
+        (ctxs.some(function (c) { return c.state !== 'running'; }) ? ' · ВНИМАНИЕ: контекст не running' : ''),
+      'эффекты: ' + (g.sfx || '?'),
       'Settings.vol ' + (g.vol ? JSON.stringify(g.vol) : '?') + (g.bus ? ' · шины ' + g.bus : ''),
       'сборка ' + (window.wnbBuild || '?') + (g.ver ? ' · ' + g.ver : '')
     ];
@@ -164,7 +193,9 @@ html, body, #canvas { overscroll-behavior: none; }
       if (!document.body) return;
       box = document.createElement('div'); box.id = 'wnb-diagbox';
       box.setAttribute('aria-hidden', 'true');
+      var tiny = Math.min(innerWidth, innerHeight) < 420;     // телефон в альбомной (iPhone: 607×260) — мельче и ниже
       box.style.cssText = 'position:fixed;left:0;bottom:0;max-width:100%;z-index:10002;background:rgba(0,0,0,.72);' +
+        (tiny ? 'font-size:7px !important;line-height:1.1 !important;max-height:42% !important;' : '') +
         'color:#9f9;font:9px/1.2 Consolas,"DejaVu Sans Mono",monospace;white-space:pre-wrap;word-break:break-all;' +
         'padding:2px 4px;pointer-events:auto;touch-action:manipulation;max-height:60%;overflow:hidden';
       box.addEventListener('click', function (ev) { small = !small; ev.stopPropagation(); tick(); });
@@ -340,7 +371,11 @@ html, body, #canvas { overscroll-behavior: none; }
   //    тишина — в gain. В памяти — только текущая дорожка; пока новая декодируется, старая уже остановлена.
   var qg = /[?&]musgain=([012])(&|#|$)/.exec(location.search);
   var GAIN = qg ? qg[1] : '';
-  var BUF = GAIN === '2';
+  var IOS = !!(window.wnbEnv && window.wnbEnv.ios);
+  // 29.11: на iOS по умолчанию — буфер (?musgain=2): громкость элемента там не задаётся (проба на отсоединённом
+  // Audio() на iOS 26 врёт: «задаётся»), а буфер на iPhone собирался и играл; ?musgain=0|1|2 главнее.
+  if (!qg && IOS) GAIN = '2';
+  var BUF = GAIN === '2' && !!(window.AudioContext || window.webkitAudioContext);   // без Web Audio — элемент
   var bf = { ctx: null, gain: null, node: null, url: '', buffer: null, token: 0, state: 'none', dur: 0 };
   function bufCtx() {
     if (bf.ctx) return bf.ctx;
@@ -364,7 +399,7 @@ html, body, #canvas { overscroll-behavior: none; }
     try {
       var n = bf.ctx.createBufferSource();
       n.buffer = bf.buffer; n.loop = true; n.connect(bf.gain); n.start(0);
-      bf.node = n; bf.state = 'playing';
+      bf.node = n; bf.state = 'playing'; bf.t0 = bf.ctx.currentTime;
     } catch (e) { mus.err = String((e && e.name) || e); }
   }
   function bufPlay(u) {
@@ -388,8 +423,11 @@ html, body, #canvas { overscroll-behavior: none; }
       })
       .catch(function (e) { if (tk === bf.token) { bf.state = 'error'; mus.err = String((e && (e.message || e.name)) || e); } });
   }
+  // «громкость элемента задаётся»: iOS — нет, какой бы ни была проба; иначе — проба на новом Audio() и проверка у
+  // настоящего элемента после каждой установки (applyVol: расхождение > 0,01 → нет, дальше — через GainNode)
   try { var probeA = new Audio(); probeA.volume = 0.5; mus.settable = Math.abs(probeA.volume - 0.5) < 0.01; }
   catch (e) { mus.settable = false; }
+  if (IOS) mus.settable = false;
   function wantGain() { return GAIN === '1' || (GAIN !== '0' && !mus.settable); }
   function el() {
     if (!mus.a) { mus.a = new Audio(); mus.a.loop = true; mus.a.preload = 'auto'; applyVol(); }
@@ -408,7 +446,10 @@ html, body, #canvas { overscroll-behavior: none; }
         g.setTargetAtTime(v, t, 0.03);              // ~0,1 с до уровня — без щелчка
       } catch (e) { try { mus.gain.gain.value = v; } catch (e2) {} }
     } else if (a && mus.settable) {
-      try { a.volume = v; } catch (e) {}
+      try {
+        a.volume = v;
+        if (Math.abs(a.volume - v) > 0.01) { mus.settable = false; mus.err = 'volume не задаётся (' + a.volume + ')'; }
+      } catch (e) {}
     }
     if (bf.gain) {
       try {
@@ -466,18 +507,58 @@ html, body, #canvas { overscroll-behavior: none; }
       try { var p = mus.a.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
     }
   }
-  function gesture() { wake(); try { route(); } catch (e) {} tryPlay(); }
+  // iOS без navigator.audioSession: тихий зацикленный <audio> (беззвучный WAV), запущенный жестом, держит аудиосессию
+  // в режиме воспроизведения — Web Audio (буфер музыки, эффекты движка) не глушится переключателем «Без звука».
+  var sil = { a: null, want: false, err: '' };
+  function silentWav() {
+    var n = 4000, b = new ArrayBuffer(44 + n * 2), d = new DataView(b), i;
+    function w(o, t) { for (i = 0; i < t.length; i++) d.setUint8(o + i, t.charCodeAt(i)); }
+    w(0, 'RIFF'); d.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); d.setUint32(16, 16, true); d.setUint16(20, 1, true);
+    d.setUint16(22, 1, true); d.setUint32(24, 8000, true); d.setUint32(28, 16000, true); d.setUint16(32, 2, true);
+    d.setUint16(34, 16, true); w(36, 'data'); d.setUint32(40, n * 2, true);
+    var u = new Uint8Array(b), s = '';
+    for (i = 0; i < u.length; i++) s += String.fromCharCode(u[i]);
+    return 'data:audio/wav;base64,' + btoa(s);
+  }
+  var SIL_NEED = IOS && !(window.wnbEnv && window.wnbEnv.session && window.wnbEnv.session.set === 'playback');
+  function silPlay() {
+    if (!SIL_NEED || document.hidden) return;
+    try {
+      if (!sil.a) {
+        sil.a = new Audio(silentWav()); sil.a.loop = true; sil.a.setAttribute('playsinline', ''); sil.a.preload = 'auto';
+      }
+      sil.want = true;
+      if (sil.a.paused) { var p = sil.a.play(); if (p && p.catch) p.catch(function (e) { sil.err = String((e && e.name) || e); }); }
+    } catch (e) { sil.err = String((e && e.name) || e); }
+  }
+  // контексты звука движка Godot (учёт — window.wnbCtxs только с ?diag=1; на iOS — всегда): поднять после «interrupted»
+  function wakeAll() {
+    (window.wnbCtxs || []).forEach(function (c) {
+      if (c.state !== 'running' && c.state !== 'closed') { try { var p = c.resume(); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+    });
+  }
+  function gesture() { wake(); wakeAll(); silPlay(); try { route(); } catch (e) {} tryPlay(); }
   function away() {
+    if (sil.a) { try { sil.a.pause(); } catch (e) {} }
     if (mus.a) { try { mus.a.pause(); } catch (e) {} }
     if (bf.node) { bufStop(); bf.state = 'paused'; }   // с начала дорожки при возврате (как элемент после паузы — почти)
   }
   ['pointerdown', 'keydown', 'touchend', 'mousedown'].forEach(function (e) { document.addEventListener(e, gesture, true); });
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) away(); else { wake(); tryPlay(); }
+    if (document.hidden) away(); else { wake(); wakeAll(); if (sil.want) silPlay(); tryPlay(); }
   });
   // iOS: при уходе со страницы и блокировке экрана visibilitychange приходит не всегда — пауза и на pagehide
   window.addEventListener('pagehide', away);
-  window.addEventListener('pageshow', function () { if (!document.hidden) { wake(); tryPlay(); } });
+  window.addEventListener('pageshow', function () { if (!document.hidden) { wake(); wakeAll(); if (sil.want) silPlay(); tryPlay(); } });
+  window.wnbSilent = function () { return SIL_NEED ? (sil.a ? (sil.a.paused ? 'пауза' : 'играет') + (sil.err ? ' ' + sil.err : '') : 'ждёт жеста') : 'не нужен'; };
+  // какой путь держит Web Audio при беззвучном режиме iPhone (29.11: у коллеги он включён): для плашки ?diag=1
+  window.wnbSessionPath = function () {
+    var e = window.wnbEnv || {};
+    if (!IOS) return 'не iOS — не нужен';
+    if (e.session && e.session.set === 'playback') return 'ПУТЬ 1: audioSession.type = playback';
+    return 'ПУТЬ 2: тихий элемент — ' + window.wnbSilent() + (e.session && e.session.has ? ' (audioSession есть, type не встал: ' +
+      (e.session.set || '?') + (e.session.err ? ', ' + e.session.err : '') + ')' : ' (audioSession нет)');
+  };
   window.wnbMusic = {
     play: function (u) {
       mus.want = true;
@@ -496,6 +577,7 @@ html, body, #canvas { overscroll-behavior: none; }
       if (BUF) {
         try { if (bf.gain) g = +bf.gain.gain.value.toFixed(4); } catch (e) {}
         return JSON.stringify({ mode: 'buffer', force: GAIN, vol: +mus.vol.toFixed(4), gain: g, state: bf.state,
+          pos: bf.node && bf.dur ? +(((bf.ctx.currentTime - (bf.t0 || 0)) % bf.dur)).toFixed(1) : null,
           dur: +(bf.dur || 0).toFixed(1), ctx: bf.ctx ? bf.ctx.state : '', err: mus.err, src: mus.src,
           playing: !!bf.node });
       }

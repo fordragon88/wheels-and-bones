@@ -309,7 +309,7 @@ func diag_info() -> Dictionary:
 			" mute" if AudioServer.is_bus_mute(i) else ""])
 	return {"touch": UI.touch(), "phone": UI.phone(), "why": "wnbEnv" if str(JavaScriptBridge.eval(
 		"window.wnbEnv ? 'y' : 'n'", true)) == "y" else "pointer:coarse", "vol": Settings.vol,
-		"sfx": "%s %.1fdB (playback %s, микшер %d Гц)" % [Audio.last_sfx[0], Audio.last_sfx[1],
+		"sfx": "всего запущено %d, последний %s %.1fdB (playback %s, микшер %d Гц)" % [Audio.sfx_count, Audio.last_sfx[0], Audio.last_sfx[1],
 		str(ProjectSettings.get_setting("audio/general/default_playback_type.web", "?")), AudioServer.get_mix_rate()],
 		"bus": ", ".join(bus), "ver": str(ProjectSettings.get_setting("application/config/version", ""))}
 
