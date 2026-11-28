@@ -204,7 +204,7 @@ html, body, #canvas { overscroll-behavior: none; }
         ' · тихий элемент ' + (window.wnbSilent ? window.wnbSilent() : '-') +
         (ctxs.some(function (c) { return c.state !== 'running'; }) ? ' · ВНИМАНИЕ: контекст не running' : ''),
       'эффекты: ' + (g.sfx || '?') + ' · выход звука: пик ' + outp.peak.toFixed(3) + ' за последние 2 с (Web Audio: эффекты' +
-        (window.wnbMusic && /buffer|gain/.test(window.wnbMusic.info()) ? ' и музыка' : '') + ')',
+        (window.wnbMusic && /"mode":"(buffer|gain)"/.test(window.wnbMusic.info()) ? ' и музыка' : '') + ')',
       'Settings.vol ' + (g.vol ? JSON.stringify(g.vol) : '?') + (g.bus ? ' · шины ' + g.bus : ''),
       'сборка ' + (window.wnbBuild || '?') + (g.ver ? ' · ' + g.ver : '')
     ];
