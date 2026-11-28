@@ -98,7 +98,7 @@ html, body, #canvas { overscroll-behavior: none; }
   } catch (err) {}
   e.why = why.join(', ') || '—';
   // iOS (iPhone, iPod, iPad, iPad «как компьютер»: Macintosh + касания): громкость <audio> из скрипта не задаётся,
-  // Web Audio по умолчанию («auto» → «ambient») глушится переключателем «Без звука» (29.11, снимки ?diag=1 с iPhone)
+  // Web Audio по умолчанию («auto» → «ambient») глушится переключателем «Без звука» (28.11, снимки ?diag=1 с iPhone)
   e.ios = /iPhone|iPod|iPad/.test(ua) || (/Macintosh/.test(ua) && e.mtp > 1);
   // Audio Session API (WebKit: Safari/iOS 16.4+, «subset of the AudioSession Web API»; w3c.github.io/audio-session):
   // type «playback» — сессия воспроизведения (как у видео и музыки), не «ambient». Только на iOS.
@@ -372,7 +372,7 @@ html, body, #canvas { overscroll-behavior: none; }
   var qg = /[?&]musgain=([012])(&|#|$)/.exec(location.search);
   var GAIN = qg ? qg[1] : '';
   var IOS = !!(window.wnbEnv && window.wnbEnv.ios);
-  // 29.11: на iOS по умолчанию — буфер (?musgain=2): громкость элемента там не задаётся (проба на отсоединённом
+  // 28.11: на iOS по умолчанию — буфер (?musgain=2): громкость элемента там не задаётся (проба на отсоединённом
   // Audio() на iOS 26 врёт: «задаётся»), а буфер на iPhone собирался и играл; ?musgain=0|1|2 главнее.
   if (!qg && IOS) GAIN = '2';
   var BUF = GAIN === '2' && !!(window.AudioContext || window.webkitAudioContext);   // без Web Audio — элемент
@@ -551,7 +551,7 @@ html, body, #canvas { overscroll-behavior: none; }
   window.addEventListener('pagehide', away);
   window.addEventListener('pageshow', function () { if (!document.hidden) { wake(); wakeAll(); if (sil.want) silPlay(); tryPlay(); } });
   window.wnbSilent = function () { return SIL_NEED ? (sil.a ? (sil.a.paused ? 'пауза' : 'играет') + (sil.err ? ' ' + sil.err : '') : 'ждёт жеста') : 'не нужен'; };
-  // какой путь держит Web Audio при беззвучном режиме iPhone (29.11: у коллеги он включён): для плашки ?diag=1
+  // какой путь держит Web Audio при беззвучном режиме iPhone (28.11: у коллеги он включён): для плашки ?diag=1
   window.wnbSessionPath = function () {
     var e = window.wnbEnv || {};
     if (!IOS) return 'не iOS — не нужен';

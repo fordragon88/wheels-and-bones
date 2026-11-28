@@ -2900,8 +2900,8 @@ async def sc_music(b):
     await music_run(b, "ios", ios=True, expect="gain")
     await music_run(b, "ios_nogain", "&musgain=0", ios=True)
     await music_buf_run(b)                                # ?musgain=2 (28.11): без <audio>, AudioBufferSourceNode
-    await music_ios_run(b, "ios26_session", True)          # 29.11: iPhone, по умолчанию буфер, audioSession → playback
-    await music_ios_run(b, "ios26_nosession", False)       # 29.11: iPhone без audioSession → тихий элемент
+    await music_ios_run(b, "ios26_session", True)          # 28.11: iPhone, по умолчанию буфер, audioSession → playback
+    await music_ios_run(b, "ios26_nosession", False)       # 28.11: iPhone без audioSession → тихий элемент
 
 
 # ---------------- телефонные пропорции при крупном тексте (блок 2, 21.11) ----------------
@@ -3557,7 +3557,7 @@ AUDIO_SESSION_JS = """
 
 
 async def music_ios_run(b, label, session):
-    """Эмуляция iPhone (29.11, снимки ?diag=1 с iOS 26: проба на new Audio() «громкость задаётся», а у настоящего
+    """Эмуляция iPhone (28.11, снимки ?diag=1 с iOS 26: проба на new Audio() «громкость задаётся», а у настоящего
     элемента — нет): UA iPhone, касания, громкость элемента не задаётся. Способ по умолчанию — не element (буфер, где
     есть Web Audio; в WebKit Playwright его нет — элемент, выключение через muted); уровень и M — через gain; есть
     navigator.audioSession (подмена) → type «playback»; нет → тихий <audio> играет после жеста."""
