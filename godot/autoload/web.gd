@@ -418,6 +418,12 @@ func state() -> Dictionary:
 					vs.append([str(cc.name), r.position.x, r.position.y, r.size.x, r.size.y, snappedf(float(cc.get("value")), 0.001)])
 			d["vol_sliders"] = vs
 			d["vol"] = Settings.vol
+		if Nav.toast.active():                  # плашка сообщений (web_smoke toast, 28.11): где стоит, поверх ли названия
+			var tl: Array = Nav.toast.layout()
+			var trc: Rect2 = tl[0]
+			var brr: Rect2 = Nav.toast.brand_rect()
+			d["toast_box"] = [trc.position.x, trc.position.y, trc.size.x, trc.size.y, bool(tl[4])]
+			d["brand_box"] = [brr.position.x, brr.position.y, brr.size.x, brr.size.y]
 		var tv: Variant = scr.get("tools") if "tools" in scr else null
 		if tv is ToolPanel:                     # ремонт (web_smoke toolbig, 27.11): полоса инструмента и карточка сноски
 			var tp: ToolPanel = tv

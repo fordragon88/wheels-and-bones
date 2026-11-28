@@ -457,6 +457,12 @@ def skip_cdp(name):
     print(f"  --   {name}: пропущено: только Chromium (нужен CDP)", flush=True)
 
 
+def skip_part(name, why):
+    """Часть сценария, которую Playwright в этом движке не умеет (28.11) — честный пропуск, не FAIL."""
+    skipped.append(name)
+    print(f"  --   {name}: пропущено: {why}", flush=True)
+
+
 async def measure_fps(p, secs=5.0):
     vals = []
     t0 = time.time()
@@ -3341,6 +3347,9 @@ async def sc_diag(b):
     info(f"{p.name}: плашка:\n" + t)
     need = ["screen ", "dpr ", "pointer ", "any-pointer", "страница: phone", "игра: touch 1 phone 1", "ввод: последний",
             "музыка {", "routes", "Settings.vol {", "сборка "]
+    if BROWSER == "firefox":                              # Firefox не эмулирует экран телефона (isMobile) — решение другое
+        need.remove("игра: touch 1 phone 1")
+        skip_part("diag: «игра: phone 1»", "Firefox не эмулирует телефон")
     miss = [k for k in need if k not in t]
     check(not miss, f"{p.name}: плашка заполнена (нет: {miss})")
     await p.pg.screenshot(path=os.path.join(out, f"diag_{BROWSER}.png"), timeout=20000)
@@ -3358,6 +3367,9 @@ async def sc_envphone(b):
               False, False),
              ("android", None, dict(touch=True, mobile=True, w=780, h=360, dpr=3), True, True)]
     for name, js, kw, ph, tch in cases:
+        if BROWSER == "firefox" and ph:                   # экран телефона Firefox не эмулирует (isMobile нет)
+            skip_part(f"envphone {name}", "Firefox не эмулирует экран телефона")
+            continue
         p = await new_page(b, f"env_{name}", legacy=SKIP_SEED, **kw)
         p.allow.append("ERR_NO_BUFFER_SPACE")
         if js:
@@ -3480,6 +3492,9 @@ async def sfx_peak(p, x, y, x_to):
 
 
 async def sc_volslide(b):
+    if not CHROMIUM:                                      # перетаскивание касанием — через CDP
+        skip_cdp("volslide")
+        return
     """Ползунки громкости касанием (обычный вид и телефон): перетаскивание меняет значение (Settings.vol); громкость
     эффектов измерена по сигналу движка (Chromium): ползунок эффектов 0,9 и 0,25 — пик звука «ok» во столько же раз
     меньше. Музыка и фон — в 0, чтобы слышать только эффект."""
@@ -3572,6 +3587,65 @@ async def music_buf_run(b):
     check(sh.startswith("paused") and s.startswith("playing"), f"{p.name}: pagehide — {sh[:6]}, pageshow — {s[:7]}")
     p.check_console()
     await p.ctx.close()
+
+
+
+async def sc_toast(b):
+    """Плашка сообщений сверху (28.11, владелец: «по размеру текста, а не во всю длину»; закрывала кнопку звука и
+    название игры): нажать кнопку звука в мастерской и в задании (обычный вид и телефон), длинное сообщение ремонта
+    («Инструмент верный, но не та деталь…», RU/EN) и RU при 150 % — плашка не на кнопках шапки, не во всю ширину, не
+    на названии игры (кроме случаев, когда левее него не помещается — toast_box[4]); снимки шапки → web_shots/toast/."""
+    from PIL import Image
+    out = os.path.join(SHOTS, "toast")
+    os.makedirs(out, exist_ok=True)
+    n = 0
+
+    async def snap(p, kw, fname):
+        nonlocal n
+        await p.pg.wait_for_timeout(500)
+        st = await p.state()
+        tb = st.get("toast_box")
+        if not tb:
+            check(False, f"{p.name} {fname}: плашки нет")
+            return
+        r = _rx(tb[:4])
+        btn = [x for x in st.get("buttons", []) if x[2] < 56]
+        hit = [x[0] for x in btn if _cross(r, _rx(x[1:5]))]
+        br = st.get("brand_box") or [0, 0, 0, 0]
+        on_brand = br[2] > 0 and _cross(r, _rx(br))
+        check(not hit and tb[2] < 1100 and r[0] >= 0 and r[2] <= 1280 and (not on_brand or tb[4]),
+              f"{p.name} {fname}: плашка {[round(v) for v in tb[:4]]} — на кнопках {hit}, ширина {round(tb[2])}, "
+              f"на названии игры {on_brand} (левее не помещалась: {tb[4]})")
+        g, c, _ = await game_rect(p)
+        k = kw.get("dpr", 1)
+        path = os.path.join(out, f"{fname}.png")
+        await p.pg.screenshot(path=path, timeout=20000)
+        Image.open(path).crop([round(v * k) for v in (g[0], g[1], g[0] + g[2], g[1] + g[3] * 0.13)]).save(path)
+        n += 1
+
+    for view, kw in (("pc", dict(w=1280, h=720)), ("phone", dict(touch=True, mobile=True, w=780, h=360, dpr=3))):
+        for lang, text in (("ru", 0), ("en", 0), ("ru", 3)):
+            p = await new_page(b, f"toast_{view}_{lang}{text}", legacy=SKIP_SEED, **kw)
+            p.allow.append("ERR_NO_BUFFER_SPACE")
+            if kw.get("mobile") and CHROMIUM:
+                await orient(p, kw["w"], kw["h"], True, kw["dpr"])
+            await p.boot(f"&phone={1 if view == 'phone' else 0}")
+            await title_ready(p)
+            for x in (f"set:lang={lang}", f"set:text={text}", "hub", "set:vol_master=0.8"):
+                await set_stage(p, x)
+            tag = f"{view}_{lang}{'' if text == 0 else 150}"
+            await p.press("Sound", wait=200)                 # «Звук выключен (M — включить)»
+            await snap(p, kw, f"{tag}_hub_sound_off")
+            await p.press("Sound", wait=200)
+            await set_stage(p, "job_flat_repair")
+            await p.press("Part_brake", wait=200)            # не та деталь: «Инструмент верный, но не та деталь…»
+            await snap(p, kw, f"{tag}_job_wrong_part")
+            await p.press("Sound", wait=200)
+            await snap(p, kw, f"{tag}_job_sound_off")
+            await p.press("Sound", wait=200)
+            p.check_console()
+            await p.ctx.close()
+    check(n > 0, f"toast: снимков {n} → toast/")
 
 
 async def sc_seatrough(b):
@@ -4247,7 +4321,7 @@ SCENARIOS = {"boot": sc_boot, "play": sc_play, "links": sc_links, "migrate": sc_
              "guild": sc_guild, "phone": sc_phone, "stale": sc_stale, "a11y": sc_a11y, "fps": sc_fpshud, "plates": sc_plates, "feedback": sc_feedback, "perf": sc_perf,
              "prof": sc_prof, "screens": sc_screens, "tabs": sc_tabs, "store": sc_store, "loader": sc_loader,
              "netfail": sc_netfail, "fsexit": sc_fsexit, "res": sc_resparam, "zoom": sc_zoom, "assign": sc_assign,
-             "pad": sc_pad, "bg": sc_bg, "music": sc_music, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "toolbig": sc_toolbig, "toolpc": sc_toolpc, "diag": sc_diag, "envphone": sc_envphone, "muteicon": sc_muteicon, "volslide": sc_volslide, "seatrough": sc_seatrough,
+             "pad": sc_pad, "bg": sc_bg, "music": sc_music, "phonetext": sc_phonetext, "phonebig": sc_phonebig, "toolbig": sc_toolbig, "toolpc": sc_toolpc, "toast": sc_toast, "diag": sc_diag, "envphone": sc_envphone, "muteicon": sc_muteicon, "volslide": sc_volslide, "seatrough": sc_seatrough,
              "embed": sc_embed}
 TIMEOUT = {"screens": 5400, "phonetext": 7200, "embed": 1800,            # все экраны × 4 прохода — долго
            "bg": 2 * float(os.environ.get("WNB_BG_SECS", "70")) + 480}   # два раза «в фоне» + задание
@@ -4314,7 +4388,7 @@ if __name__ == "__main__":
         for k in [k for k, *_ in SCREENS if any(k in sc[c] for c in cols)]:
             print(f"  {k:<21}" + "".join(f"{sc[c][k][0]:>8.0f} ({sc[c][k][1]:>3.0f})" if k in sc[c] else f"{'—':>14}"
                                          for c in cols))
-    tail = f" ({BROWSER}; пропущено, только Chromium: {', '.join(skipped)})" if skipped else f" ({BROWSER})"
+    tail = f" ({BROWSER}; пропущено: {', '.join(skipped)})" if skipped else f" ({BROWSER})"
     print(f"\nWEB SMOKE: {len(notes)} ok, {len(fails)} FAIL{tail}. Скриншоты: {os.path.relpath(SHOTS, os.path.dirname(GODOT))}/ — открой и посмотри.")
     for f in fails:
         print("  ", f)

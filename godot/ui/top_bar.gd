@@ -9,6 +9,7 @@ var brand: bool = true                    # «КОЛЁСА И КОСТИ» сп�
 var right_edge: float = UI.W - 170        # правый край заголовка/бренда
 var left: float = 56                      # после «◂ назад» (8 + 38 + 10)
 var text_rects: Array[Rect2] = []         # где нарисованы название, вторая строка и бренд (проверка значка «без звука»)
+var brand_rect: Rect2 = Rect2()            # «КОЛЁСА И КОСТИ» (пусто — бренда нет): плашка сообщений его не закрывает
 
 
 static func make(title_ru: String, sub_ru: String = "", back: bool = true) -> TopBar:
@@ -34,9 +35,11 @@ func _draw() -> void:
 	draw_line(Vector2(0, 54.5), Vector2(UI.W, 54.5), UI.AMBER, 1.0)
 	var right := right_edge
 	text_rects.clear()
+	brand_rect = Rect2()
 	if brand:
 		var b := Loc.t("КОЛЁСА И КОСТИ")
-		text_rects.append(UI.draw_text(self, b, Vector2(right, 16), 18, UI.GHOST, true, 2))
+		brand_rect = UI.draw_text(self, b, Vector2(right, 16), 18, UI.GHOST, true, 2)
+		text_rects.append(brand_rect)
 		right -= UI.text_width(b, 18, true) + 16
 	var x0 := left
 	var tt := Loc.t(title)

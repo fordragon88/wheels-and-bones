@@ -511,6 +511,100 @@ func mute_check(runner: Node) -> Array:
 	return [n, bad]
 
 
+## Плашка сообщений (28.11, владелец: «по размеру текста, а не во всю длину»; закрывала кнопку звука): на ключевых
+## экранах × RU/EN × ПК/телефон × текст 100/150 % × (короткое, «Звук выключен», длинное) — прямоугольник
+## (Toast.layout) не пересекает ни одну кнопку шапки (верх 56), не выходит за экран, ширина = текст + поля (короче
+## полосы, если текст короче), текст влезает в высоту (≤ 50), название игры не закрыто (кроме случаев, когда текст
+## левее него не помещается — их список). Возврат: [проверено, нарушения, не влезло, поверх названия].
+const TOAST_MSGS := ["Звук включён", "Звук выключен (M — включить)",
+	"Инструмент верный, но не та деталь. Цель: Подъёмник сиденья. Сначала осмотри детали справа и выбери диагноз."]
+
+
+func toast_check(runner: Node) -> Array:
+	R = runner
+	_ensure_stager()
+	var t0: int = UI._touch
+	var p0: int = UI._phone
+	var lang0 := Loc.code
+	var text0: int = Settings.a11y.get("text", 0)
+	var n := 0
+	var bad: PackedStringArray = []
+	var tall: PackedStringArray = []
+	var over: PackedStringArray = []                # не поместилось левее названия игры — поверх него
+	Engine.time_scale = 25.0
+	for ph: bool in [false, true]:
+		UI._touch = 1 if ph else 0
+		UI.set_phone(ph)
+		for tx: int in [0, 3]:
+			Settings.a11y["text"] = tx
+			UI.clear_font_cache()
+			for lang: String in ["ru", "en"]:
+				SaveGame.reset()
+				for name: String in ["title"] + KEY_STATES:
+					SaveGame.tutorial_skipped = true
+					Settings.lang = lang
+					Loc.code = lang
+					var sname: String = "title_en" if lang == "en" and name == "title" else name
+					await _stager.stage(sname)
+					Settings.lang = lang
+					Loc.code = lang
+					await R._frames(1)
+					var scr: Node = Nav.current
+					Nav.toast.bounds = UI.phone_bounds(scr.toast_bounds())
+					var btns: Array = []
+					for c: Node in scr.find_children("*", "BaseButton", true, false):
+						var b := c as Control
+						if b and b.is_visible_in_tree() and b.get_global_rect().position.y < 56:
+							btns.append([b.name, b.get_global_rect()])
+					for msg: String in TOAST_MSGS:
+						Nav.toast.text = msg
+						var lay: Array = Nav.toast.layout()
+						var r: Rect2 = lay[0]
+						var lines: PackedStringArray = lay[2]
+						var bd: Array = Nav.toast.band(msg)
+						var brr: Rect2 = Nav.toast.brand_rect()
+						n += 1
+						var tag := "%s %s %d%% %s «%s»" % ["телефон" if ph else "ПК", lang, [100, 112, 125, 150][tx], name,
+							msg.left(20)]
+						if r.position.x < -0.5 or r.end.x > UI.W + 0.5:
+							bad.append("%s: плашка за экраном %s" % [tag, _fmt_r(r)])
+						for b: Array in btns:
+							if (b[1] as Rect2).intersects(r):
+								bad.append("%s: плашка %s на кнопке %s %s" % [tag, _fmt_r(r), b[0], _fmt_r(b[1])])
+						var tw := 0.0
+						for ln in lines:
+							tw = maxf(tw, UI.text_width(ln, lay[1]))
+						if absf(r.size.x - minf(float(bd[1]) - float(bd[0]), ceilf(tw + 2 * Toast.PAD))) > 1.0:
+							bad.append("%s: ширина %d не по тексту (%d + поля, полоса %d)" % [tag, r.size.x, tw,
+								float(bd[1]) - float(bd[0])])
+						if brr.has_area() and r.intersects(brr):
+							if bool(lay[4]):
+								over.append(tag)
+							else:
+								bad.append("%s: плашка %s на названии игры %s" % [tag, _fmt_r(r), _fmt_r(brr)])
+						if 8 + lines.size() * float(lay[3]) > 50.5:
+							tall.append("%s: %d строк кеглем %d" % [tag, lines.size(), lay[1]])
+					_stager.unstage(sname)
+	Nav.toast.text = ""
+	Engine.time_scale = 1.0
+	if Share.dlg != null:
+		Share._close_dlg()
+	if Nav.settings != null:
+		Nav.close_settings()
+	if Nav.feedback != null:
+		Nav.feedback.close()
+	if Nav.help != null:
+		Nav.toggle_help()
+	Settings.a11y["text"] = text0
+	UI.clear_font_cache()
+	Loc.code = lang0
+	Settings.lang = lang0
+	UI._touch = t0
+	UI._phone = p0
+	Settings.changed.emit("phone")
+	return [n, bad, tall, over]
+
+
 static func _fmt_r(r: Rect2) -> String:
 	return "%d,%d %d×%d" % [roundi(r.position.x), roundi(r.position.y), roundi(r.size.x), roundi(r.size.y)]
 

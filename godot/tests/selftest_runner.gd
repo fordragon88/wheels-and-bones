@@ -221,6 +221,7 @@ func _run() -> void:
 	fx_line += "; " + await _touch()
 	fx_line += "; " + await _phone_check()
 	fx_line += "; " + await _mute_check()
+	fx_line += "; " + await _toast_check()
 	fx_line += "; " + await _review_kb()
 	fx_line += "; " + await _review_web()
 	fx_line += "; " + await _review_port()
@@ -289,6 +290,22 @@ func _mute_check() -> String:
 	for b: String in r[1]:
 		err(b)
 	return "КНОПКА ЗВУКА: проверено %d (экраны × вкл/выкл, RU/EN, ПК и телефон), нарушений — %d" % [r[0], r[1].size()]
+
+
+## Плашка сообщений по размеру текста, не на кнопках шапки (phone_check.toast_check).
+func _toast_check() -> String:
+	var pc: Node = (load("res://tests/phone_check.gd") as GDScript).new()
+	add_child(pc)
+	var r: Array = await pc.toast_check(self)
+	pc.queue_free()
+	for b: String in r[1]:
+		err(b)
+	for x: String in r[2]:
+		print("ПЛАШКА не влезла в высоту: " + x)
+	for x: String in r[3]:
+		print("ПЛАШКА поверх названия игры (левее не помещается): " + x)
+	return "ПЛАШКА СООБЩЕНИЙ: проверено %d (экраны × RU/EN × ПК/телефон × 100/150 %% × 3 сообщения), нарушений %d, не влезло в высоту — %d, поверх названия игры — %d" % [
+		r[0], r[1].size(), r[2].size(), r[3].size()]
 
 
 func _phone_measure(ref: bool) -> String:
@@ -2644,6 +2661,8 @@ func _only(what: String) -> void:
 			line = await _phone_check()
 		"mute":
 			line = await _mute_check()
+		"toast":
+			line = await _toast_check()
 		"phone-measure":
 			line = await _phone_measure(false)
 		"phone-ref":
