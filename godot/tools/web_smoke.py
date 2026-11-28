@@ -2900,6 +2900,8 @@ async def sc_music(b):
     await music_run(b, "ios", ios=True, expect="gain")
     await music_run(b, "ios_nogain", "&musgain=0", ios=True)
     await music_buf_run(b)                                # ?musgain=2 (28.11): без <audio>, AudioBufferSourceNode
+    await music_ios_run(b, "ios26_session", True)          # 29.11: iPhone, по умолчанию буфер, audioSession → playback
+    await music_ios_run(b, "ios26_nosession", False)       # 29.11: iPhone без audioSession → тихий элемент
 
 
 # ---------------- телефонные пропорции при крупном тексте (блок 2, 21.11) ----------------
@@ -3346,7 +3348,7 @@ async def sc_diag(b):
     t = await p.pg.evaluate("(document.getElementById('wnb-diagbox') || {}).textContent || ''")
     info(f"{p.name}: плашка:\n" + t)
     need = ["screen ", "dpr ", "pointer ", "any-pointer", "страница: phone", "игра: touch 1 phone 1", "ввод: последний",
-            "музыка {", "routes", "Settings.vol {", "сборка "]
+            "музыка {", "routes", "Settings.vol {", "сборка ", "беззвучный режим iPhone: ", "звук: ", "эффекты: всего запущено"]
     if BROWSER == "firefox":                              # Firefox не эмулирует экран телефона (isMobile) — решение другое
         need.remove("игра: touch 1 phone 1")
         skip_part("diag: «игра: phone 1»", "Firefox не эмулирует телефон")
@@ -3382,6 +3384,8 @@ async def sc_envphone(b):
         env = await p.pg.evaluate("JSON.stringify(window.wnbEnv)")
         check(st.get("phone") is ph and st.get("touch") is tch,
               f"{p.name}: телефон {st.get('phone')} (ждали {ph}), касания {st.get('touch')} (ждали {tch}); wnbEnv {env}")
+        ios = json.loads(env).get("ios")
+        check(ios is (name == "iphone_nocoarse"), f"{p.name}: wnbEnv.ios = {ios}")
         p.check_console()
         await p.ctx.close()
 
@@ -3544,6 +3548,62 @@ async def sc_volslide(b):
                      f"эффектов здесь по звуку не измерить")
         p.check_console()
         await p.ctx.close()
+
+
+AUDIO_SESSION_JS = """
+(() => { if (!navigator.audioSession) { const s = { type: 'auto', state: 'inactive' };
+  try { Object.defineProperty(Navigator.prototype, 'audioSession', { configurable: true, get() { return s; } }); } catch (e) {} } })();
+"""
+
+
+async def music_ios_run(b, label, session):
+    """Эмуляция iPhone (29.11, снимки ?diag=1 с iOS 26: проба на new Audio() «громкость задаётся», а у настоящего
+    элемента — нет): UA iPhone, касания, громкость элемента не задаётся. Способ по умолчанию — не element (буфер, где
+    есть Web Audio; в WebKit Playwright его нет — элемент, выключение через muted); уровень и M — через gain; есть
+    navigator.audioSession (подмена) → type «playback»; нет → тихий <audio> играет после жеста."""
+    p = await new_page(b, f"music_{label}", legacy=SKIP_SEED)
+    await p.ctx.add_init_script(env_js(IPHONE_UA, 390, 844, True, True, False, 5))
+    await p.ctx.add_init_script(IOS_VOLUME_JS)
+    if session:
+        await p.ctx.add_init_script(AUDIO_SESSION_JS)
+    await p.boot("&phone=0")
+    env = json.loads(await p.pg.evaluate("JSON.stringify(window.wnbEnv)"))
+    check(env.get("ios") is True, f"{p.name}: страница поняла, что это iOS (ios={env.get('ios')})")
+    if session:
+        t = await p.pg.evaluate("navigator.audioSession ? navigator.audioSession.type : 'нет'")
+        check(t == "playback", f"{p.name}: navigator.audioSession.type = {t} (ждали playback)")
+    has_ac = await p.pg.evaluate("!!(window.AudioContext || window.webkitAudioContext)")
+    await to_hub(p)
+    s = await mus_playing(p)
+    check(s.startswith("playing"), f"{p.name}: после жеста музыка играет ({s[:60]})")
+    want = "buffer" if has_ac else "element"
+    m = await mus_wait(p, lambda m: m.get("mode") == want and (not has_ac or m.get("ctx") == "running"), 10)
+    info(f"{p.name}: {m}")
+    check(m.get("mode") == want, f"{p.name}: способ по умолчанию {m.get('mode')} (ждали {want}"
+                                 f"{'' if has_ac else ': в этом движке нет Web Audio'})")
+    path = await p.pg.evaluate("window.wnbSessionPath ? wnbSessionPath() : '-'")
+    check(path.startswith("ПУТЬ 1" if session else "ПУТЬ 2"), f"{p.name}: путь при беззвучном режиме — {path}")
+    if not session:
+        sil = await p.pg.evaluate("window.wnbSilent ? wnbSilent() : '-'")
+        check(sil.startswith("играет"), f"{p.name}: без audioSession — тихий элемент: {sil}")
+    if has_ac:
+        await mus_stage(p, "vol_music=0.3")
+        m = await mus_wait(p, lambda m: m.get("gain") is not None and abs(m["gain"] - m["vol"]) < 0.02, 3)
+        check(m.get("gain") is not None and abs(m["gain"] - m["vol"]) < 0.02 and m["vol"] > 0,
+              f"{p.name}: уровень через gain: vol {m.get('vol')}, gain {m.get('gain')}")
+    await p.pg.mouse.move(5, 5)
+    await p.key("m", 500)
+    m = await mus_wait(p, lambda m: m.get("muted") is True or (m.get("gain") is not None and m["gain"] < 0.01), 3)
+    check((m.get("gain") is not None and m["gain"] < 0.01) or m.get("muted") is True,
+          f"{p.name}: M глушит: gain {m.get('gain')}, muted {m.get('muted')}")
+    await p.key("m", 500)
+    st = await p.state()
+    await p.press("Sound", st, wait=500)
+    m = await mus_wait(p, lambda m: m.get("muted") is True or (m.get("gain") is not None and m["gain"] < 0.01), 3)
+    check((m.get("gain") is not None and m["gain"] < 0.01) or m.get("muted") is True,
+          f"{p.name}: кнопка звука глушит: gain {m.get('gain')}, muted {m.get('muted')}")
+    p.check_console()
+    await p.ctx.close()
 
 
 async def music_buf_run(b):
